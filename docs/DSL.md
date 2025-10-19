@@ -8,48 +8,31 @@ dslsystem Architecture {
     structure: Modular Monolithic
 
     modules: [
-        User,
         Conversation,
         Grammar,
         Search,
-        Voice,
-        Dashboard,
         Web
     ]
 }
 2. 데이터베이스 스키마
 dsldatabase Schema {
-    
-    table users {
-        id: UUID PRIMARY KEY
-        email: TEXT UNIQUE
-        password_hash: TEXT
-        name: TEXT
-        created_at: DATETIME
-        updated_at: DATETIME
-    }
-    
+
     table conversations {
         id: UUID PRIMARY KEY
-        user_id: UUID FOREIGN KEY -> users(id)
-        topic: TEXT  // "UFC", "baseball", "travel"
-        context_data: JSON  // Tavily 검색 결과
-        tavily_used: BOOLEAN
         message_count: INTEGER
         status: TEXT  // "ACTIVE" | "COMPLETED"
         created_at: DATETIME
         updated_at: DATETIME
     }
-    
+
     table messages {
         id: UUID PRIMARY KEY
         conversation_id: UUID FOREIGN KEY -> conversations(id)
         role: TEXT  // "user" | "assistant" | "system"
         content: TEXT
-        audio_url: TEXT  // 음성 파일 경로 (선택사항)
         created_at: DATETIME
     }
-    
+
     table grammar_feedback {
         id: UUID PRIMARY KEY
         message_id: UUID FOREIGN KEY -> messages(id)
@@ -59,122 +42,52 @@ dsldatabase Schema {
         errors: JSON  // List of error objects
         created_at: DATETIME
     }
-    
-    table search_cache {
-        id: UUID PRIMARY KEY
-        query: TEXT UNIQUE
-        results: JSON  // Tavily 검색 결과
-        created_at: DATETIME
-        expires_at: DATETIME  // 24시간 후
-    }
-    
-    table api_usage {
-        id: UUID PRIMARY KEY
-        user_id: UUID FOREIGN KEY -> users(id)
-        service_type: TEXT  // "TAVILY" | "OPENROUTER"
-        endpoint: TEXT
-        tokens_used: INTEGER
-        cost: FLOAT
-        created_at: DATETIME
-    }
 }
 3. 모듈별 정의
-3.1 User 모듈
-dslmodule User {
-    
-    // Repository Layer
-    repository UserRepository {
-        await function save(user: User) -> Result<UUID, Error>
-        await function findById(id: UUID) -> Result<User, Error>
-        await function findByEmail(email: String) -> Result<User, Error>
-        await function updatePassword(id: UUID, passwordHash: String) -> Result<Void, Error>
-        await function deleteById(id: UUID) -> Result<Void, Error>
-    }
-    
-    // Service Layer
-    service UserService {
-        await function register(email: String, password: String, name: String) -> Result<User, Error>
-        await function login(email: String, password: String) -> Result<AuthToken, Error>
-        await function getUser(id: UUID) -> Result<User, Error>
-        await function updateProfile(id: UUID, name?: String) -> Result<Void, Error>
-        await function changePassword(id: UUID, oldPassword: String, newPassword: String) -> Result<Void, Error>
-        function hashPassword(password: String) -> String
-        function verifyPassword(password: String, hash: String) -> Boolean
-        function generateToken(userId: UUID) -> String
-    }
-    
-    // API Router
-    router UserRouter {
-        POST   /api/auth/register/     -> register
-        POST   /api/auth/login/        -> login
-        GET    /api/users/me/          -> getCurrentUser
-        PUT    /api/users/me/          -> updateProfile
-        POST   /api/users/me/password/ -> changePassword
-    }
-    
-    // Types
-    type User {
-        id: UUID
-        email: String
-        passwordHash: String
-        name: String
-        createdAt: DateTime
-        updatedAt: DateTime
-    }
-    
-    type AuthToken {
-        accessToken: String
-        tokenType: String
-        expiresIn: Integer
-    }
-}
-3.2 Conversation 모듈
+3.1 Conversation 모듈
 dslmodule Conversation {
     
     // Repository Layer
     repository ConversationRepository {
         await function save(conversation: Conversation) -> Result<UUID, Error>
         await function findById(id: UUID) -> Result<Conversation, Error>
-        await function findByUserId(userId: UUID, limit?: Integer, offset?: Integer) -> List<Conversation>
+        await function findAll(limit?: Integer, offset?: Integer) -> List<Conversation>
         await function updateStatus(id: UUID, status: ConversationStatus) -> Result<Void, Error>
         await function updateMessageCount(id: UUID, count: Integer) -> Result<Void, Error>
         await function deleteById(id: UUID) -> Result<Void, Error>
-        
+
         await function saveMessage(message: Message) -> Result<UUID, Error>
         await function findMessageById(id: UUID) -> Result<Message, Error>
         await function getMessages(conversationId: UUID, limit?: Integer, offset?: Integer) -> List<Message>
         await function getRecentMessages(conversationId: UUID, turnCount: Integer) -> List<Message>
         await function deleteMessage(id: UUID) -> Result<Void, Error>
     }
-    
+
     // Service Layer
     service ConversationService {
         await function startConversation(
-            userId: UUID,
-            topic: String,
             firstMessage: String
         ) -> Result<ConversationResponse, Error>
-        
+
         await function continueConversation(
             conversationId: UUID,
             userMessage: String
         ) -> Result<MessageResponse, Error>
-        
+
         await function getConversation(id: UUID) -> Result<Conversation, Error>
-        await function getConversations(userId: UUID, limit?: Integer, offset?: Integer) -> List<Conversation>
+        await function getConversations(limit?: Integer, offset?: Integer) -> List<Conversation>
         await function getMessages(conversationId: UUID, limit?: Integer, offset?: Integer) -> List<Message>
         await function endConversation(id: UUID) -> Result<Void, Error>
-        
+
         // LLM 호출
         await function generateResponse(
             systemPrompt: String,
-            contextData: JSON,
             messageHistory: List<Message>,
             userInput: String
         ) -> Result<String, Error>
-        
+
         // Helper 함수
-        function buildSystemPrompt(topic: String, contextData: JSON) -> String
+        function buildSystemPrompt(userMessage: String, searchContext?: String) -> String
         function prepareMessageHistory(messages: List<Message>, turnLimit: Integer) -> List<Dict>
     }
     
@@ -193,47 +106,30 @@ dslmodule Conversation {
     page ConversationListPage {
         route: "/conversations"
         template: "conversation_list.html"
-        
+
         components {
             ConversationTable {
                 endpoint: "/api/conversations"
-                
-                columns: [topic, messageCount, status, createdAt]
+
+                columns: [messageCount, status, createdAt]
                 actions: [view, continue, delete]
-                
+
                 onRowClick: navigateToDetail
             }
-            
+
             NewConversationButton {
-                action: navigateToTopicSelection
+                action: navigateToNewChat
             }
         }
     }
-    
-    page TopicSelectionPage {
-        route: "/conversations/new"
-        template: "topic_selection.html"
-        
-        components {
-            TopicCards {
-                topics: [
-                    {id: "ufc", name: "UFC", icon: "🥊", description: "MMA 경기 토론"},
-                    {id: "baseball", name: "Baseball", icon: "⚾", description: "야구 경기 토론"},
-                    {id: "travel", name: "Travel", icon: "✈️", description: "여행 경험 공유"}
-                ]
-                
-                onSelect: startConversationWithTopic
-            }
-        }
-    }
-    
+
     page ChatPage {
         route: "/conversations/{id}"
         template: "chat.html"
-        
+
         components {
             ChatHeader {
-                display: [topic, messageCount]
+                display: [messageCount, createdAt]
                 actions: [endConversation]
             }
             
@@ -264,10 +160,6 @@ dslmodule Conversation {
     // Types
     type Conversation {
         id: UUID
-        userId: UUID
-        topic: String
-        contextData: JSON
-        tavilyUsed: Boolean
         messageCount: Integer
         status: ConversationStatus
         createdAt: DateTime
@@ -279,7 +171,6 @@ dslmodule Conversation {
         conversationId: UUID
         role: MessageRole
         content: String
-        audioUrl: String?
         createdAt: DateTime
     }
     
@@ -291,8 +182,6 @@ dslmodule Conversation {
         conversationId: UUID
         response: String
         grammarFeedback: GrammarFeedback
-        tavilyUsed: Boolean
-        contextInfo: SearchContextInfo?
     }
     
     type MessageResponse {
@@ -302,23 +191,23 @@ dslmodule Conversation {
         turnCount: Integer
     }
 }
-3.3 Grammar 모듈
+3.2 Grammar 모듈
 dslmodule Grammar {
-    
+
     // Repository Layer
     repository GrammarRepository {
         await function save(feedback: GrammarFeedback) -> Result<UUID, Error>
         await function findById(id: UUID) -> Result<GrammarFeedback, Error>
         await function findByMessageId(messageId: UUID) -> Result<GrammarFeedback, Error>
-        await function getUserStats(userId: UUID, timeRange?: TimeRange) -> GrammarStats
+        await function getStats(timeRange?: TimeRange) -> GrammarStats
     }
-    
+
     // Service Layer
     service GrammarService {
         await function checkGrammar(text: String) -> Result<GrammarFeedback, Error>
         await function saveFeedback(messageId: UUID, feedback: GrammarFeedback) -> Result<UUID, Error>
         await function getFeedback(messageId: UUID) -> Result<GrammarFeedback, Error>
-        await function getUserStats(userId: UUID, timeRange?: TimeRange) -> GrammarStats
+        await function getStats(timeRange?: TimeRange) -> GrammarStats
         
         // LLM 호출
         await function analyzeGrammar(text: String) -> Result<GrammarAnalysis, Error>
@@ -410,58 +299,30 @@ dslmodule Grammar {
         }>
     }
 }
-3.4 Search 모듈
+3.3 Search 모듈
 dslmodule Search {
-    
-    // Repository Layer
-    repository SearchRepository {
-        await function saveCache(cache: SearchCache) -> Result<UUID, Error>
-        await function findByQuery(query: String) -> Result<SearchCache, Error>
-        await function findValidCache(query: String) -> Result<SearchCache, Error>
-        await function deleteExpired() -> Result<Integer, Error>
-        await function getMonthlyUsage(userId?: UUID) -> Integer
-    }
-    
+
     // Service Layer
     service SearchService {
-        await function search(
-            query: String,
-            userId?: UUID,
-            forceRefresh?: Boolean
-        ) -> Result<SearchResult, Error>
-        
-        await function getOrCache(query: String, userId?: UUID) -> Result<SearchResult, Error>
-        await function checkUsageLimit(userId?: UUID) -> Result<UsageStatus, Error>
-        
+        await function search(query: String) -> Result<SearchResult, Error>
+
         // Tavily API 호출
         await function callTavilyAPI(query: String) -> Result<TavilyResponse, Error>
-        
+
         // Helper 함수
         function buildSearchQuery(topic: String) -> String
         function formatSearchResults(results: TavilyResponse) -> SearchResult
-        function isValidCache(cache: SearchCache) -> Boolean
     }
-    
+
     // API Router
     router SearchRouter {
-        POST   /api/search/              -> search
-        GET    /api/search/usage/        -> getUsageStatus
-        DELETE /api/search/cache/clear/  -> clearExpiredCache
+        POST   /api/search/  -> search
     }
     
     // Types
-    type SearchCache {
-        id: UUID
-        query: String
-        results: JSON
-        createdAt: DateTime
-        expiresAt: DateTime
-    }
-    
     type SearchResult {
         query: String
         results: List<SearchResultItem>
-        fromCache: Boolean
         timestamp: DateTime
     }
     
@@ -485,253 +346,20 @@ dslmodule Search {
         score: Float
         published_date: String?
     }
-    
-    type UsageStatus {
-        used: Integer
-        limit: Integer
-        remaining: Integer
-        resetDate: Date
-    }
-    
-    type SearchContextInfo {
-        title: String
-        summary: String
-        sources: List<String>
-    }
 }
-3.5 Voice 모듈
-dslmodule Voice {
-    
-    // Service Layer
-    service VoiceService {
-        // 음성 파일 저장/관리
-        await function saveAudioFile(
-            userId: UUID,
-            audioData: Bytes,
-            format: AudioFormat
-        ) -> Result<String, Error>
-        
-        await function getAudioFile(audioUrl: String) -> Result<Bytes, Error>
-        await function deleteAudioFile(audioUrl: String) -> Result<Void, Error>
-        
-        // Helper 함수
-        function generateAudioPath(userId: UUID, messageId: UUID) -> String
-        function validateAudioFormat(format: AudioFormat) -> Boolean
-    }
-    
-    // API Router
-    router VoiceRouter {
-        POST   /api/voice/upload/         -> uploadAudio
-        GET    /api/voice/{filename}/     -> getAudio
-        DELETE /api/voice/{filename}/     -> deleteAudio
-    }
-    
-    // Types
-    type AudioFormat = "webm" | "wav" | "mp3" | "ogg"
-    
-    type AudioMetadata {
-        duration: Float
-        size: Integer
-        format: AudioFormat
-        sampleRate: Integer
-    }
-}
-3.6 Dashboard 모듈
-dslmodule Dashboard {
-    
-    // Repository Layer
-    repository DashboardRepository {
-        await function getSystemOverview(userId: UUID) -> SystemOverview
-        await function getConversationStats(userId: UUID, timeRange?: TimeRange) -> ConversationStats
-        await function getGrammarProgress(userId: UUID, timeRange?: TimeRange) -> GrammarProgress
-        await function getUsageStats(userId: UUID) -> UsageStats
-    }
-    
-    // Service Layer
-    service DashboardService {
-        await function getSystemOverview(userId: UUID) -> SystemOverview
-        await function getConversationStats(userId: UUID, timeRange?: TimeRange) -> ConversationStats
-        await function getGrammarProgress(userId: UUID, timeRange?: TimeRange) -> GrammarProgress
-        await function getUsageStats(userId: UUID) -> UsageStats
-        await function getActivityFeed(userId: UUID, limit?: Integer) -> List<Activity>
-    }
-    
-    // API Router
-    router DashboardRouter {
-        GET /api/dashboard/overview/          -> getSystemOverview
-        GET /api/dashboard/conversations/     -> getConversationStats
-        GET /api/dashboard/grammar/           -> getGrammarProgress
-        GET /api/dashboard/usage/             -> getUsageStats
-        GET /api/dashboard/activities/        -> getActivityFeed
-    }
-    
-    // Web Pages
-    page DashboardPage {
-        route: "/dashboard"
-        template: "dashboard.html"
-        
-        components {
-            OverviewPanel {
-                endpoint: "/api/dashboard/overview"
-                
-                cards: [
-                    {
-                        title: "총 대화",
-                        value: "totalConversations",
-                        icon: "message-square",
-                        trend: "conversationGrowth"
-                    },
-                    {
-                        title: "학습 시간",
-                        value: "totalStudyTime",
-                        icon: "clock",
-                        trend: "timeGrowth"
-                    },
-                    {
-                        title: "문법 정확도",
-                        value: "grammarAccuracy",
-                        icon: "check-circle",
-                        trend: "accuracyGrowth"
-                    },
-                    {
-                        title: "이번 달 대화",
-                        value: "monthlyConversations",
-                        icon: "calendar",
-                        trend: "monthlyGrowth"
-                    }
-                ]
-            }
-            
-            ActivityFeed {
-                endpoint: "/api/dashboard/activities"
-                limit: 10
-                
-                display: [
-                    timestamp,
-                    activityType,
-                    description
-                ]
-            }
-            
-            ConversationChart {
-                endpoint: "/api/dashboard/conversations"
-                
-                chart: "line"
-                title: "대화 추이"
-                timeRange: "30d"
-            }
-            
-            GrammarProgressChart {
-                endpoint: "/api/dashboard/grammar"
-                
-                chart: "bar"
-                title: "문법 개선도"
-                timeRange: "30d"
-            }
-            
-            QuickActions {
-                buttons: [
-                    {
-                        text: "새 대화 시작",
-                        action: "navigateTo('/conversations/new')",
-                        icon: "plus-circle"
-                    },
-                    {
-                        text: "문법 통계",
-                        action: "navigateTo('/grammar/stats')",
-                        icon: "bar-chart"
-                    },
-                    {
-                        text: "대화 히스토리",
-                        action: "navigateTo('/conversations')",
-                        icon: "history"
-                    }
-                ]
-            }
-        }
-    }
-    
-    // Types
-    type SystemOverview {
-        totalConversations: Integer
-        conversationGrowth: Float
-        totalStudyTime: Duration
-        timeGrowth: Float
-        grammarAccuracy: Float
-        accuracyGrowth: Float
-        monthlyConversations: Integer
-        monthlyGrowth: Float
-        lastUpdated: DateTime
-    }
-    
-    type ConversationStats {
-        totalConversations: Integer
-        averageLength: Float  // 평균 턴 수
-        topicBreakdown: List<{
-            topic: String
-            count: Integer
-            percentage: Float
-        }>
-        conversationsOverTime: List<{
-            date: Date
-            count: Integer
-        }>
-    }
-    
-    type GrammarProgress {
-        overallAccuracy: Float
-        accuracyOverTime: List<{
-            date: Date
-            accuracy: Float
-        }>
-        errorReduction: Float
-        mostImprovedAreas: List<{
-            errorType: ErrorType
-            improvement: Float
-        }>
-    }
-    
-    type UsageStats {
-        tavilyUsage: {
-            used: Integer
-            limit: Integer
-            percentage: Float
-        }
-        openrouterUsage: {
-            tokensUsed: Integer
-            estimatedCost: Float
-        }
-        storageUsage: {
-            audioFiles: Integer
-            totalSize: Integer
-        }
-    }
-    
-    type Activity {
-        id: UUID
-        timestamp: DateTime
-        activityType: ActivityType
-        description: String
-        metadata: JSON
-    }
-    
-    type ActivityType = "CONVERSATION_STARTED" | "CONVERSATION_COMPLETED" | "GRAMMAR_IMPROVED" | "MILESTONE_REACHED"
-    
-    type TimeRange = "7d" | "30d" | "90d" | "all"
-}
-3.7 Web 모듈
+3.4 Web 모듈
 dslmodule Web {
-    
+
     // Template Convention Rules
     template_rules {
         base_template: "templates/base.html"
-        
+
         inheritance_required: true
         convention: |
             1. 모든 도메인 템플릿은 반드시 base.html을 상속해야 함
             2. {% extends "base.html" %} 필수 선언
             3. 독립적인 HTML 구조 금지
-            
+
         blocks: {
             title: "페이지 제목"
             meta: "메타 태그"
@@ -739,12 +367,12 @@ dslmodule Web {
             extra_css: "추가 CSS 파일"
             extra_js: "추가 JavaScript 파일"
         }
-        
+
         template_search_paths: [
             "templates/",
             "domains/{module}/templates/"
         ]
-        
+
         helpers: {
             formatDate: "날짜 포맷팅"
             formatDuration: "시간 포맷팅"
@@ -752,22 +380,16 @@ dslmodule Web {
             showModal: "모달 창 표시"
         }
     }
-    
+
     // Main Application Router
     router MainRouter {
-        // Public Pages
+        // Pages
         GET /                              -> LandingPage
-        GET /login                         -> LoginPage
-        GET /register                      -> RegisterPage
-        
-        // Protected Pages
-        GET /dashboard                     -> DashboardPage
         GET /conversations                 -> ConversationListPage
-        GET /conversations/new             -> TopicSelectionPage
+        GET /conversations/new             -> ChatPage
         GET /conversations/{id}            -> ChatPage
         GET /grammar/stats                 -> GrammarStatsPage
-        GET /profile                       -> ProfilePage
-        
+
         // Static Files
         GET /static/*                      -> StaticFiles
     }
@@ -787,9 +409,9 @@ dslmodule Web {
             Features {
                 items: [
                     {
-                        icon: "🎯",
-                        title: "맞춤형 주제",
-                        description: "스포츠, 여행 등 관심 있는 주제로 대화"
+                        icon: "🌐",
+                        title: "최신 정보 활용",
+                        description: "실시간 뉴스와 정보를 기반으로 대화"
                     },
                     {
                         icon: "🔊",
@@ -807,79 +429,6 @@ dslmodule Web {
                         description: "진행 상황을 한눈에 확인"
                     }
                 ]
-            }
-        }
-    }
-    
-    // Login Page
-    page LoginPage {
-        route: "/login"
-        template: "login.html"
-        
-        components {
-            LoginForm {
-                endpoint: "/api/auth/login"
-                
-                fields: [
-                    {name: "email", type: "email", required: true},
-                    {name: "password", type: "password", required: true}
-                ]
-                
-                onSuccess: redirectToDashboard
-                onError: showErrorMessage
-            }
-            
-            RegisterLink {
-                text: "계정이 없으신가요? 회원가입"
-                href: "/register"
-            }
-        }
-    }
-    
-    // Register Page
-    page RegisterPage {
-        route: "/register"
-        template: "register.html"
-        
-        components {
-            RegisterForm {
-                endpoint: "/api/auth/register"
-                
-                fields: [
-                    {name: "name", type: "text", required: true},
-                    {name: "email", type: "email", required: true},
-                    {name: "password", type: "password", required: true},
-                    {name: "confirmPassword", type: "password", required: true}
-                ]
-                
-                validation: {
-                    passwordMatch: true
-                    passwordMinLength: 8
-                }
-                
-                onSuccess: redirectToLogin
-                onError: showErrorMessage
-            }
-        }
-    }
-    
-    // Profile Page
-    page ProfilePage {
-        route: "/profile"
-        template: "profile.html"
-        
-        components {
-            ProfileInfo {
-                endpoint: "/api/users/me"
-                
-                display: [name, email, createdAt]
-                actions: [editProfile, changePassword]
-            }
-            
-            UsageInfo {
-                endpoint: "/api/dashboard/usage"
-                
-                display: [tavilyUsage, openrouterUsage, storageUsage]
             }
         }
     }
@@ -941,8 +490,6 @@ dslapplication FastAPIApp {
         "sqlalchemy",
         "psycopg2-binary",
         "pydantic",
-        "python-jose[cryptography]",
-        "passlib[bcrypt]",
         "jinja2",
         "httpx",
         "pytest",
@@ -957,27 +504,20 @@ dslapplication FastAPIApp {
         ├── shared/                   // 공통 유틸리티
         │   ├── __init__.py
         │   ├── database.py          // 공통 DB 연결
-        │   ├── auth.py              // JWT 인증
         │   ├── exceptions.py        // 커스텀 예외
         │   ├── utils.py             // 공통 유틸리티
         │   └── types.py             // 공통 타입 정의
         ├── domains/                  // 도메인별 수직 구조
-        │   ├── user/
+        │   ├── conversation/
         │   │   ├── __init__.py
         │   │   ├── models.py
         │   │   ├── repository.py
         │   │   ├── service.py
         │   │   ├── router.py
         │   │   └── tests/
-        │   ├── conversation/
-        │   │   └── (동일 구조)
         │   ├── grammar/
         │   │   └── (동일 구조)
         │   ├── search/
-        │   │   └── (동일 구조)
-        │   ├── voice/
-        │   │   └── (동일 구조)
-        │   ├── dashboard/
         │   │   └── (동일 구조)
         │   └── web/
         │       ├── __init__.py
@@ -985,8 +525,9 @@ dslapplication FastAPIApp {
         │       ├── templates/
         │       │   ├── base.html
         │       │   ├── landing.html
-        │       │   ├── dashboard.html
         │       │   ├── chat.html
+        │       │   ├── conversation_list.html
+        │       │   ├── grammar_stats.html
         │       │   └── ...
         │       └── tests/
         ├── static/
@@ -1039,10 +580,9 @@ dsltesting TestStrategy {
     // Router Layer - API 엔드포인트 테스트
     router_tests {
         tool: FastAPI TestClient
-        
+
         coverage {
             - HTTP 요청/응답
-            - 인증/인가
             - 에러 핸들링
             - 응답 포맷
         }
@@ -1051,10 +591,10 @@ dsltesting TestStrategy {
     // Integration Tests
     integration_tests {
         scope: 전체 워크플로우
-        
+
         scenarios {
-            - 회원가입 → 로그인 → 대화 시작 → 메시지 전송
-            - 검색 캐싱 동작 확인
+            - 대화 시작 → 메시지 전송
+            - 검색 동작 확인
             - 문법 체크 전체 플로우
         }
     }
@@ -1065,19 +605,11 @@ dsltesting TestStrategy {
             @pytest.fixture
             def test_db():
                 # 테스트용 PostgreSQL DB
-                
+
             @pytest.fixture
             def test_client():
                 # FastAPI 테스트 클라이언트
-                
-            @pytest.fixture
-            def authenticated_client():
-                # 인증된 테스트 클라이언트
-                
-            @pytest.fixture
-            def sample_user():
-                # 테스트용 사용자
-                
+
             @pytest.fixture
             def sample_conversation():
                 # 테스트용 대화
@@ -1116,49 +648,46 @@ dsltesting TestStrategy {
     }
 }
 6. 주요 워크플로우
-dslworkflow UserRegistration {
-    1. POST /api/auth/register (이메일, 비밀번호, 이름)
-    2. UserService.register()
-       - 비밀번호 해싱
-       - 사용자 생성
-       - DB 저장
-    3. 성공 → 로그인 페이지로 리다이렉트
-}
-
 workflow ConversationFlow {
-    1. 사용자가 주제 선택 (예: "UFC")
+    1. 사용자가 첫 메시지 입력 (예: "Let's talk about the latest UFC fight")
     2. POST /api/conversations/start
-    3. SearchService.getOrCache() → Tavily 검색 (캐시 우선)
-    4. ConversationService.startConversation()
-       - Conversation 생성
-       - 시스템 프롬프트 구성 (주제 + 검색 결과)
+    3. ConversationService.startConversation()
+       - (선택적) 사용자 메시지에서 키워드 추출
+       - (선택적) SearchService.search() → Tavily 검색 (세션 메모리에만 저장)
+       - Conversation 생성 (DB 저장)
+       - 시스템 프롬프트 구성 (검색 결과는 메모리에서 사용)
        - LLM API 호출 (첫 번째 응답 생성)
        - GrammarService.checkGrammar() (사용자 입력 문법 체크)
-    5. 응답 + 문법 피드백 반환
-    
-    6. 사용자가 메시지 입력
-    7. POST /api/conversations/{id}/message
-    8. ConversationService.continueConversation()
+    4. 응답 + 문법 피드백 반환
+
+    5. 사용자가 메시지 입력
+    6. POST /api/conversations/{id}/message
+    7. ConversationService.continueConversation()
        - 최근 10턴 조회
        - 메시지 히스토리 구성
+       - (선택적) 필요 시 추가 검색 (세션 메모리)
        - LLM API 호출
        - GrammarService.checkGrammar()
-    9. 응답 + 문법 피드백 반환
-    
-    10. 대화 종료 시 status를 "COMPLETED"로 변경
+    8. 응답 + 문법 피드백 반환
+
+    9. 대화 종료 시 status를 "COMPLETED"로 변경
 }
 
 workflow VoiceInteraction {
+    // 음성 입력 (STT - Speech to Text)
     1. 사용자가 마이크 버튼 클릭
-    2. Web Speech API 시작 (브라우저)
+    2. Web Speech API의 SpeechRecognition 시작 (브라우저)
     3. 음성 → 텍스트 변환 (실시간)
-    4. 텍스트가 채팅 입력창에 표시
-    5. 전송 버튼 클릭 → 일반 메시지 플로우
-    
+    4. 변환된 텍스트가 채팅 입력창에 자동 표시
+    5. 전송 버튼 클릭 → 일반 텍스트 메시지 플로우
+
+    // 음성 출력 (TTS - Text to Speech)
     6. AI 응답 수신 후
-    7. Web Speech API의 SpeechSynthesis 사용
-    8. 텍스트 → 음성 자동 재생
+    7. Web Speech API의 SpeechSynthesis 사용 (브라우저)
+    8. 응답 텍스트 → 음성 자동 재생
     9. 재생 컨트롤 제공 (일시정지, 재개, 속도 조절)
+
+    // 참고: 모든 음성 처리는 브라우저에서 수행되며, 백엔드는 텍스트만 처리
 }
 
 workflow GrammarCheck {
@@ -1175,32 +704,6 @@ workflow GrammarCheck {
     6. 사용자 메시지 아래 문법 피드백 표시
 }
 
-workflow SearchCaching {
-    1. 대화 시작 시 주제 확인 (예: "UFC")
-    2. SearchService.getOrCache("UFC recent")
-    3. 캐시 확인:
-       - 24시간 이내 캐시 존재 → 반환 (Tavily 호출 X)
-       - 캐시 없음 → Tavily API 호출
-    4. 월간 사용량 체크:
-       - 1,000회 미만 → 검색 실행
-       - 1,000회 이상 → 오래된 캐시 사용 또는 에러
-    5. 새 검색 결과를 캐시에 저장 (24시간 TTL)
-}
-
-workflow DashboardView {
-    1. GET /dashboard → DashboardPage
-    2. 여러 API 병렬 호출:
-       - GET /api/dashboard/overview
-       - GET /api/dashboard/conversations
-       - GET /api/dashboard/grammar
-       - GET /api/dashboard/usage
-    3. 각 컴포넌트별 데이터 렌더링:
-       - 통계 카드 (총 대화, 학습 시간, 문법 정확도)
-       - 대화 추이 차트
-       - 문법 개선도 차트
-       - 활동 피드
-    4. Quick Actions 버튼 제공
-}
 7. 타입 관리 정책
 dsltypes TypeManagementPolicy {
     
@@ -1214,24 +717,20 @@ dsltypes TypeManagementPolicy {
     
     // 도메인별 타입 관리
     domain_types {
-        user: "domains/user/models.py" {
-            - User, AuthToken
-        }
-        
         conversation: "domains/conversation/models.py" {
             - Conversation, Message
             - ConversationStatus, MessageRole
             - ConversationResponse, MessageResponse
         }
-        
+
         grammar: "domains/grammar/models.py" {
             - GrammarFeedback, GrammarError
             - ErrorType, GrammarAnalysis, GrammarStats
         }
-        
+
         search: "domains/search/models.py" {
-            - SearchCache, SearchResult
-            - TavilyResponse, UsageStatus
+            - SearchResult, SearchResultItem
+            - TavilyResponse, TavilyResult
         }
     }
     
@@ -1402,8 +901,7 @@ dsldevelopment DomainDevelopmentGuide {
             contains: [
                 "FastAPI 엔드포인트",
                 "요청/응답 모델",
-                "HTTP 상태 코드",
-                "인증/인가"
+                "HTTP 상태 코드"
             ]
         }
     }
@@ -1422,28 +920,16 @@ dsldevelopment DomainDevelopmentGuide {
     
     // 보안 고려사항
     security {
-        authentication: {
-            method: "JWT (JSON Web Token)"
-            implementation: "python-jose"
-            tokenExpiry: "24시간"
-        }
-        
-        password: {
-            hashing: "bcrypt"
-            implementation: "passlib"
-            minLength: 8
-        }
-        
         apiKeys: {
             storage: "환경 변수 (.env)"
             access: "백엔드에서만 사용"
             exposure: "프론트엔드에 노출 금지"
         }
-        
+
         cors: {
             allowedOrigins: ["http://localhost:5173"]  // Svelte 개발 서버
             allowedMethods: ["GET", "POST", "PUT", "DELETE"]
-            allowCredentials: true
+            allowCredentials: false
         }
     }
 }
