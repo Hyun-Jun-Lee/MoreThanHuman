@@ -54,7 +54,6 @@ class MessageModel(Base):
     conversation_id = Column(PGUUID(as_uuid=True), ForeignKey("conversations.id"), nullable=False)
     role = Column(SQLEnum(MessageRole), nullable=False)
     content = Column(Text, nullable=False)
-    audio_url = Column(String(512), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     # Relationships
@@ -83,7 +82,6 @@ class Message(BaseModel):
     conversation_id: UUID
     role: MessageRole
     content: str
-    audio_url: str | None = None
     created_at: datetime
 
     class Config:
