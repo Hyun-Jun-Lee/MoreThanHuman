@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+
+{% block title %}Conversations - MoreThanHuman{% endblock %}
+
+{% block content %}
+<div class="relative flex h-screen w-full overflow-hidden">
+    <!-- Sidebar -->
+    <aside class="w-72 flex-col shrink-0 bg-surface-light dark:bg-surface-dark border-r border-solid border-subtle-light/20 dark:border-subtle-dark/20 flex">
+        <!-- Header -->
+        <div class="flex items-center justify-between whitespace-nowrap border-b border-solid border-subtle-light/20 dark:border-subtle-dark/20 px-6 py-4 shrink-0">
+            <div class="flex items-center gap-3 text-text-light dark:text-text-dark">
+                <div class="size-6 text-primary">
+                    <svg fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M4 4H17.3334V17.3334H30.6666V30.6666H44V44H4V4Z" fill="currentColor"></path>
+                    </svg>
+                </div>
+                <h1 class="text-xl font-bold leading-tight tracking-tight">MoreThanHuman</h1>
+            </div>
+        </div>
+
+        <!-- Conversation List -->
+        <div class="flex flex-col p-4 gap-2 overflow-y-auto" id="conversation-list">
+            <p class="text-center text-subtle-light dark:text-subtle-dark text-sm py-8">
+                Loading conversations...
+            </p>
+        </div>
+
+        <!-- New Conversation Button -->
+        <div class="mt-auto p-4">
+            <a href="/conversations/new" class="w-full flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-5 bg-primary text-white text-sm font-bold leading-normal tracking-wide hover:bg-primary/90 transition-colors">
+                <span class="truncate">New Conversation</span>
+            </a>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <div class="flex flex-1 flex-col items-center justify-center">
+        <div class="text-center">
+            <div class="text-6xl mb-4">💬</div>
+            <h2 class="text-2xl font-bold mb-2">대화 목록</h2>
+            <p class="text-subtle-light dark:text-subtle-dark mb-6">
+                새 대화를 시작하거나 이전 대화를 선택하세요
+            </p>
+            <a href="/conversations/new" class="inline-block px-6 py-3 rounded-lg bg-primary text-white font-medium hover:bg-primary/90 transition-colors">
+                새 대화 시작
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Load conversations from API
+    async function loadConversations() {
+        try {
+            const response = await fetch('/api/conversations/');
+            const data = await response.json();
+
+            const listContainer = document.getElementById('conversation-list');
+
+            if (!data.success || !data.data || data.data.length === 0) {
+                listContainer.innerHTML = `
+                    <p class="text-center text-subtle-light dark:text-subtle-dark text-sm py-8">
+                        아직 대화가 없습니다.<br>새 대화를 시작해보세요!
+                    </p>
+                `;
+                return;
+            }
+
+            // Group by date (Today, Yesterday, Previous 7 Days, Older)
+            const now = new Date();
+            const groups = {
+                today: [],
+                yesterday: [],
+                week: [],
+                older: []
+            };
+
+            data.data.forEach(conv => {
+                const convDate = new Date(conv.created_at);
+                const diffDays = Math.floor((now - convDate) / (1000 * 60 * 60 * 24));
+
+                if (diffDays === 0) groups.today.push(conv);
+                else if (diffDays === 1) groups.yesterday.push(conv);
+                else if (diffDays <= 7) groups.week.push(conv);
+                else groups.older.push(conv);
+            });
+
+            // Render groups
+            let html = '';
+
+            if (groups.today.length > 0) {
+                html += renderGroup('Today', groups.today);
+            }
+            if (groups.yesterday.length > 0) {
+                html += renderGroup('Yesterday', groups.yesterday);
+            }
+            if (groups.week.length > 0) {
+                html += renderGroup('Previous 7 Days', groups.week);
+            }
+            if (groups.older.length > 0) {
+                html += renderGroup('Older', groups.older);
+            }
+
+            listContainer.innerHTML = html;
+        } catch (error) {
+            console.error('Failed to load conversations:', error);
+        }
+    }
+
+    function renderGroup(title, conversations) {
+        const items = conversations.map(conv => `
+            <a class="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-primary/5 text-text-light dark:text-text-dark" href="/conversations/${conv.id}">
+                <span class="material-symbols-outlined text-xl">chat_bubble</span>
+                <div class="flex-1 min-w-0">
+                    <p class="text-sm font-medium truncate">대화 #${conv.id.substring(0, 8)}</p>
+                    <p class="text-xs text-subtle-light dark:text-subtle-dark">${conv.message_count} 메시지</p>
+                </div>
+            </a>
+        `).join('');
+
+        return `
+            <div class="flex flex-col gap-1">
+                <h2 class="text-xs font-bold tracking-widest uppercase text-subtle-light dark:text-subtle-dark px-4 mt-2">${title}</h2>
+                ${items}
+            </div>
+        `;
+    }
+
+    // Load on page load
+    loadConversations();
+</script>
+{% endblock %}

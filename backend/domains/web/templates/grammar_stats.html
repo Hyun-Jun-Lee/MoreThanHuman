@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+
+{% block title %}Grammar Stats - MoreThanHuman{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-background-light dark:bg-background-dark">
+    <!-- Header -->
+    <header class="bg-surface-light dark:bg-surface-dark border-b border-subtle-light/20 dark:border-subtle-dark/20 px-6 py-4">
+        <div class="max-w-7xl mx-auto flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <a href="/conversations" class="text-subtle-light dark:text-subtle-dark hover:text-primary">
+                    <span class="material-symbols-outlined">arrow_back</span>
+                </a>
+                <h1 class="text-2xl font-bold">Grammar Statistics</h1>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-6 py-8">
+        <!-- Overview Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="bg-surface-light dark:bg-surface-dark p-6 rounded-xl shadow-sm border border-subtle-light/10 dark:border-subtle-dark/10">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-sm font-medium text-subtle-light dark:text-subtle-dark">Total Messages</h3>
+                    <span class="material-symbols-outlined text-primary">chat</span>
+                </div>
+                <p class="text-3xl font-bold" id="total-messages">-</p>
+            </div>
+
+            <div class="bg-surface-light dark:bg-surface-dark p-6 rounded-xl shadow-sm border border-subtle-light/10 dark:border-subtle-dark/10">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-sm font-medium text-subtle-light dark:text-subtle-dark">Messages with Errors</h3>
+                    <span class="material-symbols-outlined text-yellow-500">warning</span>
+                </div>
+                <p class="text-3xl font-bold" id="messages-with-errors">-</p>
+            </div>
+
+            <div class="bg-surface-light dark:bg-surface-dark p-6 rounded-xl shadow-sm border border-subtle-light/10 dark:border-subtle-dark/10">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-sm font-medium text-subtle-light dark:text-subtle-dark">Error Rate</h3>
+                    <span class="material-symbols-outlined text-red-500">percent</span>
+                </div>
+                <p class="text-3xl font-bold" id="error-rate">-</p>
+            </div>
+        </div>
+
+        <!-- Common Errors -->
+        <div class="bg-surface-light dark:bg-surface-dark p-6 rounded-xl shadow-sm border border-subtle-light/10 dark:border-subtle-dark/10 mb-8">
+            <h2 class="text-xl font-bold mb-4">Common Error Types</h2>
+            <div id="common-errors" class="space-y-3">
+                <p class="text-center text-subtle-light dark:text-subtle-dark py-8">Loading statistics...</p>
+            </div>
+        </div>
+
+        <!-- Recent Feedback -->
+        <div class="bg-surface-light dark:bg-surface-dark p-6 rounded-xl shadow-sm border border-subtle-light/10 dark:border-subtle-dark/10">
+            <h2 class="text-xl font-bold mb-4">Recent Grammar Feedback</h2>
+            <div id="recent-feedback" class="space-y-4">
+                <p class="text-center text-subtle-light dark:text-subtle-dark py-8">Loading feedback...</p>
+            </div>
+        </div>
+    </main>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    async function loadGrammarStats() {
+        try {
+            const response = await fetch('/api/grammar/stats/');
+            const data = await response.json();
+
+            if (data.success && data.data) {
+                const stats = data.data;
+
+                // Update overview cards
+                document.getElementById('total-messages').textContent = stats.total_messages || 0;
+                document.getElementById('messages-with-errors').textContent = stats.messages_with_errors || 0;
+                document.getElementById('error-rate').textContent =
+                    ((stats.error_rate || 0) * 100).toFixed(1) + '%';
+
+                // Render common errors
+                if (stats.common_errors && stats.common_errors.length > 0) {
+                    const errorsHtml = stats.common_errors.map(error => `
+                        <div class="flex items-center justify-between p-4 bg-background-light dark:bg-background-dark rounded-lg">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                                    <span class="material-symbols-outlined text-primary">error</span>
+                                </div>
+                                <div>
+                                    <p class="font-medium capitalize">${error.type.replace('_', ' ')}</p>
+                                    <p class="text-sm text-subtle-light dark:text-subtle-dark">${error.count} occurrences</p>
+                                </div>
+                            </div>
+                            <div class="text-2xl font-bold text-primary">${error.count}</div>
+                        </div>
+                    `).join('');
+                    document.getElementById('common-errors').innerHTML = errorsHtml;
+                } else {
+                    document.getElementById('common-errors').innerHTML = `
+                        <p class="text-center text-subtle-light dark:text-subtle-dark py-8">No error data available yet</p>
+                    `;
+                }
+            }
+        } catch (error) {
+            console.error('Failed to load grammar stats:', error);
+        }
+    }
+
+    // Load stats on page load
+    loadGrammarStats();
+</script>
+{% endblock %}

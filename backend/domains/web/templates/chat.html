@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+
+{% block title %}Chat - MoreThanHuman{% endblock %}
+
+{% block content %}
+<div class="relative flex h-screen w-full overflow-hidden">
+    <!-- Sidebar -->
+    <aside class="w-72 flex-col shrink-0 bg-surface-light dark:bg-surface-dark border-r border-solid border-subtle-light/20 dark:border-subtle-dark/20 hidden md:flex">
+        <div class="flex items-center justify-between whitespace-nowrap border-b border-solid border-subtle-light/20 dark:border-subtle-dark/20 px-6 py-4 shrink-0">
+            <div class="flex items-center gap-3 text-text-light dark:text-text-dark">
+                <div class="size-6 text-primary">
+                    <svg fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M4 4H17.3334V17.3334H30.6666V30.6666H44V44H4V4Z" fill="currentColor"></path>
+                    </svg>
+                </div>
+                <h1 class="text-xl font-bold leading-tight tracking-tight">MoreThanHuman</h1>
+            </div>
+        </div>
+
+        <div class="flex flex-col p-4 gap-2 overflow-y-auto" id="sidebar-conversation-list">
+            <p class="text-center text-subtle-light dark:text-subtle-dark text-sm py-8">Loading...</p>
+        </div>
+
+        <div class="mt-auto p-4">
+            <a href="/conversations/new" class="w-full flex cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-5 bg-primary text-white text-sm font-bold hover:bg-primary/90 transition-colors">
+                <span class="truncate">New Conversation</span>
+            </a>
+        </div>
+    </aside>
+
+    <!-- Main Chat Area -->
+    <div class="flex flex-1 flex-col">
+        <!-- Header -->
+        <header class="flex items-center justify-between whitespace-nowrap border-b border-solid border-subtle-light/20 dark:border-subtle-dark/20 px-6 sm:px-10 py-4 shrink-0 bg-surface-light dark:bg-surface-dark shadow-sm">
+            <div class="flex items-center gap-3">
+                <a href="/conversations" class="md:hidden text-subtle-light dark:text-subtle-dark hover:text-primary">
+                    <span class="material-symbols-outlined">arrow_back</span>
+                </a>
+                <h2 class="text-lg font-semibold text-text-light dark:text-text-dark" id="conversation-title">New Conversation</h2>
+            </div>
+            <div class="flex items-center gap-2">
+                <button id="search-btn" class="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-subtle-light dark:text-subtle-dark hover:bg-primary/10 hover:text-primary transition-colors">
+                    <span class="material-symbols-outlined text-xl">search</span>
+                    <span class="hidden sm:inline">Search Context</span>
+                </button>
+                <button class="flex items-center justify-center size-9 rounded-full text-subtle-light dark:text-subtle-dark hover:bg-primary/10 hover:text-primary transition-colors">
+                    <span class="material-symbols-outlined text-2xl">more_horiz</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Messages Area -->
+        <main class="flex-1 flex flex-col overflow-y-auto px-4 sm:px-6 md:px-8 lg:px-12 py-8" id="messages-container">
+            <div class="w-full max-w-4xl mx-auto flex-1">
+                <div class="flex flex-col gap-6" id="messages-list">
+                    <!-- Welcome Message -->
+                    <div class="flex items-end gap-3 self-start max-w-xl">
+                        <div class="bg-primary/20 rounded-full w-10 h-10 shrink-0 flex items-center justify-center">
+                            <span class="material-symbols-outlined text-primary">smart_toy</span>
+                        </div>
+                        <div class="flex flex-1 flex-col gap-1 items-start">
+                            <p class="text-subtle-light dark:text-subtle-dark text-sm font-medium leading-normal">MoreThanHuman AI</p>
+                            <p class="text-base font-normal leading-relaxed rounded-lg px-4 py-3 bg-surface-light dark:bg-surface-dark shadow-sm">
+                                Hi! I'm your English conversation partner. What would you like to talk about today?
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Input Area -->
+        <footer class="bg-surface-light dark:bg-surface-dark border-t border-solid border-subtle-light/20 dark:border-subtle-dark/20 px-4 sm:px-6 md:px-8 lg:px-12 py-4 shrink-0">
+            <div class="w-full max-w-4xl mx-auto">
+                <div class="relative flex items-center">
+                    <textarea
+                        id="message-input"
+                        class="w-full resize-none rounded-lg border border-subtle-light/30 dark:border-subtle-dark/30 bg-background-light dark:bg-background-dark py-3 pl-4 pr-24 text-base focus:ring-2 focus:ring-primary focus:border-primary transition-shadow"
+                        placeholder="Type your message here..."
+                        rows="1"
+                    ></textarea>
+                    <div class="absolute right-3 flex items-center gap-2">
+                        <button
+                            id="voice-btn"
+                            aria-label="Voice input"
+                            class="flex items-center justify-center size-9 rounded-full text-subtle-light dark:text-subtle-dark hover:bg-primary/10 hover:text-primary transition-colors">
+                            <span class="material-symbols-outlined text-2xl">mic</span>
+                        </button>
+                        <button
+                            id="send-btn"
+                            aria-label="Send message"
+                            class="flex items-center justify-center size-9 rounded-full bg-primary text-white hover:bg-primary/90 transition-colors">
+                            <span class="material-symbols-outlined text-2xl">send</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </footer>
+    </div>
+</div>
+
+<!-- Search Modal -->
+<div id="search-modal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div class="bg-surface-light dark:bg-surface-dark rounded-xl p-6 max-w-md w-full">
+        <h3 class="text-xl font-bold mb-4">Search for Context</h3>
+        <input
+            type="text"
+            id="search-query"
+            class="w-full px-4 py-2 rounded-lg border border-subtle-light/30 dark:border-subtle-dark/30 bg-background-light dark:bg-background-dark mb-4"
+            placeholder="e.g., latest news about AI"
+        />
+        <div class="flex gap-3 justify-end">
+            <button id="search-cancel" class="px-4 py-2 rounded-lg text-subtle-light dark:text-subtle-dark hover:bg-background-light dark:hover:bg-background-dark">
+                Cancel
+            </button>
+            <button id="search-submit" class="px-4 py-2 rounded-lg bg-primary text-white hover:bg-primary/90">
+                Search
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="/static/js/chat.js"></script>
+<script src="/static/js/voice.js"></script>
+{% endblock %}
