@@ -4,7 +4,8 @@ uvicorn[standard]==0.27.0
 
 # Database
 sqlalchemy==2.0.25
-psycopg2-binary==2.9.9
+# SQLite는 Python 내장 모듈 (별도 설치 불필요)
+# PostgreSQL 사용 시: psycopg2-binary==2.9.9
 
 # Pydantic & Settings
 pydantic==2.5.3

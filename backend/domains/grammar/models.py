@@ -6,11 +6,10 @@ from enum import Enum
 from uuid import UUID
 
 from pydantic import BaseModel
-from sqlalchemy import Boolean, Column, DateTime, Enum as SQLEnum, ForeignKey, JSON, Text
-from sqlalchemy.dialects.postgresql import UUID as PGUUID
+from sqlalchemy import Boolean, Column, DateTime, Enum as SQLEnum, ForeignKey, JSON, String, Text
 from sqlalchemy.orm import relationship
 
-from backend.database import Base
+from database import Base
 
 
 # Enums
@@ -30,8 +29,8 @@ class GrammarFeedbackModel(Base):
 
     __tablename__ = "grammar_feedback"
 
-    id = Column(PGUUID(as_uuid=True), primary_key=True)
-    message_id = Column(PGUUID(as_uuid=True), ForeignKey("messages.id"), unique=True, nullable=False)
+    id = Column(String(36), primary_key=True)  # UUID를 문자열로 저장
+    message_id = Column(String(36), ForeignKey("messages.id"), unique=True, nullable=False)
     original_text = Column(Text, nullable=False)
     corrected_text = Column(Text, nullable=False)
     has_errors = Column(Boolean, default=False, nullable=False)

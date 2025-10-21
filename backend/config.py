@@ -2,6 +2,7 @@
 환경 변수 및 애플리케이션 설정 관리
 """
 from functools import lru_cache
+from pathlib import Path
 from pydantic_settings import BaseSettings
 
 
@@ -9,7 +10,7 @@ class Settings(BaseSettings):
     """애플리케이션 설정"""
 
     # Database
-    database_url: str
+    database_url: str = "sqlite:///./english_learning.db"
 
     # External APIs
     openrouter_api_key: str
@@ -29,7 +30,8 @@ class Settings(BaseSettings):
     max_history_turns: int = 10
 
     class Config:
-        env_file = ".env"
+        # 프로젝트 루트의 .env 파일 경로 (backend/config.py 기준 상위 디렉토리)
+        env_file = str(Path(__file__).parent.parent / ".env")
         case_sensitive = False
 
 

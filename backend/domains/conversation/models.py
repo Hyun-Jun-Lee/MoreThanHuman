@@ -7,10 +7,9 @@ from uuid import UUID
 
 from pydantic import BaseModel
 from sqlalchemy import Column, DateTime, Enum as SQLEnum, ForeignKey, Integer, String, Text
-from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import relationship
 
-from backend.database import Base
+from database import Base
 
 
 # Enums
@@ -35,7 +34,7 @@ class ConversationModel(Base):
 
     __tablename__ = "conversations"
 
-    id = Column(PGUUID(as_uuid=True), primary_key=True)
+    id = Column(String(36), primary_key=True)  # UUID를 문자열로 저장
     message_count = Column(Integer, default=0, nullable=False)
     status = Column(SQLEnum(ConversationStatus), default=ConversationStatus.ACTIVE, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
@@ -50,8 +49,8 @@ class MessageModel(Base):
 
     __tablename__ = "messages"
 
-    id = Column(PGUUID(as_uuid=True), primary_key=True)
-    conversation_id = Column(PGUUID(as_uuid=True), ForeignKey("conversations.id"), nullable=False)
+    id = Column(String(36), primary_key=True)  # UUID를 문자열로 저장
+    conversation_id = Column(String(36), ForeignKey("conversations.id"), nullable=False)
     role = Column(SQLEnum(MessageRole), nullable=False)
     content = Column(Text, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)

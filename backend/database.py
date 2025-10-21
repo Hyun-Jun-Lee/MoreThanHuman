@@ -5,16 +5,15 @@ from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-from backend.config import get_settings
+from config import get_settings
 
 settings = get_settings()
 
 # SQLAlchemy 엔진 생성
+# SQLite 사용 시 check_same_thread=False 필요 (FastAPI 멀티스레드 환경)
 engine = create_engine(
     settings.database_url,
-    pool_pre_ping=True,
-    pool_size=5,
-    max_overflow=10,
+    connect_args={"check_same_thread": False} if settings.database_url.startswith("sqlite") else {},
 )
 
 # 세션 팩토리
