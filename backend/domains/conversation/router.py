@@ -2,18 +2,21 @@
 Conversation API Router
 HTTP 요청/응답 처리
 """
+import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from backend.database import get_db
-from backend.domains.conversation.models import Conversation, ConversationResponse, Message, MessageResponse
-from backend.domains.conversation.repository import ConversationRepository
-from backend.domains.conversation.service import ConversationService
-from backend.shared.exceptions import AppException, NotFoundException
-from backend.shared.types import ErrorResponse, SuccessResponse
+logger = logging.getLogger(__name__)
+
+from database import get_db
+from domains.conversation.models import Conversation, ConversationResponse, Message, MessageResponse
+from domains.conversation.repository import ConversationRepository
+from domains.conversation.service import ConversationService
+from shared.exceptions import AppException, NotFoundException
+from shared.types import ErrorResponse, SuccessResponse
 
 router = APIRouter(prefix="/api/conversations", tags=["conversations"])
 
@@ -58,7 +61,11 @@ async def start_conversation(
         response = await service.start_conversation(request.first_message)
         return SuccessResponse(data=response, message="대화가 시작되었습니다")
     except AppException as e:
+        logger.error(f"AppException in start_conversation: {e.message}", exc_info=True)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
+    except Exception as e:
+        logger.error(f"Unexpected error in start_conversation: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
 @router.post("/{conversation_id}/message/", response_model=SuccessResponse[MessageResponse])
@@ -82,9 +89,14 @@ async def send_message(
         response = await service.continue_conversation(str(conversation_id), request.message)
         return SuccessResponse(data=response)
     except NotFoundException as e:
+        logger.error(f"NotFoundException in send_message: {e.message}")
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
     except AppException as e:
+        logger.error(f"AppException in send_message: {e.message}", exc_info=True)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
+    except Exception as e:
+        logger.error(f"Unexpected error in send_message: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
 @router.get("/", response_model=SuccessResponse[list[Conversation]])

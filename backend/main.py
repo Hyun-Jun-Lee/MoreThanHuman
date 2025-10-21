@@ -1,16 +1,20 @@
 """
 FastAPI 메인 애플리케이션
 """
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
-from backend.config import get_settings
-from backend.database import Base, engine
-from backend.domains.conversation.router import router as conversation_router
-from backend.domains.grammar.router import router as grammar_router
-from backend.domains.search.router import router as search_router
-from backend.shared.exceptions import AppException, NotFoundException
+from config import get_settings
+from database import Base, engine
+from domains.conversation.router import router as conversation_router
+from domains.grammar.router import router as grammar_router
+from domains.search.router import router as search_router
+from domains.web.router import router as web_router
+from shared.exceptions import AppException, NotFoundException
 
 settings = get_settings()
 
@@ -34,7 +38,7 @@ app.add_middleware(
 
 # Exception Handlers
 @app.exception_handler(NotFoundException)
-async def not_found_exception_handler(request, exc: NotFoundException):
+async def not_found_exception_handler(_request, exc: NotFoundException):
     """404 에러 핸들러"""
     return JSONResponse(
         status_code=404,
@@ -43,7 +47,7 @@ async def not_found_exception_handler(request, exc: NotFoundException):
 
 
 @app.exception_handler(AppException)
-async def app_exception_handler(request, exc: AppException):
+async def app_exception_handler(_request, exc: AppException):
     """애플리케이션 에러 핸들러"""
     return JSONResponse(
         status_code=400,
@@ -51,10 +55,18 @@ async def app_exception_handler(request, exc: AppException):
     )
 
 
-# 라우터 등록
+# Static Files (정적 파일은 API 라우터보다 먼저 등록)
+# 프로젝트 루트의 static 디렉토리 (backend/main.py 기준 상위 디렉토리)
+STATIC_DIR = Path(__file__).parent.parent / "static"
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+# API 라우터 등록
 app.include_router(conversation_router)
 app.include_router(grammar_router)
 app.include_router(search_router)
+
+# Web 라우터 등록 (마지막에 등록하여 API 우선순위 보장)
+app.include_router(web_router)
 
 
 # Startup/Shutdown 이벤트
@@ -73,17 +85,7 @@ async def shutdown_event():
     print("👋 Application shutting down")
 
 
-# Health Check
-@app.get("/", tags=["health"])
-async def root():
-    """헬스 체크"""
-    return {
-        "status": "ok",
-        "message": "영어 회화 학습 API",
-        "version": "1.0.0",
-    }
-
-
+# Health Check (API only)
 @app.get("/health", tags=["health"])
 async def health_check():
     """상세 헬스 체크"""
@@ -92,3 +94,16 @@ async def health_check():
         "database": "connected",
         "version": "1.0.0",
     }
+
+
+# 직접 실행 지원
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=8010,
+        reload=True,
+        reload_dirs=["backend", "static"],
+    )
