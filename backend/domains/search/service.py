@@ -5,9 +5,9 @@ from datetime import datetime
 
 import httpx
 
-from backend.config import get_settings
-from backend.domains.search.models import SearchResult, SearchResultItem, TavilyResponse
-from backend.shared.exceptions import ExternalAPIException
+from config import get_settings
+from domains.search.models import SearchResult, SearchResultItem, TavilyResponse
+from shared.exceptions import ExternalAPIException
 
 settings = get_settings()
 

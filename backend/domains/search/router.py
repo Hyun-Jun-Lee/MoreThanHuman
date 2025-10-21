@@ -4,10 +4,10 @@ Search API Router
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
-from backend.domains.search.models import SearchResult
-from backend.domains.search.service import SearchService
-from backend.shared.exceptions import AppException
-from backend.shared.types import SuccessResponse
+from domains.search.models import SearchResult
+from domains.search.service import SearchService
+from shared.exceptions import AppException
+from shared.types import SuccessResponse
 
 router = APIRouter(prefix="/api/search", tags=["search"])
 
