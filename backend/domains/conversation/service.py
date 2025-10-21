@@ -6,8 +6,8 @@ from uuid import uuid4
 
 import httpx
 
-from backend.config import get_settings
-from backend.domains.conversation.models import (
+from config import get_settings
+from domains.conversation.models import (
     Conversation,
     ConversationModel,
     ConversationResponse,
@@ -17,8 +17,8 @@ from backend.domains.conversation.models import (
     MessageResponse,
     MessageRole,
 )
-from backend.domains.conversation.repository import ConversationRepository
-from backend.shared.exceptions import ExternalAPIException
+from domains.conversation.repository import ConversationRepository
+from shared.exceptions import ExternalAPIException
 
 settings = get_settings()
 
@@ -42,7 +42,7 @@ class ConversationService:
         """
         # 1. Conversation 생성
         conversation = ConversationModel(
-            id=uuid4(),
+            id=str(uuid4()),
             message_count=0,
             status=ConversationStatus.ACTIVE,
         )
@@ -50,7 +50,7 @@ class ConversationService:
 
         # 2. 사용자 메시지 저장
         user_message = MessageModel(
-            id=uuid4(),
+            id=str(uuid4()),
             conversation_id=conversation.id,
             role=MessageRole.USER,
             content=first_message,
@@ -65,7 +65,7 @@ class ConversationService:
 
         # 5. AI 메시지 저장
         assistant_message = MessageModel(
-            id=uuid4(),
+            id=str(uuid4()),
             conversation_id=conversation.id,
             role=MessageRole.ASSISTANT,
             content=ai_response,
@@ -97,7 +97,7 @@ class ConversationService:
 
         # 2. 사용자 메시지 저장
         user_msg = MessageModel(
-            id=uuid4(),
+            id=str(uuid4()),
             conversation_id=conversation.id,
             role=MessageRole.USER,
             content=user_message,
@@ -118,7 +118,7 @@ class ConversationService:
 
         # 7. AI 메시지 저장
         assistant_msg = MessageModel(
-            id=uuid4(),
+            id=str(uuid4()),
             conversation_id=conversation.id,
             role=MessageRole.ASSISTANT,
             content=ai_response,

@@ -2,13 +2,12 @@
 Grammar Repository Layer
 """
 from datetime import datetime, timedelta
-from uuid import UUID
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from backend.domains.grammar.models import GrammarFeedbackModel
-from backend.shared.exceptions import NotFoundException
+from domains.grammar.models import GrammarFeedbackModel
+from shared.exceptions import NotFoundException
 
 
 class GrammarRepository:
@@ -32,7 +31,7 @@ class GrammarRepository:
         self.db.refresh(feedback)
         return feedback
 
-    def find_by_id(self, feedback_id: UUID) -> GrammarFeedbackModel:
+    def find_by_id(self, feedback_id: str) -> GrammarFeedbackModel:
         """
         ID로 피드백 조회
 
@@ -50,7 +49,7 @@ class GrammarRepository:
             raise NotFoundException(f"Grammar feedback {feedback_id} not found")
         return feedback
 
-    def find_by_message_id(self, message_id: UUID) -> GrammarFeedbackModel:
+    def find_by_message_id(self, message_id: str) -> GrammarFeedbackModel:
         """
         메시지 ID로 피드백 조회
 

@@ -2,17 +2,15 @@
 Conversation Repository Layer
 데이터 접근 및 CRUD 연산
 """
-from uuid import UUID
-
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
-from backend.domains.conversation.models import (
+from domains.conversation.models import (
     ConversationModel,
     ConversationStatus,
     MessageModel,
 )
-from backend.shared.exceptions import NotFoundException
+from shared.exceptions import NotFoundException
 
 
 class ConversationRepository:
@@ -36,7 +34,7 @@ class ConversationRepository:
         self.db.refresh(conversation)
         return conversation
 
-    def find_by_id(self, conversation_id: UUID) -> ConversationModel:
+    def find_by_id(self, conversation_id: str) -> ConversationModel:
         """
         ID로 대화 조회
 
@@ -73,7 +71,7 @@ class ConversationRepository:
             .all()
         )
 
-    def update_status(self, conversation_id: UUID, status: ConversationStatus) -> None:
+    def update_status(self, conversation_id: str, status: ConversationStatus) -> None:
         """
         대화 상태 업데이트
 
@@ -85,7 +83,7 @@ class ConversationRepository:
         conversation.status = status
         self.db.commit()
 
-    def update_message_count(self, conversation_id: UUID, count: int) -> None:
+    def update_message_count(self, conversation_id: str, count: int) -> None:
         """
         메시지 카운트 업데이트
 
@@ -97,7 +95,7 @@ class ConversationRepository:
         conversation.message_count = count
         self.db.commit()
 
-    def delete_by_id(self, conversation_id: UUID) -> None:
+    def delete_by_id(self, conversation_id: str) -> None:
         """
         대화 삭제
 
@@ -124,7 +122,7 @@ class ConversationRepository:
         self.db.refresh(message)
         return message
 
-    def find_message_by_id(self, message_id: UUID) -> MessageModel:
+    def find_message_by_id(self, message_id: str) -> MessageModel:
         """
         ID로 메시지 조회
 
@@ -142,7 +140,7 @@ class ConversationRepository:
             raise NotFoundException(f"Message {message_id} not found")
         return message
 
-    def get_messages(self, conversation_id: UUID, limit: int = 50, offset: int = 0) -> list[MessageModel]:
+    def get_messages(self, conversation_id: str, limit: int = 50, offset: int = 0) -> list[MessageModel]:
         """
         대화의 메시지 조회
 
@@ -163,7 +161,7 @@ class ConversationRepository:
             .all()
         )
 
-    def get_recent_messages(self, conversation_id: UUID, turn_count: int = 10) -> list[MessageModel]:
+    def get_recent_messages(self, conversation_id: str, turn_count: int = 10) -> list[MessageModel]:
         """
         최근 N턴의 메시지 조회
 
@@ -182,7 +180,7 @@ class ConversationRepository:
             .all()
         )[::-1]  # 시간순 정렬
 
-    def delete_message(self, message_id: UUID) -> None:
+    def delete_message(self, message_id: str) -> None:
         """
         메시지 삭제
 

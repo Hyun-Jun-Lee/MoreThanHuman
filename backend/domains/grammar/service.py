@@ -2,14 +2,14 @@
 Grammar Service Layer
 """
 import json
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import httpx
 
-from backend.config import get_settings
-from backend.domains.grammar.models import GrammarAnalysis, GrammarFeedback, GrammarFeedbackModel, GrammarStats
-from backend.domains.grammar.repository import GrammarRepository
-from backend.shared.exceptions import ExternalAPIException
+from config import get_settings
+from domains.grammar.models import GrammarAnalysis, GrammarFeedback, GrammarFeedbackModel, GrammarStats
+from domains.grammar.repository import GrammarRepository
+from shared.exceptions import ExternalAPIException
 
 settings = get_settings()
 
@@ -34,15 +34,15 @@ class GrammarService:
         analysis = await self.analyze_grammar(text)
 
         return GrammarFeedback(
-            id=uuid4(),
-            message_id=uuid4(),  # 임시 ID, 실제로는 메시지 저장 시 설정
+            id=str(uuid4()),
+            message_id=str(uuid4()),  # 임시 ID, 실제로는 메시지 저장 시 설정
             original_text=text,
             corrected_text=analysis.corrected_sentence,
             has_errors=analysis.has_errors,
             errors=analysis.errors,
         )
 
-    async def save_feedback(self, message_id: UUID, feedback: GrammarFeedback) -> UUID:
+    async def save_feedback(self, message_id: str, feedback: GrammarFeedback) -> str:
         """
         피드백 저장
 
@@ -54,7 +54,7 @@ class GrammarService:
             저장된 피드백 ID
         """
         feedback_model = GrammarFeedbackModel(
-            id=uuid4(),
+            id=str(uuid4()),
             message_id=message_id,
             original_text=feedback.original_text,
             corrected_text=feedback.corrected_text,
@@ -65,7 +65,7 @@ class GrammarService:
         saved = self.repository.save(feedback_model)
         return saved.id
 
-    def get_feedback(self, message_id: UUID) -> GrammarFeedback:
+    def get_feedback(self, message_id: str) -> GrammarFeedback:
         """
         메시지 ID로 피드백 조회
 

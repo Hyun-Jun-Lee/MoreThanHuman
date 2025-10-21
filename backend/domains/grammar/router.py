@@ -1,18 +1,16 @@
 """
 Grammar API Router
 """
-from uuid import UUID
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from backend.database import get_db
-from backend.domains.grammar.models import GrammarFeedback, GrammarStats
-from backend.domains.grammar.repository import GrammarRepository
-from backend.domains.grammar.service import GrammarService
-from backend.shared.exceptions import AppException, NotFoundException
-from backend.shared.types import SuccessResponse
+from database import get_db
+from domains.grammar.models import GrammarFeedback, GrammarStats
+from domains.grammar.repository import GrammarRepository
+from domains.grammar.service import GrammarService
+from shared.exceptions import AppException, NotFoundException
+from shared.types import SuccessResponse
 
 router = APIRouter(prefix="/api/grammar", tags=["grammar"])
 
@@ -56,7 +54,7 @@ async def check_grammar(
 
 @router.get("/message/{message_id}/", response_model=SuccessResponse[GrammarFeedback])
 def get_feedback_by_message(
-    message_id: UUID,
+    message_id: str,
     service: GrammarService = Depends(get_grammar_service),
 ):
     """
