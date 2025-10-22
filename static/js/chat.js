@@ -1,6 +1,7 @@
 // Chat functionality
 let conversationId = null;
 let searchContext = null;
+let lastUserMessage = null; // Store last message for retry
 
 // Get conversation ID from URL
 function getConversationId() {
@@ -35,6 +36,32 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     document.getElementById('search-submit').addEventListener('click', performSearch);
 
+    // Speaker button and retry button event delegation
+    const messagesContainer = document.getElementById('messages-list');
+    messagesContainer.addEventListener('click', (e) => {
+        // Handle speaker button clicks
+        const speakerBtn = e.target.closest('.speaker-btn');
+        if (speakerBtn) {
+            const text = speakerBtn.dataset.text;
+            if (text) {
+                speakText(text, speakerBtn);
+            }
+            return;
+        }
+
+        // Handle retry button clicks
+        const retryBtn = e.target.closest('.retry-btn');
+        if (retryBtn && lastUserMessage) {
+            // Remove retry message
+            const retryMessage = retryBtn.closest('.retry-message');
+            if (retryMessage) {
+                retryMessage.remove();
+            }
+            // Retry with last message
+            sendMessage(lastUserMessage);
+        }
+    });
+
     // Load sidebar conversations
     loadSidebarConversations();
 });
@@ -61,17 +88,24 @@ async function loadConversation(id) {
 }
 
 // Send message
-async function sendMessage() {
+async function sendMessage(retryMessage = null) {
     const input = document.getElementById('message-input');
-    const message = input.value.trim();
+    const message = retryMessage || input.value.trim();
 
     if (!message) return;
 
-    // Clear input
-    input.value = '';
+    // Store message for potential retry
+    lastUserMessage = message;
 
-    // Add user message to UI
-    addUserMessage(message);
+    // Clear input only if not retrying
+    if (!retryMessage) {
+        input.value = '';
+    }
+
+    // Add user message to UI (only if not retrying)
+    if (!retryMessage) {
+        addUserMessage(message);
+    }
 
     try {
         let response;
@@ -87,12 +121,22 @@ async function sendMessage() {
                 })
             });
 
+            // Check for rate limit error
+            if (response.status === 429) {
+                const errorData = await response.json();
+                addRetryMessage(errorData.detail || '사용 한도에 도달했습니다. 1-2분 후 다시 시도해주세요.');
+                return;
+            }
+
             const data = await response.json();
 
             if (data.success && data.data) {
                 conversationId = data.data.conversation_id;
                 // Update URL without reload
                 window.history.pushState({}, '', `/conversations/${conversationId}`);
+
+                // Remove any retry messages on success
+                removeRetryMessages();
 
                 // Add AI response
                 addAIMessage(data.data.response, data.data.grammar_feedback);
@@ -102,12 +146,22 @@ async function sendMessage() {
             response = await fetch(`/api/conversations/${conversationId}/message/`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user_message: message })
+                body: JSON.stringify({ message: message })
             });
+
+            // Check for rate limit error
+            if (response.status === 429) {
+                const errorData = await response.json();
+                addRetryMessage(errorData.detail || '사용 한도에 도달했습니다. 1-2분 후 다시 시도해주세요.');
+                return;
+            }
 
             const data = await response.json();
 
             if (data.success && data.data) {
+                // Remove any retry messages on success
+                removeRetryMessages();
+
                 addAIMessage(data.data.response, data.data.grammar_feedback);
             }
         }
@@ -143,6 +197,36 @@ async function performSearch() {
         console.error('Search failed:', error);
         alert('Search failed. Please try again.');
     }
+}
+
+// Add retry message for rate limit errors
+function addRetryMessage(errorMessage) {
+    const messagesContainer = document.getElementById('messages-list');
+
+    const retryHtml = `
+        <div class="flex items-start gap-3 self-start max-w-xl retry-message">
+            <div class="bg-yellow-500/20 rounded-full w-10 h-10 shrink-0 flex items-center justify-center">
+                <span class="material-symbols-outlined text-yellow-600 dark:text-yellow-400">schedule</span>
+            </div>
+            <div class="flex flex-1 flex-col gap-2 items-start">
+                <p class="text-yellow-800 dark:text-yellow-200 text-sm font-bold leading-normal">Rate Limit</p>
+                <p class="text-base font-normal leading-relaxed rounded-lg px-4 py-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800/50">${escapeHtml(errorMessage)}</p>
+                <button class="retry-btn flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-colors">
+                    <span class="material-symbols-outlined text-lg">refresh</span>
+                    <span>재시도</span>
+                </button>
+            </div>
+        </div>
+    `;
+
+    messagesContainer.insertAdjacentHTML('beforeend', retryHtml);
+    scrollToBottom();
+}
+
+// Remove retry messages from UI
+function removeRetryMessages() {
+    const retryMessages = document.querySelectorAll('.retry-message');
+    retryMessages.forEach(msg => msg.remove());
 }
 
 // Add user message to UI
@@ -186,7 +270,12 @@ function addAIMessage(content, grammarFeedback = null) {
                 <span class="material-symbols-outlined text-primary">smart_toy</span>
             </div>
             <div class="flex flex-1 flex-col gap-1 items-start">
-                <p class="text-subtle-light dark:text-subtle-dark text-sm font-medium leading-normal">MoreThanHuman AI</p>
+                <div class="flex items-center gap-2">
+                    <p class="text-subtle-light dark:text-subtle-dark text-sm font-medium leading-normal">MoreThanHuman AI</p>
+                    <button class="speaker-btn flex items-center justify-center size-7 rounded-full hover:bg-primary/10 transition-colors" data-text="${escapeHtml(content)}" title="Play audio">
+                        <span class="material-symbols-outlined text-lg text-subtle-light dark:text-subtle-dark">volume_up</span>
+                    </button>
+                </div>
                 <p class="text-base font-normal leading-relaxed rounded-lg px-4 py-3 bg-surface-light dark:bg-surface-dark shadow-sm">${escapeHtml(content)}</p>
                 ${grammarHtml}
             </div>
@@ -194,6 +283,16 @@ function addAIMessage(content, grammarFeedback = null) {
     `;
 
     messagesContainer.insertAdjacentHTML('beforeend', messageHtml);
+
+    // Auto-play if enabled
+    if (typeof autoSpeak !== 'undefined' && autoSpeak) {
+        // Get the speaker button we just added
+        const speakerButtons = messagesContainer.querySelectorAll('.speaker-btn');
+        const lastButton = speakerButtons[speakerButtons.length - 1];
+        if (lastButton) {
+            speakText(content, lastButton);
+        }
+    }
 }
 
 // Append message from API data
@@ -201,7 +300,27 @@ function appendMessage(msg) {
     if (msg.role === 'user') {
         addUserMessage(msg.content);
     } else if (msg.role === 'assistant') {
-        addAIMessage(msg.content);
+        // Add AI message without auto-play for historical messages
+        const messagesContainer = document.getElementById('messages-list');
+
+        const messageHtml = `
+            <div class="flex items-end gap-3 self-start max-w-xl">
+                <div class="bg-primary/20 rounded-full w-10 h-10 shrink-0 flex items-center justify-center">
+                    <span class="material-symbols-outlined text-primary">smart_toy</span>
+                </div>
+                <div class="flex flex-1 flex-col gap-1 items-start">
+                    <div class="flex items-center gap-2">
+                        <p class="text-subtle-light dark:text-subtle-dark text-sm font-medium leading-normal">MoreThanHuman AI</p>
+                        <button class="speaker-btn flex items-center justify-center size-7 rounded-full hover:bg-primary/10 transition-colors" data-text="${escapeHtml(msg.content)}" title="Play audio">
+                            <span class="material-symbols-outlined text-lg text-subtle-light dark:text-subtle-dark">volume_up</span>
+                        </button>
+                    </div>
+                    <p class="text-base font-normal leading-relaxed rounded-lg px-4 py-3 bg-surface-light dark:bg-surface-dark shadow-sm">${escapeHtml(msg.content)}</p>
+                </div>
+            </div>
+        `;
+
+        messagesContainer.insertAdjacentHTML('beforeend', messageHtml);
     }
 }
 

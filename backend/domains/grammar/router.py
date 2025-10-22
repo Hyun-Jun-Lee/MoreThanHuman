@@ -9,7 +9,7 @@ from database import get_db
 from domains.grammar.models import GrammarFeedback, GrammarStats
 from domains.grammar.repository import GrammarRepository
 from domains.grammar.service import GrammarService
-from shared.exceptions import AppException, NotFoundException
+from shared.exceptions import AppException, NotFoundException, RateLimitException
 from shared.types import SuccessResponse
 
 router = APIRouter(prefix="/api/grammar", tags=["grammar"])
@@ -48,6 +48,8 @@ async def check_grammar(
     try:
         feedback = await service.check_grammar(request.text)
         return SuccessResponse(data=feedback)
+    except RateLimitException as e:
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=e.message)
     except AppException as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
 

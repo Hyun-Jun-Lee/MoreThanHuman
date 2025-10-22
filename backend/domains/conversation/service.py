@@ -18,7 +18,7 @@ from domains.conversation.models import (
     MessageRole,
 )
 from domains.conversation.repository import ConversationRepository
-from shared.exceptions import ExternalAPIException
+from shared.exceptions import ExternalAPIException, RateLimitException
 
 settings = get_settings()
 
@@ -229,6 +229,13 @@ class ConversationService:
                 response.raise_for_status()
                 data = response.json()
                 return data["choices"][0]["message"]["content"]
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code == 429:
+                    raise RateLimitException(
+                        "무료 모델의 사용 한도에 도달했습니다. 잠시 후 다시 시도해주세요.",
+                        details={"retry_after": "1-2 minutes"}
+                    )
+                raise ExternalAPIException(f"LLM API call failed: {str(e)}")
             except httpx.HTTPError as e:
                 raise ExternalAPIException(f"LLM API call failed: {str(e)}")
 

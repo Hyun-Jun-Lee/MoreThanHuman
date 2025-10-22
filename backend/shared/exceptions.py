@@ -28,3 +28,9 @@ class ExternalAPIException(AppException):
     """외부 API 호출 실패"""
 
     pass
+
+
+class RateLimitException(AppException):
+    """API Rate Limit 도달"""
+
+    pass

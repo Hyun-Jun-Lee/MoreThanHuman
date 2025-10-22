@@ -9,7 +9,7 @@ import httpx
 from config import get_settings
 from domains.grammar.models import GrammarAnalysis, GrammarFeedback, GrammarFeedbackModel, GrammarStats
 from domains.grammar.repository import GrammarRepository
-from shared.exceptions import ExternalAPIException
+from shared.exceptions import ExternalAPIException, RateLimitException
 
 settings = get_settings()
 
@@ -135,6 +135,13 @@ class GrammarService:
                 llm_response = data["choices"][0]["message"]["content"]
 
                 return self.parse_grammar_response(llm_response)
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code == 429:
+                    raise RateLimitException(
+                        "무료 모델의 사용 한도에 도달했습니다. 잠시 후 다시 시도해주세요.",
+                        details={"retry_after": "1-2 minutes"}
+                    )
+                raise ExternalAPIException(f"Grammar check API call failed: {str(e)}")
             except httpx.HTTPError as e:
                 raise ExternalAPIException(f"Grammar check API call failed: {str(e)}")
 

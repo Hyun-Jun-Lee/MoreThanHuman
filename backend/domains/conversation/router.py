@@ -15,7 +15,7 @@ from database import get_db
 from domains.conversation.models import Conversation, ConversationResponse, Message, MessageResponse
 from domains.conversation.repository import ConversationRepository
 from domains.conversation.service import ConversationService
-from shared.exceptions import AppException, NotFoundException
+from shared.exceptions import AppException, NotFoundException, RateLimitException
 from shared.types import ErrorResponse, SuccessResponse
 
 router = APIRouter(prefix="/api/conversations", tags=["conversations"])
@@ -60,6 +60,9 @@ async def start_conversation(
     try:
         response = await service.start_conversation(request.first_message)
         return SuccessResponse(data=response, message="대화가 시작되었습니다")
+    except RateLimitException as e:
+        logger.warning(f"RateLimitException in start_conversation: {e.message}")
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=e.message)
     except AppException as e:
         logger.error(f"AppException in start_conversation: {e.message}", exc_info=True)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
@@ -88,6 +91,9 @@ async def send_message(
     try:
         response = await service.continue_conversation(str(conversation_id), request.message)
         return SuccessResponse(data=response)
+    except RateLimitException as e:
+        logger.warning(f"RateLimitException in send_message: {e.message}")
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=e.message)
     except NotFoundException as e:
         logger.error(f"NotFoundException in send_message: {e.message}")
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
