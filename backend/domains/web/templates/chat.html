@@ -43,6 +43,9 @@
                     <span class="material-symbols-outlined text-xl">search</span>
                     <span class="hidden sm:inline">Search Context</span>
                 </button>
+                <button id="auto-speak-toggle" class="flex items-center justify-center size-9 rounded-full text-subtle-light dark:text-subtle-dark hover:bg-primary/10 hover:text-primary transition-colors" title="Auto-play AI responses">
+                    <span class="material-symbols-outlined text-2xl">volume_up</span>
+                </button>
                 <button class="flex items-center justify-center size-9 rounded-full text-subtle-light dark:text-subtle-dark hover:bg-primary/10 hover:text-primary transition-colors">
                     <span class="material-symbols-outlined text-2xl">more_horiz</span>
                 </button>
@@ -59,7 +62,12 @@
                             <span class="material-symbols-outlined text-primary">smart_toy</span>
                         </div>
                         <div class="flex flex-1 flex-col gap-1 items-start">
-                            <p class="text-subtle-light dark:text-subtle-dark text-sm font-medium leading-normal">MoreThanHuman AI</p>
+                            <div class="flex items-center gap-2">
+                                <p class="text-subtle-light dark:text-subtle-dark text-sm font-medium leading-normal">MoreThanHuman AI</p>
+                                <button class="speaker-btn flex items-center justify-center size-7 rounded-full hover:bg-primary/10 transition-colors" data-text="Hi! I'm your English conversation partner. What would you like to talk about today?" title="Play audio">
+                                    <span class="material-symbols-outlined text-lg text-subtle-light dark:text-subtle-dark">volume_up</span>
+                                </button>
+                            </div>
                             <p class="text-base font-normal leading-relaxed rounded-lg px-4 py-3 bg-surface-light dark:bg-surface-dark shadow-sm">
                                 Hi! I'm your English conversation partner. What would you like to talk about today?
                             </p>

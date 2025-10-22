@@ -71,7 +71,7 @@ function updateVoiceButton() {
 }
 
 // Speak text using TTS
-function speakText(text) {
+function speakText(text, buttonElement = null) {
     if (!synthesis) {
         console.error('Speech synthesis not supported');
         return;
@@ -85,14 +85,62 @@ function speakText(text) {
     utterance.rate = 0.9;
     utterance.pitch = 1.0;
 
+    // Update button icon to pause when speaking starts
+    if (buttonElement) {
+        const icon = buttonElement.querySelector('.material-symbols-outlined');
+        if (icon) {
+            icon.textContent = 'pause';
+            buttonElement.classList.add('text-primary');
+        }
+    }
+
+    // Restore icon when speech ends
+    utterance.onend = () => {
+        if (buttonElement) {
+            const icon = buttonElement.querySelector('.material-symbols-outlined');
+            if (icon) {
+                icon.textContent = 'volume_up';
+                buttonElement.classList.remove('text-primary');
+            }
+        }
+    };
+
     synthesis.speak(utterance);
 }
 
 // Auto-speak AI responses (optional feature)
-let autoSpeak = localStorage.getItem('autoSpeak') === 'true';
+let autoSpeak = localStorage.getItem('autoSpeak') !== 'false'; // Default to true
 
 function toggleAutoSpeak() {
     autoSpeak = !autoSpeak;
     localStorage.setItem('autoSpeak', autoSpeak);
+    updateAutoSpeakButton();
     return autoSpeak;
 }
+
+// Update auto-speak toggle button appearance
+function updateAutoSpeakButton() {
+    const toggleBtn = document.getElementById('auto-speak-toggle');
+    if (!toggleBtn) return;
+
+    const icon = toggleBtn.querySelector('.material-symbols-outlined');
+    if (autoSpeak) {
+        icon.textContent = 'volume_up';
+        toggleBtn.title = 'Auto-play: ON';
+    } else {
+        icon.textContent = 'volume_off';
+        toggleBtn.title = 'Auto-play: OFF';
+    }
+}
+
+// Initialize auto-speak button on page load
+document.addEventListener('DOMContentLoaded', () => {
+    updateAutoSpeakButton();
+
+    const autoSpeakToggle = document.getElementById('auto-speak-toggle');
+    if (autoSpeakToggle) {
+        autoSpeakToggle.addEventListener('click', () => {
+            toggleAutoSpeak();
+        });
+    }
+});
