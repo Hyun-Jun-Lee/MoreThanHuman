@@ -2,6 +2,8 @@
 Conversation Service Layer
 비즈니스 로직 및 도메인 규칙
 """
+import logging
+import traceback
 from uuid import uuid4
 
 from config import get_model_for_provider, get_settings
@@ -12,6 +14,7 @@ from domains.conversation.schemas import Conversation, ConversationResponse, Mes
 from domains.llm.factory import LLMProviderFactory
 from domains.llm.schemas import LLMMessage, LLMRequest
 
+logger = logging.getLogger(__name__)
 settings = get_settings()
 
 
@@ -32,46 +35,54 @@ class ConversationService:
         Returns:
             대화 응답
         """
-        # 1. Conversation 생성
-        conversation = ConversationModel(
-            id=str(uuid4()),
-            message_count=0,
-            status=ConversationStatus.ACTIVE,
-        )
-        self.repository.save(conversation)
+        try:
+            # 1. Conversation 생성
+            # 첫 메시지를 title로 설정 (최대 50자)
+            title = first_message[:50] if len(first_message) <= 50 else first_message[:47] + "..."
 
-        # 2. 사용자 메시지 저장
-        user_message = MessageModel(
-            id=str(uuid4()),
-            conversation_id=conversation.id,
-            role=MessageRole.USER,
-            content=first_message,
-        )
-        self.repository.save_message(user_message)
+            conversation = ConversationModel(
+                id=str(uuid4()),
+                title=title,
+                message_count=0,
+                status=ConversationStatus.ACTIVE,
+            )
+            self.repository.save(conversation)
 
-        # 3. 시스템 프롬프트 생성
-        system_prompt = self.build_system_prompt(first_message, search_context)
+            # 2. 사용자 메시지 저장
+            user_message = MessageModel(
+                id=str(uuid4()),
+                conversation_id=conversation.id,
+                role=MessageRole.USER,
+                content=first_message,
+            )
+            self.repository.save_message(user_message)
 
-        # 4. LLM 응답 생성
-        ai_response = await self.generate_response(system_prompt, [], first_message)
+            # 3. 시스템 프롬프트 생성
+            system_prompt = self.build_system_prompt(first_message, search_context)
 
-        # 5. AI 메시지 저장
-        assistant_message = MessageModel(
-            id=str(uuid4()),
-            conversation_id=conversation.id,
-            role=MessageRole.ASSISTANT,
-            content=ai_response,
-        )
-        self.repository.save_message(assistant_message)
+            # 4. LLM 응답 생성
+            ai_response = await self.generate_response(system_prompt, [], first_message)
 
-        # 6. 메시지 카운트 업데이트
-        self.repository.update_message_count(conversation.id, 2)
+            # 5. AI 메시지 저장
+            assistant_message = MessageModel(
+                id=str(uuid4()),
+                conversation_id=conversation.id,
+                role=MessageRole.ASSISTANT,
+                content=ai_response,
+            )
+            self.repository.save_message(assistant_message)
 
-        return ConversationResponse(
-            conversation_id=conversation.id,
-            response=ai_response,
-            grammar_feedback=None,  # Grammar 모듈에서 처리
-        )
+            # 6. 메시지 카운트 업데이트
+            self.repository.update_message_count(conversation.id, 2)
+
+            return ConversationResponse(
+                conversation_id=conversation.id,
+                response=ai_response,
+                grammar_feedback=None,  # Grammar 모듈에서 처리
+            )
+        except Exception as e:
+            logger.error(f"Error in start_conversation: {str(e)}\n{traceback.format_exc()}")
+            raise
 
     async def continue_conversation(self, conversation_id: str, user_message: str) -> MessageResponse:
         """
@@ -84,49 +95,53 @@ class ConversationService:
         Returns:
             메시지 응답
         """
-        # 1. 대화 조회
-        conversation = self.repository.find_by_id(conversation_id)
+        try:
+            # 1. 대화 조회
+            conversation = self.repository.find_by_id(conversation_id)
 
-        # 2. 사용자 메시지 저장
-        user_msg = MessageModel(
-            id=str(uuid4()),
-            conversation_id=conversation.id,
-            role=MessageRole.USER,
-            content=user_message,
-        )
-        self.repository.save_message(user_msg)
+            # 2. 사용자 메시지 저장
+            user_msg = MessageModel(
+                id=str(uuid4()),
+                conversation_id=conversation.id,
+                role=MessageRole.USER,
+                content=user_message,
+            )
+            self.repository.save_message(user_msg)
 
-        # 3. 최근 10턴 조회
-        recent_messages = self.repository.get_recent_messages(conversation.id, settings.max_history_turns)
+            # 3. 최근 10턴 조회
+            recent_messages = self.repository.get_recent_messages(conversation.id, settings.max_history_turns)
 
-        # 4. 메시지 히스토리 구성
-        message_history = self.prepare_message_history(recent_messages[:-1])  # 방금 저장한 메시지 제외
+            # 4. 메시지 히스토리 구성
+            message_history = self.prepare_message_history(recent_messages[:-1])  # 방금 저장한 메시지 제외
 
-        # 5. 시스템 프롬프트 생성
-        system_prompt = self.build_system_prompt(user_message)
+            # 5. 시스템 프롬프트 생성
+            system_prompt = self.build_system_prompt(user_message)
 
-        # 6. LLM 응답 생성
-        ai_response = await self.generate_response(system_prompt, message_history, user_message)
+            # 6. LLM 응답 생성
+            ai_response = await self.generate_response(system_prompt, message_history, user_message)
 
-        # 7. AI 메시지 저장
-        assistant_msg = MessageModel(
-            id=str(uuid4()),
-            conversation_id=conversation.id,
-            role=MessageRole.ASSISTANT,
-            content=ai_response,
-        )
-        self.repository.save_message(assistant_msg)
+            # 7. AI 메시지 저장
+            assistant_msg = MessageModel(
+                id=str(uuid4()),
+                conversation_id=conversation.id,
+                role=MessageRole.ASSISTANT,
+                content=ai_response,
+            )
+            self.repository.save_message(assistant_msg)
 
-        # 8. 메시지 카운트 업데이트
-        new_count = conversation.message_count + 2
-        self.repository.update_message_count(conversation.id, new_count)
+            # 8. 메시지 카운트 업데이트
+            new_count = conversation.message_count + 2
+            self.repository.update_message_count(conversation.id, new_count)
 
-        return MessageResponse(
-            message_id=assistant_msg.id,
-            response=ai_response,
-            grammar_feedback=None,  # Grammar 모듈에서 처리
-            turn_count=new_count // 2,
-        )
+            return MessageResponse(
+                message_id=assistant_msg.id,
+                response=ai_response,
+                grammar_feedback=None,  # Grammar 모듈에서 처리
+                turn_count=new_count // 2,
+            )
+        except Exception as e:
+            logger.error(f"Error in continue_conversation: {str(e)}\n{traceback.format_exc()}")
+            raise
 
     def get_conversation(self, conversation_id: str) -> Conversation:
         """

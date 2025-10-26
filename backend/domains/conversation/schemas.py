@@ -13,6 +13,7 @@ class Conversation(BaseModel):
     """대화 스키마"""
 
     id: UUID
+    title: str | None = None
     message_count: int
     status: ConversationStatus
     created_at: datetime

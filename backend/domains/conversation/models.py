@@ -16,6 +16,7 @@ class ConversationModel(Base):
     __tablename__ = "conversations"
 
     id = Column(String(36), primary_key=True)  # UUID를 문자열로 저장
+    title = Column(String(200), nullable=True)  # 대화 제목 (첫 질문)
     message_count = Column(Integer, default=0, nullable=False)
     status = Column(SQLEnum(ConversationStatus), default=ConversationStatus.ACTIVE, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)

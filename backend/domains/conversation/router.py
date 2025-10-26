@@ -26,6 +26,7 @@ class StartConversationRequest(BaseModel):
     """대화 시작 요청"""
 
     first_message: str
+    search_context: str | None = None
 
 
 class SendMessageRequest(BaseModel):
@@ -58,7 +59,7 @@ async def start_conversation(
         대화 응답
     """
     try:
-        response = await service.start_conversation(request.first_message)
+        response = await service.start_conversation(request.first_message, request.search_context)
         return SuccessResponse(data=response, message="대화가 시작되었습니다")
     except RateLimitException as e:
         logger.warning(f"RateLimitException in start_conversation: {e.message}")
