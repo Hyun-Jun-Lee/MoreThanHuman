@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     """애플리케이션 설정"""
 
     # Database
-    database_url: str = "sqlite:///./english_learning.db"
+    database_url: str = None
 
     # External APIs
     openrouter_api_key: str
@@ -20,10 +20,18 @@ class Settings(BaseSettings):
     debug: bool = False
     cors_origins: list[str] = ["http://localhost:5173"]
 
-    # LLM Settings
-    llm_model: str = "google/gemini-2.0-flash-exp:free"
-    llm_fallback_model: str = "deepseek/deepseek-chat"
-    max_tokens: int = 2000
+    # LLM Provider Settings
+    llm_provider: str
+    ollama_base_url: str
+
+    # OpenRouter Model Settings
+    openrouter_model: str
+
+    # Ollama Model Settings
+    ollama_model: str
+
+    # Common LLM Settings
+    max_tokens: int = 4000
     temperature: float = 0.7
 
     # Conversation Settings
@@ -39,3 +47,22 @@ class Settings(BaseSettings):
 def get_settings() -> Settings:
     """설정 싱글톤 인스턴스 반환"""
     return Settings()
+
+
+def get_model_for_provider(provider: str | None = None) -> str:
+    """
+    현재 Provider에 맞는 모델 반환
+
+    Args:
+        provider: Provider 타입 (None이면 설정값 사용)
+
+    Returns:
+        Provider에 맞는 모델명
+    """
+    settings = get_settings()
+    current_provider = provider or settings.llm_provider
+
+    if current_provider == "ollama":
+        return settings.ollama_model
+    else:  # openrouter
+        return settings.openrouter_model
