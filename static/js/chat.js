@@ -19,7 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Event listeners
-    document.getElementById('send-btn').addEventListener('click', sendMessage);
+    document.getElementById('send-btn').addEventListener('click', () => sendMessage());
     document.getElementById('message-input').addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
@@ -64,6 +64,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Load sidebar conversations
     loadSidebarConversations();
+
+    // Warn on page refresh if message is being typed on new conversation page
+    if (conversationId === 'new') {
+        window.addEventListener('beforeunload', (e) => {
+            const input = document.getElementById('message-input');
+            if (input.value.trim()) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        });
+    }
 });
 
 // Load conversation messages
@@ -107,6 +118,9 @@ async function sendMessage(retryMessage = null) {
         addUserMessage(message);
     }
 
+    // Show loading indicator
+    addLoadingMessage();
+
     try {
         let response;
 
@@ -123,6 +137,7 @@ async function sendMessage(retryMessage = null) {
 
             // Check for rate limit error
             if (response.status === 429) {
+                removeLoadingMessage();
                 const errorData = await response.json();
                 addRetryMessage(errorData.detail || '사용 한도에 도달했습니다. 1-2분 후 다시 시도해주세요.');
                 return;
@@ -138,7 +153,8 @@ async function sendMessage(retryMessage = null) {
                 // Remove any retry messages on success
                 removeRetryMessages();
 
-                // Add AI response
+                // Remove loading and add AI response
+                removeLoadingMessage();
                 addAIMessage(data.data.response, data.data.grammar_feedback);
             }
         } else {
@@ -151,8 +167,16 @@ async function sendMessage(retryMessage = null) {
 
             // Check for rate limit error
             if (response.status === 429) {
+                removeLoadingMessage();
                 const errorData = await response.json();
                 addRetryMessage(errorData.detail || '사용 한도에 도달했습니다. 1-2분 후 다시 시도해주세요.');
+                return;
+            }
+
+            // Check for not found error (conversation deleted or doesn't exist)
+            if (response.status === 404) {
+                removeLoadingMessage();
+                window.location.href = '/conversations/new';
                 return;
             }
 
@@ -162,12 +186,15 @@ async function sendMessage(retryMessage = null) {
                 // Remove any retry messages on success
                 removeRetryMessages();
 
+                // Remove loading and add AI response
+                removeLoadingMessage();
                 addAIMessage(data.data.response, data.data.grammar_feedback);
             }
         }
 
         scrollToBottom();
     } catch (error) {
+        removeLoadingMessage();
         console.error('Failed to send message:', error);
         alert('Failed to send message. Please try again.');
     }
@@ -227,6 +254,38 @@ function addRetryMessage(errorMessage) {
 function removeRetryMessages() {
     const retryMessages = document.querySelectorAll('.retry-message');
     retryMessages.forEach(msg => msg.remove());
+}
+
+// Add loading message
+function addLoadingMessage() {
+    const messagesContainer = document.getElementById('messages-list');
+
+    const loadingHtml = `
+        <div class="flex items-end gap-3 self-start max-w-xl loading-message">
+            <div class="bg-primary/20 rounded-full w-10 h-10 shrink-0 flex items-center justify-center">
+                <span class="material-symbols-outlined text-primary">smart_toy</span>
+            </div>
+            <div class="flex flex-1 flex-col gap-1 items-start">
+                <p class="text-subtle-light dark:text-subtle-dark text-sm font-medium leading-normal">MoreThanHuman AI</p>
+                <p class="text-base font-normal leading-relaxed rounded-lg px-4 py-3 bg-surface-light dark:bg-surface-dark shadow-sm">
+                    <span class="inline-flex items-center gap-1">
+                        응답중<span class="animate-pulse">...</span>
+                    </span>
+                </p>
+            </div>
+        </div>
+    `;
+
+    messagesContainer.insertAdjacentHTML('beforeend', loadingHtml);
+    scrollToBottom();
+}
+
+// Remove loading message
+function removeLoadingMessage() {
+    const loadingMessage = document.querySelector('.loading-message');
+    if (loadingMessage) {
+        loadingMessage.remove();
+    }
 }
 
 // Add user message to UI
@@ -341,7 +400,7 @@ async function loadSidebarConversations() {
         const html = data.data.slice(0, 10).map(conv => `
             <a class="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-primary/5 ${conv.id === conversationId ? 'bg-primary/10 text-primary' : 'text-text-light dark:text-text-dark'}" href="/conversations/${conv.id}">
                 <span class="material-symbols-outlined text-xl">chat_bubble</span>
-                <span class="text-sm font-medium truncate">#${conv.id.substring(0, 8)}</span>
+                <span class="text-sm font-medium truncate">${conv.title || '#' + conv.id.substring(0, 8)}</span>
             </a>
         `).join('');
 
