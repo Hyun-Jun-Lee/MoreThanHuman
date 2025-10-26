@@ -1,10 +1,10 @@
 """
 Grammar 도메인 Pydantic 스키마 정의
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from domains.grammar.enums import ErrorType
 
@@ -28,7 +28,7 @@ class GrammarFeedback(BaseModel):
     corrected_text: str
     has_errors: bool
     errors: list[GrammarError]
-    created_at: datetime
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     class Config:
         from_attributes = True

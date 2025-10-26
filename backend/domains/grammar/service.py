@@ -21,18 +21,19 @@ class GrammarService:
     def __init__(self, repository: GrammarRepository):
         self.repository = repository
 
-    async def check_grammar(self, text: str) -> GrammarFeedback:
+    async def check_grammar(self, text: str, previous_ai_message: str | None = None) -> GrammarFeedback:
         """
         문법 체크
 
         Args:
             text: 체크할 텍스트
+            previous_ai_message: 바로 전 AI 메시지 (대화 맥락)
 
         Returns:
             문법 피드백
         """
         # LLM을 통한 문법 분석
-        analysis = await self.analyze_grammar(text)
+        analysis = await self.analyze_grammar(text, previous_ai_message)
 
         return GrammarFeedback(
             id=str(uuid4()),
@@ -79,32 +80,13 @@ class GrammarService:
         feedback = self.repository.find_by_message_id(message_id)
         return GrammarFeedback.model_validate(feedback)
 
-    def get_stats(self, time_range: str | None = None) -> GrammarStats:
-        """
-        문법 통계 조회
-
-        Args:
-            time_range: 시간 범위
-
-        Returns:
-            문법 통계
-        """
-        stats = self.repository.get_stats(time_range)
-
-        return GrammarStats(
-            total_messages=stats["total_messages"],
-            messages_with_errors=stats["messages_with_errors"],
-            error_rate=stats["error_rate"],
-            common_errors=[],  # TODO: 구현
-            improvement_trend=[],  # TODO: 구현
-        )
-
-    async def analyze_grammar(self, text: str) -> GrammarAnalysis:
+    async def analyze_grammar(self, text: str, previous_ai_message: str | None = None) -> GrammarAnalysis:
         """
         LLM을 사용한 문법 분석
 
         Args:
             text: 분석할 텍스트
+            previous_ai_message: 바로 전 AI 메시지 (대화 맥락)
 
         Returns:
             문법 분석 결과
@@ -117,7 +99,7 @@ class GrammarService:
         provider = LLMProviderFactory.create_provider()
 
         # Build prompt
-        prompt = self.build_grammar_prompt(text)
+        prompt = self.build_grammar_prompt(text, previous_ai_message)
 
         # Create request with provider-specific model
         request = LLMRequest(
@@ -131,19 +113,31 @@ class GrammarService:
         response = await provider.chat_completion(request)
         return self.parse_grammar_response(response.content)
 
-    def build_grammar_prompt(self, text: str) -> str:
+    def build_grammar_prompt(self, text: str, previous_ai_message: str | None = None) -> str:
         """
         문법 체크용 프롬프트 생성
 
         Args:
             text: 체크할 텍스트
+            previous_ai_message: 바로 전 AI 메시지 (대화 맥락)
 
         Returns:
             프롬프트
         """
-        return f"""Analyze the following English sentence for grammar errors.
+        context_part = ""
+        if previous_ai_message:
+            context_part = f"""
+Context (previous AI message): "{previous_ai_message}"
 
-Sentence: "{text}"
+IMPORTANT: Consider the conversation context when analyzing.
+- Short responses like "Went to the park" are natural replies to questions like "What did you do?"
+- Don't mark conversational responses as errors if they're natural in context
+- However, still check for actual grammar errors (subject-verb agreement, tense, etc.)
+"""
+
+        return f"""Analyze the following English response for grammar errors.
+{context_part}
+User's response: "{text}"
 
 Respond in JSON format with:
 {{
@@ -189,7 +183,7 @@ Keep explanations concise and helpful."""
                 corrected_sentence=data.get("corrected_sentence", ""),
                 overall_quality=data.get("overall_quality", 1.0),
             )
-        except (json.JSONDecodeError, KeyError) as e:
+        except (json.JSONDecodeError, KeyError):
             # 파싱 실패 시 에러 없음으로 처리
             return GrammarAnalysis(
                 has_errors=False, errors=[], corrected_sentence="", overall_quality=1.0
