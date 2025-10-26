@@ -2,6 +2,9 @@
 let conversationId = null;
 let searchContext = null;
 let lastUserMessage = null; // Store last message for retry
+let conversationType = 'FREE_CHAT'; // FREE_CHAT or ROLE_PLAYING
+let roleCharacter = null;
+let isSending = false; // Track if message is being sent
 
 // Get conversation ID from URL
 function getConversationId() {
@@ -16,6 +19,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (conversationId && conversationId !== 'new') {
         loadConversation(conversationId);
+        document.getElementById('welcome-message').classList.remove('hidden');
+    } else {
+        // Show conversation setup for new conversations
+        document.getElementById('conversation-setup').classList.remove('hidden');
+        document.getElementById('conversation-setup').classList.add('flex');
+        initializeConversationSetup();
     }
 
     // Event listeners
@@ -77,6 +86,69 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
+// Initialize conversation setup UI
+function initializeConversationSetup() {
+    const freeChatBtn = document.getElementById('type-free-chat');
+    const rolePlayingBtn = document.getElementById('type-role-playing');
+    const freeChatOptions = document.getElementById('free-chat-options');
+    const rolePlayingOptions = document.getElementById('role-playing-options');
+    const startBtn = document.getElementById('start-conversation-btn');
+    const messageInput = document.getElementById('message-input');
+
+    // Hide message input initially
+    messageInput.closest('footer').classList.add('hidden');
+
+    // Type selection handlers
+    freeChatBtn.addEventListener('click', () => {
+        conversationType = 'FREE_CHAT';
+        freeChatBtn.classList.add('border-primary', 'bg-primary/10');
+        rolePlayingBtn.classList.remove('border-primary', 'bg-primary/10');
+        freeChatOptions.classList.remove('hidden');
+        rolePlayingOptions.classList.add('hidden');
+        startBtn.classList.remove('hidden');
+    });
+
+    rolePlayingBtn.addEventListener('click', () => {
+        conversationType = 'ROLE_PLAYING';
+        rolePlayingBtn.classList.add('border-primary', 'bg-primary/10');
+        freeChatBtn.classList.remove('border-primary', 'bg-primary/10');
+        rolePlayingOptions.classList.remove('hidden');
+        freeChatOptions.classList.add('hidden');
+        startBtn.classList.remove('hidden');
+    });
+
+    // Start conversation button handler
+    startBtn.addEventListener('click', () => {
+        if (conversationType === 'ROLE_PLAYING') {
+            roleCharacter = document.getElementById('role-character').value.trim();
+            if (!roleCharacter) {
+                alert('Please enter a character role for role-playing');
+                return;
+            }
+        }
+
+        // Enable search context if checkbox is checked for free chat
+        if (conversationType === 'FREE_CHAT' && document.getElementById('enable-search-context').checked) {
+            document.getElementById('search-modal').classList.remove('hidden');
+            return; // Wait for search to complete
+        }
+
+        // Hide setup, show input, and show welcome message
+        startConversationUI();
+    });
+}
+
+// Start conversation UI
+function startConversationUI() {
+    document.getElementById('conversation-setup').classList.add('hidden');
+    document.getElementById('conversation-setup').classList.remove('flex');
+    document.getElementById('message-input').closest('footer').classList.remove('hidden');
+    document.getElementById('welcome-message').classList.remove('hidden');
+
+    // Focus on message input
+    document.getElementById('message-input').focus();
+}
+
 // Load conversation messages
 async function loadConversation(id) {
     try {
@@ -100,10 +172,18 @@ async function loadConversation(id) {
 
 // Send message
 async function sendMessage(retryMessage = null) {
+    // Prevent sending if already sending
+    if (isSending) {
+        console.log('Message already being sent, please wait...');
+        return;
+    }
+
     const input = document.getElementById('message-input');
     const message = retryMessage || input.value.trim();
 
     if (!message) return;
+
+    isSending = true;
 
     // Store message for potential retry
     lastUserMessage = message;
@@ -131,7 +211,9 @@ async function sendMessage(retryMessage = null) {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     first_message: message,
-                    search_context: searchContext
+                    search_context: searchContext,
+                    conversation_type: conversationType,
+                    role_character: roleCharacter
                 })
             });
 
@@ -150,12 +232,16 @@ async function sendMessage(retryMessage = null) {
                 // Update URL without reload
                 window.history.pushState({}, '', `/conversations/${conversationId}`);
 
+                // Update sidebar with new conversation
+                loadSidebarConversations();
+
                 // Remove any retry messages on success
                 removeRetryMessages();
 
-                // Remove loading and add AI response
+                // Remove loading and add grammar feedback to user message
                 removeLoadingMessage();
-                addAIMessage(data.data.response, data.data.grammar_feedback);
+                addGrammarFeedback(data.data.grammar_feedback);
+                addAIMessage(data.data.response);
             }
         } else {
             // Continue conversation
@@ -186,9 +272,10 @@ async function sendMessage(retryMessage = null) {
                 // Remove any retry messages on success
                 removeRetryMessages();
 
-                // Remove loading and add AI response
+                // Remove loading and add grammar feedback to user message
                 removeLoadingMessage();
-                addAIMessage(data.data.response, data.data.grammar_feedback);
+                addGrammarFeedback(data.data.grammar_feedback);
+                addAIMessage(data.data.response);
             }
         }
 
@@ -197,6 +284,8 @@ async function sendMessage(retryMessage = null) {
         removeLoadingMessage();
         console.error('Failed to send message:', error);
         alert('Failed to send message. Please try again.');
+    } finally {
+        isSending = false;
     }
 }
 
@@ -218,7 +307,13 @@ async function performSearch() {
         if (data.success && data.data) {
             searchContext = data.data;
             document.getElementById('search-modal').classList.add('hidden');
-            alert('Search context loaded! Your next message will use this information.');
+
+            // If we're in setup mode, start the conversation UI
+            if (conversationId === 'new' && document.getElementById('conversation-setup').classList.contains('flex')) {
+                startConversationUI();
+            } else {
+                alert('Search context loaded! Your next message will use this information.');
+            }
         }
     } catch (error) {
         console.error('Search failed:', error);
@@ -293,7 +388,7 @@ function addUserMessage(content) {
     const messagesContainer = document.getElementById('messages-list');
 
     const messageHtml = `
-        <div class="flex flex-col items-end gap-2 self-end max-w-xl">
+        <div class="user-message-container flex flex-col items-end gap-2 self-end max-w-xl">
             <div class="flex items-end gap-3 self-end w-full">
                 <div class="flex flex-1 flex-col gap-1 items-end">
                     <p class="text-subtle-light dark:text-subtle-dark text-sm font-medium leading-normal">You</p>
@@ -309,19 +404,37 @@ function addUserMessage(content) {
     messagesContainer.insertAdjacentHTML('beforeend', messageHtml);
 }
 
-// Add AI message to UI
-function addAIMessage(content, grammarFeedback = null) {
-    const messagesContainer = document.getElementById('messages-list');
+// Add grammar feedback to last user message
+function addGrammarFeedback(grammarFeedback) {
+    if (!grammarFeedback) return;
 
-    let grammarHtml = '';
-    if (grammarFeedback && grammarFeedback.has_errors) {
-        grammarHtml = `
-            <div class="flex flex-col gap-1 items-start bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-lg border border-yellow-200 dark:border-yellow-800/50 w-[calc(100%-3.25rem)]">
+    const userMessages = document.querySelectorAll('.user-message-container');
+    const lastUserMessage = userMessages[userMessages.length - 1];
+
+    if (!lastUserMessage) return;
+
+    let feedbackHtml = '';
+    if (grammarFeedback.has_errors) {
+        feedbackHtml = `
+            <div class="flex flex-col gap-1 items-end bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-lg border border-yellow-200 dark:border-yellow-800/50 w-full">
                 <p class="text-yellow-800 dark:text-yellow-200 text-sm font-bold leading-tight">Correction</p>
-                <p class="text-text-light dark:text-text-dark text-base font-normal leading-relaxed">${grammarFeedback.corrected_text || ''}</p>
+                <p class="text-text-light dark:text-text-dark text-base font-normal leading-relaxed text-right">${escapeHtml(grammarFeedback.corrected_text || '')}</p>
+            </div>
+        `;
+    } else {
+        feedbackHtml = `
+            <div class="flex items-center justify-end gap-2 p-2 w-full">
+                <span class="material-symbols-outlined text-green-600 dark:text-green-400 text-xl">check_circle</span>
             </div>
         `;
     }
+
+    lastUserMessage.insertAdjacentHTML('beforeend', feedbackHtml);
+}
+
+// Add AI message to UI
+function addAIMessage(content) {
+    const messagesContainer = document.getElementById('messages-list');
 
     const messageHtml = `
         <div class="flex items-end gap-3 self-start max-w-xl">
@@ -336,7 +449,6 @@ function addAIMessage(content, grammarFeedback = null) {
                     </button>
                 </div>
                 <p class="text-base font-normal leading-relaxed rounded-lg px-4 py-3 bg-surface-light dark:bg-surface-dark shadow-sm">${escapeHtml(content)}</p>
-                ${grammarHtml}
             </div>
         </div>
     `;
@@ -358,6 +470,10 @@ function addAIMessage(content, grammarFeedback = null) {
 function appendMessage(msg) {
     if (msg.role === 'user') {
         addUserMessage(msg.content);
+        // Add grammar feedback if available
+        if (msg.grammar_feedback) {
+            addGrammarFeedback(msg.grammar_feedback);
+        }
     } else if (msg.role === 'assistant') {
         // Add AI message without auto-play for historical messages
         const messagesContainer = document.getElementById('messages-list');
