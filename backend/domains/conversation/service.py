@@ -2,15 +2,18 @@
 Conversation Service Layer
 비즈니스 로직 및 도메인 규칙
 """
+import asyncio
 import logging
 import traceback
 from uuid import uuid4
 
 from config import get_model_for_provider, get_settings
-from domains.conversation.enums import ConversationStatus, MessageRole
+from domains.conversation.enums import ConversationStatus, ConversationType, MessageRole
 from domains.conversation.models import ConversationModel, MessageModel
 from domains.conversation.repository import ConversationRepository
 from domains.conversation.schemas import Conversation, ConversationResponse, Message, MessageResponse
+from domains.grammar.repository import GrammarRepository
+from domains.grammar.service import GrammarService
 from domains.llm.factory import LLMProviderFactory
 from domains.llm.schemas import LLMMessage, LLMRequest
 
@@ -21,16 +24,25 @@ settings = get_settings()
 class ConversationService:
     """대화 서비스"""
 
-    def __init__(self, repository: ConversationRepository):
+    def __init__(self, repository: ConversationRepository, grammar_repository: GrammarRepository):
         self.repository = repository
+        self.grammar_service = GrammarService(grammar_repository)
 
-    async def start_conversation(self, first_message: str, search_context: str | None = None) -> ConversationResponse:
+    async def start_conversation(
+        self,
+        first_message: str,
+        search_context: str | None = None,
+        conversation_type: ConversationType = ConversationType.FREE_CHAT,
+        role_character: str | None = None
+    ) -> ConversationResponse:
         """
         대화 시작
 
         Args:
             first_message: 첫 메시지
             search_context: 검색 컨텍스트 (세션 메모리)
+            conversation_type: 대화 타입 (자유 대화 또는 롤플레이)
+            role_character: 롤플레이 캐릭터 (예: "카페 바리스타", "영어 선생님")
 
         Returns:
             대화 응답
@@ -43,6 +55,8 @@ class ConversationService:
             conversation = ConversationModel(
                 id=str(uuid4()),
                 title=title,
+                conversation_type=conversation_type,
+                role_character=role_character,
                 message_count=0,
                 status=ConversationStatus.ACTIVE,
             )
@@ -58,10 +72,22 @@ class ConversationService:
             self.repository.save_message(user_message)
 
             # 3. 시스템 프롬프트 생성
-            system_prompt = self.build_system_prompt(first_message, search_context)
+            system_prompt = self.build_system_prompt(search_context, conversation_type, role_character)
 
-            # 4. LLM 응답 생성
-            ai_response = await self.generate_response(system_prompt, [], first_message)
+            # 4. LLM 응답 생성과 문법 체크를 병렬로 실행 (첫 메시지이므로 이전 AI 메시지 없음)
+            results = await asyncio.gather(
+                self.generate_response(system_prompt, [], first_message),
+                self.grammar_service.check_grammar(first_message, previous_ai_message=None),
+                return_exceptions=True
+            )
+
+            ai_response = results[0]
+            grammar_feedback = None
+            if not isinstance(results[1], Exception):
+                # 문법 피드백 DB에 저장
+                feedback_result = results[1]
+                await self.grammar_service.save_feedback(user_message.id, feedback_result)
+                grammar_feedback = feedback_result.model_dump()
 
             # 5. AI 메시지 저장
             assistant_message = MessageModel(
@@ -77,8 +103,10 @@ class ConversationService:
 
             return ConversationResponse(
                 conversation_id=conversation.id,
+                conversation_type=conversation.conversation_type,
+                role_character=conversation.role_character,
                 response=ai_response,
-                grammar_feedback=None,  # Grammar 모듈에서 처리
+                grammar_feedback=grammar_feedback,
             )
         except Exception as e:
             logger.error(f"Error in start_conversation: {str(e)}\n{traceback.format_exc()}")
@@ -115,10 +143,37 @@ class ConversationService:
             message_history = self.prepare_message_history(recent_messages[:-1])  # 방금 저장한 메시지 제외
 
             # 5. 시스템 프롬프트 생성
-            system_prompt = self.build_system_prompt(user_message)
+            system_prompt = self.build_system_prompt(
+                None,  # search_context는 첫 대화에만 사용
+                conversation.conversation_type,
+                conversation.role_character
+            )
 
-            # 6. LLM 응답 생성
-            ai_response = await self.generate_response(system_prompt, message_history, user_message)
+            # 6. 바로 전 AI 메시지 찾기 (문법 체크 맥락용)
+            previous_ai_message = None
+            # 방금 저장한 user_msg 제외하고 마지막 assistant 메시지 찾기
+            for msg in reversed(recent_messages[:-1]):
+                if msg.role == MessageRole.ASSISTANT:
+                    previous_ai_message = msg.content
+                    break
+
+            # 7. LLM 응답 생성과 문법 체크를 병렬로 실행
+            results = await asyncio.gather(
+                self.generate_response(system_prompt, message_history, user_message),
+                self.grammar_service.check_grammar(user_message, previous_ai_message),
+                return_exceptions=True
+            )
+
+            ai_response = results[0]
+            grammar_feedback = None
+            if not isinstance(results[1], Exception):
+                # 문법 피드백 DB에 저장
+                feedback_result = results[1]
+                await self.grammar_service.save_feedback(user_msg.id, feedback_result)
+                grammar_feedback = feedback_result.model_dump()
+            else:
+                # 디버깅용 로그
+                logger.error(f"Grammar check error: {type(results[1]).__name__}: {str(results[1])}")
 
             # 7. AI 메시지 저장
             assistant_msg = MessageModel(
@@ -136,7 +191,7 @@ class ConversationService:
             return MessageResponse(
                 message_id=assistant_msg.id,
                 response=ai_response,
-                grammar_feedback=None,  # Grammar 모듈에서 처리
+                grammar_feedback=grammar_feedback,
                 turn_count=new_count // 2,
             )
         except Exception as e:
@@ -183,7 +238,26 @@ class ConversationService:
             메시지 목록
         """
         messages = self.repository.get_messages(conversation_id, limit, offset)
-        return [Message.model_validate(m) for m in messages]
+        result = []
+        for m in messages:
+            # MessageModel을 dict로 변환
+            msg_dict = {
+                "id": m.id,
+                "conversation_id": m.conversation_id,
+                "role": m.role,
+                "content": m.content,
+                "created_at": m.created_at,
+                "grammar_feedback": None
+            }
+
+            # grammar_feedback가 있으면 dict로 변환
+            if m.grammar_feedback:
+                from domains.grammar.schemas import GrammarFeedback
+                msg_dict["grammar_feedback"] = GrammarFeedback.model_validate(m.grammar_feedback).model_dump()
+
+            result.append(Message.model_validate(msg_dict))
+
+        return result
 
     def end_conversation(self, conversation_id: str) -> None:
         """
@@ -236,30 +310,75 @@ class ConversationService:
         return response.content
 
     # Helper 함수
-    def build_system_prompt(self, user_message: str, search_context: str | None = None) -> str:
+    def build_system_prompt(
+        self,
+        search_context: str | None = None,
+        conversation_type: ConversationType = ConversationType.FREE_CHAT,
+        role_character: str | None = None
+    ) -> str:
         """
-        시스템 프롬프트 구성
+        대화 타입에 따라 다른 시스템 프롬프트 생성
 
         Args:
-            user_message: 사용자 메시지
             search_context: 검색 컨텍스트
+            conversation_type: 대화 타입
+            role_character: 롤플레이 캐릭터
 
         Returns:
             시스템 프롬프트
         """
-        base_prompt = """You are a helpful English conversation partner.
-Your role is to engage in natural, flowing conversations to help users practice English.
+        if conversation_type == ConversationType.ROLE_PLAYING:
+            return self.build_roleplay_prompt(role_character, search_context)
+        else:
+            return self.build_free_chat_prompt(search_context)
 
-Guidelines:
-- Speak naturally and conversationally
-- Ask follow-up questions to keep the conversation going
-- Use varied vocabulary and sentence structures
-- Be encouraging and supportive
-- Keep responses concise (2-4 sentences)
-"""
+    def build_roleplay_prompt(self, role_character: str, search_context: str | None = None) -> str:
+        """롤플레이용 시스템 프롬프트"""
+
+        base_prompt = f"""You are an English conversation practice partner playing the role of '{role_character}'.
+
+        ## Role Guidelines:
+        1. Always speak naturally from the perspective of '{role_character}'
+        2. Use vocabulary and expressions appropriate for this role
+        3. Lead the conversation immersively as if in a real situation
+
+        ## Conversation Rules:
+        - Continue the conversation with natural questions appropriate to the situation
+        - Create realistic scenarios that fit the role
+        - **IMPORTANT: Keep responses short - maximum 3 sentences**
+
+        ## Scenario Examples:
+        - Cafe Barista: Greeting customers, explaining and recommending menu items, taking orders, chatting during drink preparation, payment and closing
+        - Interviewer: Welcoming candidates, requesting self-introduction, asking about experience and career, evaluating problem-solving skills in various situations, providing time for questions
+        - English Teacher: Practicing daily conversation, introducing new expressions, explaining grammar, correcting pronunciation, reviewing homework and providing feedback
+        - Hotel Front Desk: Check-in procedures, room information, introducing hotel facilities, handling requests, check-out and feedback
+        """
 
         if search_context:
-            base_prompt += f"\n\nRelevant context:\n{search_context}\n"
+            base_prompt += f"\n\n## Reference Information:\n{search_context}"
+
+        return base_prompt
+
+    def build_free_chat_prompt(self, search_context: str | None = None) -> str:
+        """자유 대화용 시스템 프롬프트"""
+
+        base_prompt = """You are a friendly and helpful English conversation learning assistant.
+
+        ## Role:
+        - Help users learn by having natural English conversations
+        - Answer questions about grammar and expressions
+        - Teach practical English expressions
+
+        ## Conversation Style:
+        - Always communicate in English only
+        - Actively utilize reference information when available
+        - Use natural and fluent English expressions
+        - Proceed like a real conversation
+        - **IMPORTANT: Keep responses very short - maximum 3 sentences**
+        """
+
+        if search_context:
+            base_prompt += f"\n\n## Reference Information:\n{search_context}"
 
         return base_prompt
 

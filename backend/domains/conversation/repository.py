@@ -149,8 +149,11 @@ class ConversationRepository:
         Returns:
             메시지 목록
         """
+        from sqlalchemy.orm import joinedload
+
         return (
             self.db.query(MessageModel)
+            .options(joinedload(MessageModel.grammar_feedback))
             .filter(MessageModel.conversation_id == conversation_id)
             .order_by(MessageModel.created_at)
             .limit(limit)

@@ -6,7 +6,7 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
-from domains.conversation.enums import ConversationStatus, MessageRole
+from domains.conversation.enums import ConversationStatus, ConversationType, MessageRole
 
 
 class Conversation(BaseModel):
@@ -14,6 +14,8 @@ class Conversation(BaseModel):
 
     id: UUID
     title: str | None = None
+    conversation_type: ConversationType
+    role_character: str | None = None
     message_count: int
     status: ConversationStatus
     created_at: datetime
@@ -31,6 +33,7 @@ class Message(BaseModel):
     role: MessageRole
     content: str
     created_at: datetime
+    grammar_feedback: dict | None = None  # GrammarFeedback relationship
 
     class Config:
         from_attributes = True
@@ -40,6 +43,8 @@ class ConversationResponse(BaseModel):
     """대화 시작 응답"""
 
     conversation_id: UUID
+    conversation_type: ConversationType
+    role_character: str | None = None
     response: str
     grammar_feedback: dict | None = None
 

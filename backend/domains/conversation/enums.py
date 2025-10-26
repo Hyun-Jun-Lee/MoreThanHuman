@@ -11,6 +11,13 @@ class ConversationStatus(str, Enum):
     COMPLETED = "COMPLETED"
 
 
+class ConversationType(str, Enum):
+    """대화 타입"""
+
+    FREE_CHAT = "FREE_CHAT"
+    ROLE_PLAYING = "ROLE_PLAYING"
+
+
 class MessageRole(str, Enum):
     """메시지 역할"""
 

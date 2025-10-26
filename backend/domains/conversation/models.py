@@ -7,7 +7,7 @@ from sqlalchemy import Column, DateTime, Enum as SQLEnum, ForeignKey, Integer, S
 from sqlalchemy.orm import relationship
 
 from database import Base
-from domains.conversation.enums import ConversationStatus, MessageRole
+from domains.conversation.enums import ConversationStatus, ConversationType, MessageRole
 
 
 class ConversationModel(Base):
@@ -17,6 +17,8 @@ class ConversationModel(Base):
 
     id = Column(String(36), primary_key=True)  # UUID를 문자열로 저장
     title = Column(String(200), nullable=True)  # 대화 제목 (첫 질문)
+    conversation_type = Column(SQLEnum(ConversationType), default=ConversationType.FREE_CHAT, nullable=False)  # 대화 타입
+    role_character = Column(String(100), nullable=True)  # 롤플레이 캐릭터 (예: "카페 바리스타", "영어 선생님")
     message_count = Column(Integer, default=0, nullable=False)
     status = Column(SQLEnum(ConversationStatus), default=ConversationStatus.ACTIVE, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)

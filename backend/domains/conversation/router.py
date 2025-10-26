@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 logger = logging.getLogger(__name__)
 
 from database import get_db
+from domains.conversation.enums import ConversationType
 from domains.conversation.repository import ConversationRepository
 from domains.conversation.schemas import Conversation, ConversationResponse, Message, MessageResponse
 from domains.conversation.service import ConversationService
@@ -27,6 +28,8 @@ class StartConversationRequest(BaseModel):
 
     first_message: str
     search_context: str | None = None
+    conversation_type: ConversationType = ConversationType.FREE_CHAT
+    role_character: str | None = None
 
 
 class SendMessageRequest(BaseModel):
@@ -38,8 +41,11 @@ class SendMessageRequest(BaseModel):
 # Dependency
 def get_conversation_service(db: Session = Depends(get_db)) -> ConversationService:
     """Conversation Service 의존성"""
+    from domains.grammar.repository import GrammarRepository
+
     repository = ConversationRepository(db)
-    return ConversationService(repository)
+    grammar_repository = GrammarRepository(db)
+    return ConversationService(repository, grammar_repository)
 
 
 # Endpoints
@@ -59,7 +65,12 @@ async def start_conversation(
         대화 응답
     """
     try:
-        response = await service.start_conversation(request.first_message, request.search_context)
+        response = await service.start_conversation(
+            request.first_message,
+            request.search_context,
+            request.conversation_type,
+            request.role_character
+        )
         return SuccessResponse(data=response, message="대화가 시작되었습니다")
     except RateLimitException as e:
         logger.warning(f"RateLimitException in start_conversation: {e.message}")
