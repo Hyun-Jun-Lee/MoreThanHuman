@@ -4,9 +4,7 @@ Conversation Service Layer
 """
 from uuid import uuid4
 
-import httpx
-
-from config import get_settings
+from config import get_model_for_provider, get_settings
 from domains.conversation.models import (
     Conversation,
     ConversationModel,
@@ -18,7 +16,8 @@ from domains.conversation.models import (
     MessageRole,
 )
 from domains.conversation.repository import ConversationRepository
-from shared.exceptions import ExternalAPIException, RateLimitException
+from domains.llm.factory import LLMProviderFactory
+from domains.llm.models import LLMMessage, LLMRequest
 
 settings = get_settings()
 
@@ -203,41 +202,30 @@ class ConversationService:
             AI 응답
 
         Raises:
+            RateLimitException: Rate limit 도달
             ExternalAPIException: LLM API 호출 실패
         """
-        messages = [{"role": "system", "content": system_prompt}] + message_history + [
-            {"role": "user", "content": user_input}
+        # Create provider
+        provider = LLMProviderFactory.create_provider()
+
+        # Build message list
+        messages = [
+            LLMMessage(role="system", content=system_prompt),
+            *[LLMMessage(role=msg["role"], content=msg["content"]) for msg in message_history],
+            LLMMessage(role="user", content=user_input),
         ]
 
-        async with httpx.AsyncClient() as client:
-            try:
-                response = await client.post(
-                    "https://openrouter.ai/api/v1/chat/completions",
-                    headers={
-                        "Authorization": f"Bearer {settings.openrouter_api_key}",
-                        "HTTP-Referer": "https://github.com/MoreThanHuman",
-                        "Content-Type": "application/json",
-                    },
-                    json={
-                        "model": settings.llm_model,
-                        "messages": messages,
-                        "max_tokens": settings.max_tokens,
-                        "temperature": settings.temperature,
-                    },
-                    timeout=30.0,
-                )
-                response.raise_for_status()
-                data = response.json()
-                return data["choices"][0]["message"]["content"]
-            except httpx.HTTPStatusError as e:
-                if e.response.status_code == 429:
-                    raise RateLimitException(
-                        "무료 모델의 사용 한도에 도달했습니다. 잠시 후 다시 시도해주세요.",
-                        details={"retry_after": "1-2 minutes"}
-                    )
-                raise ExternalAPIException(f"LLM API call failed: {str(e)}")
-            except httpx.HTTPError as e:
-                raise ExternalAPIException(f"LLM API call failed: {str(e)}")
+        # Create request with provider-specific model
+        request = LLMRequest(
+            messages=messages,
+            model=get_model_for_provider(),
+            max_tokens=settings.max_tokens,
+            temperature=settings.temperature,
+        )
+
+        # Call provider
+        response = await provider.chat_completion(request)
+        return response.content
 
     # Helper 함수
     def build_system_prompt(self, user_message: str, search_context: str | None = None) -> str:

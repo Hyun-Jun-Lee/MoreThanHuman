@@ -4,11 +4,11 @@ Grammar Service Layer
 import json
 from uuid import uuid4
 
-import httpx
-
-from config import get_settings
+from config import get_model_for_provider, get_settings
 from domains.grammar.models import GrammarAnalysis, GrammarFeedback, GrammarFeedbackModel, GrammarStats
 from domains.grammar.repository import GrammarRepository
+from domains.llm.factory import LLMProviderFactory
+from domains.llm.models import LLMMessage, LLMRequest
 from shared.exceptions import ExternalAPIException, RateLimitException
 
 settings = get_settings()
@@ -109,41 +109,26 @@ class GrammarService:
             문법 분석 결과
 
         Raises:
+            RateLimitException: Rate limit 도달
             ExternalAPIException: LLM API 호출 실패
         """
+        # Create provider
+        provider = LLMProviderFactory.create_provider()
+
+        # Build prompt
         prompt = self.build_grammar_prompt(text)
 
-        async with httpx.AsyncClient() as client:
-            try:
-                response = await client.post(
-                    "https://openrouter.ai/api/v1/chat/completions",
-                    headers={
-                        "Authorization": f"Bearer {settings.openrouter_api_key}",
-                        "HTTP-Referer": "https://github.com/MoreThanHuman",
-                        "Content-Type": "application/json",
-                    },
-                    json={
-                        "model": settings.llm_model,
-                        "messages": [{"role": "user", "content": prompt}],
-                        "max_tokens": 1000,
-                        "temperature": 0.3,
-                    },
-                    timeout=30.0,
-                )
-                response.raise_for_status()
-                data = response.json()
-                llm_response = data["choices"][0]["message"]["content"]
+        # Create request with provider-specific model
+        request = LLMRequest(
+            messages=[LLMMessage(role="user", content=prompt)],
+            model=get_model_for_provider(),
+            max_tokens=1000,
+            temperature=0.3,
+        )
 
-                return self.parse_grammar_response(llm_response)
-            except httpx.HTTPStatusError as e:
-                if e.response.status_code == 429:
-                    raise RateLimitException(
-                        "무료 모델의 사용 한도에 도달했습니다. 잠시 후 다시 시도해주세요.",
-                        details={"retry_after": "1-2 minutes"}
-                    )
-                raise ExternalAPIException(f"Grammar check API call failed: {str(e)}")
-            except httpx.HTTPError as e:
-                raise ExternalAPIException(f"Grammar check API call failed: {str(e)}")
+        # Call provider
+        response = await provider.chat_completion(request)
+        return self.parse_grammar_response(response.content)
 
     def build_grammar_prompt(self, text: str) -> str:
         """
