@@ -5,10 +5,11 @@ import json
 from uuid import uuid4
 
 from config import get_model_for_provider, get_settings
-from domains.grammar.models import GrammarAnalysis, GrammarFeedback, GrammarFeedbackModel, GrammarStats
+from domains.grammar.models import GrammarFeedbackModel
 from domains.grammar.repository import GrammarRepository
+from domains.grammar.schemas import GrammarAnalysis, GrammarFeedback, GrammarStats
 from domains.llm.factory import LLMProviderFactory
-from domains.llm.models import LLMMessage, LLMRequest
+from domains.llm.schemas import LLMMessage, LLMRequest
 from shared.exceptions import ExternalAPIException, RateLimitException
 
 settings = get_settings()

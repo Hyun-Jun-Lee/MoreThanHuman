@@ -12,8 +12,8 @@ from sqlalchemy.orm import Session
 logger = logging.getLogger(__name__)
 
 from database import get_db
-from domains.conversation.models import Conversation, ConversationResponse, Message, MessageResponse
 from domains.conversation.repository import ConversationRepository
+from domains.conversation.schemas import Conversation, ConversationResponse, Message, MessageResponse
 from domains.conversation.service import ConversationService
 from shared.exceptions import AppException, NotFoundException, RateLimitException
 from shared.types import ErrorResponse, SuccessResponse

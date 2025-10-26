@@ -6,8 +6,8 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from database import get_db
-from domains.grammar.models import GrammarFeedback, GrammarStats
 from domains.grammar.repository import GrammarRepository
+from domains.grammar.schemas import GrammarFeedback, GrammarStats
 from domains.grammar.service import GrammarService
 from shared.exceptions import AppException, NotFoundException, RateLimitException
 from shared.types import SuccessResponse

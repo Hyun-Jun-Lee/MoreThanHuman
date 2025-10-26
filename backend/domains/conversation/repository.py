@@ -5,11 +5,8 @@ Conversation Repository Layer
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
-from domains.conversation.models import (
-    ConversationModel,
-    ConversationStatus,
-    MessageModel,
-)
+from domains.conversation.enums import ConversationStatus
+from domains.conversation.models import ConversationModel, MessageModel
 from shared.exceptions import NotFoundException
 
 

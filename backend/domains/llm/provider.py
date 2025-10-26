@@ -4,7 +4,7 @@ Abstract base class for all LLM providers
 """
 from abc import ABC, abstractmethod
 
-from domains.llm.models import LLMRequest, LLMResponse
+from domains.llm.schemas import LLMRequest, LLMResponse
 
 
 class LLMProvider(ABC):

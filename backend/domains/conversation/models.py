@@ -1,34 +1,15 @@
 """
-Conversation 도메인 모델 정의
+Conversation 도메인 SQLAlchemy 모델 정의
 """
 from datetime import datetime
-from enum import Enum
-from uuid import UUID
 
-from pydantic import BaseModel
 from sqlalchemy import Column, DateTime, Enum as SQLEnum, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 
 from database import Base
+from domains.conversation.enums import ConversationStatus, MessageRole
 
 
-# Enums
-class ConversationStatus(str, Enum):
-    """대화 상태"""
-
-    ACTIVE = "ACTIVE"
-    COMPLETED = "COMPLETED"
-
-
-class MessageRole(str, Enum):
-    """메시지 역할"""
-
-    USER = "user"
-    ASSISTANT = "assistant"
-    SYSTEM = "system"
-
-
-# SQLAlchemy Models
 class ConversationModel(Base):
     """대화 테이블"""
 
@@ -58,47 +39,3 @@ class MessageModel(Base):
     # Relationships
     conversation = relationship("ConversationModel", back_populates="messages")
     grammar_feedback = relationship("GrammarFeedbackModel", back_populates="message", uselist=False, cascade="all, delete-orphan")
-
-
-# Pydantic Models
-class Conversation(BaseModel):
-    """대화 스키마"""
-
-    id: UUID
-    message_count: int
-    status: ConversationStatus
-    created_at: datetime
-    updated_at: datetime
-
-    class Config:
-        from_attributes = True
-
-
-class Message(BaseModel):
-    """메시지 스키마"""
-
-    id: UUID
-    conversation_id: UUID
-    role: MessageRole
-    content: str
-    created_at: datetime
-
-    class Config:
-        from_attributes = True
-
-
-class ConversationResponse(BaseModel):
-    """대화 시작 응답"""
-
-    conversation_id: UUID
-    response: str
-    grammar_feedback: dict | None = None
-
-
-class MessageResponse(BaseModel):
-    """메시지 응답"""
-
-    message_id: UUID
-    response: str
-    grammar_feedback: dict | None = None
-    turn_count: int

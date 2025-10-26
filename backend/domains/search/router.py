@@ -4,7 +4,7 @@ Search API Router
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
-from domains.search.models import SearchResult
+from domains.search.schemas import SearchResult
 from domains.search.service import SearchService
 from shared.exceptions import AppException
 from shared.types import SuccessResponse

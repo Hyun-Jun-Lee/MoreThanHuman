@@ -6,7 +6,7 @@ from datetime import datetime
 import httpx
 
 from config import get_settings
-from domains.search.models import SearchResult, SearchResultItem, TavilyResponse
+from domains.search.schemas import SearchResult, SearchResultItem, TavilyResponse
 from shared.exceptions import ExternalAPIException
 
 settings = get_settings()

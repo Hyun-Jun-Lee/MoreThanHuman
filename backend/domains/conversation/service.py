@@ -5,19 +5,12 @@ Conversation Service Layer
 from uuid import uuid4
 
 from config import get_model_for_provider, get_settings
-from domains.conversation.models import (
-    Conversation,
-    ConversationModel,
-    ConversationResponse,
-    ConversationStatus,
-    Message,
-    MessageModel,
-    MessageResponse,
-    MessageRole,
-)
+from domains.conversation.enums import ConversationStatus, MessageRole
+from domains.conversation.models import ConversationModel, MessageModel
 from domains.conversation.repository import ConversationRepository
+from domains.conversation.schemas import Conversation, ConversationResponse, Message, MessageResponse
 from domains.llm.factory import LLMProviderFactory
-from domains.llm.models import LLMMessage, LLMRequest
+from domains.llm.schemas import LLMMessage, LLMRequest
 
 settings = get_settings()
 

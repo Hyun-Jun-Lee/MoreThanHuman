@@ -4,7 +4,7 @@ Ollama LLM Provider
 import httpx
 
 from config import get_settings
-from domains.llm.models import LLMRequest, LLMResponse
+from domains.llm.schemas import LLMRequest, LLMResponse
 from domains.llm.provider import LLMProvider
 from shared.exceptions import ExternalAPIException
 
