@@ -130,9 +130,29 @@ class GrammarService:
 Context (previous AI message): "{previous_ai_message}"
 
 IMPORTANT: Consider the conversation context when analyzing.
+
+NATURAL CONVERSATIONAL RESPONSES (Do NOT mark as errors):
 - Short responses like "Went to the park" are natural replies to questions like "What did you do?"
-- Don't mark conversational responses as errors if they're natural in context
-- However, still check for actual grammar errors (subject-verb agreement, tense, etc.)
+- Elliptical answers that omit subjects/verbs when context is clear
+
+MUST CHECK FOR THESE ERRORS:
+1. Basic Grammar Errors:
+   - Subject-verb agreement (e.g., "I likes" → "I like")
+   - Spelling mistakes
+   - Punctuation errors
+   - Word order problems
+
+2. Contextual Appropriateness:
+   - Tense consistency: If AI asks about past ("What did you do yesterday?"), user should use past tense, not future/present
+   - Question-answer match: "Where" questions need location answers, not "how" or "what" answers
+   - Formality level: Match the conversation style (formal hotel check-in vs casual chat)
+   - Role-appropriate expressions: Use suitable language for the roleplay situation
+
+3. Examples of contextual errors:
+   - AI: "What did you do yesterday?" → User: "I will go shopping" ❌ (should be "I went shopping")
+   - AI: "How was your weekend?" → User: "I am having fun" ❌ (should be "I had fun")
+   - AI: "Where did you go?" → User: "I enjoyed it" ❌ (doesn't answer the location question)
+   - AI (Hotel staff): "How may I help you?" → User: "Yo gimme a room" ❌ (too casual for formal setting)
 """
 
         return f"""Analyze the following English response for grammar errors.
