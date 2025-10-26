@@ -1,6 +1,7 @@
 """
 FastAPI 메인 애플리케이션
 """
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -18,12 +19,29 @@ from shared.exceptions import AppException, NotFoundException
 
 settings = get_settings()
 
+
+# Lifespan 이벤트 핸들러
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """애플리케이션 생명주기 관리"""
+    # Startup
+    Base.metadata.create_all(bind=engine)
+    print("✅ Database tables created")
+    print(f"✅ Application started in {'DEBUG' if settings.debug else 'PRODUCTION'} mode")
+
+    yield
+
+    # Shutdown
+    print("👋 Application shutting down")
+
+
 # FastAPI 앱 생성
 app = FastAPI(
     title="영어 회화 학습 API",
     description="AI 기반 영어 회화 학습 플랫폼",
     version="1.0.0",
     debug=settings.debug,
+    lifespan=lifespan,
 )
 
 # CORS 설정
@@ -67,22 +85,6 @@ app.include_router(search_router)
 
 # Web 라우터 등록 (마지막에 등록하여 API 우선순위 보장)
 app.include_router(web_router)
-
-
-# Startup/Shutdown 이벤트
-@app.on_event("startup")
-async def startup_event():
-    """애플리케이션 시작 시 실행"""
-    # 데이터베이스 테이블 생성
-    Base.metadata.create_all(bind=engine)
-    print("✅ Database tables created")
-    print(f"✅ Application started in {'DEBUG' if settings.debug else 'PRODUCTION'} mode")
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """애플리케이션 종료 시 실행"""
-    print("👋 Application shutting down")
 
 
 # Health Check (API only)
