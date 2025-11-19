@@ -43,6 +43,7 @@ class ConversationResponse(BaseModel):
     """대화 시작 응답"""
 
     conversation_id: UUID
+    message_id: UUID  # 사용자 메시지 ID (SSE 연결용)
     conversation_type: ConversationType
     role_character: str | None = None
     response: str

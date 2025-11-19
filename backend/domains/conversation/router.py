@@ -2,10 +2,13 @@
 Conversation API Router
 HTTP 요청/응답 처리
 """
+import asyncio
+import json
 import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -23,13 +26,18 @@ router = APIRouter(prefix="/api/conversations", tags=["conversations"])
 
 
 # Request Models
-class StartConversationRequest(BaseModel):
-    """대화 시작 요청"""
+class StartFreeChatRequest(BaseModel):
+    """자유 대화 시작 요청"""
 
     first_message: str
     search_context: str | None = None
-    conversation_type: ConversationType = ConversationType.FREE_CHAT
-    role_character: str | None = None
+
+
+class StartRoleplayRequest(BaseModel):
+    """롤플레이 대화 시작 요청"""
+
+    role_character: str
+    search_context: str | None = None
 
 
 class SendMessageRequest(BaseModel):
@@ -49,37 +57,67 @@ def get_conversation_service(db: Session = Depends(get_db)) -> ConversationServi
 
 
 # Endpoints
-@router.post("/start/", response_model=SuccessResponse[ConversationResponse])
-async def start_conversation(
-    request: StartConversationRequest,
+@router.post("/start/free-chat/", response_model=SuccessResponse[ConversationResponse])
+async def start_free_chat_conversation(
+    request: StartFreeChatRequest,
     service: ConversationService = Depends(get_conversation_service),
 ):
     """
-    새 대화 시작
+    자유 대화 시작
 
     Args:
-        request: 대화 시작 요청
+        request: 자유 대화 시작 요청
         service: Conversation Service
 
     Returns:
         대화 응답
     """
     try:
-        response = await service.start_conversation(
+        response = await service.start_free_chat_conversation(
             request.first_message,
-            request.search_context,
-            request.conversation_type,
-            request.role_character
+            request.search_context
         )
-        return SuccessResponse(data=response, message="대화가 시작되었습니다")
+        return SuccessResponse(data=response, message="자유 대화가 시작되었습니다")
     except RateLimitException as e:
-        logger.warning(f"RateLimitException in start_conversation: {e.message}")
+        logger.warning(f"RateLimitException in start_free_chat_conversation: {e.message}")
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=e.message)
     except AppException as e:
-        logger.error(f"AppException in start_conversation: {e.message}", exc_info=True)
+        logger.error(f"AppException in start_free_chat_conversation: {e.message}", exc_info=True)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
     except Exception as e:
-        logger.error(f"Unexpected error in start_conversation: {str(e)}", exc_info=True)
+        logger.error(f"Unexpected error in start_free_chat_conversation: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.post("/start/roleplay/", response_model=SuccessResponse[ConversationResponse])
+async def start_roleplay_conversation(
+    request: StartRoleplayRequest,
+    service: ConversationService = Depends(get_conversation_service),
+):
+    """
+    롤플레이 대화 시작 (AI가 먼저 인사)
+
+    Args:
+        request: 롤플레이 시작 요청
+        service: Conversation Service
+
+    Returns:
+        대화 응답
+    """
+    try:
+        response = await service.start_roleplay_conversation(
+            request.role_character,
+            request.search_context
+        )
+        return SuccessResponse(data=response, message="롤플레이 대화가 시작되었습니다")
+    except RateLimitException as e:
+        logger.warning(f"RateLimitException in start_roleplay_conversation: {e.message}")
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=e.message)
+    except AppException as e:
+        logger.error(f"AppException in start_roleplay_conversation: {e.message}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
+    except Exception as e:
+        logger.error(f"Unexpected error in start_roleplay_conversation: {str(e)}", exc_info=True)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
@@ -239,3 +277,65 @@ def delete_conversation(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
     except AppException as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
+
+
+@router.get("/messages/{message_id}/grammar-feedback/stream")
+async def stream_grammar_feedback(
+    message_id: UUID,
+    service: ConversationService = Depends(get_conversation_service),
+):
+    """
+    SSE로 문법 피드백 스트리밍
+
+    Args:
+        message_id: 사용자 메시지 ID
+        service: Conversation Service
+
+    Returns:
+        SSE 스트림
+    """
+    async def event_generator():
+        """SSE 이벤트 생성기"""
+        max_wait_seconds = 10  # 최대 10초 대기
+        check_interval = 0.5  # 0.5초마다 체크
+        elapsed = 0
+
+        try:
+            while elapsed < max_wait_seconds:
+                # DB에서 문법 피드백 조회
+                from domains.grammar.repository import GrammarRepository
+                from database import get_db
+
+                db = next(get_db())
+                grammar_repo = GrammarRepository(db)
+                feedback = grammar_repo.find_by_message_id(str(message_id))
+
+                if feedback:
+                    # 문법 피드백 발견 - JSON으로 변환하여 전송
+                    from domains.grammar.schemas import GrammarFeedback
+                    feedback_data = GrammarFeedback.model_validate(feedback).model_dump()
+                    yield f"data: {json.dumps(feedback_data)}\n\n"
+                    break
+
+                # 아직 없으면 대기
+                await asyncio.sleep(check_interval)
+                elapsed += check_interval
+
+            # 타임아웃 또는 완료 후 연결 종료
+            if elapsed >= max_wait_seconds:
+                # 타임아웃 - 빈 응답 전송
+                yield f"data: {json.dumps({'timeout': True})}\n\n"
+
+        except Exception as e:
+            logger.error(f"SSE stream error: {str(e)}")
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # Nginx 버퍼링 비활성화
+        }
+    )
