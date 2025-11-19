@@ -28,41 +28,62 @@ class ConversationService:
         self.repository = repository
         self.grammar_service = GrammarService(grammar_repository)
 
-    async def start_conversation(
+    async def process_grammar_feedback_background(
+        self, user_message_id: str, user_message: str, previous_ai_message: str | None = None
+    ) -> None:
+        """
+        백그라운드에서 문법 체크 실행 및 저장
+
+        Args:
+            user_message_id: 사용자 메시지 ID
+            user_message: 사용자 메시지 내용
+            previous_ai_message: 이전 AI 메시지 (맥락용)
+        """
+        try:
+            # 문법 체크 실행
+            feedback = await self.grammar_service.check_grammar(user_message, previous_ai_message)
+
+            # DB에 저장
+            await self.grammar_service.save_feedback(user_message_id, feedback)
+
+            logger.info(f"Grammar feedback saved for message {user_message_id}")
+        except Exception as e:
+            # 백그라운드 태스크 실패는 로깅만 하고 계속 진행
+            logger.error(f"Background grammar check failed: {str(e)}\n{traceback.format_exc()}")
+
+    async def start_free_chat_conversation(
         self,
         first_message: str,
-        search_context: str | None = None,
-        conversation_type: ConversationType = ConversationType.FREE_CHAT,
-        role_character: str | None = None
+        search_context: str | None = None
     ) -> ConversationResponse:
         """
-        대화 시작
+        자유 대화 시작
 
         Args:
             first_message: 첫 메시지
             search_context: 검색 컨텍스트 (세션 메모리)
-            conversation_type: 대화 타입 (자유 대화 또는 롤플레이)
-            role_character: 롤플레이 캐릭터 (예: "카페 바리스타", "영어 선생님")
 
         Returns:
             대화 응답
         """
         try:
             # 1. Conversation 생성
-            # 첫 메시지를 title로 설정 (최대 50자)
             title = first_message[:50] if len(first_message) <= 50 else first_message[:47] + "..."
 
             conversation = ConversationModel(
                 id=str(uuid4()),
                 title=title,
-                conversation_type=conversation_type,
-                role_character=role_character,
+                conversation_type=ConversationType.FREE_CHAT,
+                role_character=None,
                 message_count=0,
                 status=ConversationStatus.ACTIVE,
             )
             self.repository.save(conversation)
 
-            # 2. 사용자 메시지 저장
+            # 2. 시스템 프롬프트 생성
+            system_prompt = self.build_system_prompt(search_context, ConversationType.FREE_CHAT, None)
+
+            # 3. 사용자 메시지 저장
             user_message = MessageModel(
                 id=str(uuid4()),
                 conversation_id=conversation.id,
@@ -71,23 +92,8 @@ class ConversationService:
             )
             self.repository.save_message(user_message)
 
-            # 3. 시스템 프롬프트 생성
-            system_prompt = self.build_system_prompt(search_context, conversation_type, role_character)
-
-            # 4. LLM 응답 생성과 문법 체크를 병렬로 실행 (첫 메시지이므로 이전 AI 메시지 없음)
-            results = await asyncio.gather(
-                self.generate_response(system_prompt, [], first_message),
-                self.grammar_service.check_grammar(first_message, previous_ai_message=None),
-                return_exceptions=True
-            )
-
-            ai_response = results[0]
-            grammar_feedback = None
-            if not isinstance(results[1], Exception):
-                # 문법 피드백 DB에 저장
-                feedback_result = results[1]
-                await self.grammar_service.save_feedback(user_message.id, feedback_result)
-                grammar_feedback = feedback_result.model_dump()
+            # 4. AI 응답만 먼저 생성 (문법 체크는 백그라운드에서 처리)
+            ai_response = await self.generate_response(system_prompt, [], first_message)
 
             # 5. AI 메시지 저장
             assistant_message = MessageModel(
@@ -101,15 +107,83 @@ class ConversationService:
             # 6. 메시지 카운트 업데이트
             self.repository.update_message_count(conversation.id, 2)
 
+            # 7. 백그라운드에서 문법 체크 실행 (첫 메시지이므로 이전 AI 메시지 없음)
+            asyncio.create_task(
+                self.process_grammar_feedback_background(user_message.id, first_message, previous_ai_message=None)
+            )
+
+            # 8. AI 응답 즉시 반환 (grammar_feedback=None)
             return ConversationResponse(
                 conversation_id=conversation.id,
-                conversation_type=conversation.conversation_type,
-                role_character=conversation.role_character,
+                message_id=user_message.id,
+                conversation_type=ConversationType.FREE_CHAT,
+                role_character=None,
                 response=ai_response,
-                grammar_feedback=grammar_feedback,
+                grammar_feedback=None,  # 백그라운드에서 처리 중
             )
         except Exception as e:
-            logger.error(f"Error in start_conversation: {str(e)}\n{traceback.format_exc()}")
+            logger.error(f"Error in start_free_chat_conversation: {str(e)}\n{traceback.format_exc()}")
+            raise
+
+    async def start_roleplay_conversation(
+        self,
+        role_character: str,
+        search_context: str | None = None
+    ) -> ConversationResponse:
+        """
+        롤플레이 대화 시작 (AI가 먼저 인사)
+
+        Args:
+            role_character: 롤플레이 캐릭터 (예: "카페 바리스타", "영어 선생님")
+            search_context: 검색 컨텍스트 (세션 메모리)
+
+        Returns:
+            대화 응답
+        """
+        try:
+            # 1. Conversation 생성
+            title = f"Role: {role_character}"
+
+            conversation = ConversationModel(
+                id=str(uuid4()),
+                title=title,
+                conversation_type=ConversationType.ROLE_PLAYING,
+                role_character=role_character,
+                message_count=0,
+                status=ConversationStatus.ACTIVE,
+            )
+            self.repository.save(conversation)
+
+            # 2. 시스템 프롬프트 생성
+            system_prompt = self.build_system_prompt(search_context, ConversationType.ROLE_PLAYING, role_character)
+
+            # 3. AI의 첫 인사 생성
+            greeting_prompt = f"You are starting a role-play as '{role_character}'. Greet the user naturally and start the conversation as this character would. Keep it short (1-2 sentences)."
+            ai_response = await self.generate_response(system_prompt, [], greeting_prompt)
+
+            # 4. AI 메시지만 저장 (사용자 메시지 없음)
+            assistant_message = MessageModel(
+                id=str(uuid4()),
+                conversation_id=conversation.id,
+                role=MessageRole.ASSISTANT,
+                content=ai_response,
+            )
+            self.repository.save_message(assistant_message)
+
+            # 5. 메시지 카운트 업데이트 (AI 메시지 1개)
+            self.repository.update_message_count(conversation.id, 1)
+
+            # 6. 롤플레이 시작이므로 grammar_feedback 없음
+            return ConversationResponse(
+                conversation_id=conversation.id,
+                message_id=assistant_message.id,
+                conversation_type=ConversationType.ROLE_PLAYING,
+                role_character=role_character,
+                response=ai_response,
+                grammar_feedback=None,
+            )
+        except Exception as e:
+            logger.error(f"Error in start_roleplay_conversation: {str(e)}\n{traceback.format_exc()}")
             raise
 
     async def continue_conversation(self, conversation_id: str, user_message: str) -> MessageResponse:
@@ -157,25 +231,10 @@ class ConversationService:
                     previous_ai_message = msg.content
                     break
 
-            # 7. LLM 응답 생성과 문법 체크를 병렬로 실행
-            results = await asyncio.gather(
-                self.generate_response(system_prompt, message_history, user_message),
-                self.grammar_service.check_grammar(user_message, previous_ai_message),
-                return_exceptions=True
-            )
+            # 7. AI 응답만 먼저 생성 (문법 체크는 백그라운드에서 처리)
+            ai_response = await self.generate_response(system_prompt, message_history, user_message)
 
-            ai_response = results[0]
-            grammar_feedback = None
-            if not isinstance(results[1], Exception):
-                # 문법 피드백 DB에 저장
-                feedback_result = results[1]
-                await self.grammar_service.save_feedback(user_msg.id, feedback_result)
-                grammar_feedback = feedback_result.model_dump()
-            else:
-                # 디버깅용 로그
-                logger.error(f"Grammar check error: {type(results[1]).__name__}: {str(results[1])}")
-
-            # 7. AI 메시지 저장
+            # 8. AI 메시지 저장
             assistant_msg = MessageModel(
                 id=str(uuid4()),
                 conversation_id=conversation.id,
@@ -184,14 +243,20 @@ class ConversationService:
             )
             self.repository.save_message(assistant_msg)
 
-            # 8. 메시지 카운트 업데이트
+            # 9. 메시지 카운트 업데이트
             new_count = conversation.message_count + 2
             self.repository.update_message_count(conversation.id, new_count)
 
+            # 10. 백그라운드에서 문법 체크 실행 (응답 반환에 영향 없음)
+            asyncio.create_task(
+                self.process_grammar_feedback_background(user_msg.id, user_message, previous_ai_message)
+            )
+
+            # 11. AI 응답 즉시 반환 (grammar_feedback=None)
             return MessageResponse(
-                message_id=assistant_msg.id,
+                message_id=user_msg.id,  # 사용자 메시지 ID (SSE로 문법 피드백 연결할 때 사용)
                 response=ai_response,
-                grammar_feedback=grammar_feedback,
+                grammar_feedback=None,  # 백그라운드에서 처리 중
                 turn_count=new_count // 2,
             )
         except Exception as e:
