@@ -189,6 +189,27 @@
         </div>
     </div>
 </div>
+
+<!-- Edit Title Modal -->
+<div id="edit-title-modal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div class="bg-surface-light dark:bg-surface-dark rounded-xl p-6 max-w-md w-full">
+        <h3 class="text-xl font-bold mb-4 text-text-light dark:text-text-dark">Edit Conversation Title</h3>
+        <input
+            type="text"
+            id="edit-title-input"
+            class="w-full px-4 py-3 rounded-lg border border-subtle-light/30 dark:border-subtle-dark/30 bg-background-light dark:bg-background-dark mb-4 text-text-light dark:text-text-dark focus:ring-2 focus:ring-primary focus:border-primary"
+            placeholder="Enter new title"
+        />
+        <div class="flex gap-3 justify-end">
+            <button id="edit-title-cancel" class="px-4 py-2 rounded-lg text-subtle-light dark:text-subtle-dark hover:bg-background-light dark:hover:bg-background-dark transition-colors">
+                Cancel
+            </button>
+            <button id="edit-title-submit" class="px-4 py-2 rounded-lg bg-primary text-white hover:bg-primary/90 transition-colors">
+                Save
+            </button>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}

@@ -333,6 +333,16 @@ class ConversationService:
         """
         self.repository.update_status(conversation_id, ConversationStatus.COMPLETED)
 
+    def update_conversation_title(self, conversation_id: str, title: str) -> None:
+        """
+        대화 제목 업데이트
+
+        Args:
+            conversation_id: 대화 ID
+            title: 새로운 제목
+        """
+        self.repository.update_title(conversation_id, title)
+
     # LLM 호출
     async def generate_response(
         self, system_prompt: str, message_history: list[dict], user_input: str

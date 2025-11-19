@@ -580,13 +580,41 @@ async function loadSidebarConversations() {
         }
 
         const html = data.data.slice(0, 10).map(conv => `
-            <a class="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-primary/5 ${conv.id === conversationId ? 'bg-primary/10 text-primary' : 'text-text-light dark:text-text-dark'}" href="/conversations/${conv.id}">
-                <span class="material-symbols-outlined text-xl">chat_bubble</span>
-                <span class="text-sm font-medium truncate">${conv.title || '#' + conv.id.substring(0, 8)}</span>
-            </a>
+            <div class="flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-primary/5 ${conv.id === conversationId ? 'bg-primary/10' : ''}">
+                <a class="flex items-center gap-3 px-2 py-1 flex-1 min-w-0 ${conv.id === conversationId ? 'text-primary' : 'text-text-light dark:text-text-dark'}" href="/conversations/${conv.id}">
+                    <span class="material-symbols-outlined text-xl">chat_bubble</span>
+                    <span class="text-sm font-medium truncate conversation-title" data-conversation-id="${conv.id}">${conv.title || '#' + conv.id.substring(0, 8)}</span>
+                </a>
+                <div class="flex items-center gap-1 shrink-0">
+                    <button class="conversation-edit-btn flex items-center justify-center size-8 rounded-full hover:bg-blue-500/10 hover:text-blue-500 transition-colors text-subtle-light dark:text-subtle-dark" data-conversation-id="${conv.id}" title="Edit conversation title">
+                        <span class="material-symbols-outlined text-lg">edit</span>
+                    </button>
+                    <button class="conversation-delete-btn flex items-center justify-center size-8 rounded-full hover:bg-red-500/10 hover:text-red-500 transition-colors text-subtle-light dark:text-subtle-dark" data-conversation-id="${conv.id}" title="Delete conversation">
+                        <span class="material-symbols-outlined text-lg">delete</span>
+                    </button>
+                </div>
+            </div>
         `).join('');
 
         container.innerHTML = html;
+
+        // Add edit event listeners
+        container.querySelectorAll('.conversation-edit-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                await handleEditConversationTitle(btn.dataset.conversationId);
+            });
+        });
+
+        // Add delete event listeners
+        container.querySelectorAll('.conversation-delete-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                await handleDeleteConversation(btn.dataset.conversationId);
+            });
+        });
     } catch (error) {
         console.error('Failed to load sidebar conversations:', error);
     }
@@ -672,4 +700,138 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// Edit conversation title
+async function handleEditConversationTitle(convId) {
+    const titleElement = document.querySelector(`.conversation-title[data-conversation-id="${convId}"]`);
+    if (!titleElement) return;
+
+    const currentTitle = titleElement.textContent;
+
+    // Show modal
+    const modal = document.getElementById('edit-title-modal');
+    const input = document.getElementById('edit-title-input');
+    const submitBtn = document.getElementById('edit-title-submit');
+    const cancelBtn = document.getElementById('edit-title-cancel');
+
+    input.value = currentTitle;
+    modal.classList.remove('hidden');
+    input.focus();
+    input.select();
+
+    // Handle submit
+    const handleSubmit = async () => {
+        const newTitle = input.value.trim();
+
+        if (!newTitle || newTitle === currentTitle) {
+            modal.classList.add('hidden');
+            cleanup();
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/conversations/${convId}/title/`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ title: newTitle })
+            });
+
+            const data = await response.json();
+
+            if (!data.success) {
+                alert('Failed to update conversation title: ' + (data.message || 'Unknown error'));
+                return;
+            }
+
+            // Update title in sidebar
+            titleElement.textContent = newTitle;
+
+            // If edited conversation is the current one, update header title too
+            if (convId === conversationId) {
+                const headerTitle = document.getElementById('conversation-title');
+                if (headerTitle) {
+                    headerTitle.textContent = newTitle;
+                }
+            }
+
+            modal.classList.add('hidden');
+            cleanup();
+        } catch (error) {
+            console.error('Failed to update conversation title:', error);
+            alert('Failed to update conversation title. Please try again.');
+        }
+    };
+
+    // Handle cancel
+    const handleCancel = () => {
+        modal.classList.add('hidden');
+        cleanup();
+    };
+
+    // Handle Enter key
+    const handleKeyPress = (e) => {
+        if (e.key === 'Enter') {
+            handleSubmit();
+        } else if (e.key === 'Escape') {
+            handleCancel();
+        }
+    };
+
+    // Cleanup function
+    const cleanup = () => {
+        submitBtn.removeEventListener('click', handleSubmit);
+        cancelBtn.removeEventListener('click', handleCancel);
+        input.removeEventListener('keypress', handleKeyPress);
+        modal.removeEventListener('click', handleModalClick);
+    };
+
+    // Handle click outside modal
+    const handleModalClick = (e) => {
+        if (e.target === modal) {
+            handleCancel();
+        }
+    };
+
+    // Add event listeners
+    submitBtn.addEventListener('click', handleSubmit);
+    cancelBtn.addEventListener('click', handleCancel);
+    input.addEventListener('keypress', handleKeyPress);
+    modal.addEventListener('click', handleModalClick);
+}
+
+// Delete conversation
+async function handleDeleteConversation(convId) {
+    if (!confirm('Are you sure you want to delete this conversation?')) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/conversations/${convId}/`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        const data = await response.json();
+
+        if (!data.success) {
+            alert('Failed to delete conversation: ' + (data.message || 'Unknown error'));
+            return;
+        }
+
+        // If deleted conversation is the current one, redirect to new conversation
+        if (convId === conversationId) {
+            window.location.href = '/conversations/new';
+        } else {
+            // Just reload the sidebar
+            await loadSidebarConversations();
+        }
+    } catch (error) {
+        console.error('Failed to delete conversation:', error);
+        alert('Failed to delete conversation. Please try again.');
+    }
 }

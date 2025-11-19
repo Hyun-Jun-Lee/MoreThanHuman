@@ -92,6 +92,18 @@ class ConversationRepository:
         conversation.message_count = count
         self.db.commit()
 
+    def update_title(self, conversation_id: str, title: str) -> None:
+        """
+        대화 제목 업데이트
+
+        Args:
+            conversation_id: 대화 ID
+            title: 새로운 제목
+        """
+        conversation = self.find_by_id(conversation_id)
+        conversation.title = title
+        self.db.commit()
+
     def delete_by_id(self, conversation_id: str) -> None:
         """
         대화 삭제

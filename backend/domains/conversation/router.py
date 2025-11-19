@@ -46,6 +46,12 @@ class SendMessageRequest(BaseModel):
     message: str
 
 
+class UpdateTitleRequest(BaseModel):
+    """대화 제목 수정 요청"""
+
+    title: str
+
+
 # Dependency
 def get_conversation_service(db: Session = Depends(get_db)) -> ConversationService:
     """Conversation Service 의존성"""
@@ -249,6 +255,32 @@ def end_conversation(
     try:
         service.end_conversation(str(conversation_id))
         return SuccessResponse(data={}, message="대화가 종료되었습니다")
+    except NotFoundException as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
+    except AppException as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
+
+
+@router.put("/{conversation_id}/title/", response_model=SuccessResponse[dict])
+def update_conversation_title(
+    conversation_id: UUID,
+    request: UpdateTitleRequest,
+    service: ConversationService = Depends(get_conversation_service),
+):
+    """
+    대화 제목 수정
+
+    Args:
+        conversation_id: 대화 ID
+        request: 제목 수정 요청
+        service: Conversation Service
+
+    Returns:
+        성공 응답
+    """
+    try:
+        service.update_conversation_title(str(conversation_id), request.title)
+        return SuccessResponse(data={}, message="대화 제목이 수정되었습니다")
     except NotFoundException as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
     except AppException as e:
