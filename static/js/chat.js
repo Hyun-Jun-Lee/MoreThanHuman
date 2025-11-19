@@ -95,6 +95,10 @@ function initializeConversationSetup() {
     const startBtn = document.getElementById('start-conversation-btn');
     const messageInput = document.getElementById('message-input');
 
+    if (!startBtn) {
+        return;
+    }
+
     // Hide message input initially
     messageInput.closest('footer').classList.add('hidden');
 
@@ -118,24 +122,84 @@ function initializeConversationSetup() {
     });
 
     // Start conversation button handler
-    startBtn.addEventListener('click', () => {
+    startBtn.addEventListener('click', async () => {
         if (conversationType === 'ROLE_PLAYING') {
             roleCharacter = document.getElementById('role-character').value.trim();
             if (!roleCharacter) {
                 alert('Please enter a character role for role-playing');
                 return;
             }
-        }
 
-        // Enable search context if checkbox is checked for free chat
-        if (conversationType === 'FREE_CHAT' && document.getElementById('enable-search-context').checked) {
-            document.getElementById('search-modal').classList.remove('hidden');
-            return; // Wait for search to complete
-        }
+            // 롤플레이의 경우 즉시 대화 시작 (AI가 먼저 인사)
+            await startRolePlayConversation();
+        } else {
+            // Enable search context if checkbox is checked for free chat
+            if (document.getElementById('enable-search-context').checked) {
+                document.getElementById('search-modal').classList.remove('hidden');
+                return; // Wait for search to complete
+            }
 
-        // Hide setup, show input, and show welcome message
-        startConversationUI();
+            // 자유 대화는 UI만 표시 (사용자가 먼저 메시지 입력)
+            startConversationUI();
+        }
     });
+}
+
+// Start role-play conversation (AI greets first)
+async function startRolePlayConversation() {
+    try {
+        // Hide setup UI, show chat UI
+        document.getElementById('conversation-setup').classList.add('hidden');
+        document.getElementById('conversation-setup').classList.remove('flex');
+        document.getElementById('message-input').closest('footer').classList.remove('hidden');
+
+        // Show loading message
+        const messagesContainer = document.getElementById('messages-list');
+        messagesContainer.innerHTML = '';  // Clear any existing messages
+        addLoadingMessage();
+
+        // Start roleplay conversation (AI will greet first)
+        const response = await fetch('/api/conversations/start/roleplay/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                role_character: roleCharacter,
+                search_context: searchContext
+            })
+        });
+
+        // Check for rate limit error
+        if (response.status === 429) {
+            removeLoadingMessage();
+            const errorData = await response.json();
+            addRetryMessage(errorData.detail || '사용 한도에 도달했습니다. 1-2분 후 다시 시도해주세요.');
+            return;
+        }
+
+        const data = await response.json();
+
+        if (data.success && data.data) {
+            conversationId = data.data.conversation_id;
+            // Update URL without reload
+            window.history.pushState({}, '', `/conversations/${conversationId}`);
+
+            // Update sidebar with new conversation
+            loadSidebarConversations();
+
+            // Remove loading and show AI's greeting
+            removeLoadingMessage();
+            addAIMessage(data.data.response);
+
+            // Focus on message input for user to respond
+            document.getElementById('message-input').focus();
+
+            scrollToBottom();
+        }
+    } catch (error) {
+        removeLoadingMessage();
+        console.error('Failed to start role-play conversation:', error);
+        alert('Failed to start conversation. Please try again.');
+    }
 }
 
 // Start conversation UI
@@ -205,15 +269,13 @@ async function sendMessage(retryMessage = null) {
         let response;
 
         if (!conversationId || conversationId === 'new') {
-            // Start new conversation
-            response = await fetch('/api/conversations/start/', {
+            // Start new free chat conversation
+            response = await fetch('/api/conversations/start/free-chat/', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     first_message: message,
-                    search_context: searchContext,
-                    conversation_type: conversationType,
-                    role_character: roleCharacter
+                    search_context: searchContext
                 })
             });
 
@@ -238,10 +300,12 @@ async function sendMessage(retryMessage = null) {
                 // Remove any retry messages on success
                 removeRetryMessages();
 
-                // Remove loading and add grammar feedback to user message
+                // Remove loading and add AI message first (no grammar feedback yet)
                 removeLoadingMessage();
-                addGrammarFeedback(data.data.grammar_feedback);
                 addAIMessage(data.data.response);
+
+                // Start SSE connection for grammar feedback
+                listenForGrammarFeedback(data.data.message_id);
             }
         } else {
             // Continue conversation
@@ -272,10 +336,12 @@ async function sendMessage(retryMessage = null) {
                 // Remove any retry messages on success
                 removeRetryMessages();
 
-                // Remove loading and add grammar feedback to user message
+                // Remove loading and add AI message first (no grammar feedback yet)
                 removeLoadingMessage();
-                addGrammarFeedback(data.data.grammar_feedback);
                 addAIMessage(data.data.response);
+
+                // Start SSE connection for grammar feedback
+                listenForGrammarFeedback(data.data.message_id);
             }
         }
 
@@ -524,6 +590,76 @@ async function loadSidebarConversations() {
     } catch (error) {
         console.error('Failed to load sidebar conversations:', error);
     }
+}
+
+// SSE - 문법 피드백 수신
+async function listenForGrammarFeedback(messageId) {
+    try {
+        const eventSource = new EventSource(`/api/conversations/messages/${messageId}/grammar-feedback/stream`);
+
+        eventSource.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+
+                // 타임아웃 또는 에러 체크
+                if (data.timeout) {
+                    console.log('Grammar feedback timeout');
+                    eventSource.close();
+                    return;
+                }
+
+                if (data.error) {
+                    console.error('Grammar feedback error:', data.error);
+                    eventSource.close();
+                    return;
+                }
+
+                // 정상적인 문법 피드백 수신
+                updateGrammarFeedback(data);
+                eventSource.close();
+            } catch (error) {
+                console.error('Failed to parse SSE data:', error);
+                eventSource.close();
+            }
+        };
+
+        eventSource.onerror = (error) => {
+            console.error('SSE connection error:', error);
+            eventSource.close();
+        };
+
+    } catch (error) {
+        console.error('Failed to start SSE connection:', error);
+    }
+}
+
+// 문법 피드백 UI 업데이트 (SSE로 받은 후 호출)
+function updateGrammarFeedback(grammarFeedback) {
+    if (!grammarFeedback) return;
+
+    // 마지막 사용자 메시지에 문법 피드백 추가
+    const userMessages = document.querySelectorAll('.user-message-container');
+    const lastUserMessage = userMessages[userMessages.length - 1];
+
+    if (!lastUserMessage) return;
+
+    let feedbackHtml = '';
+    if (grammarFeedback.has_errors) {
+        feedbackHtml = `
+            <div class="flex flex-col gap-1 items-end bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-lg border border-yellow-200 dark:border-yellow-800/50 w-full">
+                <p class="text-yellow-800 dark:text-yellow-200 text-sm font-bold leading-tight">Correction</p>
+                <p class="text-text-light dark:text-text-dark text-base font-normal leading-relaxed text-right">${escapeHtml(grammarFeedback.corrected_text || '')}</p>
+            </div>
+        `;
+    } else {
+        feedbackHtml = `
+            <div class="flex items-center justify-end gap-2 p-2 w-full">
+                <span class="material-symbols-outlined text-green-600 dark:text-green-400 text-xl">check_circle</span>
+            </div>
+        `;
+    }
+
+    lastUserMessage.insertAdjacentHTML('beforeend', feedbackHtml);
 }
 
 // Utility functions
