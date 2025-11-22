@@ -328,8 +328,8 @@ async def stream_grammar_feedback(
     """
     async def event_generator():
         """SSE 이벤트 생성기"""
-        max_wait_seconds = 10  # 최대 10초 대기
-        check_interval = 0.5  # 0.5초마다 체크
+        max_wait_seconds = 20  # 최대 20초 대기
+        check_interval = 1
         elapsed = 0
 
         try:
@@ -338,16 +338,24 @@ async def stream_grammar_feedback(
                 from domains.grammar.repository import GrammarRepository
                 from database import get_db
 
+                # DB 세션을 컨텍스트 매니저로 관리하여 자동으로 닫기
                 db = next(get_db())
-                grammar_repo = GrammarRepository(db)
-                feedback = grammar_repo.find_by_message_id(str(message_id))
+                try:
+                    grammar_repo = GrammarRepository(db)
 
-                if feedback:
-                    # 문법 피드백 발견 - JSON으로 변환하여 전송
-                    from domains.grammar.schemas import GrammarFeedback
-                    feedback_data = GrammarFeedback.model_validate(feedback).model_dump()
-                    yield f"data: {json.dumps(feedback_data)}\n\n"
-                    break
+                    try:
+                        feedback = grammar_repo.find_by_message_id(str(message_id))
+                        # 문법 피드백 발견 - JSON으로 변환하여 전송
+                        from domains.grammar.schemas import GrammarFeedback
+                        feedback_data = GrammarFeedback.model_validate(feedback).model_dump_json()
+                        yield f"data: {feedback_data}\n\n"
+                        break
+                    except NotFoundException:
+                        # 아직 생성 중 - 정상적인 대기 상태, 계속 polling
+                        pass
+                finally:
+                    # DB 세션 명시적으로 닫기
+                    db.close()
 
                 # 아직 없으면 대기
                 await asyncio.sleep(check_interval)
@@ -356,11 +364,15 @@ async def stream_grammar_feedback(
             # 타임아웃 또는 완료 후 연결 종료
             if elapsed >= max_wait_seconds:
                 # 타임아웃 - 빈 응답 전송
-                yield f"data: {json.dumps({'timeout': True})}\n\n"
+                logger.warning(f"Grammar feedback timeout for message {message_id} after {max_wait_seconds}s")
+                timeout_data = {'timeout': True}
+                yield f"data: {json.dumps(timeout_data)}\n\n"
 
         except Exception as e:
-            logger.error(f"SSE stream error: {str(e)}")
-            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+            # NotFoundException이 아닌 실제 에러만 여기서 처리
+            logger.error(f"SSE stream error for message {message_id}: {str(e)}", exc_info=True)
+            error_data = {'error': str(e)}
+            yield f"data: {json.dumps(error_data)}\n\n"
 
     return StreamingResponse(
         event_generator(),
