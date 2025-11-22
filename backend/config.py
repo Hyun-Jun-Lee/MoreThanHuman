@@ -3,6 +3,7 @@
 """
 from functools import lru_cache
 from pathlib import Path
+from typing import Optional
 from pydantic_settings import BaseSettings
 
 
@@ -29,6 +30,11 @@ class Settings(BaseSettings):
 
     # Ollama Model Settings
     ollama_model: str
+
+    # Grammar Check Model Settings (separate from conversation model)
+    grammar_model_provider: str = None  # If None, uses llm_provider
+    grammar_openrouter_model: Optional[str] = None  # If None, uses openrouter_model
+    grammar_ollama_model: Optional[str] = None  # If None, uses ollama_model
 
     # Common LLM Settings
     max_tokens: int = 4000
@@ -66,3 +72,23 @@ def get_model_for_provider(provider: str | None = None) -> str:
         return settings.ollama_model
     else:  # openrouter
         return settings.openrouter_model
+
+
+def get_grammar_model_config() -> tuple[str, str]:
+    """
+    문법 체크용 모델 설정 반환
+
+    Returns:
+        (provider, model) 튜플
+    """
+    settings = get_settings()
+
+    # 문법 전용 provider 설정이 있으면 사용, 없으면 기본 provider 사용
+    provider = settings.grammar_model_provider or settings.llm_provider
+
+    if provider == "ollama":
+        model = settings.grammar_ollama_model or settings.ollama_model
+    else:  # openrouter
+        model = settings.grammar_openrouter_model or settings.openrouter_model
+
+    return provider, model
