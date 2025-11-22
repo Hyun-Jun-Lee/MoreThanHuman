@@ -4,7 +4,7 @@ Grammar Service Layer
 import json
 from uuid import uuid4
 
-from config import get_model_for_provider, get_settings
+from config import get_grammar_model_config, get_settings
 from domains.grammar.models import GrammarFeedbackModel
 from domains.grammar.repository import GrammarRepository
 from domains.grammar.schemas import GrammarAnalysis, GrammarFeedback, GrammarStats
@@ -95,18 +95,21 @@ class GrammarService:
             RateLimitException: Rate limit 도달
             ExternalAPIException: LLM API 호출 실패
         """
-        # Create provider
-        provider = LLMProviderFactory.create_provider()
+        # Get grammar-specific model configuration
+        grammar_provider, grammar_model = get_grammar_model_config()
+
+        # Create provider with grammar-specific settings
+        provider = LLMProviderFactory.create_provider(grammar_provider)
 
         # Build prompt
         prompt = self.build_grammar_prompt(text, previous_ai_message)
 
-        # Create request with provider-specific model
+        # Create request with grammar-specific model (최적화: 토큰 절반, 온도 낮춤)
         request = LLMRequest(
             messages=[LLMMessage(role="user", content=prompt)],
-            model=get_model_for_provider(),
-            max_tokens=1000,
-            temperature=0.3,
+            model=grammar_model,
+            max_tokens=500,  # 1000 → 500 (더 빠른 응답)
+            temperature=0.1,  # 0.3 → 0.1 (더 일관되고 빠른 응답)
         )
 
         # Call provider
@@ -134,45 +137,57 @@ IMPORTANT: Consider the conversation context when analyzing.
 NATURAL CONVERSATIONAL RESPONSES (Do NOT mark as errors):
 - Short responses like "Went to the park" are natural replies to questions like "What did you do?"
 - Elliptical answers that omit subjects/verbs when context is clear
+- Casual expressions like "gonna", "wanna", "yeah", "nope" in informal conversation
 
 MUST CHECK FOR THESE ERRORS:
 1. Basic Grammar Errors:
    - Subject-verb agreement (e.g., "I likes" → "I like")
+   - Question formation: Must have proper word order
+     * Questions need: Wh-word (if any) + Auxiliary (do/does/did/can/will) + Subject + Main verb
+     * Examples: "what you think?" → "What do you think?"
+     * Examples: "other groups you know?" → "What other groups do you know?" or "Do you know other groups?"
    - Spelling mistakes
    - Punctuation errors
    - Word order problems
+   - Missing words (articles, auxiliary verbs, prepositions, question words)
 
 2. Contextual Appropriateness:
-   - Tense consistency: If AI asks about past ("What did you do yesterday?"), user should use past tense, not future/present
-   - Question-answer match: "Where" questions need location answers, not "how" or "what" answers
-   - Formality level: Match the conversation style (formal hotel check-in vs casual chat)
-   - Role-appropriate expressions: Use suitable language for the roleplay situation
+   - Tense consistency: If AI asks about past, user should use past tense, not future/present
+   - Question-answer match: "Where" questions need location answers
+   - Formality level: Match the conversation style (formal vs casual)
 
 3. Examples of contextual errors:
    - AI: "What did you do yesterday?" → User: "I will go shopping" ❌ (should be "I went shopping")
-   - AI: "How was your weekend?" → User: "I am having fun" ❌ (should be "I had fun")
    - AI: "Where did you go?" → User: "I enjoyed it" ❌ (doesn't answer the location question)
-   - AI (Hotel staff): "How may I help you?" → User: "Yo gimme a room" ❌ (too casual for formal setting)
 """
 
         return f"""Analyze the following English response for grammar errors.
 {context_part}
 User's response: "{text}"
 
-Respond in JSON format with:
+CRITICAL CORRECTION RULES:
+1. The corrected sentence MUST make logical sense and be grammatically complete
+2. If a word seems out of place or makes no sense, consider it might be:
+   - A typo (e.g., "know" might be "now")
+   - Should be removed entirely
+   - Part of a different intended phrase
+3. Fix ALL errors to create a natural, meaningful sentence
+4. Examples:
+   - "hi know i want seat of mine" → "Hi, I want my seat." (remove nonsensical "know")
+   - "what you think where is best?" → "What do you think is the best?" (fix question structure)
+   - "other groups you know?" → "What other groups do you know?" (add missing question word)
+
+Respond in JSON format:
 {{
-  "has_errors": boolean,
+  "has_errors": true/false,
+  "corrected_sentence": "fully corrected, meaningful sentence",
   "errors": [
     {{
-      "type": "grammar|word_choice|expression|spelling|punctuation",
-      "original": "incorrect text",
-      "corrected": "correct text",
-      "explanation": "brief explanation",
-      "position": {{"start": int, "end": int}}
+      "original": "incorrect part",
+      "corrected": "correct part",
+      "explanation": "brief explanation"
     }}
-  ],
-  "corrected_sentence": "fully corrected sentence",
-  "overall_quality": float (0.0 to 1.0)
+  ]
 }}
 
 If there are no errors, return has_errors: false and an empty errors array.
@@ -201,10 +216,9 @@ Keep explanations concise and helpful."""
                 has_errors=data.get("has_errors", False),
                 errors=[error for error in data.get("errors", [])],
                 corrected_sentence=data.get("corrected_sentence", ""),
-                overall_quality=data.get("overall_quality", 1.0),
             )
         except (json.JSONDecodeError, KeyError):
             # 파싱 실패 시 에러 없음으로 처리
             return GrammarAnalysis(
-                has_errors=False, errors=[], corrected_sentence="", overall_quality=1.0
+                has_errors=False, errors=[], corrected_sentence=""
             )

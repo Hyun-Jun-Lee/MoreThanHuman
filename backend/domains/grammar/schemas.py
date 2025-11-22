@@ -6,17 +6,13 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from domains.grammar.enums import ErrorType
-
 
 class GrammarError(BaseModel):
-    """문법 에러"""
+    """문법 에러 (간소화)"""
 
-    type: ErrorType
     original: str
     corrected: str
     explanation: str
-    position: dict[str, int]  # {"start": int, "end": int}
 
 
 class GrammarFeedback(BaseModel):
@@ -35,12 +31,11 @@ class GrammarFeedback(BaseModel):
 
 
 class GrammarAnalysis(BaseModel):
-    """문법 분석 결과"""
+    """문법 분석 결과 (간소화)"""
 
     has_errors: bool
     errors: list[GrammarError]
     corrected_sentence: str
-    overall_quality: float  # 0-1 scale
 
 
 class GrammarStats(BaseModel):
