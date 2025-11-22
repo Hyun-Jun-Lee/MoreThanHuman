@@ -1,138 +1,196 @@
-# 영어 회화 학습 웹 서비스 프로젝트 개요
+# MoreThanHuman
 
 ## 📌 프로젝트 소개
 
-AI를 활용하여 사용자가 원하는 주제(스포츠, 여행 등)로 영어 회화를 연습할 수 있는 웹 서비스입니다. 최신 뉴스와 정보를 기반으로 실용적이고 현실적인 대화를 나눌 수 있으며, 음성 입력/출력과 실시간 문법 교정 기능을 제공합니다.
+AI 영어 회화 공부를 위해 전화 영어 및 학원을 찾아보다가 높은 비용으로 인해 사람 보다 더 좋은 영어 선생님을 만들어 보고자 시작한 프로젝트.
 
-## 🎯 핵심 기능
+---
 
-### 1. 맞춤형 주제 대화
-- **지원 주제**: UFC, 야구, 여행 등
-- **최신 정보 반영**: Tavily API를 통해 실시간 뉴스/정보 검색
-- **컨텍스트 기반 대화**: 검색된 정보를 바탕으로 자연스러운 대화
+## ✨ 주요 기능
 
-### 2. 음성 지원
-- **STT (Speech-to-Text)**: 브라우저 Web Speech API 활용
-- **TTS (Text-to-Speech)**: AI 응답을 자동으로 읽어주기
-- **실시간 변환**: 말하는 내용이 즉시 텍스트로 표시
+### 🎭 롤플레이 대화
+- **상황별 역할극**: 카페 바리스타, 호텔 직원, 면접관, 영어 선생님 등
+- **AI가 먼저 시작**: 역할에 맞는 인사말로 자연스럽게 대화 시작
+- **실전 연습**: 실제 상황에서 필요한 표현 학습
 
-### 3. 실시간 문법 교정
-- **자동 분석**: 사용자 메시지 전송 시 자동으로 문법 체크
-- **상세 피드백**: 오류 부분 하이라이트 및 설명 제공
-- **올바른 표현 제시**: 교정된 문장과 함께 학습 가이드
+### 💬 자유 대화
+- **주제 선택**: 스포츠, 여행, 취미 등 관심사로 대화
+- **최신 정보 기반**: Tavily API로 실시간 뉴스 검색 후 대화 가능
+- **자연스러운 대화**: 일상적인 영어 회화 연습
+- **최대 10턴 히스토리**: 대화 맥락을 유지하며 자연스러운 흐름
 
-### 4. 학습 통계 및 대시보드
-- **진행 상황 추적**: 총 대화 수, 학습 시간, 문법 정확도
-- **개선도 시각화**: 차트를 통한 진행 상황 확인
-- **자주 하는 실수 분석**: 반복되는 문법 오류 패턴 파악
+### ⚡ 실시간 문법 피드백
+- **SSE 스트리밍**: 백그라운드에서 문법 체크 후 실시간 전송
+- **상세한 교정**: 틀린 부분, 올바른 표현, 설명 제공
+- **맥락 기반 분석**: 대화 흐름을 고려한 문법 체크
 
-## 🏗️ 기술 스택
+### 🤖 자유로운 모델 선택
+- **Ollama 지원**: 로컬에서 완전 무료로 실행 (qwen2.5:3b, qwen2.5:7b 등)
+- **OpenRouter 지원**: 다양한 클라우드 모델 선택 (Gemini, GPT-4o, Claude 등)
+- **독립적인 모델 설정**: 대화용 모델과 문법 체크용 모델을 각각 다르게 설정 가능
+- **비용 최적화**: 대화는 빠른 모델, 문법은 정확한 모델로 조합 가능
 
-### Backend
-- **Framework**: FastAPI (Python)
-- **Database**: PostgreSQL (Supabase)
-- **ORM**: SQLAlchemy
-- **Authentication**: JWT (python-jose)
+---
 
-### Frontend
-- **Framework**: Svelte
-- **Styling**: Tailwind CSS (예상)
-- **API Client**: Fetch API / Axios
+## 🚀 설치 및 설정
 
-### AI & APIs
-- **LLM**: OpenRouter API
-  - 주 모델: Google Gemini 2.0 Flash (무료)
-  - 대체 모델: DeepSeek Chat v3.1 (무료)
-- **검색**: Tavily API (무료 티어, 월 1,000회)
-- **음성**: Web Speech API (브라우저 네이티브)
+### 1. 필수 요구사항
+- Python 3.12+
+- (선택) [Ollama](https://ollama.com) - 로컬 모델 사용 시
 
-## 📊 시스템 아키텍처
+### 2. 저장소 클론 및 의존성 설치
+
+```bash
+# 저장소 클론
+git clone https://github.com/yourusername/MoreThanHuman.git
+cd MoreThanHuman/backend
+
+# uv로 가상환경 생성 및 의존성 설치 (권장)
+uv sync
+
+# 가상환경 활성화
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+```
+
+### 3. 환경 변수 설정
+
+```bash
+# .env.example을 .env로 복사
+cp .env.example .env
+```
+
+#### .env 파일 설정
+
+**기본 설정 (필수)**
+```bash
+# Database
+DATABASE_URL=sqlite:///./english_learning.db
+
+# External APIs
+TAVILY_API_KEY=your_tavily_api_key_here  # 검색 기능 사용 시 (선택)
+
+# Application
+DEBUG=true
+CORS_ORIGINS=["http://localhost:5173","http://localhost:3000"]
+```
+
+**LLM 모델 설정**
+
+모델은 **대화용**과 **문법 체크용** 두 가지로 나뉘어 설정할 수 있으며, 각각 **Ollama** 또는 **OpenRouter**에서 지원하는 모든 모델을 사용할 수 있습니다.
+
+- **대화용 모델**: 빠른 응답이 중요 (가벼운 모델 권장)
+- **문법 체크용 모델**: 정확한 교정이 중요 (큰 모델 권장)
+- **프로바이더**: Ollama (로컬) 또는 OpenRouter (클라우드)를 자유롭게 선택
+
+#### 설정 예시 (Ollama 사용)
+
+```bash
+# Ollama 모델 다운로드
+ollama pull qwen2.5:3b
+ollama pull qwen2.5:7b
+
+# .env 설정
+LLM_PROVIDER=ollama
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=qwen2.5:3b              # 대화용 (빠른 모델)
+
+GRAMMAR_MODEL_PROVIDER=ollama
+GRAMMAR_OLLAMA_MODEL=qwen2.5:7b      # 문법용 (정확한 모델)
+```
+
+**참고**: OpenRouter 사용 시 `LLM_PROVIDER=openrouter`로 설정하고 `OPENROUTER_MODEL`, `OPENROUTER_API_KEY`를 지정하면 됩니다. 지원 모델 목록은 [OpenRouter](https://openrouter.ai/models)에서 확인할 수 있습니다.
+
+**기타 설정**
+```bash
+# LLM 공통 설정
+MAX_TOKENS=2000
+TEMPERATURE=0.7
+
+# 대화 설정
+MAX_HISTORY_TURNS=10
+```
+
+### 4. 서버 실행
+
+```bash
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
+```
+
+서버가 **http://localhost:8000** 에서 실행됩니다.
+
+---
+
+## 🏗️ 시스템 아키텍처
 
 ```
 ┌─────────────┐
-│   Svelte    │ ← 사용자 인터페이스
-│  Frontend   │   (음성 입력/출력, 채팅 UI)
+│   Client    │ ← 사용자 인터페이스 (추후 구현)
+│  (Future)   │
 └──────┬──────┘
-       │ HTTPS
+       │ HTTP/SSE
 ┌──────▼──────┐
-│   FastAPI   │ ← REST API 서버
-│   Backend   │   (비즈니스 로직)
+│   FastAPI   │ ← REST API + SSE 스트리밍
+│   Backend   │   (Python 3.12)
 └──────┬──────┘
        │
-   ┌───┴────┐
-   │        │
-┌──▼──┐  ┌─▼──────┐
-│ SQL │  │External│
-│ DB  │  │  APIs  │
-└─────┘  └────┬───┘
-              │
-         ┌────┴─────┐
-         │          │
-    ┌────▼───┐ ┌───▼────┐
-    │Tavily  │ │OpenRouter│
-    │Search  │ │  LLM   │
-    └────────┘ └────────┘
+   ┌───┴────────────┐
+   │                │
+┌──▼──┐      ┌─────▼─────┐
+│ SQLite │    │  LLM API  │
+│  DB    │    │ Provider  │
+└────────┘    └─────┬─────┘
+                    │
+              ┌─────┴─────┐
+              │           │
+         ┌────▼────┐ ┌───▼────┐
+         │ Ollama  │ │OpenRouter│
+         │ (Local) │ │ (Cloud) │
+         └─────────┘ └─────────┘
 ```
 
-## 💡 주요 워크플로우
+### 핵심 워크플로우
 
-### 대화 시작
-1. 사용자가 주제 선택 (예: "UFC")
-2. 시스템이 Tavily로 최신 정보 검색 (캐시 우선)
-3. 검색 결과와 함께 대화 세션 생성
-4. 사용자 첫 메시지 입력
-5. AI가 컨텍스트 기반 응답 생성
-6. 문법 체크 후 피드백과 함께 반환
-
-### 대화 진행
-1. 사용자 메시지 입력 (텍스트 또는 음성)
-2. 최근 10턴 히스토리 로드
-3. AI 응답 생성 (병렬로 문법 체크)
-4. 응답 + 문법 피드백 표시
-5. TTS로 AI 응답 자동 재생
-
-### 문법 교정
+#### 1. 대화 시작
 ```
-사용자: "I goes to the store yesterday"
-        ─┬──         ────┬────
-         │               │
-    ┌────▼───────────────▼────┐
-    │ Grammar Check (LLM API) │
-    └─────────────┬────────────┘
-                  │
-         ┌────────▼─────────┐
-         │ "goes" → "went"  │
-         │ 과거형 사용 필요  │
-         └──────────────────┘
+사용자 요청
+    ↓
+대화 타입 선택 (자유 대화 / 롤플레이)
+    ↓
+시스템 프롬프트 생성
+    ↓
+AI 응답 생성 (LLM API)
+    ↓
+사용자에게 즉시 반환
 ```
 
-
-## 📦 프로젝트 구조
-
+#### 2. 메시지 전송 + 문법 체크
 ```
-/
-├── backend/
-│   ├── main.py                 # FastAPI 앱
-│   ├── database.py             # DB 설정
-│   ├── config.py               # 환경 변수
-│   ├── shared/                 # 공통 모듈
-│   └── domains/                # 도메인별 모듈
-│       ├── user/               # 사용자 관리
-│       ├── conversation/       # 대화 관리
-│       ├── grammar/            # 문법 체크
-│       ├── search/             # 검색 캐싱
-│       ├── voice/              # 음성 관리
-│       ├── dashboard/          # 통계
-│       └── web/                # 웹 라우팅
-├── frontend/
-│   ├── src/
-│   │   ├── routes/             # Svelte 라우트
-│   │   ├── components/         # 재사용 컴포넌트
-│   │   ├── lib/                # 유틸리티
-│   │   └── stores/             # 상태 관리
-│   └── static/                 # 정적 파일
-├── tests/                      # 테스트 코드
-└── docs/                       # 문서
+사용자 메시지 전송
+    ↓
+┌─────────────────┬─────────────────┐
+│  메인 스레드     │ 백그라운드 태스크 │
+│                 │                 │
+│ 1. 메시지 저장  │ 1. 문법 체크     │
+│ 2. AI 응답 생성 │    (LLM API)    │
+│ 3. 즉시 반환    │ 2. DB 저장      │
+└─────────────────┴─────────────────┘
+         │                 │
+         ↓                 ↓
+    AI 응답 표시      SSE로 문법 피드백
 ```
 
+#### 3. SSE 문법 피드백 스트리밍
+```
+클라이언트 SSE 연결
+    ↓
+0.5초마다 DB polling (최대 20초)
+    ↓
+문법 피드백 발견?
+    ├─ Yes → JSON으로 전송 → 연결 종료
+    └─ No  → 대기 계속
+```
 ---
+
+## 📝 라이선스
+
+MIT License
