@@ -1,196 +1,367 @@
-# MoreThanHuman
+# MoreThanHuman Backend API
 
-## 📌 프로젝트 소개
+AI 기반 영어 회화 학습 플랫폼 Convia의 FastAPI 백엔드예요.
 
-AI 영어 회화 공부를 위해 전화 영어 및 학원을 찾아보다가 높은 비용으로 인해 사람 보다 더 좋은 영어 선생님을 만들어 보고자 시작한 프로젝트.
+현재 저장소의 기준 범위는 백엔드 API예요. 사용자-facing 클라이언트는 향후 Flutter 기반 모바일 앱으로 별도 개발할 예정이에요.
 
----
+## 빠른 시작
 
-## ✨ 주요 기능
-
-### 🎭 롤플레이 대화
-- **상황별 역할극**: 카페 바리스타, 호텔 직원, 면접관, 영어 선생님 등
-- **AI가 먼저 시작**: 역할에 맞는 인사말로 자연스럽게 대화 시작
-- **실전 연습**: 실제 상황에서 필요한 표현 학습
-
-### 💬 자유 대화
-- **주제 선택**: 스포츠, 여행, 취미 등 관심사로 대화
-- **최신 정보 기반**: Tavily API로 실시간 뉴스 검색 후 대화 가능
-- **자연스러운 대화**: 일상적인 영어 회화 연습
-- **최대 10턴 히스토리**: 대화 맥락을 유지하며 자연스러운 흐름
-
-### ⚡ 실시간 문법 피드백
-- **SSE 스트리밍**: 백그라운드에서 문법 체크 후 실시간 전송
-- **상세한 교정**: 틀린 부분, 올바른 표현, 설명 제공
-- **맥락 기반 분석**: 대화 흐름을 고려한 문법 체크
-
-### 🤖 자유로운 모델 선택
-- **Ollama 지원**: 로컬에서 완전 무료로 실행 (qwen2.5:3b, qwen2.5:7b 등)
-- **OpenRouter 지원**: 다양한 클라우드 모델 선택 (Gemini, GPT-4o, Claude 등)
-- **독립적인 모델 설정**: 대화용 모델과 문법 체크용 모델을 각각 다르게 설정 가능
-- **비용 최적화**: 대화는 빠른 모델, 문법은 정확한 모델로 조합 가능
-
----
-
-## 🚀 설치 및 설정
-
-### 1. 필수 요구사항
-- Python 3.12+
-- (선택) [Ollama](https://ollama.com) - 로컬 모델 사용 시
-
-### 2. 저장소 클론 및 의존성 설치
+### 1. 환경 설정
 
 ```bash
-# 저장소 클론
-git clone https://github.com/yourusername/MoreThanHuman.git
-cd MoreThanHuman/backend
-
-# uv로 가상환경 생성 및 의존성 설치 (권장)
-uv sync
-
-# 가상환경 활성화
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
-```
-
-### 3. 환경 변수 설정
-
-```bash
-# .env.example을 .env로 복사
 cp .env.example .env
 ```
 
-#### .env 파일 설정
+`.env`에서 최소한 아래 값을 설정해요:
 
-**기본 설정 (필수)**
+| 변수 | 설명 |
+|------|------|
+| `LLM_PROVIDER` | `openrouter` 또는 `ollama` |
+| `OPENROUTER_API_KEY` | OpenRouter API 키 |
+| `OPENROUTER_MODEL` | OpenRouter 모델명 |
+| `OLLAMA_BASE_URL` | Ollama 서버 URL |
+| `OLLAMA_MODEL` | Ollama 모델명 |
+| `JWT_SECRET_KEY` | JWT 서명 secret |
+
+### 2. 의존성 설치
+
+권장 방식:
+
 ```bash
-# Database
+cd backend
+uv sync
+```
+
+호환 방식:
+
+```bash
+pip install -r requirements.txt
+```
+
+`backend/pyproject.toml`이 최신 의존성 기준이에요.
+
+### 3. 데이터베이스
+
+개발 기본값은 SQLite예요.
+
+```env
 DATABASE_URL=sqlite:///./english_learning.db
-
-# External APIs
-TAVILY_API_KEY=your_tavily_api_key_here  # 검색 기능 사용 시 (선택)
-
-# Application
-DEBUG=true
-CORS_ORIGINS=["http://localhost:5173","http://localhost:3000"]
 ```
 
-**LLM 모델 설정**
+프로덕션에서는 PostgreSQL을 사용해요.
 
-모델은 **대화용**과 **문법 체크용** 두 가지로 나뉘어 설정할 수 있으며, 각각 **Ollama** 또는 **OpenRouter**에서 지원하는 모든 모델을 사용할 수 있습니다.
-
-- **대화용 모델**: 빠른 응답이 중요 (가벼운 모델 권장)
-- **문법 체크용 모델**: 정확한 교정이 중요 (큰 모델 권장)
-- **프로바이더**: Ollama (로컬) 또는 OpenRouter (클라우드)를 자유롭게 선택
-
-#### 설정 예시 (Ollama 사용)
-
-```bash
-# Ollama 모델 다운로드
-ollama pull qwen2.5:3b
-ollama pull qwen2.5:7b
-
-# .env 설정
-LLM_PROVIDER=ollama
-OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=qwen2.5:3b              # 대화용 (빠른 모델)
-
-GRAMMAR_MODEL_PROVIDER=ollama
-GRAMMAR_OLLAMA_MODEL=qwen2.5:7b      # 문법용 (정확한 모델)
-```
-
-**참고**: OpenRouter 사용 시 `LLM_PROVIDER=openrouter`로 설정하고 `OPENROUTER_MODEL`, `OPENROUTER_API_KEY`를 지정하면 됩니다. 지원 모델 목록은 [OpenRouter](https://openrouter.ai/models)에서 확인할 수 있습니다.
-
-**기타 설정**
-```bash
-# LLM 공통 설정
-MAX_TOKENS=2000
-TEMPERATURE=0.7
-
-# 대화 설정
-MAX_HISTORY_TURNS=10
+```env
+DATABASE_URL=postgresql://user:password@localhost:5432/english_learning
 ```
 
 ### 4. 서버 실행
 
 ```bash
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+cd backend
+uv run python main.py
 ```
 
-서버가 **http://localhost:8000** 에서 실행됩니다.
+또는:
 
----
-
-## 🏗️ 시스템 아키텍처
-
-```
-┌─────────────┐
-│   Client    │ ← 사용자 인터페이스 (추후 구현)
-│  (Future)   │
-└──────┬──────┘
-       │ HTTP/SSE
-┌──────▼──────┐
-│   FastAPI   │ ← REST API + SSE 스트리밍
-│   Backend   │   (Python 3.12)
-└──────┬──────┘
-       │
-   ┌───┴────────────┐
-   │                │
-┌──▼──┐      ┌─────▼─────┐
-│ SQLite │    │  LLM API  │
-│  DB    │    │ Provider  │
-└────────┘    └─────┬─────┘
-                    │
-              ┌─────┴─────┐
-              │           │
-         ┌────▼────┐ ┌───▼────┐
-         │ Ollama  │ │OpenRouter│
-         │ (Local) │ │ (Cloud) │
-         └─────────┘ └─────────┘
+```bash
+cd backend
+uv run uvicorn main:app --reload --port 8010
 ```
 
-### 핵심 워크플로우
+서버 실행 후:
 
-#### 1. 대화 시작
-```
-사용자 요청
-    ↓
-대화 타입 선택 (자유 대화 / 롤플레이)
-    ↓
-시스템 프롬프트 생성
-    ↓
-AI 응답 생성 (LLM API)
-    ↓
-사용자에게 즉시 반환
-```
+| URL | 설명 |
+|-----|------|
+| `http://localhost:8010/docs` | Swagger API 문서 |
+| `http://localhost:8010/redoc` | ReDoc |
+| `http://localhost:8010/health` | 헬스 체크 |
 
-#### 2. 메시지 전송 + 문법 체크
-```
-사용자 메시지 전송
-    ↓
-┌─────────────────┬─────────────────┐
-│  메인 스레드     │ 백그라운드 태스크 │
-│                 │                 │
-│ 1. 메시지 저장  │ 1. 문법 체크     │
-│ 2. AI 응답 생성 │    (LLM API)    │
-│ 3. 즉시 반환    │ 2. DB 저장      │
-└─────────────────┴─────────────────┘
-         │                 │
-         ↓                 ↓
-    AI 응답 표시      SSE로 문법 피드백
+## 프로젝트 구조
+
+```text
+backend/
+├── main.py                 # FastAPI 앱 초기화 및 라우터 등록
+├── config.py               # 환경 설정
+├── database.py             # SQLAlchemy DB 연결 및 세션 관리
+├── shared/                 # 공통 타입, 예외, 유틸리티
+└── domains/
+    ├── auth/               # 회원가입, 로그인, JWT, Google OAuth
+    ├── conversation/       # 대화 관리
+    ├── grammar/            # 문법 체크 및 통계
+    ├── llm/                # OpenRouter/Ollama 추상화
+    └── search/             # DuckDuckGo 검색 + LLM 요약
 ```
 
-#### 3. SSE 문법 피드백 스트리밍
-```
-클라이언트 SSE 연결
-    ↓
-0.5초마다 DB polling (최대 20초)
-    ↓
-문법 피드백 발견?
-    ├─ Yes → JSON으로 전송 → 연결 종료
-    └─ No  → 대기 계속
-```
----
+## API 공통 규칙
 
-## 📝 라이선스
+Base URL: `http://localhost:8010`
 
-MIT License
+성공 응답:
+
+```json
+{
+  "success": true,
+  "message": "optional message",
+  "data": {}
+}
+```
+
+에러 응답:
+
+```json
+{
+  "success": false,
+  "error": "에러 메시지",
+  "details": {}
+}
+```
+
+인증이 필요한 API는 헤더를 사용해요:
+
+```http
+Authorization: Bearer <access_token>
+```
+
+## Auth API
+
+### `POST /api/auth/register`
+
+이메일+비밀번호로 회원가입하고 JWT를 발급해요.
+
+```json
+{
+  "email": "user@example.com",
+  "password": "password",
+  "name": "User"
+}
+```
+
+### `POST /api/auth/login`
+
+이메일+비밀번호로 로그인해 JWT를 발급해요.
+
+```json
+{
+  "email": "user@example.com",
+  "password": "password"
+}
+```
+
+### `GET /api/auth/google/login`
+
+Google OAuth2 로그인 URL을 반환해요.
+
+### `GET /api/auth/google/callback?code=...`
+
+Google OAuth2 callback code로 JWT를 발급해요.
+
+### `GET /api/auth/me`
+
+현재 사용자 프로필을 반환해요. 인증이 필요해요.
+
+## Conversation API
+
+모든 conversation API는 인증이 필요해요.
+
+### `POST /api/conversations/start/free-chat/`
+
+자유 대화를 시작해요.
+
+```json
+{
+  "first_message": "Hello, I want to practice English.",
+  "search_context": null
+}
+```
+
+### `POST /api/conversations/start/roleplay/`
+
+롤플레이 대화를 시작해요.
+
+```json
+{
+  "role_character": "a barista at a coffee shop",
+  "search_context": null
+}
+```
+
+### `POST /api/conversations/{conversation_id}/message/`
+
+진행 중인 대화에 메시지를 전송해요.
+
+```json
+{
+  "message": "I want to order a latte."
+}
+```
+
+### `GET /api/conversations/`
+
+현재 사용자의 대화 목록을 조회해요.
+
+Query:
+
+| 파라미터 | 기본값 | 설명 |
+|---------|--------|------|
+| `limit` | `50` | 조회 개수 |
+| `offset` | `0` | 시작 위치 |
+
+### `GET /api/conversations/{conversation_id}/`
+
+현재 사용자의 특정 대화를 조회해요.
+
+### `GET /api/conversations/{conversation_id}/messages/`
+
+대화 메시지 목록을 조회해요.
+
+### `PUT /api/conversations/{conversation_id}/end/`
+
+대화를 종료해요.
+
+### `PUT /api/conversations/{conversation_id}/title/`
+
+대화 제목을 수정해요.
+
+```json
+{
+  "title": "Coffee Shop Roleplay"
+}
+```
+
+### `DELETE /api/conversations/{conversation_id}/`
+
+대화와 관련 메시지를 삭제해요.
+
+### `GET /api/conversations/messages/{message_id}/grammar-feedback/stream`
+
+문법 피드백을 SSE로 수신해요. 이 엔드포인트는 토큰을 쿼리 파라미터로 전달해요.
+
+```text
+/api/conversations/messages/{message_id}/grammar-feedback/stream?token=<access_token>
+```
+
+## Grammar API
+
+### `POST /api/grammar/check/`
+
+텍스트 문법을 독립적으로 검사해요.
+
+```json
+{
+  "text": "I want go home."
+}
+```
+
+### `GET /api/grammar/message/{message_id}/`
+
+특정 메시지의 문법 피드백을 조회해요.
+
+### `GET /api/grammar/stats/`
+
+문법 통계를 조회해요.
+
+Query:
+
+| 파라미터 | 설명 |
+|---------|------|
+| `time_range` | `"7d"`, `"30d"`, `"90d"`, `"all"` |
+
+## Search API
+
+### `POST /api/search/`
+
+DuckDuckGo 검색 결과를 LLM으로 요약해요.
+
+```json
+{
+  "query": "how to order coffee in English"
+}
+```
+
+응답 `data`:
+
+```json
+{
+  "query": "how to order coffee in English",
+  "summary": "Summary text",
+  "sources": [
+    {
+      "title": "Source title",
+      "url": "https://example.com",
+      "snippet": "Source snippet"
+    }
+  ],
+  "timestamp": "2026-05-25T00:00:00"
+}
+```
+
+## Health Check
+
+### `GET /health`
+
+```json
+{
+  "status": "healthy",
+  "database": "connected",
+  "version": "1.0.0"
+}
+```
+
+## 환경 변수
+
+| 변수 | 필수 | 기본값 | 설명 |
+|------|------|--------|------|
+| `DATABASE_URL` | 아니오 | `sqlite:///./english_learning.db` | DB 연결 문자열 |
+| `OPENROUTER_API_KEY` | OpenRouter 사용 시 | 없음 | OpenRouter API 키 |
+| `LLM_PROVIDER` | 예 | 없음 | `openrouter` 또는 `ollama` |
+| `OLLAMA_BASE_URL` | Ollama 사용 시 | 없음 | Ollama 서버 URL |
+| `OPENROUTER_MODEL` | OpenRouter 사용 시 | 없음 | 대화용 OpenRouter 모델 |
+| `OLLAMA_MODEL` | Ollama 사용 시 | 없음 | 대화용 Ollama 모델 |
+| `GRAMMAR_MODEL_PROVIDER` | 아니오 | `LLM_PROVIDER` | 문법 체크 전용 provider |
+| `GRAMMAR_OPENROUTER_MODEL` | 아니오 | `OPENROUTER_MODEL` | 문법 체크 전용 OpenRouter 모델 |
+| `GRAMMAR_OLLAMA_MODEL` | 아니오 | `OLLAMA_MODEL` | 문법 체크 전용 Ollama 모델 |
+| `JWT_SECRET_KEY` | 예 | 없음 | JWT 서명 secret |
+| `JWT_ALGORITHM` | 아니오 | `HS256` | JWT 알고리즘 |
+| `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` | 아니오 | `1440` | access token 만료 시간 |
+| `GOOGLE_CLIENT_ID` | Google OAuth 사용 시 | 없음 | Google OAuth client ID |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth 사용 시 | 없음 | Google OAuth client secret |
+| `GOOGLE_REDIRECT_URI` | 아니오 | `http://localhost:8010/api/auth/google/callback` | Google OAuth callback |
+| `DEBUG` | 아니오 | `false` | 디버그 모드 |
+| `CORS_ORIGINS` | 아니오 | `[]` | CORS 허용 origin 목록 |
+| `MAX_TOKENS` | 아니오 | `4000` | LLM 최대 토큰 |
+| `TEMPERATURE` | 아니오 | `0.7` | LLM temperature |
+| `SEARCH_SUMMARY_MAX_TOKENS` | 아니오 | `600` | 검색 요약 최대 토큰 |
+| `MAX_HISTORY_TURNS` | 아니오 | `10` | 대화 기록 최대 턴 |
+
+## 개발 가이드
+
+### 새 도메인 추가
+
+1. `backend/domains/{domain_name}/` 폴더를 만들어요.
+2. 필요에 따라 `models.py`, `schemas.py`, `enums.py`를 추가해요.
+3. `repository.py`에 데이터 접근을 분리해요.
+4. `service.py`에 비즈니스 로직을 둬요.
+5. `router.py`에 API 엔드포인트를 정의해요.
+6. `backend/main.py`에 라우터를 등록해요.
+
+### 문서 동기화
+
+API, 환경변수, 도메인 계약이 바뀌면 같은 작업 단위에서 아래 파일을 함께 갱신해요.
+
+| 변경 | 동기화 대상 |
+|------|-------------|
+| API 엔드포인트 | `README.md`, `docs/DSL.md`, `backend/domains/*/router.py` |
+| 환경변수 | `.env.example`, `README.md`, `backend/config.py` |
+
+## 주요 기능
+
+- 이메일/비밀번호 회원가입 및 로그인
+- Google OAuth2 로그인
+- JWT 기반 인증
+- AI 기반 영어 회화 연습
+- 자유 대화와 롤플레이 대화
+- 사용자별 대화 히스토리 관리
+- 문법 체크 및 SSE 기반 비동기 피드백
+- 문법 통계
+- OpenRouter/Ollama LLM provider 추상화
+- DuckDuckGo 검색 + LLM 요약

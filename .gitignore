@@ -50,3 +50,10 @@ uv.lock
 
 # Project specific
 web_example.html
+
+# Seed artifacts
+.agent/_questions/open/*.draft.md
+.agent/scratch/
+
+# Compound Engineering local config
+.compound-engineering/*.local.yaml
