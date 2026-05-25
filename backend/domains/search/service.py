@@ -1,13 +1,19 @@
 """
 Search Service Layer
 """
+import asyncio
+import logging
 from datetime import datetime
 
-import httpx
+from duckduckgo_search import DDGS
 
-from config import get_settings
-from domains.search.schemas import SearchResult, SearchResultItem, TavilyResponse
+from config import get_model_for_provider, get_settings
+from domains.llm.factory import LLMProviderFactory
+from domains.llm.schemas import LLMMessage, LLMRequest
+from domains.search.schemas import SearchResult, SearchResultItem
 from shared.exceptions import ExternalAPIException
+
+logger = logging.getLogger(__name__)
 
 settings = get_settings()
 
@@ -17,93 +23,102 @@ class SearchService:
 
     async def search(self, query: str) -> SearchResult:
         """
-        검색 실행
+        DuckDuckGo 검색 후 LLM 요약
 
         Args:
             query: 검색 쿼리
 
         Returns:
-            검색 결과
+            요약된 검색 결과
         """
-        # Tavily API 호출
-        tavily_response = await self.call_tavily_api(query)
+        raw_results = await self._search_duckduckgo(query)
 
-        # 결과 포맷팅
-        return self.format_search_results(tavily_response)
+        sources = [
+            SearchResultItem(
+                title=r.get("title", ""),
+                url=r.get("href", ""),
+                snippet=r.get("body", "")[:300],
+            )
+            for r in raw_results
+        ]
 
-    async def call_tavily_api(self, query: str) -> TavilyResponse:
+        summary = await self._summarize_results(query, sources)
+
+        return SearchResult(
+            query=query,
+            summary=summary,
+            sources=sources,
+            timestamp=datetime.utcnow(),
+        )
+
+    async def _search_duckduckgo(self, query: str) -> list[dict]:
         """
-        Tavily API 호출
+        DuckDuckGo 검색 (동기 라이브러리를 스레드에서 실행)
 
         Args:
             query: 검색 쿼리
 
         Returns:
-            Tavily 응답
+            검색 결과 리스트
 
         Raises:
-            ExternalAPIException: API 호출 실패
+            ExternalAPIException: 검색 실패
         """
-        async with httpx.AsyncClient() as client:
-            try:
-                response = await client.post(
-                    "https://api.tavily.com/search",
-                    headers={"Content-Type": "application/json"},
-                    json={
-                        "api_key": settings.tavily_api_key,
-                        "query": query,
-                        "search_depth": "basic",
-                        "max_results": 5,
-                    },
-                    timeout=15.0,
-                )
-                response.raise_for_status()
-                data = response.json()
+        try:
+            return await asyncio.to_thread(self._sync_search, query)
+        except ExternalAPIException:
+            raise
+        except Exception as e:
+            raise ExternalAPIException(f"DuckDuckGo search failed: {str(e)}")
 
-                return TavilyResponse(query=query, results=data.get("results", []))
-            except httpx.HTTPError as e:
-                raise ExternalAPIException(f"Tavily API call failed: {str(e)}")
+    def _sync_search(self, query: str) -> list[dict]:
+        """DuckDuckGo 동기 검색"""
+        ddgs = DDGS()
+        results = ddgs.text(query, max_results=5)
+        return results
 
-    def build_search_query(self, topic: str) -> str:
+    async def _summarize_results(self, query: str, sources: list[SearchResultItem]) -> str:
         """
-        검색 쿼리 생성
+        LLM을 사용하여 검색 결과 요약
 
         Args:
-            topic: 주제
+            query: 원본 검색 쿼리
+            sources: 검색 결과 항목 리스트
 
         Returns:
-            검색 쿼리
+            요약 텍스트
         """
-        return f"{topic} latest news"
+        if not sources:
+            return f"No results found for: {query}"
 
-    def format_search_results(self, tavily_response: TavilyResponse) -> SearchResult:
-        """
-        검색 결과 포맷팅
+        source_text = "\n".join(
+            f"- {s.title}: {s.snippet}" for s in sources
+        )
 
-        Args:
-            tavily_response: Tavily 응답
-
-        Returns:
-            포맷팅된 검색 결과
-        """
-        results = []
-        for item in tavily_response.results:
-            # published_date 파싱
-            published_date = None
-            if item.published_date:
-                try:
-                    published_date = datetime.fromisoformat(item.published_date.replace("Z", "+00:00"))
-                except ValueError:
-                    pass
-
-            results.append(
-                SearchResultItem(
-                    title=item.title,
-                    url=item.url,
-                    snippet=item.content[:200] if item.content else "",
-                    published_date=published_date,
-                    score=item.score,
-                )
+        try:
+            provider = LLMProviderFactory.create_provider()
+            request = LLMRequest(
+                messages=[
+                    LLMMessage(
+                        role="system",
+                        content=(
+                            "Summarize the following search results into a concise paragraph. "
+                            "Focus on key facts and information relevant to the query. "
+                            "Write in English only. Keep it under 150 words."
+                        ),
+                    ),
+                    LLMMessage(
+                        role="user",
+                        content=f"Query: {query}\n\nSearch Results:\n{source_text}",
+                    ),
+                ],
+                model=get_model_for_provider(),
+                max_tokens=settings.search_summary_max_tokens,
+                temperature=0.3,
             )
 
-        return SearchResult(query=tavily_response.query, results=results, timestamp=datetime.utcnow())
+            response = await provider.chat_completion(request)
+            return response.content
+        except Exception as e:
+            logger.warning(f"LLM summarization failed, using fallback: {e}")
+            return "\n".join(f"- {s.title}: {s.snippet}" for s in sources)

@@ -11,11 +11,13 @@ from fastapi.staticfiles import StaticFiles
 
 from config import get_settings
 from database import Base, engine
+from domains.auth.models import UserModel  # noqa: F401 - 테이블 생성용 import
+from domains.auth.router import router as auth_router
 from domains.conversation.router import router as conversation_router
 from domains.grammar.router import router as grammar_router
 from domains.search.router import router as search_router
 from domains.web.router import router as web_router
-from shared.exceptions import AppException, NotFoundException
+from shared.exceptions import AppException, AuthenticationException, NotFoundException
 
 settings = get_settings()
 
@@ -48,13 +50,22 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
-    allow_credentials=False,
+    allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=["*"],
 )
 
 
 # Exception Handlers
+@app.exception_handler(AuthenticationException)
+async def authentication_exception_handler(_request, exc: AuthenticationException):
+    """401 인증 에러 핸들러"""
+    return JSONResponse(
+        status_code=401,
+        content={"success": False, "error": exc.message, "details": exc.details},
+    )
+
+
 @app.exception_handler(NotFoundException)
 async def not_found_exception_handler(_request, exc: NotFoundException):
     """404 에러 핸들러"""
@@ -79,6 +90,7 @@ STATIC_DIR = Path(__file__).parent.parent / "static"
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 # API 라우터 등록
+app.include_router(auth_router)
 app.include_router(conversation_router)
 app.include_router(grammar_router)
 app.include_router(search_router)

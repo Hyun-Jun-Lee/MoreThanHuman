@@ -371,7 +371,7 @@ async function performSearch() {
         const data = await response.json();
 
         if (data.success && data.data) {
-            searchContext = data.data;
+            searchContext = data.data.summary;
             document.getElementById('search-modal').classList.add('hidden');
 
             // If we're in setup mode, start the conversation UI

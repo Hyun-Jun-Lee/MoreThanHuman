@@ -54,7 +54,8 @@ class ConversationService:
     async def start_free_chat_conversation(
         self,
         first_message: str,
-        search_context: str | None = None
+        search_context: str | None = None,
+        user_id: str = "",
     ) -> ConversationResponse:
         """
         자유 대화 시작
@@ -62,6 +63,7 @@ class ConversationService:
         Args:
             first_message: 첫 메시지
             search_context: 검색 컨텍스트 (세션 메모리)
+            user_id: 사용자 ID
 
         Returns:
             대화 응답
@@ -72,6 +74,7 @@ class ConversationService:
 
             conversation = ConversationModel(
                 id=str(uuid4()),
+                user_id=user_id,
                 title=title,
                 conversation_type=ConversationType.FREE_CHAT,
                 role_character=None,
@@ -105,7 +108,7 @@ class ConversationService:
             self.repository.save_message(assistant_message)
 
             # 6. 메시지 카운트 업데이트
-            self.repository.update_message_count(conversation.id, 2)
+            self.repository.update_message_count(conversation.id, user_id, 2)
 
             # 7. 백그라운드에서 문법 체크 실행 (첫 메시지이므로 이전 AI 메시지 없음)
             asyncio.create_task(
@@ -128,7 +131,8 @@ class ConversationService:
     async def start_roleplay_conversation(
         self,
         role_character: str,
-        search_context: str | None = None
+        search_context: str | None = None,
+        user_id: str = "",
     ) -> ConversationResponse:
         """
         롤플레이 대화 시작 (AI가 먼저 인사)
@@ -136,6 +140,7 @@ class ConversationService:
         Args:
             role_character: 롤플레이 캐릭터 (예: "카페 바리스타", "영어 선생님")
             search_context: 검색 컨텍스트 (세션 메모리)
+            user_id: 사용자 ID
 
         Returns:
             대화 응답
@@ -146,6 +151,7 @@ class ConversationService:
 
             conversation = ConversationModel(
                 id=str(uuid4()),
+                user_id=user_id,
                 title=title,
                 conversation_type=ConversationType.ROLE_PLAYING,
                 role_character=role_character,
@@ -171,7 +177,7 @@ class ConversationService:
             self.repository.save_message(assistant_message)
 
             # 5. 메시지 카운트 업데이트 (AI 메시지 1개)
-            self.repository.update_message_count(conversation.id, 1)
+            self.repository.update_message_count(conversation.id, user_id, 1)
 
             # 6. 롤플레이 시작이므로 grammar_feedback 없음
             return ConversationResponse(
@@ -186,20 +192,21 @@ class ConversationService:
             logger.error(f"Error in start_roleplay_conversation: {str(e)}\n{traceback.format_exc()}")
             raise
 
-    async def continue_conversation(self, conversation_id: str, user_message: str) -> MessageResponse:
+    async def continue_conversation(self, conversation_id: str, user_message: str, user_id: str = "") -> MessageResponse:
         """
         대화 계속하기
 
         Args:
             conversation_id: 대화 ID
             user_message: 사용자 메시지
+            user_id: 사용자 ID
 
         Returns:
             메시지 응답
         """
         try:
             # 1. 대화 조회
-            conversation = self.repository.find_by_id(conversation_id)
+            conversation = self.repository.find_by_id(conversation_id, user_id)
 
             # 2. 사용자 메시지 저장
             user_msg = MessageModel(
@@ -245,7 +252,7 @@ class ConversationService:
 
             # 9. 메시지 카운트 업데이트
             new_count = conversation.message_count + 2
-            self.repository.update_message_count(conversation.id, new_count)
+            self.repository.update_message_count(conversation.id, user_id, new_count)
 
             # 10. 백그라운드에서 문법 체크 실행 (응답 반환에 영향 없음)
             asyncio.create_task(
@@ -263,45 +270,50 @@ class ConversationService:
             logger.error(f"Error in continue_conversation: {str(e)}\n{traceback.format_exc()}")
             raise
 
-    def get_conversation(self, conversation_id: str) -> Conversation:
+    def get_conversation(self, conversation_id: str, user_id: str) -> Conversation:
         """
         대화 조회
 
         Args:
             conversation_id: 대화 ID
+            user_id: 사용자 ID
 
         Returns:
             대화
         """
-        conversation = self.repository.find_by_id(conversation_id)
+        conversation = self.repository.find_by_id(conversation_id, user_id)
         return Conversation.model_validate(conversation)
 
-    def get_conversations(self, limit: int = 50, offset: int = 0) -> list[Conversation]:
+    def get_conversations(self, user_id: str, limit: int = 50, offset: int = 0) -> list[Conversation]:
         """
         대화 목록 조회
 
         Args:
+            user_id: 사용자 ID
             limit: 조회 개수
             offset: 시작 위치
 
         Returns:
             대화 목록
         """
-        conversations = self.repository.find_all(limit, offset)
+        conversations = self.repository.find_all(user_id, limit, offset)
         return [Conversation.model_validate(c) for c in conversations]
 
-    def get_messages(self, conversation_id: str, limit: int = 50, offset: int = 0) -> list[Message]:
+    def get_messages(self, conversation_id: str, user_id: str, limit: int = 50, offset: int = 0) -> list[Message]:
         """
         메시지 목록 조회
 
         Args:
             conversation_id: 대화 ID
+            user_id: 사용자 ID
             limit: 조회 개수
             offset: 시작 위치
 
         Returns:
             메시지 목록
         """
+        # user_id 검증
+        self.repository.find_by_id(conversation_id, user_id)
         messages = self.repository.get_messages(conversation_id, limit, offset)
         result = []
         for m in messages:
@@ -324,24 +336,26 @@ class ConversationService:
 
         return result
 
-    def end_conversation(self, conversation_id: str) -> None:
+    def end_conversation(self, conversation_id: str, user_id: str) -> None:
         """
         대화 종료
 
         Args:
             conversation_id: 대화 ID
+            user_id: 사용자 ID
         """
-        self.repository.update_status(conversation_id, ConversationStatus.COMPLETED)
+        self.repository.update_status(conversation_id, user_id, ConversationStatus.COMPLETED)
 
-    def update_conversation_title(self, conversation_id: str, title: str) -> None:
+    def update_conversation_title(self, conversation_id: str, title: str, user_id: str = "") -> None:
         """
         대화 제목 업데이트
 
         Args:
             conversation_id: 대화 ID
             title: 새로운 제목
+            user_id: 사용자 ID
         """
-        self.repository.update_title(conversation_id, title)
+        self.repository.update_title(conversation_id, user_id, title)
 
     # LLM 호출
     async def generate_response(

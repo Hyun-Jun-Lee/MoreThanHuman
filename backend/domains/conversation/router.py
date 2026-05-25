@@ -7,7 +7,7 @@ import json
 import logging
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -15,6 +15,8 @@ from sqlalchemy.orm import Session
 logger = logging.getLogger(__name__)
 
 from database import get_db
+from domains.auth.dependencies import get_current_user, get_current_user_from_token_param
+from domains.auth.models import UserModel
 from domains.conversation.enums import ConversationType
 from domains.conversation.repository import ConversationRepository
 from domains.conversation.schemas import Conversation, ConversationResponse, Message, MessageResponse
@@ -66,22 +68,15 @@ def get_conversation_service(db: Session = Depends(get_db)) -> ConversationServi
 @router.post("/start/free-chat/", response_model=SuccessResponse[ConversationResponse])
 async def start_free_chat_conversation(
     request: StartFreeChatRequest,
+    current_user: UserModel = Depends(get_current_user),
     service: ConversationService = Depends(get_conversation_service),
 ):
-    """
-    자유 대화 시작
-
-    Args:
-        request: 자유 대화 시작 요청
-        service: Conversation Service
-
-    Returns:
-        대화 응답
-    """
+    """자유 대화 시작"""
     try:
         response = await service.start_free_chat_conversation(
             request.first_message,
-            request.search_context
+            request.search_context,
+            user_id=current_user.id,
         )
         return SuccessResponse(data=response, message="자유 대화가 시작되었습니다")
     except RateLimitException as e:
@@ -98,22 +93,15 @@ async def start_free_chat_conversation(
 @router.post("/start/roleplay/", response_model=SuccessResponse[ConversationResponse])
 async def start_roleplay_conversation(
     request: StartRoleplayRequest,
+    current_user: UserModel = Depends(get_current_user),
     service: ConversationService = Depends(get_conversation_service),
 ):
-    """
-    롤플레이 대화 시작 (AI가 먼저 인사)
-
-    Args:
-        request: 롤플레이 시작 요청
-        service: Conversation Service
-
-    Returns:
-        대화 응답
-    """
+    """롤플레이 대화 시작 (AI가 먼저 인사)"""
     try:
         response = await service.start_roleplay_conversation(
             request.role_character,
-            request.search_context
+            request.search_context,
+            user_id=current_user.id,
         )
         return SuccessResponse(data=response, message="롤플레이 대화가 시작되었습니다")
     except RateLimitException as e:
@@ -131,21 +119,14 @@ async def start_roleplay_conversation(
 async def send_message(
     conversation_id: UUID,
     request: SendMessageRequest,
+    current_user: UserModel = Depends(get_current_user),
     service: ConversationService = Depends(get_conversation_service),
 ):
-    """
-    메시지 전송
-
-    Args:
-        conversation_id: 대화 ID
-        request: 메시지 요청
-        service: Conversation Service
-
-    Returns:
-        메시지 응답
-    """
+    """메시지 전송"""
     try:
-        response = await service.continue_conversation(str(conversation_id), request.message)
+        response = await service.continue_conversation(
+            str(conversation_id), request.message, user_id=current_user.id
+        )
         return SuccessResponse(data=response)
     except RateLimitException as e:
         logger.warning(f"RateLimitException in send_message: {e.message}")
@@ -165,21 +146,12 @@ async def send_message(
 def get_conversations(
     limit: int = 50,
     offset: int = 0,
+    current_user: UserModel = Depends(get_current_user),
     service: ConversationService = Depends(get_conversation_service),
 ):
-    """
-    대화 목록 조회
-
-    Args:
-        limit: 조회 개수
-        offset: 시작 위치
-        service: Conversation Service
-
-    Returns:
-        대화 목록
-    """
+    """대화 목록 조회"""
     try:
-        conversations = service.get_conversations(limit, offset)
+        conversations = service.get_conversations(current_user.id, limit, offset)
         return SuccessResponse(data=conversations)
     except AppException as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
@@ -188,20 +160,12 @@ def get_conversations(
 @router.get("/{conversation_id}/", response_model=SuccessResponse[Conversation])
 def get_conversation(
     conversation_id: UUID,
+    current_user: UserModel = Depends(get_current_user),
     service: ConversationService = Depends(get_conversation_service),
 ):
-    """
-    대화 조회
-
-    Args:
-        conversation_id: 대화 ID
-        service: Conversation Service
-
-    Returns:
-        대화
-    """
+    """대화 조회"""
     try:
-        conversation = service.get_conversation(str(conversation_id))
+        conversation = service.get_conversation(str(conversation_id), current_user.id)
         return SuccessResponse(data=conversation)
     except NotFoundException as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
@@ -214,22 +178,12 @@ def get_messages(
     conversation_id: UUID,
     limit: int = 50,
     offset: int = 0,
+    current_user: UserModel = Depends(get_current_user),
     service: ConversationService = Depends(get_conversation_service),
 ):
-    """
-    메시지 목록 조회
-
-    Args:
-        conversation_id: 대화 ID
-        limit: 조회 개수
-        offset: 시작 위치
-        service: Conversation Service
-
-    Returns:
-        메시지 목록
-    """
+    """메시지 목록 조회"""
     try:
-        messages = service.get_messages(str(conversation_id), limit, offset)
+        messages = service.get_messages(str(conversation_id), current_user.id, limit, offset)
         return SuccessResponse(data=messages)
     except NotFoundException as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
@@ -240,20 +194,12 @@ def get_messages(
 @router.put("/{conversation_id}/end/", response_model=SuccessResponse[dict])
 def end_conversation(
     conversation_id: UUID,
+    current_user: UserModel = Depends(get_current_user),
     service: ConversationService = Depends(get_conversation_service),
 ):
-    """
-    대화 종료
-
-    Args:
-        conversation_id: 대화 ID
-        service: Conversation Service
-
-    Returns:
-        성공 응답
-    """
+    """대화 종료"""
     try:
-        service.end_conversation(str(conversation_id))
+        service.end_conversation(str(conversation_id), current_user.id)
         return SuccessResponse(data={}, message="대화가 종료되었습니다")
     except NotFoundException as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
@@ -265,21 +211,12 @@ def end_conversation(
 def update_conversation_title(
     conversation_id: UUID,
     request: UpdateTitleRequest,
+    current_user: UserModel = Depends(get_current_user),
     service: ConversationService = Depends(get_conversation_service),
 ):
-    """
-    대화 제목 수정
-
-    Args:
-        conversation_id: 대화 ID
-        request: 제목 수정 요청
-        service: Conversation Service
-
-    Returns:
-        성공 응답
-    """
+    """대화 제목 수정"""
     try:
-        service.update_conversation_title(str(conversation_id), request.title)
+        service.update_conversation_title(str(conversation_id), request.title, current_user.id)
         return SuccessResponse(data={}, message="대화 제목이 수정되었습니다")
     except NotFoundException as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
@@ -290,20 +227,12 @@ def update_conversation_title(
 @router.delete("/{conversation_id}/", response_model=SuccessResponse[dict])
 def delete_conversation(
     conversation_id: UUID,
+    current_user: UserModel = Depends(get_current_user),
     service: ConversationService = Depends(get_conversation_service),
 ):
-    """
-    대화 삭제
-
-    Args:
-        conversation_id: 대화 ID
-        service: Conversation Service
-
-    Returns:
-        성공 응답
-    """
+    """대화 삭제"""
     try:
-        service.repository.delete_by_id(str(conversation_id))
+        service.repository.delete_by_id(str(conversation_id), current_user.id)
         return SuccessResponse(data={}, message="대화가 삭제되었습니다")
     except NotFoundException as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
@@ -314,18 +243,10 @@ def delete_conversation(
 @router.get("/messages/{message_id}/grammar-feedback/stream")
 async def stream_grammar_feedback(
     message_id: UUID,
+    current_user: UserModel = Depends(get_current_user_from_token_param),
     service: ConversationService = Depends(get_conversation_service),
 ):
-    """
-    SSE로 문법 피드백 스트리밍
-
-    Args:
-        message_id: 사용자 메시지 ID
-        service: Conversation Service
-
-    Returns:
-        SSE 스트림
-    """
+    """SSE로 문법 피드백 스트리밍 (토큰은 쿼리 파라미터로 전달)"""
     async def event_generator():
         """SSE 이벤트 생성기"""
         max_wait_seconds = 20  # 최대 20초 대기

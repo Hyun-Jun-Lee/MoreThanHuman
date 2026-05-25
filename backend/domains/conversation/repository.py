@@ -31,12 +31,13 @@ class ConversationRepository:
         self.db.refresh(conversation)
         return conversation
 
-    def find_by_id(self, conversation_id: str) -> ConversationModel:
+    def find_by_id(self, conversation_id: str, user_id: str) -> ConversationModel:
         """
-        ID로 대화 조회
+        ID로 대화 조회 (user_id 검증 포함)
 
         Args:
             conversation_id: 대화 ID
+            user_id: 사용자 ID
 
         Returns:
             대화 모델
@@ -44,16 +45,21 @@ class ConversationRepository:
         Raises:
             NotFoundException: 대화를 찾을 수 없을 때
         """
-        conversation = self.db.query(ConversationModel).filter(ConversationModel.id == conversation_id).first()
+        conversation = (
+            self.db.query(ConversationModel)
+            .filter(ConversationModel.id == conversation_id, ConversationModel.user_id == user_id)
+            .first()
+        )
         if not conversation:
             raise NotFoundException(f"Conversation {conversation_id} not found")
         return conversation
 
-    def find_all(self, limit: int = 50, offset: int = 0) -> list[ConversationModel]:
+    def find_all(self, user_id: str, limit: int = 50, offset: int = 0) -> list[ConversationModel]:
         """
-        모든 대화 조회
+        사용자의 대화 목록 조회
 
         Args:
+            user_id: 사용자 ID
             limit: 조회 개수
             offset: 시작 위치
 
@@ -62,56 +68,61 @@ class ConversationRepository:
         """
         return (
             self.db.query(ConversationModel)
+            .filter(ConversationModel.user_id == user_id)
             .order_by(desc(ConversationModel.created_at))
             .limit(limit)
             .offset(offset)
             .all()
         )
 
-    def update_status(self, conversation_id: str, status: ConversationStatus) -> None:
+    def update_status(self, conversation_id: str, user_id: str, status: ConversationStatus) -> None:
         """
         대화 상태 업데이트
 
         Args:
             conversation_id: 대화 ID
+            user_id: 사용자 ID
             status: 새로운 상태
         """
-        conversation = self.find_by_id(conversation_id)
+        conversation = self.find_by_id(conversation_id, user_id)
         conversation.status = status
         self.db.commit()
 
-    def update_message_count(self, conversation_id: str, count: int) -> None:
+    def update_message_count(self, conversation_id: str, user_id: str, count: int) -> None:
         """
         메시지 카운트 업데이트
 
         Args:
             conversation_id: 대화 ID
+            user_id: 사용자 ID
             count: 메시지 개수
         """
-        conversation = self.find_by_id(conversation_id)
+        conversation = self.find_by_id(conversation_id, user_id)
         conversation.message_count = count
         self.db.commit()
 
-    def update_title(self, conversation_id: str, title: str) -> None:
+    def update_title(self, conversation_id: str, user_id: str, title: str) -> None:
         """
         대화 제목 업데이트
 
         Args:
             conversation_id: 대화 ID
+            user_id: 사용자 ID
             title: 새로운 제목
         """
-        conversation = self.find_by_id(conversation_id)
+        conversation = self.find_by_id(conversation_id, user_id)
         conversation.title = title
         self.db.commit()
 
-    def delete_by_id(self, conversation_id: str) -> None:
+    def delete_by_id(self, conversation_id: str, user_id: str) -> None:
         """
         대화 삭제
 
         Args:
             conversation_id: 대화 ID
+            user_id: 사용자 ID
         """
-        conversation = self.find_by_id(conversation_id)
+        conversation = self.find_by_id(conversation_id, user_id)
         self.db.delete(conversation)
         self.db.commit()
 

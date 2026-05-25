@@ -34,3 +34,9 @@ class RateLimitException(AppException):
     """API Rate Limit 도달"""
 
     pass
+
+
+class AuthenticationException(AppException):
+    """인증 실패"""
+
+    pass

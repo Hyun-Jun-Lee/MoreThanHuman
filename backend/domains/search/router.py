@@ -1,9 +1,11 @@
 """
 Search API Router
 """
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
+from domains.auth.dependencies import get_current_user
+from domains.auth.models import UserModel
 from domains.search.schemas import SearchResult
 from domains.search.service import SearchService
 from shared.exceptions import AppException
@@ -19,20 +21,21 @@ class SearchRequest(BaseModel):
     query: str
 
 
+# Dependency
+def get_search_service() -> SearchService:
+    """SearchService 의존성"""
+    return SearchService()
+
+
 # Endpoints
 @router.post("/", response_model=SuccessResponse[SearchResult])
-async def search(request: SearchRequest):
-    """
-    검색 실행
-
-    Args:
-        request: 검색 요청
-
-    Returns:
-        검색 결과
-    """
+async def search(
+    request: SearchRequest,
+    current_user: UserModel = Depends(get_current_user),
+    service: SearchService = Depends(get_search_service),
+):
+    """검색 실행"""
     try:
-        service = SearchService()
         result = await service.search(request.query)
         return SuccessResponse(data=result)
     except AppException as e:

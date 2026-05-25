@@ -3,7 +3,6 @@
 """
 from functools import lru_cache
 from pathlib import Path
-from typing import Optional
 from pydantic_settings import BaseSettings
 
 
@@ -15,11 +14,10 @@ class Settings(BaseSettings):
 
     # External APIs
     openrouter_api_key: str
-    tavily_api_key: str
 
     # Application
     debug: bool = False
-    cors_origins: list[str] = ["http://localhost:5173"]
+    cors_origins: list[str] = []
 
     # LLM Provider Settings
     llm_provider: str
@@ -33,12 +31,25 @@ class Settings(BaseSettings):
 
     # Grammar Check Model Settings (separate from conversation model)
     grammar_model_provider: str = None  # If None, uses llm_provider
-    grammar_openrouter_model: Optional[str] = None  # If None, uses openrouter_model
-    grammar_ollama_model: Optional[str] = None  # If None, uses ollama_model
+    grammar_openrouter_model: str | None = None  # If None, uses openrouter_model
+    grammar_ollama_model: str | None = None  # If None, uses ollama_model
+
+    # Auth / JWT
+    jwt_secret_key: str
+    jwt_algorithm: str = "HS256"
+    jwt_access_token_expire_minutes: int = 1440  # 24시간
+
+    # Google OAuth2
+    google_client_id: str | None = None
+    google_client_secret: str | None = None
+    google_redirect_uri: str = "http://localhost:8010/api/auth/google/callback"
 
     # Common LLM Settings
     max_tokens: int = 4000
     temperature: float = 0.7
+
+    # Search Settings
+    search_summary_max_tokens: int = 600
 
     # Conversation Settings
     max_history_turns: int = 10

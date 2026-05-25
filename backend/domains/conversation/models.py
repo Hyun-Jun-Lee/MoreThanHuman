@@ -3,7 +3,7 @@ Conversation 도메인 SQLAlchemy 모델 정의
 """
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, Enum as SQLEnum, ForeignKey, Integer, String, Text
+from sqlalchemy import Column, DateTime, Enum as SQLEnum, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import relationship
 
 from database import Base
@@ -16,6 +16,7 @@ class ConversationModel(Base):
     __tablename__ = "conversations"
 
     id = Column(String(36), primary_key=True)  # UUID를 문자열로 저장
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
     title = Column(String(200), nullable=True)  # 대화 제목 (첫 질문)
     conversation_type = Column(SQLEnum(ConversationType), default=ConversationType.FREE_CHAT, nullable=False)  # 대화 타입
     role_character = Column(String(100), nullable=True)  # 롤플레이 캐릭터 (예: "카페 바리스타", "영어 선생님")
@@ -25,6 +26,7 @@ class ConversationModel(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
     # Relationships
+    user = relationship("UserModel", back_populates="conversations")
     messages = relationship("MessageModel", back_populates="conversation", cascade="all, delete-orphan")
 
 
