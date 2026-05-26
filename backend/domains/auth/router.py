@@ -4,8 +4,7 @@ Auth API Router
 """
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from domains.auth.dependencies import get_auth_service, get_current_user
 from domains.auth.models import UserModel
@@ -29,7 +28,8 @@ def register(
         token = service.register(request.email, request.password, request.name, request.device_id)
         return SuccessResponse(data=token, message="회원가입이 완료되었습니다")
     except ValidationException as e:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e.message)
+        http_status = status.HTTP_409_CONFLICT if e.details.get("code") == "EMAIL_EXISTS" else status.HTTP_400_BAD_REQUEST
+        raise HTTPException(status_code=http_status, detail=e.message)
 
 
 @router.post("/login", response_model=SuccessResponse[TokenResponse])
@@ -43,6 +43,8 @@ def login(
         return SuccessResponse(data=token, message="로그인 성공")
     except AuthenticationException as e:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=e.message)
+    except ValidationException as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
 
 
 @router.post("/refresh", response_model=SuccessResponse[TokenResponse])
@@ -56,6 +58,8 @@ def refresh(
         return SuccessResponse(data=token, message="토큰 갱신 성공")
     except AuthenticationException as e:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=e.message)
+    except ValidationException as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
 
 
 @router.post("/logout", response_model=SuccessResponse[dict])
@@ -64,13 +68,16 @@ def logout(
     service: AuthService = Depends(get_auth_service),
 ):
     """refresh token revoke (기본 로그아웃)"""
-    service.logout(request.refresh_token, request.device_id)
-    return SuccessResponse(data={"ok": True}, message="로그아웃 성공")
+    try:
+        service.logout(request.refresh_token, request.device_id)
+        return SuccessResponse(data={"ok": True}, message="로그아웃 성공")
+    except ValidationException as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
 
 
 @router.get("/google/login")
 def google_login(
-    device_id: str,
+    device_id: str = Query(..., description="Flutter installation ID (UUIDv4)"),
     service: AuthService = Depends(get_auth_service),
 ):
     """Google OAuth2 로그인 URL 반환"""
@@ -91,8 +98,10 @@ async def google_callback(
     try:
         token = await service.handle_google_callback(code, state)
         return SuccessResponse(data=token, message="Google 로그인 성공")
-    except (AuthenticationException, ValidationException) as e:
+    except AuthenticationException as e:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=e.message)
+    except ValidationException as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
 
 
 @router.get("/me", response_model=SuccessResponse[UserProfile])

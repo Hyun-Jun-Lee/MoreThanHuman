@@ -35,9 +35,9 @@ class AuthService:
     @staticmethod
     def _validate_device_id(device_id: str) -> None:
         if not device_id or not device_id.strip():
-            raise ValidationException("device_id가 필요합니다")
+            raise ValidationException("device_id가 필요합니다", details={"code": "DEVICE_ID_REQUIRED"})
         if len(device_id) > 64:
-            raise ValidationException("device_id가 너무 깁니다")
+            raise ValidationException("device_id가 너무 깁니다", details={"code": "DEVICE_ID_TOO_LONG"})
 
     # --- 비밀번호 ---
 
@@ -107,7 +107,7 @@ class AuthService:
         self._validate_device_id(device_id)
         existing = self.repository.find_by_email(email)
         if existing:
-            raise ValidationException("이미 등록된 이메일입니다")
+            raise ValidationException("이미 등록된 이메일입니다", details={"code": "EMAIL_EXISTS"})
 
         user = UserModel(
             id=str(uuid4()),

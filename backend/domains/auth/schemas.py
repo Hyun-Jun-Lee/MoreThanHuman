@@ -3,38 +3,38 @@ Auth 도메인 Pydantic 스키마
 """
 from datetime import datetime
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 
 
 class RegisterRequest(BaseModel):
     """회원가입 요청"""
 
     email: EmailStr
-    password: str
-    name: str
-    device_id: str
+    password: str = Field(min_length=1)
+    name: str = Field(min_length=1)
+    device_id: str = Field(min_length=1, max_length=64)
 
 
 class LoginRequest(BaseModel):
     """로그인 요청"""
 
     email: EmailStr
-    password: str
-    device_id: str
+    password: str = Field(min_length=1)
+    device_id: str = Field(min_length=1, max_length=64)
 
 
 class RefreshRequest(BaseModel):
     """토큰 갱신 요청"""
 
-    refresh_token: str
-    device_id: str
+    refresh_token: str = Field(min_length=1)
+    device_id: str = Field(min_length=1, max_length=64)
 
 
 class LogoutRequest(BaseModel):
     """로그아웃 요청"""
 
-    refresh_token: str
-    device_id: str
+    refresh_token: str = Field(min_length=1)
+    device_id: str = Field(min_length=1, max_length=64)
 
 
 class TokenResponse(BaseModel):
