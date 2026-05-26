@@ -111,9 +111,18 @@ class AuthRepository:
             .update(
                 {
                     RefreshTokenModel.revoked_at: now,
+                    RefreshTokenModel.last_used_at: now,
                 },
                 synchronize_session=False,
             )
         )
         self.db.commit()
         return int(updated or 0)
+
+    def touch_refresh_token_last_used(self, refresh_token_id: str) -> None:
+        now = datetime.utcnow()
+        self.db.query(RefreshTokenModel).filter(RefreshTokenModel.id == refresh_token_id).update(
+            {RefreshTokenModel.last_used_at: now},
+            synchronize_session=False,
+        )
+        self.db.commit()
