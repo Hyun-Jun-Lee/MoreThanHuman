@@ -3,7 +3,7 @@ Auth 도메인 SQLAlchemy 모델 정의
 """
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, DateTime, String
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, String
 from sqlalchemy.orm import relationship
 
 from database import Base
@@ -26,3 +26,20 @@ class UserModel(Base):
 
     # Relationships
     conversations = relationship("ConversationModel", back_populates="user", cascade="all, delete-orphan")
+
+
+class RefreshTokenModel(Base):
+    """Refresh token 테이블(기기/설치 단위 세션)"""
+
+    __tablename__ = "refresh_tokens"
+
+    id = Column(String(36), primary_key=True)
+    user_id = Column(String(36), ForeignKey("users.id"), index=True, nullable=False)
+    device_id = Column(String(64), index=True, nullable=False)
+    token_hash = Column(String(64), unique=True, index=True, nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+    revoked_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    last_used_at = Column(DateTime, nullable=True)
+
+    user = relationship("UserModel")

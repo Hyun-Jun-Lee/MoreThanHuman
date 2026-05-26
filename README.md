@@ -355,6 +355,7 @@ DuckDuckGo 검색 결과를 LLM으로 요약해요.
 | `JWT_SECRET_KEY` | 예 | 없음 | JWT 서명 secret |
 | `JWT_ALGORITHM` | 아니오 | `HS256` | JWT 알고리즘 |
 | `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` | 아니오 | `1440` | access token 만료 시간 |
+| `JWT_REFRESH_TOKEN_EXPIRE_DAYS` | 아니오 | `15` | refresh token 만료 기간(일) |
 | `GOOGLE_CLIENT_ID` | Google OAuth 사용 시 | 없음 | Google OAuth client ID |
 | `GOOGLE_CLIENT_SECRET` | Google OAuth 사용 시 | 없음 | Google OAuth client secret |
 | `GOOGLE_REDIRECT_URI` | 아니오 | `http://localhost:8010/api/auth/google/callback` | Google OAuth callback |

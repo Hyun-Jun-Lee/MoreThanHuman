@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     jwt_secret_key: str
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = 1440  # 24시간
+    jwt_refresh_token_expire_days: int = 15
 
     # Google OAuth2
     google_client_id: str | None = None

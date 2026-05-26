@@ -12,6 +12,7 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     password: str
     name: str
+    device_id: str
 
 
 class LoginRequest(BaseModel):
@@ -19,12 +20,28 @@ class LoginRequest(BaseModel):
 
     email: EmailStr
     password: str
+    device_id: str
+
+
+class RefreshRequest(BaseModel):
+    """토큰 갱신 요청"""
+
+    refresh_token: str
+    device_id: str
+
+
+class LogoutRequest(BaseModel):
+    """로그아웃 요청"""
+
+    refresh_token: str
+    device_id: str
 
 
 class TokenResponse(BaseModel):
     """JWT 토큰 응답"""
 
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"
 
 

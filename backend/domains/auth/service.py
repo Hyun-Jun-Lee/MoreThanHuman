@@ -2,8 +2,12 @@
 Auth Service Layer
 비즈니스 로직: 비밀번호 해싱, JWT 생성/검증, Google OAuth
 """
+import hashlib
+import hmac
 import logging
+import secrets
 from datetime import datetime, timedelta, timezone
+from urllib.parse import urlencode
 from uuid import uuid4
 
 import bcrypt
@@ -56,9 +60,39 @@ class AuthService:
         except JWTError as e:
             raise AuthenticationException(f"Invalid token: {str(e)}")
 
+    # --- Refresh Token ---
+
+    @staticmethod
+    def _generate_refresh_token() -> str:
+        return secrets.token_urlsafe(48)
+
+    @staticmethod
+    def _hash_refresh_token(refresh_token: str) -> str:
+        return hmac.new(
+            settings.jwt_secret_key.encode("utf-8"),
+            refresh_token.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+
+    def _issue_token_pair(self, *, user_id: str, device_id: str) -> TokenResponse:
+        self.repository.revoke_active_refresh_tokens_for_user_device(user_id=user_id, device_id=device_id)
+
+        refresh_token = self._generate_refresh_token()
+        token_hash = self._hash_refresh_token(refresh_token)
+        expires_at = datetime.utcnow() + timedelta(days=settings.jwt_refresh_token_expire_days)
+        self.repository.create_refresh_token(
+            user_id=user_id,
+            device_id=device_id,
+            token_hash=token_hash,
+            expires_at=expires_at,
+        )
+
+        access_token = self.create_access_token(user_id)
+        return TokenResponse(access_token=access_token, refresh_token=refresh_token)
+
     # --- 회원가입 / 로그인 ---
 
-    def register(self, email: str, password: str, name: str) -> TokenResponse:
+    def register(self, email: str, password: str, name: str, device_id: str) -> TokenResponse:
         """이메일+비밀번호 회원가입"""
         existing = self.repository.find_by_email(email)
         if existing:
@@ -72,10 +106,9 @@ class AuthService:
         )
         self.repository.save(user)
 
-        token = self.create_access_token(user.id)
-        return TokenResponse(access_token=token)
+        return self._issue_token_pair(user_id=user.id, device_id=device_id)
 
-    def login(self, email: str, password: str) -> TokenResponse:
+    def login(self, email: str, password: str, device_id: str) -> TokenResponse:
         """이메일+비밀번호 로그인"""
         user = self.repository.find_by_email(email)
         if not user or not user.hashed_password:
@@ -87,30 +120,75 @@ class AuthService:
         if not user.is_active:
             raise AuthenticationException("비활성화된 계정입니다")
 
-        token = self.create_access_token(user.id)
-        return TokenResponse(access_token=token)
+        return self._issue_token_pair(user_id=user.id, device_id=device_id)
+
+    def refresh(self, refresh_token: str, device_id: str) -> TokenResponse:
+        token_hash = self._hash_refresh_token(refresh_token)
+        token = self.repository.find_active_refresh_token_by_hash(token_hash)
+        if not token:
+            raise AuthenticationException("Invalid refresh token")
+
+        if token.device_id != device_id:
+            raise AuthenticationException("Invalid device")
+
+        revoked = self.repository.revoke_refresh_token_if_active(token.id)
+        if not revoked:
+            raise AuthenticationException("Invalid refresh token")
+
+        return self._issue_token_pair(user_id=token.user_id, device_id=device_id)
+
+    def logout(self, refresh_token: str, device_id: str) -> None:
+        token_hash = self._hash_refresh_token(refresh_token)
+        token = self.repository.find_active_refresh_token_by_hash(token_hash)
+        if not token:
+            return
+        if token.device_id != device_id:
+            return
+        self.repository.revoke_refresh_token_if_active(token.id)
 
     # --- Google OAuth ---
 
-    def get_google_login_url(self) -> str:
+    def get_google_login_url(self, device_id: str) -> str:
         """Google OAuth2 로그인 URL 생성"""
         if not settings.google_client_id:
             raise ValidationException("Google OAuth가 설정되지 않았습니다")
 
+        state = self._create_oauth_state(device_id=device_id)
         params = {
             "client_id": settings.google_client_id,
             "redirect_uri": settings.google_redirect_uri,
             "response_type": "code",
             "scope": "openid email profile",
             "access_type": "offline",
+            "state": state,
         }
-        query = "&".join(f"{k}={v}" for k, v in params.items())
+        query = urlencode(params)
         return f"https://accounts.google.com/o/oauth2/v2/auth?{query}"
 
-    async def handle_google_callback(self, code: str) -> TokenResponse:
+    @staticmethod
+    def _create_oauth_state(*, device_id: str) -> str:
+        nonce = secrets.token_urlsafe(16)
+        expire = datetime.now(timezone.utc) + timedelta(minutes=10)
+        payload = {"device_id": device_id, "nonce": nonce, "exp": expire}
+        return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
+
+    @staticmethod
+    def _decode_oauth_state(state: str) -> str:
+        try:
+            payload = jwt.decode(state, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
+            device_id: str | None = payload.get("device_id")
+            if not device_id:
+                raise AuthenticationException("Invalid oauth state")
+            return device_id
+        except JWTError as e:
+            raise AuthenticationException(f"Invalid oauth state: {str(e)}")
+
+    async def handle_google_callback(self, code: str, state: str) -> TokenResponse:
         """Google OAuth2 콜백 처리"""
         if not settings.google_client_id or not settings.google_client_secret:
             raise ValidationException("Google OAuth가 설정되지 않았습니다")
+
+        device_id = self._decode_oauth_state(state)
 
         # 1. code → access_token 교환
         async with httpx.AsyncClient() as client:
@@ -166,8 +244,7 @@ class AuthService:
                 )
                 self.repository.save(user)
 
-        token = self.create_access_token(user.id)
-        return TokenResponse(access_token=token)
+        return self._issue_token_pair(user_id=user.id, device_id=device_id)
 
     # --- 프로필 ---
 
