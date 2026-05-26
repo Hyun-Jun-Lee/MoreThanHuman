@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 
 from config import get_settings
 from database import Base, engine
-from domains.auth.models import UserModel  # noqa: F401 - 테이블 생성용 import
+from domains.auth.models import RefreshTokenModel, UserModel  # noqa: F401 - 테이블 생성용 import
 from domains.auth.router import router as auth_router
 from domains.conversation.router import router as conversation_router
 from domains.grammar.router import router as grammar_router
