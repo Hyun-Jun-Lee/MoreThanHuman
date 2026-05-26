@@ -111,8 +111,8 @@ module Auth {
     POST /api/auth/login                 -> login
     POST /api/auth/refresh               -> refresh
     POST /api/auth/logout                -> logout
-    GET  /api/auth/google/login          -> googleLogin  # device_id 쿼리 포함, state로 콜백까지 전달
-    GET  /api/auth/google/callback       -> googleCallback
+    GET  /api/auth/google/login?device_id=...          -> googleLogin
+    GET  /api/auth/google/callback?code=...&state=...  -> googleCallback
     GET  /api/auth/me                    -> getCurrentUser
   }
 
