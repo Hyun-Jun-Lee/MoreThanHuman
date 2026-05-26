@@ -1,6 +1,6 @@
 # MoreThanHuman Backend DSL
 
-> 최종 갱신: 2026-05-25 · 범위: FastAPI 백엔드 API
+> 최종 갱신: 2026-05-26 · 범위: FastAPI 백엔드 API
 
 향후 사용자 클라이언트는 Flutter 기반 모바일 앱으로 개발해요. 이 문서는 모바일 앱이 연동할 백엔드 도메인, 데이터 모델, API 계약을 정의해요.
 
@@ -39,6 +39,17 @@ database Schema {
     oauth_provider_id: STRING?
     created_at: DATETIME
     updated_at: DATETIME
+  }
+
+  table refresh_tokens {
+    id: UUID PRIMARY KEY
+    user_id: UUID FOREIGN KEY -> users(id)
+    device_id: STRING NOT NULL
+    token_hash: STRING NOT NULL
+    expires_at: DATETIME
+    revoked_at: DATETIME?
+    created_at: DATETIME
+    last_used_at: DATETIME?
   }
 
   table conversations {
@@ -98,7 +109,9 @@ module Auth {
   router AuthRouter {
     POST /api/auth/register              -> register
     POST /api/auth/login                 -> login
-    GET  /api/auth/google/login          -> googleLogin
+    POST /api/auth/refresh               -> refresh
+    POST /api/auth/logout                -> logout
+    GET  /api/auth/google/login          -> googleLogin  # device_id 쿼리 포함, state로 콜백까지 전달
     GET  /api/auth/google/callback       -> googleCallback
     GET  /api/auth/me                    -> getCurrentUser
   }
@@ -107,15 +120,28 @@ module Auth {
     email: String
     password: String
     name: String
+    device_id: String
   }
 
   type LoginRequest {
     email: String
     password: String
+    device_id: String
+  }
+
+  type RefreshRequest {
+    refresh_token: String
+    device_id: String
+  }
+
+  type LogoutRequest {
+    refresh_token: String
+    device_id: String
   }
 
   type TokenResponse {
     access_token: String
+    refresh_token: String
     token_type: "bearer"
   }
 

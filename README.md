@@ -124,6 +124,14 @@ Authorization: Bearer <access_token>
 
 ## Auth API
 
+### 토큰/세션 정책(모바일 기준)
+
+- `access_token`: JWT (현재 24시간 TTL 유지)
+- `refresh_token`: opaque 랜덤 문자열(15일 TTL), **refresh 시 rotate**
+- `device_id`: “기기 ID”가 아니라 **설치(installation) ID**예요(Flutter에서 UUIDv4 생성 후 secure storage에 저장)
+- 기기당 세션: `(user_id, device_id)` 조합 기준으로 활성 refresh token은 **1개만 허용**해요
+- refresh 401 처리(권장): refresh 1회 재시도 후에도 실패하면 재로그인 유도
+
 ### `POST /api/auth/register`
 
 이메일+비밀번호로 회원가입하고 JWT를 발급해요.
@@ -132,7 +140,8 @@ Authorization: Bearer <access_token>
 {
   "email": "user@example.com",
   "password": "password",
-  "name": "User"
+  "name": "User",
+  "device_id": "550e8400-e29b-41d4-a716-446655440000"
 }
 ```
 
@@ -143,15 +152,38 @@ Authorization: Bearer <access_token>
 ```json
 {
   "email": "user@example.com",
-  "password": "password"
+  "password": "password",
+  "device_id": "550e8400-e29b-41d4-a716-446655440000"
 }
 ```
 
-### `GET /api/auth/google/login`
+### `POST /api/auth/refresh`
+
+refresh token으로 access token을 재발급해요. 성공 시 refresh token도 rotate돼요.
+
+```json
+{
+  "refresh_token": "opaque_refresh_token",
+  "device_id": "550e8400-e29b-41d4-a716-446655440000"
+}
+```
+
+### `POST /api/auth/logout`
+
+refresh token을 revoke(로그아웃)해요.
+
+```json
+{
+  "refresh_token": "opaque_refresh_token",
+  "device_id": "550e8400-e29b-41d4-a716-446655440000"
+}
+```
+
+### `GET /api/auth/google/login?device_id=...`
 
 Google OAuth2 로그인 URL을 반환해요.
 
-### `GET /api/auth/google/callback?code=...`
+### `GET /api/auth/google/callback?code=...&state=...`
 
 Google OAuth2 callback code로 JWT를 발급해요.
 
