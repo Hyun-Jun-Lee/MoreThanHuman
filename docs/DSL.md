@@ -187,6 +187,24 @@ module Conversation {
     message: String
   }
 
+  type Pagination {
+    limit: Integer
+    offset: Integer
+    total_count: Integer
+    has_more: Boolean
+    next_offset: Integer
+  }
+
+  type PaginatedConversations {
+    results: List<Conversation>
+    pagination: Pagination
+  }
+
+  type PaginatedMessages {
+    results: List<Message>
+    pagination: Pagination
+  }
+
   type Conversation {
     id: UUID
     title?: String
@@ -224,6 +242,10 @@ module Conversation {
   }
 }
 ```
+
+`GET /api/conversations/`는 `updated_at desc`로 정렬된 `PaginatedConversations`를 반환해요.
+
+`GET /api/conversations/{id}/messages/`는 `created_at asc`로 정렬된 `PaginatedMessages`를 반환해요.
 
 ## 6. Grammar 모듈
 

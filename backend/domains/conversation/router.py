@@ -19,7 +19,13 @@ from domains.auth.dependencies import get_current_user, get_current_user_from_to
 from domains.auth.models import UserModel
 from domains.conversation.enums import ConversationType
 from domains.conversation.repository import ConversationRepository
-from domains.conversation.schemas import Conversation, ConversationResponse, Message, MessageResponse
+from domains.conversation.schemas import (
+    Conversation,
+    ConversationResponse,
+    MessageResponse,
+    PaginatedConversations,
+    PaginatedMessages,
+)
 from domains.conversation.service import ConversationService
 from shared.exceptions import AppException, NotFoundException, RateLimitException
 from shared.types import ErrorResponse, SuccessResponse
@@ -142,10 +148,10 @@ async def send_message(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
-@router.get("/", response_model=SuccessResponse[list[Conversation]])
+@router.get("/", response_model=SuccessResponse[PaginatedConversations])
 def get_conversations(
-    limit: int = 50,
-    offset: int = 0,
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
     current_user: UserModel = Depends(get_current_user),
     service: ConversationService = Depends(get_conversation_service),
 ):
@@ -173,11 +179,11 @@ def get_conversation(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
 
 
-@router.get("/{conversation_id}/messages/", response_model=SuccessResponse[list[Message]])
+@router.get("/{conversation_id}/messages/", response_model=SuccessResponse[PaginatedMessages])
 def get_messages(
     conversation_id: UUID,
-    limit: int = 50,
-    offset: int = 0,
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
     current_user: UserModel = Depends(get_current_user),
     service: ConversationService = Depends(get_conversation_service),
 ):

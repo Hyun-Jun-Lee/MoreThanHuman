@@ -2,11 +2,14 @@
 Conversation 도메인 Pydantic 스키마 정의
 """
 from datetime import datetime
+from typing import Generic, TypeVar
 from uuid import UUID
 
 from pydantic import BaseModel
 
 from domains.conversation.enums import ConversationStatus, ConversationType, MessageRole
+
+SchemaType = TypeVar("SchemaType")
 
 
 class Conversation(BaseModel):
@@ -57,3 +60,28 @@ class MessageResponse(BaseModel):
     response: str
     grammar_feedback: dict | None = None
     turn_count: int
+
+
+class Pagination(BaseModel):
+    """offset 기반 페이지 메타"""
+
+    limit: int
+    offset: int
+    total_count: int
+    has_more: bool
+    next_offset: int
+
+
+class PaginatedResponse(BaseModel, Generic[SchemaType]):
+    """results/pagination 구조"""
+
+    results: list[SchemaType]
+    pagination: Pagination
+
+
+class PaginatedConversations(PaginatedResponse[Conversation]):
+    """대화 목록 페이지 응답"""
+
+
+class PaginatedMessages(PaginatedResponse[Message]):
+    """메시지 목록 페이지 응답"""

@@ -69,11 +69,15 @@ class ConversationRepository:
         return (
             self.db.query(ConversationModel)
             .filter(ConversationModel.user_id == user_id)
-            .order_by(desc(ConversationModel.created_at))
+            .order_by(desc(ConversationModel.updated_at))
             .limit(limit)
             .offset(offset)
             .all()
         )
+
+    def count_conversations(self, user_id: str) -> int:
+        """사용자의 전체 대화 수 조회"""
+        return self.db.query(ConversationModel).filter(ConversationModel.user_id == user_id).count()
 
     def update_status(self, conversation_id: str, user_id: str, status: ConversationStatus) -> None:
         """
@@ -183,6 +187,10 @@ class ConversationRepository:
             .offset(offset)
             .all()
         )
+
+    def count_messages(self, conversation_id: str) -> int:
+        """대화의 전체 메시지 수 조회"""
+        return self.db.query(MessageModel).filter(MessageModel.conversation_id == conversation_id).count()
 
     def get_recent_messages(self, conversation_id: str, turn_count: int = 10) -> list[MessageModel]:
         """

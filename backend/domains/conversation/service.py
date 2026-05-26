@@ -11,7 +11,15 @@ from config import get_model_for_provider, get_settings
 from domains.conversation.enums import ConversationStatus, ConversationType, MessageRole
 from domains.conversation.models import ConversationModel, MessageModel
 from domains.conversation.repository import ConversationRepository
-from domains.conversation.schemas import Conversation, ConversationResponse, Message, MessageResponse
+from domains.conversation.schemas import (
+    Conversation,
+    ConversationResponse,
+    Message,
+    MessageResponse,
+    PaginatedConversations,
+    PaginatedMessages,
+    Pagination,
+)
 from domains.grammar.repository import GrammarRepository
 from domains.grammar.service import GrammarService
 from domains.llm.factory import LLMProviderFactory
@@ -284,7 +292,18 @@ class ConversationService:
         conversation = self.repository.find_by_id(conversation_id, user_id)
         return Conversation.model_validate(conversation)
 
-    def get_conversations(self, user_id: str, limit: int = 50, offset: int = 0) -> list[Conversation]:
+    @staticmethod
+    def _build_pagination(*, limit: int, offset: int, total_count: int, current_count: int) -> Pagination:
+        has_more = (offset + current_count) < total_count
+        return Pagination(
+            limit=limit,
+            offset=offset,
+            total_count=total_count,
+            has_more=has_more,
+            next_offset=offset + current_count,
+        )
+
+    def get_conversations(self, user_id: str, limit: int = 50, offset: int = 0) -> PaginatedConversations:
         """
         대화 목록 조회
 
@@ -297,9 +316,17 @@ class ConversationService:
             대화 목록
         """
         conversations = self.repository.find_all(user_id, limit, offset)
-        return [Conversation.model_validate(c) for c in conversations]
+        total_count = self.repository.count_conversations(user_id)
+        results = [Conversation.model_validate(c) for c in conversations]
+        pagination = self._build_pagination(
+            limit=limit,
+            offset=offset,
+            total_count=total_count,
+            current_count=len(results),
+        )
+        return PaginatedConversations(results=results, pagination=pagination)
 
-    def get_messages(self, conversation_id: str, user_id: str, limit: int = 50, offset: int = 0) -> list[Message]:
+    def get_messages(self, conversation_id: str, user_id: str, limit: int = 50, offset: int = 0) -> PaginatedMessages:
         """
         메시지 목록 조회
 
@@ -315,7 +342,7 @@ class ConversationService:
         # user_id 검증
         self.repository.find_by_id(conversation_id, user_id)
         messages = self.repository.get_messages(conversation_id, limit, offset)
-        result = []
+        results = []
         for m in messages:
             # MessageModel을 dict로 변환
             msg_dict = {
@@ -332,9 +359,16 @@ class ConversationService:
                 from domains.grammar.schemas import GrammarFeedback
                 msg_dict["grammar_feedback"] = GrammarFeedback.model_validate(m.grammar_feedback).model_dump()
 
-            result.append(Message.model_validate(msg_dict))
+            results.append(Message.model_validate(msg_dict))
 
-        return result
+        total_count = self.repository.count_messages(conversation_id)
+        pagination = self._build_pagination(
+            limit=limit,
+            offset=offset,
+            total_count=total_count,
+            current_count=len(results),
+        )
+        return PaginatedMessages(results=results, pagination=pagination)
 
     def end_conversation(self, conversation_id: str, user_id: str) -> None:
         """

@@ -229,14 +229,32 @@ Google OAuth2 callback code로 JWT를 발급해요.
 
 ### `GET /api/conversations/`
 
-현재 사용자의 대화 목록을 조회해요.
+현재 사용자의 대화 목록을 조회해요. 최신으로 갱신된 대화가 먼저 와요(`updated_at desc`).
 
 Query:
 
 | 파라미터 | 기본값 | 설명 |
 |---------|--------|------|
-| `limit` | `50` | 조회 개수 |
+| `limit` | `50` | 조회 개수 (`1`~`100`) |
 | `offset` | `0` | 시작 위치 |
+
+응답 예시:
+
+```json
+{
+  "success": true,
+  "data": {
+    "results": [],
+    "pagination": {
+      "limit": 50,
+      "offset": 0,
+      "total_count": 123,
+      "has_more": true,
+      "next_offset": 50
+    }
+  }
+}
+```
 
 ### `GET /api/conversations/{conversation_id}/`
 
@@ -244,7 +262,32 @@ Query:
 
 ### `GET /api/conversations/{conversation_id}/messages/`
 
-대화 메시지 목록을 조회해요.
+대화 메시지 목록을 조회해요. 메시지는 시간순으로 반환돼서 최신 메시지가 아래로 쌓여요(`created_at asc`).
+
+Query:
+
+| 파라미터 | 기본값 | 설명 |
+|---------|--------|------|
+| `limit` | `50` | 조회 개수 (`1`~`100`) |
+| `offset` | `0` | 시작 위치 |
+
+응답 예시:
+
+```json
+{
+  "success": true,
+  "data": {
+    "results": [],
+    "pagination": {
+      "limit": 50,
+      "offset": 100,
+      "total_count": 123,
+      "has_more": false,
+      "next_offset": 123
+    }
+  }
+}
+```
 
 ### `PUT /api/conversations/{conversation_id}/end/`
 
