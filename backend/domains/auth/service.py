@@ -30,6 +30,15 @@ class AuthService:
     def __init__(self, repository: AuthRepository):
         self.repository = repository
 
+    # --- Validation ---
+
+    @staticmethod
+    def _validate_device_id(device_id: str) -> None:
+        if not device_id or not device_id.strip():
+            raise ValidationException("device_id가 필요합니다")
+        if len(device_id) > 64:
+            raise ValidationException("device_id가 너무 깁니다")
+
     # --- 비밀번호 ---
 
     @staticmethod
@@ -75,6 +84,7 @@ class AuthService:
         ).hexdigest()
 
     def _issue_token_pair(self, *, user_id: str, device_id: str) -> TokenResponse:
+        self._validate_device_id(device_id)
         self.repository.revoke_active_refresh_tokens_for_user_device(user_id=user_id, device_id=device_id)
 
         refresh_token = self._generate_refresh_token()
@@ -94,6 +104,7 @@ class AuthService:
 
     def register(self, email: str, password: str, name: str, device_id: str) -> TokenResponse:
         """이메일+비밀번호 회원가입"""
+        self._validate_device_id(device_id)
         existing = self.repository.find_by_email(email)
         if existing:
             raise ValidationException("이미 등록된 이메일입니다")
@@ -110,6 +121,7 @@ class AuthService:
 
     def login(self, email: str, password: str, device_id: str) -> TokenResponse:
         """이메일+비밀번호 로그인"""
+        self._validate_device_id(device_id)
         user = self.repository.find_by_email(email)
         if not user or not user.hashed_password:
             raise AuthenticationException("이메일 또는 비밀번호가 올바르지 않습니다")
@@ -123,6 +135,7 @@ class AuthService:
         return self._issue_token_pair(user_id=user.id, device_id=device_id)
 
     def refresh(self, refresh_token: str, device_id: str) -> TokenResponse:
+        self._validate_device_id(device_id)
         token_hash = self._hash_refresh_token(refresh_token)
         token = self.repository.find_active_refresh_token_by_hash(token_hash)
         if not token:
@@ -138,6 +151,7 @@ class AuthService:
         return self._issue_token_pair(user_id=token.user_id, device_id=device_id)
 
     def logout(self, refresh_token: str, device_id: str) -> None:
+        self._validate_device_id(device_id)
         token_hash = self._hash_refresh_token(refresh_token)
         token = self.repository.find_active_refresh_token_by_hash(token_hash)
         if not token:
@@ -150,6 +164,7 @@ class AuthService:
 
     def get_google_login_url(self, device_id: str) -> str:
         """Google OAuth2 로그인 URL 생성"""
+        self._validate_device_id(device_id)
         if not settings.google_client_id:
             raise ValidationException("Google OAuth가 설정되지 않았습니다")
 
