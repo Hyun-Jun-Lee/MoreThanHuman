@@ -6,7 +6,7 @@
 
 ## 트리거
 
-`docs/FEEDBACK.md` §6 우선순위 기반 + 인증 시스템 구현 진행 중 (`backend/domains/auth/`)
+초기 제품 백로그 우선순위 기반 + 인증 시스템 구현 진행 중 (`backend/domains/auth/`)
 
 ---
 

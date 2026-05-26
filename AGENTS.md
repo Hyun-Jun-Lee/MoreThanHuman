@@ -88,6 +88,10 @@
 
 **5.9** agent-time 추정: 페이스 모드 Proactive 5\~6× 적용. 실행 중심 작업은 모드 상단, 디버깅은 중간, 연구/전략은 \~1× (인간 검토가 율속). `.agent/_lessons/`의 `estimation` 태그로 ±30%+ delta만 기록·보정.
 
+**5.10** 문서 구조 원칙: 핵심 문서는 `README.md`(실행·환경변수·사용 예시), `docs/DSL.md`(외부 API 계약), `.agent/architecture.md`(내부 구조) 세 축으로 유지해요. API 계약은 `docs/DSL.md`, 환경변수 설명은 `README.md`, 내부 구현 구조는 `.agent/architecture.md`를 단일 기준으로 삼아요.
+
+**5.11** 임시 문서 정리: `PLAN_*.md`, 피드백 메모 같은 임시 문서는 구현 전 의사결정용으로만 쓰고, 반영이 끝나면 핵심 문서에 흡수한 뒤 삭제 또는 아카이브해요.
+
 ---
 
 ## 6. 클라이언트 방향
@@ -119,7 +123,6 @@
 |------|------|------|
 | 프로젝트 README | `README.md` | API 레퍼런스, 환경변수, 실행법 |
 | DSL 명세 | `docs/DSL.md` | 도메인별 상세 스펙 |
-| 피드백 | `docs/FEEDBACK.md` | 서비스·UX·기술 피드백 |
 | 모바일 UX 메모 | `docs/UX_FEEDBACK.md` | 향후 Flutter 앱 UX 방향 |
 | 아키텍처 | `.agent/architecture.md` | 시스템 아키텍처 상세 |
 | 정책 | `.agent/rules.md` | 코딩·문서·git·협업 정책 |

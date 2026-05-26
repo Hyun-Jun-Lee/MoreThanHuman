@@ -89,7 +89,8 @@ backend/
     ├── conversation/       # 대화 관리
     ├── grammar/            # 문법 체크 및 통계
     ├── llm/                # OpenRouter/Ollama 추상화
-    └── search/             # DuckDuckGo 검색 + LLM 요약
+    ├── search/             # DuckDuckGo 검색 + LLM 요약
+    └── web/                # 서버 렌더링 HTML 라우트
 ```
 
 ## API 공통 규칙
@@ -428,14 +429,6 @@ API, 환경변수, 도메인 계약이 바뀌면 같은 작업 단위에서 아�
 |------|-------------|
 | API 엔드포인트 | `README.md`, `docs/DSL.md`, `backend/domains/*/router.py` |
 | 환경변수 | `.env.example`, `README.md`, `backend/config.py` |
-
-### refresh token 검증 스크립트
-
-서버를 실행한 뒤 아래 스크립트로 refresh token 발급/rotate/logout/동시성을 빠르게 검증할 수 있어요.
-
-```bash
-BASE_URL=http://localhost:8010 ./scripts/verify_refresh_token.sh
-```
 
 ## 주요 기능
 

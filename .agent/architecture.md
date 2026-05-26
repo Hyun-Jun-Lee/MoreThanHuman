@@ -1,6 +1,6 @@
 # 시스템 아키텍처
 
-> 프로젝트: MoreThanHuman (Convia) · 버전: 0.1.0 · 최종 갱신: 2026-05-25
+> 프로젝트: MoreThanHuman (Convia) · 버전: 0.1.0 · 최종 갱신: 2026-05-26
 
 ---
 
@@ -54,7 +54,8 @@ backend/
     ├── conversation/        # 대화 관리
     ├── grammar/             # 문법 체크 및 통계
     ├── llm/                 # LLM 프로바이더 추상화
-    └── search/              # DuckDuckGo 검색 + LLM 요약
+    ├── search/              # DuckDuckGo 검색 + LLM 요약
+    └── web/                 # 서버 렌더링 HTML 라우트
 ```
 
 도메인은 기본적으로 아래 계층을 따라요:
@@ -79,9 +80,19 @@ domains/{name}/
 
 ```text
 [사용자] → POST /api/auth/register 또는 /api/auth/login
+         → device_id와 함께 AuthRouter 진입
          → AuthService
-         → UserRepository
-         → JWT 발급
+         → AuthRepository
+         → access_token(JWT) + refresh_token 발급
+
+[사용자] → POST /api/auth/refresh
+         → refresh token 검증 + rotate
+         → 새 access_token + 새 refresh_token 발급
+
+[사용자] → GET /api/auth/google/login?device_id=...
+         → OAuth state에 device_id 서명
+         → GET /api/auth/google/callback?code=...&state=...
+         → state 검증 후 token pair 발급
 ```
 
 인증이 필요한 API는 `Authorization: Bearer <token>` 헤더를 사용해요. SSE 문법 피드백 스트림은 클라이언트 제약을 고려해 토큰 쿼리 파라미터도 지원해요.
@@ -113,6 +124,14 @@ domains/{name}/
          → SearchResult { query, summary, sources, timestamp }
 ```
 
+### 웹 페이지
+
+```text
+[브라우저] → GET /, /conversations, /grammar/stats 등
+           → WebRouter
+           → Jinja2Templates로 HTML 응답
+```
+
 ---
 
 ## 4. 외부 의존성
@@ -131,5 +150,6 @@ domains/{name}/
 - API 키와 JWT secret은 환경변수로만 관리해요.
 - 클라이언트에는 OpenRouter, Google OAuth secret, JWT secret을 노출하지 않아요.
 - 비밀번호는 bcrypt로 해싱해 저장해요.
+- refresh token은 원문 대신 해시를 저장하고, 기기(installation) 단위로 rotate/revoke 해요.
 - 대화와 메시지는 `user_id`로 소유자를 분리해요.
 - 모바일 앱은 백엔드 API와 HTTPS로 통신하는 별도 클라이언트로 취급해요.
