@@ -39,6 +39,9 @@ class StartFreeChatRequest(BaseModel):
 
     first_message: str
     search_context: str | None = None
+    topic: str | None = None
+    conversation_direction: str | None = None
+    selected_question: str | None = None
 
 
 class StartRoleplayRequest(BaseModel):
@@ -83,6 +86,9 @@ async def start_free_chat_conversation(
             request.first_message,
             request.search_context,
             user_id=current_user.id,
+            topic=request.topic,
+            conversation_direction=request.conversation_direction,
+            selected_question=request.selected_question,
         )
         return SuccessResponse(data=response, message="자유 대화가 시작되었습니다")
     except RateLimitException as e:

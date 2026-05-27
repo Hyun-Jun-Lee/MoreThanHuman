@@ -64,6 +64,9 @@ class ConversationService:
         first_message: str,
         search_context: str | None = None,
         user_id: str = "",
+        topic: str | None = None,
+        conversation_direction: str | None = None,
+        selected_question: str | None = None,
     ) -> ConversationResponse:
         """
         자유 대화 시작
@@ -72,6 +75,9 @@ class ConversationService:
             first_message: 첫 메시지
             search_context: 검색 컨텍스트 (세션 메모리)
             user_id: 사용자 ID
+            topic: 준비 카드 주제
+            conversation_direction: 선택한 대화 방향
+            selected_question: 사용자가 답변하기로 선택한 첫 질문
 
         Returns:
             대화 응답
@@ -92,7 +98,14 @@ class ConversationService:
             self.repository.save(conversation)
 
             # 2. 시스템 프롬프트 생성
-            system_prompt = self.build_system_prompt(search_context, ConversationType.FREE_CHAT, None)
+            system_prompt = self.build_system_prompt(
+                search_context,
+                ConversationType.FREE_CHAT,
+                None,
+                topic=topic,
+                conversation_direction=conversation_direction,
+                selected_question=selected_question,
+            )
 
             # 3. 사용자 메시지 저장
             user_message = MessageModel(
@@ -437,7 +450,10 @@ class ConversationService:
         self,
         search_context: str | None = None,
         conversation_type: ConversationType = ConversationType.FREE_CHAT,
-        role_character: str | None = None
+        role_character: str | None = None,
+        topic: str | None = None,
+        conversation_direction: str | None = None,
+        selected_question: str | None = None,
     ) -> str:
         """
         대화 타입에 따라 다른 시스템 프롬프트 생성
@@ -446,6 +462,9 @@ class ConversationService:
             search_context: 검색 컨텍스트
             conversation_type: 대화 타입
             role_character: 롤플레이 캐릭터
+            topic: 준비 카드 주제
+            conversation_direction: 선택한 대화 방향
+            selected_question: 사용자가 답변하기로 선택한 첫 질문
 
         Returns:
             시스템 프롬프트
@@ -453,7 +472,12 @@ class ConversationService:
         if conversation_type == ConversationType.ROLE_PLAYING:
             return self.build_roleplay_prompt(role_character, search_context)
         else:
-            return self.build_free_chat_prompt(search_context)
+            return self.build_free_chat_prompt(
+                search_context,
+                topic=topic,
+                conversation_direction=conversation_direction,
+                selected_question=selected_question,
+            )
 
     def build_roleplay_prompt(self, role_character: str, search_context: str | None = None) -> str:
         """롤플레이용 시스템 프롬프트"""
@@ -482,7 +506,13 @@ class ConversationService:
 
         return base_prompt
 
-    def build_free_chat_prompt(self, search_context: str | None = None) -> str:
+    def build_free_chat_prompt(
+        self,
+        search_context: str | None = None,
+        topic: str | None = None,
+        conversation_direction: str | None = None,
+        selected_question: str | None = None,
+    ) -> str:
         """자유 대화용 시스템 프롬프트"""
 
         base_prompt = """You are a friendly and helpful English conversation learning assistant.
@@ -503,7 +533,51 @@ class ConversationService:
         if search_context:
             base_prompt += f"\n\n## Reference Information:\n{search_context}"
 
+        topic_prep_prompt = self.build_topic_prep_prompt(topic, conversation_direction, selected_question)
+        if topic_prep_prompt:
+            base_prompt += topic_prep_prompt
+
         return base_prompt
+
+    def build_topic_prep_prompt(
+        self,
+        topic: str | None = None,
+        conversation_direction: str | None = None,
+        selected_question: str | None = None,
+    ) -> str:
+        """주제 준비 카드 handoff 프롬프트"""
+        if not any([topic, conversation_direction, selected_question]):
+            return ""
+
+        direction_guidance = self._conversation_direction_guidance(conversation_direction)
+        prompt = "\n\n## Topic Prep Handoff:"
+        if topic:
+            prompt += f"\n- Topic: {topic}"
+        if conversation_direction:
+            prompt += f"\n- Selected conversation direction: {conversation_direction}"
+        if selected_question:
+            prompt += f"\n- The user is answering this first question: {selected_question}"
+        if direction_guidance:
+            prompt += f"\n- Direction guidance: {direction_guidance}"
+
+        prompt += """
+
+Use the user's first message as an answer to the selected first question.
+Continue naturally in the selected direction while keeping the conversation short and interactive.
+Do not re-ask the selected first question unless the user's answer is unclear."""
+        return prompt
+
+    def _conversation_direction_guidance(self, conversation_direction: str | None = None) -> str:
+        """대화 방향별 프롬프트 가이드"""
+        guidance = {
+            "CASUAL_CHAT": "Have a relaxed conversation about opinions, reactions, and personal experiences.",
+            "DEBATE": "Encourage the user to take a position, give reasons, and consider counterarguments.",
+            "INTERVIEW_QA": "Ask focused follow-up questions as if interviewing the user about the topic.",
+            "EXPLANATION_PRACTICE": "Help the user explain the topic clearly in simple, organized English.",
+        }
+        if not conversation_direction:
+            return ""
+        return guidance.get(conversation_direction.upper(), "")
 
     def prepare_message_history(self, messages: list[MessageModel], turn_limit: int = 10) -> list[dict]:
         """

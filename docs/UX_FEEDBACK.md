@@ -12,10 +12,12 @@
 
 1. 앱이 로그인 상태를 확인해요.
 2. 사용자가 자유 대화 또는 롤플레이를 선택해요.
-3. 필요하면 `POST /api/search/`로 주제 컨텍스트를 만들어요.
-4. `POST /api/conversations/start/free-chat/` 또는 `/roleplay/`로 대화를 시작해요.
-5. 응답의 `message_id`로 문법 피드백 스트림을 구독해요.
-6. 이후 메시지는 `POST /api/conversations/{id}/message/`로 이어가요.
+3. 자유 대화에서는 관심 주제를 입력하고 `POST /api/search/topic-prep/`로 준비 카드를 만들어요.
+4. 앱은 준비 카드의 요약, 4개 대화 방향, 선택 방향의 첫 질문 3개를 보여줘요.
+5. 사용자가 첫 질문 하나를 선택하고 답변하면 `POST /api/conversations/start/free-chat/`로 대화를 시작해요.
+6. 롤플레이는 `POST /api/conversations/start/roleplay/`로 대화를 시작해요.
+7. 응답의 `message_id`로 문법 피드백 스트림을 구독해요.
+8. 이후 메시지는 `POST /api/conversations/{id}/message/`로 이어가요.
 
 ## 3. 모바일 앱에서 필요한 상태
 
@@ -26,6 +28,7 @@
 | 메시지 상태 | user/assistant 메시지, 전송 중/성공/실패 |
 | 문법 피드백 상태 | pending/completed/timeout/error |
 | 검색 상태 | query, summary, source 목록 |
+| 주제 준비 카드 상태 | topic, summary, directions, selected direction, selected question, quality, retry guidance |
 
 ## 4. 백엔드 API 관점의 UX 리스크
 
@@ -36,10 +39,10 @@
 | 문법 피드백이 늦게 도착 | 메시지별 pending 상태 분리 |
 | 토큰 만료 | refresh token 또는 재로그인 흐름 설계 |
 | 검색/LLM 외부 API 실패 | 사용자에게 재시도 가능한 오류로 노출 |
+| 주제 준비 카드 검색 품질 부족 | 더 구체적인 주제 예시를 보여주고 재입력 유도 |
 
 ## 5. 향후 API 후보
 
-- `POST /api/auth/refresh`
 - `GET /api/grammar/message/{message_id}/status`
 - `GET /api/conversations/{conversation_id}/messages/?cursor=...`
 - `POST /api/conversations/{conversation_id}/cancel-current-response`
