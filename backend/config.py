@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     openrouter_api_key: str
 
     # Application
+    env: str = "prod"
     debug: bool = False
     cors_origins: list[str] = []
 
@@ -54,6 +55,11 @@ class Settings(BaseSettings):
 
     # Conversation Settings
     max_history_turns: int = 10
+
+    @property
+    def is_dev(self) -> bool:
+        """개발 전용 기능 활성화 여부"""
+        return self.env.lower() in {"dev", "development", "local"}
 
     class Config:
         # 프로젝트 루트의 .env 파일 경로 (backend/config.py 기준 상위 디렉토리)

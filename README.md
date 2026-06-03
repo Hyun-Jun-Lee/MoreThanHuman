@@ -158,6 +158,27 @@ Authorization: Bearer <access_token>
 }
 ```
 
+### `POST /api/auth/dev/token`
+
+Swagger/local 테스트용 JWT를 발급해요. `ENV=dev`일 때만 사용할 수 있고, 운영 환경에서는 `403`을 반환해요.
+
+요청 body는 모두 선택값이에요. 비워 보내면 Swagger 테스트용 기본 계정을 만들거나 재사용해요.
+
+```json
+{
+  "email": "swagger-test@example.com",
+  "name": "Swagger Test User",
+  "device_id": "swagger-local"
+}
+```
+
+Swagger 사용 순서:
+
+1. `POST /api/auth/dev/token` 실행
+2. 응답의 `data.access_token` 복사
+3. Swagger 우측 상단 `Authorize`에 토큰 입력
+4. `/api/search/`, `/api/search/topic-prep/` 같은 인증 API 호출
+
 ### `POST /api/auth/refresh`
 
 refresh token으로 access token을 재발급해요. 성공 시 refresh token도 rotate돼요.
@@ -500,6 +521,7 @@ DuckDuckGo 검색 결과를 LLM으로 요약해요.
 | `GOOGLE_CLIENT_ID` | Google OAuth 사용 시 | 없음 | Google OAuth client ID |
 | `GOOGLE_CLIENT_SECRET` | Google OAuth 사용 시 | 없음 | Google OAuth client secret |
 | `GOOGLE_REDIRECT_URI` | 아니오 | `http://localhost:8010/api/auth/google/callback` | Google OAuth callback |
+| `ENV` | 아니오 | `prod` | 실행 환경. `dev`/`development`/`local`이면 개발 전용 API 활성화 |
 | `DEBUG` | 아니오 | `false` | 디버그 모드 |
 | `CORS_ORIGINS` | 아니오 | `[]` | CORS 허용 origin 목록 |
 | `MAX_TOKENS` | 아니오 | `4000` | LLM 최대 토큰 |

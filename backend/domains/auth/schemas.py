@@ -23,6 +23,14 @@ class LoginRequest(BaseModel):
     device_id: str = Field(min_length=1, max_length=64)
 
 
+class DevTokenRequest(BaseModel):
+    """Swagger/local 테스트용 개발 토큰 요청"""
+
+    email: EmailStr = "swagger-test@example.com"
+    name: str = Field(default="Swagger Test User", min_length=1)
+    device_id: str = Field(default="swagger-local", min_length=1, max_length=64)
+
+
 class RefreshRequest(BaseModel):
     """토큰 갱신 요청"""
 

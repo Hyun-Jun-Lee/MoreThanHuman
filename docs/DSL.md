@@ -109,6 +109,7 @@ module Auth {
   router AuthRouter {
     POST /api/auth/register              -> register
     POST /api/auth/login                 -> login
+    POST /api/auth/dev/token             -> issueDevToken
     POST /api/auth/refresh               -> refresh
     POST /api/auth/logout                -> logout
     GET  /api/auth/google/login?device_id=...          -> googleLogin
@@ -127,6 +128,12 @@ module Auth {
     email: String
     password: String
     device_id: String
+  }
+
+  type DevTokenRequest {
+    email?: String = "swagger-test@example.com"
+    name?: String = "Swagger Test User"
+    device_id?: String = "swagger-local"
   }
 
   type RefreshRequest {

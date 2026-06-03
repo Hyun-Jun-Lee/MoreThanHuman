@@ -6,9 +6,10 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+from config import get_settings
 from domains.auth.dependencies import get_auth_service, get_current_user
 from domains.auth.models import UserModel
-from domains.auth.schemas import LoginRequest, LogoutRequest, RefreshRequest, RegisterRequest, TokenResponse, UserProfile
+from domains.auth.schemas import DevTokenRequest, LoginRequest, LogoutRequest, RefreshRequest, RegisterRequest, TokenResponse, UserProfile
 from domains.auth.service import AuthService
 from shared.exceptions import AuthenticationException, ValidationException
 from shared.types import SuccessResponse
@@ -41,6 +42,27 @@ def login(
     try:
         token = service.login(request.email, request.password, request.device_id)
         return SuccessResponse(data=token, message="로그인 성공")
+    except AuthenticationException as e:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=e.message)
+    except ValidationException as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
+
+
+@router.post("/dev/token", response_model=SuccessResponse[TokenResponse])
+def issue_dev_token(
+    request: DevTokenRequest,
+    service: AuthService = Depends(get_auth_service),
+):
+    """Swagger/local 테스트용 개발 토큰 발급"""
+    if not get_settings().is_dev:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="ENV=dev에서만 사용할 수 있는 개발 전용 엔드포인트입니다",
+        )
+
+    try:
+        token = service.issue_dev_token(request.email, request.name, request.device_id)
+        return SuccessResponse(data=token, message="개발용 토큰 발급 성공")
     except AuthenticationException as e:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=e.message)
     except ValidationException as e:

@@ -134,6 +134,28 @@ class AuthService:
 
         return self._issue_token_pair(user_id=user.id, device_id=device_id)
 
+    def issue_dev_token(self, email: str, name: str, device_id: str) -> TokenResponse:
+        """개발 환경에서 Swagger/API 테스트용 토큰 발급"""
+        if not get_settings().is_dev:
+            raise AuthenticationException("개발 환경에서만 사용할 수 있는 엔드포인트입니다")
+
+        self._validate_device_id(device_id)
+        user = self.repository.find_by_email(email)
+        if user:
+            if not user.is_active:
+                raise AuthenticationException("비활성화된 계정입니다")
+        else:
+            user = UserModel(
+                id=str(uuid4()),
+                email=email,
+                name=name,
+                oauth_provider="dev",
+                oauth_provider_id=email,
+            )
+            self.repository.save(user)
+
+        return self._issue_token_pair(user_id=user.id, device_id=device_id)
+
     def refresh(self, refresh_token: str, device_id: str) -> TokenResponse:
         self._validate_device_id(device_id)
         token_hash = self._hash_refresh_token(refresh_token)
