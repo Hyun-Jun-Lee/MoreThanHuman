@@ -158,6 +158,27 @@ Authorization: Bearer <access_token>
 }
 ```
 
+### `POST /api/auth/dev/token`
+
+Swagger/local 테스트용 JWT를 발급해요. `ENV=dev`일 때만 사용할 수 있고, 운영 환경에서는 `403`을 반환해요.
+
+요청 body는 모두 선택값이에요. 비워 보내면 Swagger 테스트용 기본 계정을 만들거나 재사용해요.
+
+```json
+{
+  "email": "swagger-test@example.com",
+  "name": "Swagger Test User",
+  "device_id": "swagger-local"
+}
+```
+
+Swagger 사용 순서:
+
+1. `POST /api/auth/dev/token` 실행
+2. 응답의 `data.access_token` 복사
+3. Swagger 우측 상단 `Authorize`에 토큰 입력
+4. `/api/search/`, `/api/search/topic-prep/` 같은 인증 API 호출
+
 ### `POST /api/auth/refresh`
 
 refresh token으로 access token을 재발급해요. 성공 시 refresh token도 rotate돼요.
@@ -203,9 +224,21 @@ Google OAuth2 callback code로 JWT를 발급해요.
 ```json
 {
   "first_message": "Hello, I want to practice English.",
-  "search_context": null
+  "search_context": null,
+  "topic": null,
+  "conversation_direction": null,
+  "selected_question": null
 }
 ```
+
+주제 준비 카드에서 시작하는 경우:
+
+| 필드 | 설명 |
+|------|------|
+| `search_context` | 준비 카드의 검색 기반 요약 |
+| `topic` | 사용자가 입력한 관심 주제 |
+| `conversation_direction` | `CASUAL_CHAT`, `DEBATE`, `INTERVIEW_QA`, `EXPLANATION_PRACTICE` 중 하나 |
+| `selected_question` | 사용자가 선택해 답변하는 AI 첫 질문 |
 
 ### `POST /api/conversations/start/roleplay/`
 
@@ -371,6 +404,91 @@ DuckDuckGo 검색 결과를 LLM으로 요약해요.
 }
 ```
 
+### `POST /api/search/topic-prep/`
+
+관심 주제를 검색해 대화 전 준비 카드를 생성해요. 인증이 필요해요. 이 엔드포인트는 conversation을 생성하지 않으며, 모바일 앱은 사용자가 첫 질문을 선택하고 답변한 뒤 `POST /api/conversations/start/free-chat/`로 대화를 시작해요.
+
+요청:
+
+```json
+{
+  "topic": "recent Dodgers game result"
+}
+```
+
+검색 품질이 충분한 응답:
+
+```json
+{
+  "success": true,
+  "data": {
+    "ready": true,
+    "card": {
+      "topic": "recent Dodgers game result",
+      "summary": "Short search-grounded summary.",
+      "directions": [
+        {
+          "direction": "DEBATE",
+          "title": "Debate",
+          "description": "Take a position and explain your reasons.",
+          "first_questions": [
+            "Was the manager's late-game decision right?",
+            "Which team had the stronger argument after the result?",
+            "What would critics say about the final inning?"
+          ]
+        }
+      ],
+      "sources": [],
+      "quality": {
+        "is_sufficient": true,
+        "source_count": 3,
+        "has_enough_sources": true,
+        "relevance": true,
+        "freshness": true,
+        "specificity": true
+      },
+      "timestamp": "2026-05-28T00:00:00"
+    },
+    "quality": {
+      "is_sufficient": true,
+      "source_count": 3,
+      "has_enough_sources": true,
+      "relevance": true,
+      "freshness": true,
+      "specificity": true
+    },
+    "retry_guidance": null,
+    "example_topics": []
+  }
+}
+```
+
+검색 품질이 낮은 응답:
+
+```json
+{
+  "success": true,
+  "data": {
+    "ready": false,
+    "card": null,
+    "quality": {
+      "is_sufficient": false,
+      "source_count": 1,
+      "has_enough_sources": false,
+      "relevance": false,
+      "freshness": false,
+      "specificity": false,
+      "reason": "대화 준비에 사용할 검색 출처가 충분하지 않아요.",
+      "retry_suggestion": "더 구체적인 사건, 날짜, 팀, 인물, 장소를 넣어 다시 입력해보세요."
+    },
+    "retry_guidance": "더 구체적인 사건, 날짜, 팀, 인물, 장소를 넣어 다시 입력해보세요.",
+    "example_topics": [
+      "2026년 5월 Dodgers 경기 결과"
+    ]
+  }
+}
+```
+
 ## Health Check
 
 ### `GET /health`
@@ -403,6 +521,7 @@ DuckDuckGo 검색 결과를 LLM으로 요약해요.
 | `GOOGLE_CLIENT_ID` | Google OAuth 사용 시 | 없음 | Google OAuth client ID |
 | `GOOGLE_CLIENT_SECRET` | Google OAuth 사용 시 | 없음 | Google OAuth client secret |
 | `GOOGLE_REDIRECT_URI` | 아니오 | `http://localhost:8010/api/auth/google/callback` | Google OAuth callback |
+| `ENV` | 아니오 | `prod` | 실행 환경. `dev`/`development`/`local`이면 개발 전용 API 활성화 |
 | `DEBUG` | 아니오 | `false` | 디버그 모드 |
 | `CORS_ORIGINS` | 아니오 | `[]` | CORS 허용 origin 목록 |
 | `MAX_TOKENS` | 아니오 | `4000` | LLM 최대 토큰 |

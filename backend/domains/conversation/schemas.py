@@ -7,9 +7,43 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
-from domains.conversation.enums import ConversationStatus, ConversationType, MessageRole
+from domains.conversation.enums import (
+    ConversationStatus,
+    ConversationType,
+    FreeChatConversationDirection,
+    MessageRole,
+)
 
 SchemaType = TypeVar("SchemaType")
+
+
+class StartFreeChatRequest(BaseModel):
+    """자유 대화 시작 요청"""
+
+    first_message: str
+    search_context: str | None = None
+    topic: str | None = None
+    conversation_direction: FreeChatConversationDirection | None = None
+    selected_question: str | None = None
+
+
+class StartRoleplayRequest(BaseModel):
+    """롤플레이 대화 시작 요청"""
+
+    role_character: str
+    search_context: str | None = None
+
+
+class SendMessageRequest(BaseModel):
+    """메시지 전송 요청"""
+
+    message: str
+
+
+class UpdateTitleRequest(BaseModel):
+    """대화 제목 수정 요청"""
+
+    title: str
 
 
 class Conversation(BaseModel):

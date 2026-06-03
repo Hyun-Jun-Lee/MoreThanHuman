@@ -18,6 +18,15 @@ class ConversationType(str, Enum):
     ROLE_PLAYING = "ROLE_PLAYING"
 
 
+class FreeChatConversationDirection(str, Enum):
+    """자유 대화 주제 준비 방향"""
+
+    CASUAL_CHAT = "CASUAL_CHAT"
+    DEBATE = "DEBATE"
+    INTERVIEW_QA = "INTERVIEW_QA"
+    EXPLANATION_PRACTICE = "EXPLANATION_PRACTICE"
+
+
 class MessageRole(str, Enum):
     """메시지 역할"""
 

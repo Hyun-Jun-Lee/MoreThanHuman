@@ -109,6 +109,7 @@ module Auth {
   router AuthRouter {
     POST /api/auth/register              -> register
     POST /api/auth/login                 -> login
+    POST /api/auth/dev/token             -> issueDevToken
     POST /api/auth/refresh               -> refresh
     POST /api/auth/logout                -> logout
     GET  /api/auth/google/login?device_id=...          -> googleLogin
@@ -127,6 +128,12 @@ module Auth {
     email: String
     password: String
     device_id: String
+  }
+
+  type DevTokenRequest {
+    email?: String = "swagger-test@example.com"
+    name?: String = "Swagger Test User"
+    device_id?: String = "swagger-local"
   }
 
   type RefreshRequest {
@@ -176,6 +183,9 @@ module Conversation {
   type StartFreeChatRequest {
     first_message: String
     search_context?: String
+    topic?: String
+    conversation_direction?: "CASUAL_CHAT" | "DEBATE" | "INTERVIEW_QA" | "EXPLANATION_PRACTICE"
+    selected_question?: String
   }
 
   type StartRoleplayRequest {
@@ -288,11 +298,13 @@ module Grammar {
 ```dsl
 module Search {
   router SearchRouter {
-    POST /api/search/ -> search
+    POST /api/search/             -> search
+    POST /api/search/topic-prep/  -> prepareTopic
   }
 
   service SearchService {
     async function search(query: String) -> SearchResult
+    async function prepareTopic(topic: String) -> TopicPrepResult
     async function searchDuckDuckGo(query: String) -> List<SearchResultItem>
     async function summarizeResults(query: String, sources: List<SearchResultItem>) -> String
   }
@@ -312,6 +324,45 @@ module Search {
     title: String
     url: String
     snippet: String
+  }
+
+  type TopicPrepRequest {
+    topic: String
+  }
+
+  type TopicPrepResult {
+    ready: Boolean
+    card?: TopicPrepCard
+    quality: TopicPrepQuality
+    retry_guidance?: String
+    example_topics: List<String>
+  }
+
+  type TopicPrepCard {
+    topic: String
+    summary: String
+    directions: List<TopicPrepDirection>
+    sources: List<SearchResultItem>
+    quality: TopicPrepQuality
+    timestamp: DateTime
+  }
+
+  type TopicPrepDirection {
+    direction: "CASUAL_CHAT" | "DEBATE" | "INTERVIEW_QA" | "EXPLANATION_PRACTICE"
+    title: String
+    description: String
+    first_questions: List<String>
+  }
+
+  type TopicPrepQuality {
+    is_sufficient: Boolean
+    source_count: Integer
+    has_enough_sources: Boolean
+    relevance: Boolean
+    freshness: Boolean
+    specificity: Boolean
+    reason?: String
+    retry_suggestion?: String
   }
 }
 ```

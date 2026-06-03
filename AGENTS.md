@@ -126,3 +126,5 @@
 | 모바일 UX 메모 | `docs/UX_FEEDBACK.md` | 향후 Flutter 앱 UX 방향 |
 | 아키텍처 | `.agent/architecture.md` | 시스템 아키텍처 상세 |
 | 정책 | `.agent/rules.md` | 코딩·문서·git·협업 정책 |
+| 문서화된 해결책 | `docs/solutions/` | 과거 문제 해결·패턴·워크플로우 learning |
+| 공유 용어집 | `CONCEPTS.md` | 프로젝트 도메인 용어와 상태 개념 |

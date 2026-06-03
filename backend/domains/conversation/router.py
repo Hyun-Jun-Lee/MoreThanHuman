@@ -9,7 +9,6 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
@@ -25,39 +24,16 @@ from domains.conversation.schemas import (
     MessageResponse,
     PaginatedConversations,
     PaginatedMessages,
+    SendMessageRequest,
+    StartFreeChatRequest,
+    StartRoleplayRequest,
+    UpdateTitleRequest,
 )
 from domains.conversation.service import ConversationService
 from shared.exceptions import AppException, NotFoundException, RateLimitException
 from shared.types import ErrorResponse, SuccessResponse
 
 router = APIRouter(prefix="/api/conversations", tags=["conversations"])
-
-
-# Request Models
-class StartFreeChatRequest(BaseModel):
-    """자유 대화 시작 요청"""
-
-    first_message: str
-    search_context: str | None = None
-
-
-class StartRoleplayRequest(BaseModel):
-    """롤플레이 대화 시작 요청"""
-
-    role_character: str
-    search_context: str | None = None
-
-
-class SendMessageRequest(BaseModel):
-    """메시지 전송 요청"""
-
-    message: str
-
-
-class UpdateTitleRequest(BaseModel):
-    """대화 제목 수정 요청"""
-
-    title: str
 
 
 # Dependency
@@ -83,6 +59,13 @@ async def start_free_chat_conversation(
             request.first_message,
             request.search_context,
             user_id=current_user.id,
+            topic=request.topic,
+            conversation_direction=(
+                request.conversation_direction.value
+                if request.conversation_direction
+                else None
+            ),
+            selected_question=request.selected_question,
         )
         return SuccessResponse(data=response, message="자유 대화가 시작되었습니다")
     except RateLimitException as e:
