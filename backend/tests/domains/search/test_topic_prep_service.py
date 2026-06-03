@@ -57,6 +57,33 @@ def _card(topic: str, sources: list[SearchResultItem], is_sufficient: bool = Tru
     )
 
 
+def _sources() -> list[SearchResultItem]:
+    return [
+        SearchResultItem(
+            title=f"Dodgers game result {index}",
+            url=f"https://example.com/{index}",
+            snippet=f"Specific Dodgers game result snippet {index}",
+        )
+        for index in range(1, 4)
+    ]
+
+
+def _direction_payload() -> list[dict]:
+    return [
+        {
+            "direction": direction.value,
+            "title": direction.value,
+            "description": f"{direction.value} mode",
+            "first_questions": [
+                f"What was specific about the Dodgers result in {direction.value}?",
+                f"Why did this game matter for {direction.value}?",
+                f"What detail would you discuss next in {direction.value}?",
+            ],
+        }
+        for direction in ConversationDirection
+    ]
+
+
 @pytest.mark.asyncio
 async def test_prepare_topic_returns_ready_card_when_search_quality_is_sufficient(monkeypatch):
     service = SearchService()
@@ -121,3 +148,45 @@ async def test_prepare_topic_rejects_when_llm_quality_gate_fails(monkeypatch):
     assert result.card is None
     assert result.quality.is_sufficient is False
     assert "팀, 날짜" in result.retry_guidance
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {
+            "quality": {"is_sufficient": True, "relevance": True, "freshness": True, "specificity": True},
+            "summary": "",
+            "directions": _direction_payload(),
+        },
+        {
+            "quality": {"is_sufficient": True, "relevance": True, "freshness": True, "specificity": True},
+            "summary": "The Dodgers won a specific recent game.",
+            "directions": _direction_payload()[:3],
+        },
+        {
+            "quality": {"is_sufficient": True, "relevance": True, "freshness": True, "specificity": True},
+            "summary": "The Dodgers won a specific recent game.",
+            "directions": [
+                {
+                    **direction,
+                    "first_questions": direction["first_questions"][:2],
+                }
+                if direction["direction"] == ConversationDirection.DEBATE.value
+                else direction
+                for direction in _direction_payload()
+            ],
+        },
+    ],
+)
+def test_build_topic_prep_card_rejects_incomplete_sufficient_llm_payload(data):
+    service = SearchService()
+
+    card = service._build_topic_prep_card_from_data(
+        "recent Dodgers game result",
+        _sources(),
+        data,
+    )
+
+    assert card.quality.is_sufficient is False
+    assert card.quality.reason == "검색 결과로 대화 준비 카드를 완성하지 못했어요."
+    assert card.quality.retry_suggestion is not None

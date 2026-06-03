@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 MIN_TOPIC_PREP_SOURCE_COUNT = 3
+INCOMPLETE_TOPIC_PREP_CARD_REASON = "검색 결과로 대화 준비 카드를 완성하지 못했어요."
 
 
 class SearchService:
@@ -265,26 +266,69 @@ Respond only in JSON:
     ) -> TopicPrepCard:
         """LLM 응답 dict를 TopicPrepCard로 변환"""
         quality_data = data.get("quality", {})
+        raw_directions = data.get("directions", [])
+        summary = str(data.get("summary") or "").strip()
+        llm_is_sufficient = self._as_json_bool(quality_data.get("is_sufficient", False))
+        has_complete_card = self._has_complete_topic_prep_payload(summary, raw_directions)
+        is_sufficient = llm_is_sufficient and has_complete_card
+        reason = quality_data.get("reason")
+        retry_suggestion = quality_data.get("retry_suggestion")
+
+        if llm_is_sufficient and not has_complete_card:
+            reason = reason or INCOMPLETE_TOPIC_PREP_CARD_REASON
+            retry_suggestion = retry_suggestion or self._build_retry_guidance(topic)
+
         quality = TopicPrepQuality(
-            is_sufficient=bool(quality_data.get("is_sufficient", False)),
+            is_sufficient=is_sufficient,
             source_count=len(sources),
             has_enough_sources=len(sources) >= MIN_TOPIC_PREP_SOURCE_COUNT,
-            relevance=bool(quality_data.get("relevance", False)),
-            freshness=bool(quality_data.get("freshness", False)),
-            specificity=bool(quality_data.get("specificity", False)),
-            reason=quality_data.get("reason"),
-            retry_suggestion=quality_data.get("retry_suggestion"),
+            relevance=self._as_json_bool(quality_data.get("relevance", False)),
+            freshness=self._as_json_bool(quality_data.get("freshness", False)),
+            specificity=self._as_json_bool(quality_data.get("specificity", False)),
+            reason=reason,
+            retry_suggestion=retry_suggestion,
         )
 
-        directions = self._normalize_topic_prep_directions(topic, data.get("directions", []))
+        directions = self._normalize_topic_prep_directions(topic, raw_directions)
         return TopicPrepCard(
             topic=topic,
-            summary=data.get("summary", ""),
+            summary=summary,
             directions=directions,
             sources=sources,
             quality=quality,
             timestamp=datetime.utcnow(),
         )
+
+    def _as_json_bool(self, value: object) -> bool:
+        """JSON boolean만 true로 인정"""
+        return value is True
+
+    def _has_complete_topic_prep_payload(self, summary: str, raw_directions: object) -> bool:
+        """ready=true 카드로 반환 가능한 최소 LLM payload 검증"""
+        if not summary or not isinstance(raw_directions, list):
+            return False
+        if len(raw_directions) != len(ConversationDirection):
+            return False
+
+        expected_directions = {direction.value for direction in ConversationDirection}
+        seen_directions = set()
+
+        for item in raw_directions:
+            if not isinstance(item, dict):
+                return False
+
+            direction = item.get("direction")
+            if direction not in expected_directions or direction in seen_directions:
+                return False
+            seen_directions.add(direction)
+
+            questions = item.get("first_questions")
+            if not isinstance(questions, list) or len(questions) != 3:
+                return False
+            if any(not str(question).strip() for question in questions):
+                return False
+
+        return seen_directions == expected_directions
 
     def _normalize_topic_prep_directions(
         self,
