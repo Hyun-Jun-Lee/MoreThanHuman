@@ -19,7 +19,7 @@
 | httpx | 0.26.0 | 외부 HTTP 클라이언트 |
 | python-jose | ≥ 3.3.0 | JWT 인증 |
 | bcrypt | ≥ 4.0.0 | 비밀번호 해싱 |
-| duckduckgo-search | ≥ 8.1.1 | 웹 검색 |
+| ddgs | ≥ 9.0.0 | 웹 검색 |
 | psycopg2-binary | 2.9.9 | PostgreSQL 드라이버 |
 
 ### Database
@@ -54,7 +54,7 @@ backend/
     ├── conversation/        # 대화 관리
     ├── grammar/             # 문법 체크 및 통계
     ├── llm/                 # LLM 프로바이더 추상화
-    ├── search/              # DuckDuckGo 검색 + LLM 요약
+    ├── search/              # ddgs 검색 + query analysis + LLM source judge + LLM 요약
     └── web/                 # 서버 렌더링 HTML 라우트
 ```
 
@@ -119,9 +119,10 @@ domains/{name}/
 
 ```text
 [사용자] → POST /api/search/
-         → DuckDuckGo 검색
-         → LLM 요약
-         → SearchResult { query, summary, sources, timestamp }
+         → hybrid query analysis
+         → ddgs 검색
+         → LLM source judge
+         → SearchResult { query, enhanced_query, ready, summary?, sources, quality, timestamp }
 ```
 
 ### 웹 페이지
@@ -140,7 +141,7 @@ domains/{name}/
 |--------|------|---------|
 | OpenRouter API | LLM 대화 생성 | 502 계열 외부 API 오류 |
 | Ollama | 로컬 LLM 대안 | 502 계열 외부 API 오류 |
-| DuckDuckGo | 검색 자료 수집 | 검색 실패 오류 또는 요약 fallback |
+| DuckDuckGo(ddgs) | 검색 자료 수집 | 검색 실패 오류 |
 | Google OAuth2 | 선택적 소셜 로그인 | 인증 오류 |
 
 ---

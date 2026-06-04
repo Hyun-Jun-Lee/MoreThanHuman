@@ -62,12 +62,15 @@ class OpenRouterProvider(LLMProvider):
                     usage=data.get("usage"),
                 )
             except httpx.HTTPStatusError as e:
+                response_body = e.response.text[:500] if e.response is not None else ""
                 if e.response.status_code == 429:
                     raise RateLimitException(
                         "무료 모델의 사용 한도에 도달했습니다. 잠시 후 다시 시도해주세요.",
                         details={"retry_after": "1-2 minutes"},
                     )
-                raise ExternalAPIException(f"OpenRouter API call failed: {str(e)}")
+                raise ExternalAPIException(
+                    f"OpenRouter API call failed: status={e.response.status_code}, body={response_body}"
+                )
             except httpx.HTTPError as e:
                 raise ExternalAPIException(f"OpenRouter API call failed: {str(e)}")
 

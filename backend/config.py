@@ -4,6 +4,7 @@
 from functools import lru_cache
 from pathlib import Path
 from pydantic_settings import BaseSettings
+from shared.exceptions import AppException
 
 
 class Settings(BaseSettings):
@@ -21,14 +22,14 @@ class Settings(BaseSettings):
     cors_origins: list[str] = []
 
     # LLM Provider Settings
-    llm_provider: str
-    ollama_base_url: str
+    llm_provider: str = "openrouter"
+    ollama_base_url: str | None = None
 
     # OpenRouter Model Settings
     openrouter_model: str
 
     # Ollama Model Settings
-    ollama_model: str
+    ollama_model: str | None = None
 
     # Grammar Check Model Settings (separate from conversation model)
     grammar_model_provider: str = None  # If None, uses llm_provider
@@ -52,6 +53,14 @@ class Settings(BaseSettings):
 
     # Search Settings
     search_summary_max_tokens: int = 600
+    search_query_analysis_max_tokens: int = 500
+    search_quality_judge_max_tokens: int = 500
+    search_region: str = "kr-kr"
+    search_safesearch: str = "moderate"
+    search_recent_timelimit: str = "m"
+    search_backend: str = "auto"
+    search_max_results: int = 12
+    search_min_relevant_results: int = 2
 
     # Conversation Settings
     max_history_turns: int = 10
@@ -87,9 +96,10 @@ def get_model_for_provider(provider: str | None = None) -> str:
     current_provider = provider or settings.llm_provider
 
     if current_provider == "ollama":
+        if not settings.ollama_model:
+            raise AppException("OLLAMA_MODEL is required when LLM_PROVIDER=ollama.")
         return settings.ollama_model
-    else:  # openrouter
-        return settings.openrouter_model
+    return settings.openrouter_model
 
 
 def get_grammar_model_config() -> tuple[str, str]:
@@ -105,6 +115,8 @@ def get_grammar_model_config() -> tuple[str, str]:
     provider = settings.grammar_model_provider or settings.llm_provider
 
     if provider == "ollama":
+        if not settings.ollama_model:
+            raise AppException("OLLAMA_MODEL is required when GRAMMAR_MODEL_PROVIDER=ollama.")
         model = settings.grammar_ollama_model or settings.ollama_model
     else:  # openrouter
         model = settings.grammar_openrouter_model or settings.openrouter_model

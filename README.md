@@ -379,7 +379,7 @@ Query:
 
 ### `POST /api/search/`
 
-DuckDuckGo 검색 결과를 LLM으로 요약해요.
+관심 주제를 검색하고, 검색 결과가 충분히 관련 있을 때만 LLM으로 요약해요. 인증이 필요해요.
 
 ```json
 {
@@ -392,6 +392,8 @@ DuckDuckGo 검색 결과를 LLM으로 요약해요.
 ```json
 {
   "query": "how to order coffee in English",
+  "enhanced_query": "how to order coffee in English",
+  "ready": true,
   "summary": "Summary text",
   "sources": [
     {
@@ -400,7 +402,46 @@ DuckDuckGo 검색 결과를 LLM으로 요약해요.
       "snippet": "Source snippet"
     }
   ],
+  "quality": {
+    "is_sufficient": true,
+    "source_count": 8,
+    "relevant_source_count": 3,
+    "dropped_source_count": 5,
+    "relevance": true,
+    "freshness": true,
+    "specificity": true
+  },
+  "retry_guidance": null,
+  "example_queries": [],
   "timestamp": "2026-05-25T00:00:00"
+}
+```
+
+검색 품질이 낮으면 HTTP 오류가 아니라 `success=true` 안의 `ready=false`로 반환해요. 이때 `summary`는 `null`이고, 모바일 클라이언트는 `retry_guidance`와 `example_queries`로 주제 재입력을 유도해요.
+
+```json
+{
+  "query": "요즘 이슈",
+  "enhanced_query": "요즘 최신 뉴스 2026년 6월",
+  "ready": false,
+  "summary": null,
+  "sources": [],
+  "quality": {
+    "is_sufficient": false,
+    "source_count": 5,
+    "relevant_source_count": 0,
+    "dropped_source_count": 5,
+    "relevance": false,
+    "freshness": true,
+    "specificity": false,
+    "reason": "검색 결과가 주제와 충분히 관련되어 있지 않아요.",
+    "retry_suggestion": "팀, 날짜, 사건명, 인물, 장소처럼 구체적인 핵심어를 더 넣어 다시 검색해보세요."
+  },
+  "retry_guidance": "팀, 날짜, 사건명, 인물, 장소처럼 구체적인 핵심어를 더 넣어 다시 검색해보세요.",
+  "example_queries": [
+    "2026년 6월 요즘 이슈 관련 최신 이슈"
+  ],
+  "timestamp": "2026-06-04T00:00:00"
 }
 ```
 
@@ -506,12 +547,12 @@ DuckDuckGo 검색 결과를 LLM으로 요약해요.
 | 변수 | 필수 | 기본값 | 설명 |
 |------|------|--------|------|
 | `DATABASE_URL` | 아니오 | `sqlite:///./english_learning.db` | DB 연결 문자열 |
-| `OPENROUTER_API_KEY` | OpenRouter 사용 시 | 없음 | OpenRouter API 키 |
-| `LLM_PROVIDER` | 예 | 없음 | `openrouter` 또는 `ollama` |
+| `OPENROUTER_API_KEY` | 예 | 없음 | OpenRouter API 키 |
+| `LLM_PROVIDER` | 아니오 | `openrouter` | 기본 LLM provider. `ollama`는 로컬 Ollama 서버를 의도적으로 사용할 때만 설정 |
 | `OLLAMA_BASE_URL` | Ollama 사용 시 | 없음 | Ollama 서버 URL |
 | `OPENROUTER_MODEL` | OpenRouter 사용 시 | 없음 | 대화용 OpenRouter 모델 |
 | `OLLAMA_MODEL` | Ollama 사용 시 | 없음 | 대화용 Ollama 모델 |
-| `GRAMMAR_MODEL_PROVIDER` | 아니오 | `LLM_PROVIDER` | 문법 체크 전용 provider |
+| `GRAMMAR_MODEL_PROVIDER` | 아니오 | `LLM_PROVIDER` | 문법 체크 전용 provider. 기본 권장은 `openrouter` |
 | `GRAMMAR_OPENROUTER_MODEL` | 아니오 | `OPENROUTER_MODEL` | 문법 체크 전용 OpenRouter 모델 |
 | `GRAMMAR_OLLAMA_MODEL` | 아니오 | `OLLAMA_MODEL` | 문법 체크 전용 Ollama 모델 |
 | `JWT_SECRET_KEY` | 예 | 없음 | JWT 서명 secret |
@@ -527,6 +568,14 @@ DuckDuckGo 검색 결과를 LLM으로 요약해요.
 | `MAX_TOKENS` | 아니오 | `4000` | LLM 최대 토큰 |
 | `TEMPERATURE` | 아니오 | `0.7` | LLM temperature |
 | `SEARCH_SUMMARY_MAX_TOKENS` | 아니오 | `600` | 검색 요약 최대 토큰 |
+| `SEARCH_QUERY_ANALYSIS_MAX_TOKENS` | 아니오 | `500` | 검색어 분석 LLM 최대 토큰 |
+| `SEARCH_QUALITY_JUDGE_MAX_TOKENS` | 아니오 | `500` | 검색 품질 판정 LLM 최대 토큰 |
+| `SEARCH_REGION` | 아니오 | `kr-kr` | ddgs 검색 지역 |
+| `SEARCH_SAFESEARCH` | 아니오 | `moderate` | ddgs safe search 옵션 |
+| `SEARCH_RECENT_TIMELIMIT` | 아니오 | `m` | 최신성 의도 쿼리에 적용할 ddgs 기간 옵션 |
+| `SEARCH_BACKEND` | 아니오 | `auto` | ddgs 검색 backend |
+| `SEARCH_MAX_RESULTS` | 아니오 | `12` | 필터링 전 수집할 검색 결과 수 |
+| `SEARCH_MIN_RELEVANT_RESULTS` | 아니오 | `2` | LLM judge가 accept해야 하는 최소 출처 수 |
 | `MAX_HISTORY_TURNS` | 아니오 | `10` | 대화 기록 최대 턴 |
 
 ## 개발 가이드
@@ -560,4 +609,4 @@ API, 환경변수, 도메인 계약이 바뀌면 같은 작업 단위에서 아�
 - 문법 체크 및 SSE 기반 비동기 피드백
 - 문법 통계
 - OpenRouter/Ollama LLM provider 추상화
-- DuckDuckGo 검색 + LLM 요약
+- ddgs 검색 + query analysis + LLM source judge + LLM 요약

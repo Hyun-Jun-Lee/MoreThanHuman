@@ -4,15 +4,25 @@ Search Service Layer
 import asyncio
 import json
 import logging
+import time
+from dataclasses import dataclass
 from datetime import datetime
-
-from duckduckgo_search import DDGS
+from typing import Any
 
 from config import get_model_for_provider, get_settings
 from domains.llm.factory import LLMProviderFactory
 from domains.llm.schemas import LLMMessage, LLMRequest
+from domains.search.provider import DuckDuckGoSearchProvider
+from domains.search.query import (
+    QueryAnalysis,
+    build_rule_query_analysis,
+    current_search_context,
+    merge_query_analysis,
+)
 from domains.search.schemas import (
     ConversationDirection,
+    SearchQualityJudgeResult,
+    SearchQuality,
     SearchResult,
     SearchResultItem,
     TopicPrepCard,
@@ -24,14 +34,25 @@ from shared.exceptions import ExternalAPIException
 
 logger = logging.getLogger(__name__)
 
-settings = get_settings()
-
 MIN_TOPIC_PREP_SOURCE_COUNT = 3
 INCOMPLETE_TOPIC_PREP_CARD_REASON = "검색 결과로 대화 준비 카드를 완성하지 못했어요."
 
 
+@dataclass(frozen=True)
+class PreparedSearchResult:
+    """검색 품질 파이프라인 결과"""
+
+    analysis: QueryAnalysis
+    sources: list[SearchResultItem]
+    quality: SearchQuality
+
+
 class SearchService:
     """검색 서비스"""
+
+    def __init__(self, search_provider: DuckDuckGoSearchProvider | None = None):
+        self.settings = get_settings()
+        self.search_provider = search_provider or DuckDuckGoSearchProvider(self.settings)
 
     async def search(self, query: str) -> SearchResult:
         """
@@ -43,23 +64,27 @@ class SearchService:
         Returns:
             요약된 검색 결과
         """
-        raw_results = await self._search_duckduckgo(query)
-
-        sources = [
-            SearchResultItem(
-                title=r.get("title", ""),
-                url=r.get("href", ""),
-                snippet=r.get("body", "")[:300],
+        prepared = await self._prepare_search_results(query)
+        if not prepared.quality.is_sufficient:
+            return SearchResult(
+                query=query,
+                enhanced_query=prepared.analysis.enhanced_query,
+                ready=False,
+                sources=prepared.sources,
+                quality=prepared.quality,
+                retry_guidance=prepared.quality.retry_suggestion or self._build_retry_guidance(query),
+                example_queries=self._build_example_topics(query),
+                timestamp=datetime.utcnow(),
             )
-            for r in raw_results
-        ]
 
-        summary = await self._summarize_results(query, sources)
-
+        summary = await self._summarize_results(query, prepared.sources, prepared.analysis)
         return SearchResult(
             query=query,
+            enhanced_query=prepared.analysis.enhanced_query,
+            ready=True,
             summary=summary,
-            sources=sources,
+            sources=prepared.sources,
+            quality=prepared.quality,
             timestamp=datetime.utcnow(),
         )
 
@@ -73,24 +98,16 @@ class SearchService:
         Returns:
             준비 카드 생성 결과
         """
-        raw_results = await self._search_duckduckgo(topic)
-        sources = [
-            SearchResultItem(
-                title=r.get("title", ""),
-                url=r.get("href", ""),
-                snippet=r.get("body", "")[:300],
-            )
-            for r in raw_results
-        ]
-
-        if len(sources) < MIN_TOPIC_PREP_SOURCE_COUNT:
+        prepared = await self._prepare_search_results(topic)
+        if not prepared.quality.is_sufficient:
             return self._build_low_quality_result(
                 topic,
-                sources,
-                reason="대화 준비에 사용할 검색 출처가 충분하지 않아요.",
+                prepared.sources,
+                reason=prepared.quality.reason or "대화 준비에 사용할 검색 출처가 충분하지 않아요.",
+                retry_suggestion=prepared.quality.retry_suggestion,
             )
 
-        card = await self._generate_topic_prep_card(topic, sources)
+        card = await self._generate_topic_prep_card(topic, prepared.sources, prepared.analysis)
         if not card.quality.is_sufficient:
             return TopicPrepResult(
                 ready=False,
@@ -106,7 +123,112 @@ class SearchService:
             quality=card.quality,
         )
 
-    async def _search_duckduckgo(self, query: str) -> list[dict]:
+    async def _prepare_search_results(self, query: str) -> PreparedSearchResult:
+        """검색 전처리, 검색 수집, LLM source judge를 실행"""
+        analysis = await self._analyze_query(query)
+        logger.info(
+            "Search pipeline stage=provider_search query=%r enhanced_query=%r recency_intent=%s",
+            query,
+            analysis.enhanced_query,
+            analysis.recency_intent,
+        )
+        raw_results = await self._search_duckduckgo(analysis.enhanced_query, analysis)
+        sources = [
+            SearchResultItem(
+                title=r.get("title", ""),
+                url=r.get("href", ""),
+                snippet=r.get("body", "")[:300],
+            )
+            for r in raw_results
+        ]
+        logger.info(
+            "Search pipeline stage=source_collection query=%r raw_count=%s",
+            query,
+            len(sources),
+        )
+        if not sources:
+            return PreparedSearchResult(
+                analysis=analysis,
+                sources=[],
+                quality=self._build_failed_search_quality(
+                    source_count=0,
+                    reason="검색 결과를 찾지 못했어요.",
+                    retry_suggestion=self._build_retry_guidance(query),
+                ),
+            )
+
+        accepted_sources, quality = await self._judge_search_quality(query, sources, analysis)
+        return PreparedSearchResult(
+            analysis=analysis,
+            sources=accepted_sources,
+            quality=quality,
+        )
+
+    async def _analyze_query(self, query: str) -> QueryAnalysis:
+        """규칙 baseline과 LLM query analyzer를 조합"""
+        current_date, _timezone = current_search_context()
+        rule_analysis = build_rule_query_analysis(query, current_date=current_date)
+        try:
+            llm_data = await self._generate_llm_query_analysis(query, current_date, _timezone)
+        except Exception as exc:
+            logger.exception(
+                "Search LLM stage=query_analysis status=fallback query=%r current_date=%s timezone=%s error=%s",
+                query,
+                current_date,
+                _timezone,
+                exc,
+            )
+            llm_data = None
+        return merge_query_analysis(rule_analysis, llm_data, current_date=current_date)
+
+    async def _generate_llm_query_analysis(self, query: str, current_date: str, timezone: str) -> dict | None:
+        """LLM query analyzer JSON 생성"""
+        provider = LLMProviderFactory.create_provider()
+        started_at = time.perf_counter()
+        request = LLMRequest(
+            messages=[
+                LLMMessage(
+                    role="system",
+                    content=(
+                        "You analyze a user's search topic for an English conversation app. "
+                        "Return only valid JSON with keys: canonical_topic, required_phrases, "
+                        "required_tokens, context_terms, recency_intent, exclude_terms. "
+                        "Keep query expansion additive and do not change the user's intent."
+                    ),
+                ),
+                LLMMessage(
+                    role="user",
+                    content=(
+                        f"Current date: {current_date}\n"
+                        f"Timezone: {timezone}\n"
+                        f"Query: {query}"
+                    ),
+                ),
+            ],
+            model=get_model_for_provider(),
+            max_tokens=self.settings.search_query_analysis_max_tokens,
+            temperature=0.1,
+        )
+        logger.info(
+            "Search LLM stage=query_analysis status=start provider=%s model=%s query=%r current_date=%s timezone=%s",
+            self._provider_name(provider),
+            request.model,
+            query,
+            current_date,
+            timezone,
+        )
+        response = await provider.chat_completion(request)
+        data = self._parse_json_response(response.content)
+        logger.info(
+            "Search LLM stage=query_analysis status=success provider=%s model=%s duration_ms=%s response_chars=%s",
+            self._provider_name(provider),
+            request.model,
+            round((time.perf_counter() - started_at) * 1000),
+            len(response.content or ""),
+        )
+        return data if isinstance(data, dict) else None
+
+    async def _search_duckduckgo(self, query: str, analysis: QueryAnalysis | None = None) -> list[dict]:
         """
         DuckDuckGo 검색 (동기 라이브러리를 스레드에서 실행)
 
@@ -120,19 +242,277 @@ class SearchService:
             ExternalAPIException: 검색 실패
         """
         try:
-            return await asyncio.to_thread(self._sync_search, query)
+            return await asyncio.to_thread(self._sync_search, query, analysis)
         except ExternalAPIException:
             raise
         except Exception as e:
             raise ExternalAPIException(f"DuckDuckGo search failed: {str(e)}")
 
-    def _sync_search(self, query: str) -> list[dict]:
+    def _sync_search(self, query: str, analysis: QueryAnalysis | None = None) -> list[dict]:
         """DuckDuckGo 동기 검색"""
-        ddgs = DDGS()
-        results = ddgs.text(query, max_results=5)
-        return results
+        return self.search_provider.text(
+            query,
+            use_recency_timelimit=bool(analysis and analysis.recency_intent),
+        )
 
-    async def _summarize_results(self, query: str, sources: list[SearchResultItem]) -> str:
+    async def _judge_search_quality(
+        self,
+        query: str,
+        sources: list[SearchResultItem],
+        analysis: QueryAnalysis,
+    ) -> tuple[list[SearchResultItem], SearchQuality]:
+        """LLM으로 source 채택과 최종 대화 적합성 판단"""
+        current_date, timezone = current_search_context()
+        source_text = self._format_numbered_sources(sources)
+        try:
+            provider = LLMProviderFactory.create_provider()
+            started_at = time.perf_counter()
+            request = LLMRequest(
+                messages=[
+                    LLMMessage(
+                        role="system",
+                        content=(
+                            "You are the primary source quality judge for an English conversation app. "
+                            "Select only sources that are directly useful for discussing the user's topic. "
+                            "Return only valid JSON with keys: is_sufficient, accepted_source_ids, "
+                            "rejected_sources, relevance, freshness, specificity, reason, retry_suggestion. "
+                            "Use 1-based source ids from the provided list. "
+                            "accepted_source_ids must be an array of integers. "
+                            "rejected_sources must be an array of objects like {\"id\": 3, \"reason\": \"...\"}. "
+                            "is_sufficient, relevance, freshness, and specificity must be JSON booleans, "
+                            "not numeric ratings. "
+                            "Set is_sufficient true only when accepted sources are enough for a concrete "
+                            "conversation and summary. If recency_intent is false, freshness should not block "
+                            "sufficiency."
+                        ),
+                    ),
+                    LLMMessage(
+                        role="user",
+                        content=(
+                            f"Current date: {current_date}\n"
+                            f"Timezone: {timezone}\n"
+                            f"Original query: {query}\n"
+                            f"Enhanced query: {analysis.enhanced_query}\n\n"
+                            f"Recency intent: {analysis.recency_intent}\n\n"
+                            f"Sources:\n{source_text}"
+                        ),
+                    ),
+                ],
+                model=get_model_for_provider(),
+                max_tokens=self.settings.search_quality_judge_max_tokens,
+                temperature=0.1,
+            )
+            logger.info(
+                "Search LLM stage=quality_judge status=start provider=%s model=%s query=%r source_count=%s",
+                self._provider_name(provider),
+                request.model,
+                query,
+                len(sources),
+            )
+            response = await provider.chat_completion(request)
+            data = self._parse_json_response(response.content)
+            judge_result = self._build_search_quality_judge_result(data)
+            accepted_sources, quality = self._finalize_search_quality(
+                query,
+                sources,
+                analysis,
+                judge_result,
+            )
+            logger.info(
+                "Search LLM stage=quality_judge status=success provider=%s model=%s duration_ms=%s sufficient=%s accepted_count=%s rejected_count=%s response_chars=%s",
+                self._provider_name(provider),
+                request.model,
+                round((time.perf_counter() - started_at) * 1000),
+                quality.is_sufficient,
+                quality.relevant_source_count,
+                len(judge_result.rejected_sources),
+                len(response.content or ""),
+            )
+            return accepted_sources, quality
+        except Exception as exc:
+            logger.exception(
+                "Search LLM stage=quality_judge status=fallback query=%r enhanced_query=%r error=%s",
+                query,
+                analysis.enhanced_query,
+                exc,
+            )
+            return [], self._build_failed_search_quality(
+                source_count=len(sources),
+                reason="검색 결과를 품질 판단하는 중 오류가 발생했어요.",
+                retry_suggestion=self._build_retry_guidance(query),
+            )
+
+    def _build_search_quality_judge_result(self, data: dict) -> SearchQualityJudgeResult:
+        """LLM source judge JSON을 내부 모델로 변환"""
+        if not isinstance(data, dict):
+            return SearchQualityJudgeResult.model_validate(data)
+
+        normalized = dict(data)
+        normalized["accepted_source_ids"] = self._coerce_int_list(
+            normalized.get("accepted_source_ids")
+            or normalized.get("accepted_sources")
+            or normalized.get("accepted_ids")
+            or []
+        )
+        normalized["rejected_sources"] = self._coerce_rejected_sources(
+            normalized.get("rejected_sources")
+            or normalized.get("rejected_source_ids")
+            or normalized.get("rejected_ids")
+            or []
+        )
+        for field in ("is_sufficient", "relevance", "freshness", "specificity"):
+            if field in normalized:
+                normalized[field] = self._coerce_llm_bool(normalized[field])
+
+        return SearchQualityJudgeResult.model_validate(normalized)
+
+    def _coerce_int_list(self, values: Any) -> list[int]:
+        """LLM이 문자열 숫자로 반환한 source id를 정수 리스트로 보정"""
+        if not isinstance(values, list):
+            return []
+
+        ids = []
+        for value in values:
+            try:
+                ids.append(int(value))
+            except (TypeError, ValueError):
+                continue
+        return ids
+
+    def _coerce_rejected_sources(self, values: Any) -> list[dict]:
+        """LLM rejected_sources 축약 응답을 객체 리스트로 보정"""
+        if not isinstance(values, list):
+            return []
+
+        rejected_sources = []
+        for value in values:
+            if isinstance(value, dict):
+                source_id = value.get("id") or value.get("source_id")
+                reason = value.get("reason") or "LLM이 대화에 덜 유용한 출처로 판단했어요."
+            else:
+                source_id = value
+                reason = "LLM이 대화에 덜 유용한 출처로 판단했어요."
+
+            try:
+                rejected_sources.append({"id": int(source_id), "reason": str(reason)})
+            except (TypeError, ValueError):
+                continue
+
+        return rejected_sources
+
+    def _coerce_llm_bool(self, value: Any) -> Any:
+        """LLM의 boolean 유사 응답을 bool로 보정"""
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            return value >= 4
+        if isinstance(value, str):
+            lowered = value.strip().casefold()
+            if lowered in {"true", "yes", "y", "sufficient", "pass"}:
+                return True
+            if lowered in {"false", "no", "n", "insufficient", "fail"}:
+                return False
+            try:
+                return float(lowered) >= 4
+            except ValueError:
+                return value
+        return value
+
+    def _format_numbered_sources(self, sources: list[SearchResultItem]) -> str:
+        """LLM judge에 전달할 numbered source 목록 생성"""
+        return "\n".join(
+            f"Source {index}\n"
+            f"Title: {source.title}\n"
+            f"Snippet: {source.snippet}\n"
+            f"URL: {source.url}"
+            for index, source in enumerate(sources, start=1)
+        )
+
+    def _finalize_search_quality(
+        self,
+        query: str,
+        sources: list[SearchResultItem],
+        analysis: QueryAnalysis,
+        judge_result: SearchQualityJudgeResult,
+    ) -> tuple[list[SearchResultItem], SearchQuality]:
+        """LLM judge 결과를 API 응답용 quality로 정규화"""
+        source_count = len(sources)
+        accepted_ids = list(dict.fromkeys(judge_result.accepted_source_ids))
+        has_invalid_source_id = any(source_id < 1 or source_id > source_count for source_id in accepted_ids)
+
+        if has_invalid_source_id:
+            return [], self._build_failed_search_quality(
+                source_count=source_count,
+                reason="검색 품질 판단 결과에 유효하지 않은 출처가 포함됐어요.",
+                retry_suggestion=self._build_retry_guidance(query),
+            )
+
+        accepted_sources = [
+            sources[source_id - 1]
+            for source_id in accepted_ids
+        ]
+        freshness = True if not analysis.recency_intent else judge_result.freshness
+        has_enough_sources = len(accepted_sources) >= self.settings.search_min_relevant_results
+        is_sufficient = (
+            judge_result.is_sufficient
+            and judge_result.relevance
+            and freshness
+            and judge_result.specificity
+            and has_enough_sources
+        )
+        reason = judge_result.reason
+        retry_suggestion = judge_result.retry_suggestion
+        if not is_sufficient:
+            reason = reason or "검색 결과가 주제와 충분히 관련되어 있지 않아요."
+            retry_suggestion = retry_suggestion or self._build_retry_guidance(query)
+
+        quality = SearchQuality(
+            is_sufficient=is_sufficient,
+            source_count=source_count,
+            relevant_source_count=len(accepted_sources),
+            dropped_source_count=source_count - len(accepted_sources),
+            relevance=judge_result.relevance,
+            freshness=freshness,
+            specificity=judge_result.specificity,
+            reason=None if is_sufficient else reason,
+            retry_suggestion=None if is_sufficient else retry_suggestion,
+        )
+        logger.info(
+            "Search pipeline stage=quality_finalizer query=%r raw_count=%s accepted_count=%s dropped_count=%s sufficient=%s",
+            query,
+            quality.source_count,
+            quality.relevant_source_count,
+            quality.dropped_source_count,
+            quality.is_sufficient,
+        )
+        return accepted_sources, quality
+
+    def _build_failed_search_quality(
+        self,
+        *,
+        source_count: int,
+        reason: str,
+        retry_suggestion: str,
+    ) -> SearchQuality:
+        """LLM judge 실패/무효 결과에 대한 품질 실패 생성"""
+        return SearchQuality(
+            is_sufficient=False,
+            source_count=source_count,
+            relevant_source_count=0,
+            dropped_source_count=source_count,
+            relevance=False,
+            freshness=False,
+            specificity=False,
+            reason=reason,
+            retry_suggestion=retry_suggestion,
+        )
+
+    async def _summarize_results(
+        self,
+        query: str,
+        sources: list[SearchResultItem],
+        analysis: QueryAnalysis,
+    ) -> str:
         """
         LLM을 사용하여 검색 결과 요약
 
@@ -149,9 +529,11 @@ class SearchService:
         source_text = "\n".join(
             f"- {s.title}: {s.snippet}" for s in sources
         )
+        current_date, timezone = current_search_context()
 
         try:
             provider = LLMProviderFactory.create_provider()
+            started_at = time.perf_counter()
             request = LLMRequest(
                 messages=[
                     LLMMessage(
@@ -164,26 +546,58 @@ class SearchService:
                     ),
                     LLMMessage(
                         role="user",
-                        content=f"Query: {query}\n\nSearch Results:\n{source_text}",
+                        content=(
+                            f"Current date: {current_date}\n"
+                            f"Timezone: {timezone}\n"
+                            f"Original query: {query}\n"
+                            f"Enhanced query: {analysis.enhanced_query}\n\n"
+                            f"Search Results:\n{source_text}"
+                        ),
                     ),
                 ],
                 model=get_model_for_provider(),
-                max_tokens=settings.search_summary_max_tokens,
+                max_tokens=self.settings.search_summary_max_tokens,
                 temperature=0.3,
             )
 
+            logger.info(
+                "Search LLM stage=summarization status=start provider=%s model=%s query=%r source_count=%s",
+                self._provider_name(provider),
+                request.model,
+                query,
+                len(sources),
+            )
             response = await provider.chat_completion(request)
+            logger.info(
+                "Search LLM stage=summarization status=success provider=%s model=%s duration_ms=%s response_chars=%s",
+                self._provider_name(provider),
+                request.model,
+                round((time.perf_counter() - started_at) * 1000),
+                len(response.content or ""),
+            )
             return response.content
         except Exception as e:
-            logger.warning(f"LLM summarization failed, using fallback: {e}")
+            logger.exception(
+                "Search LLM stage=summarization status=fallback query=%r enhanced_query=%r source_count=%s error=%s",
+                query,
+                analysis.enhanced_query,
+                len(sources),
+                e,
+            )
             return "\n".join(f"- {s.title}: {s.snippet}" for s in sources)
 
-    async def _generate_topic_prep_card(self, topic: str, sources: list[SearchResultItem]) -> TopicPrepCard:
+    async def _generate_topic_prep_card(
+        self,
+        topic: str,
+        sources: list[SearchResultItem],
+        analysis: QueryAnalysis | None = None,
+    ) -> TopicPrepCard:
         """LLM으로 검색 품질 판정과 준비 카드 내용을 생성"""
         source_text = "\n".join(
             f"- Title: {source.title}\n  Snippet: {source.snippet}\n  URL: {source.url}"
             for source in sources
         )
+        current_date, timezone = current_search_context()
 
         try:
             provider = LLMProviderFactory.create_provider()
@@ -195,11 +609,17 @@ class SearchService:
                     ),
                     LLMMessage(
                         role="user",
-                        content=f"Topic: {topic}\n\nSearch Results:\n{source_text}",
+                        content=(
+                            f"Current date: {current_date}\n"
+                            f"Timezone: {timezone}\n"
+                            f"Topic: {topic}\n"
+                            f"Enhanced query: {analysis.enhanced_query if analysis else topic}\n\n"
+                            f"Search Results:\n{source_text}"
+                        ),
                     ),
                 ],
                 model=get_model_for_provider(),
-                max_tokens=min(settings.max_tokens, 1600),
+                max_tokens=min(self.settings.max_tokens, 1600),
                 temperature=0.2,
             )
             response = await provider.chat_completion(request)
@@ -257,6 +677,13 @@ Respond only in JSON:
         elif "```" in response:
             response = response.split("```")[1].split("```")[0].strip()
         return json.loads(response)
+
+    def _provider_name(self, provider: object) -> str:
+        """로그용 provider 이름 반환"""
+        get_provider_name = getattr(provider, "get_provider_name", None)
+        if callable(get_provider_name):
+            return str(get_provider_name())
+        return provider.__class__.__name__
 
     def _build_topic_prep_card_from_data(
         self,
@@ -409,17 +836,18 @@ Respond only in JSON:
         topic: str,
         sources: list[SearchResultItem],
         reason: str,
+        retry_suggestion: str | None = None,
     ) -> TopicPrepResult:
         """검색 품질 부족 결과 생성"""
         quality = TopicPrepQuality(
             is_sufficient=False,
             source_count=len(sources),
-            has_enough_sources=False,
+            has_enough_sources=len(sources) >= MIN_TOPIC_PREP_SOURCE_COUNT,
             relevance=False,
             freshness=False,
             specificity=False,
             reason=reason,
-            retry_suggestion=self._build_retry_guidance(topic),
+            retry_suggestion=retry_suggestion or self._build_retry_guidance(topic),
         )
         return TopicPrepResult(
             ready=False,
@@ -441,8 +869,10 @@ Respond only in JSON:
         trimmed_topic = topic.strip()
         if not trimmed_topic:
             trimmed_topic = "최근 뉴스"
+        current_date, _timezone = current_search_context()
+        year, month, *_ = current_date.split("-")
         return [
-            f"2026년 5월 {trimmed_topic} 관련 최신 이슈",
+            f"{year}년 {int(month)}월 {trimmed_topic} 관련 최신 이슈",
             f"{trimmed_topic}의 구체적인 사건과 결과",
             f"{trimmed_topic}에 대한 찬반 쟁점",
         ]
