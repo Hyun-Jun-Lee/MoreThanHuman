@@ -9,7 +9,16 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from config import get_settings
 from domains.auth.dependencies import get_auth_service, get_current_user
 from domains.auth.models import UserModel
-from domains.auth.schemas import DevTokenRequest, LoginRequest, LogoutRequest, RefreshRequest, RegisterRequest, TokenResponse, UserProfile
+from domains.auth.schemas import (
+    DevTokenRequest,
+    GoogleMobileLoginRequest,
+    LoginRequest,
+    LogoutRequest,
+    RefreshRequest,
+    RegisterRequest,
+    TokenResponse,
+    UserProfile,
+)
 from domains.auth.service import AuthService
 from shared.exceptions import AuthenticationException, ValidationException
 from shared.types import SuccessResponse
@@ -67,6 +76,24 @@ def issue_dev_token(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=e.message)
     except ValidationException as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
+
+
+@router.post("/google/mobile", response_model=SuccessResponse[TokenResponse])
+def google_mobile_login(
+    request: GoogleMobileLoginRequest,
+    service: AuthService = Depends(get_auth_service),
+):
+    """Flutter Google Sign-In SDK id_token으로 로그인"""
+    try:
+        token = service.login_with_google_id_token(request.id_token, request.device_id)
+        return SuccessResponse(data=token, message="Google 모바일 로그인 성공")
+    except AuthenticationException as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=exc.message)
+    except ValidationException as exc:
+        http_status = (
+            status.HTTP_409_CONFLICT if exc.details.get("code") == "EMAIL_EXISTS" else status.HTTP_400_BAD_REQUEST
+        )
+        raise HTTPException(status_code=http_status, detail=exc.message)
 
 
 @router.post("/refresh", response_model=SuccessResponse[TokenResponse])

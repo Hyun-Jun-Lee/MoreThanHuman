@@ -201,13 +201,26 @@ refresh token을 revoke(로그아웃)해요.
 }
 ```
 
+### `POST /api/auth/google/mobile`
+
+Flutter Google Sign-In SDK에서 받은 `id_token`으로 로그인해 JWT를 발급해요. 서버는 `GOOGLE_CLIENT_ID`를 audience로 사용해 Google `id_token`을 검증해요.
+
+```json
+{
+  "id_token": "google_id_token_from_flutter_sdk",
+  "device_id": "550e8400-e29b-41d4-a716-446655440000"
+}
+```
+
+성공 시 `TokenResponse`를 반환해요. 같은 Google 계정으로 이미 생성된 사용자는 재사용하고, 같은 이메일의 비밀번호 계정이 이미 있으면 자동 연결하지 않고 `409`를 반환해요.
+
 ### `GET /api/auth/google/login?device_id=...`
 
-Google OAuth2 로그인 URL을 반환해요.
+Google OAuth2 로그인 URL을 반환해요. Swagger/웹 확인용 서버 callback OAuth 흐름이에요.
 
 ### `GET /api/auth/google/callback?code=...&state=...`
 
-Google OAuth2 callback code로 JWT를 발급해요.
+Google OAuth2 callback code로 JWT를 발급해요. Swagger/웹 확인용 서버 callback OAuth 흐름이에요.
 
 ### 모바일 Google OAuth 방향
 
@@ -223,7 +236,7 @@ Flutter App
 → TokenResponse 반환
 ```
 
-`POST /api/auth/google/mobile`은 모바일 앱 구현 전에 추가할 예정이에요. 기존 `/api/auth/google/login`과 `/api/auth/google/callback` 흐름은 Swagger/웹 확인용으로 유지할 수 있지만, 모바일 앱의 기본 흐름은 SDK 기반 token verification 방식이에요.
+기존 `/api/auth/google/login`과 `/api/auth/google/callback` 흐름은 Swagger/웹 확인용으로 유지할 수 있지만, 모바일 앱의 기본 흐름은 SDK 기반 token verification 방식이에요.
 
 ### `GET /api/auth/me`
 

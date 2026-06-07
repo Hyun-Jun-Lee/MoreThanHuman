@@ -156,6 +156,65 @@ class AuthService:
 
         return self._issue_token_pair(user_id=user.id, device_id=device_id)
 
+    def login_with_google_id_token(self, google_id_token: str, device_id: str) -> TokenResponse:
+        """Flutter Google Sign-In SDK에서 받은 id_token으로 로그인"""
+        self._validate_device_id(device_id)
+        current_settings = get_settings()
+        if not current_settings.google_client_id:
+            raise ValidationException("Google OAuth가 설정되지 않았습니다")
+
+        payload = self._verify_google_id_token(google_id_token, current_settings.google_client_id)
+        google_id = payload.get("sub")
+        email = payload.get("email")
+        email_verified = payload.get("email_verified", True)
+
+        if not google_id or not email:
+            raise AuthenticationException("Google 인증 정보가 올바르지 않습니다")
+        if email_verified is False:
+            raise AuthenticationException("Google 이메일 인증이 필요합니다")
+
+        name = payload.get("name") or email.split("@")[0]
+        user = self.repository.find_by_oauth("google", google_id)
+        if user:
+            if not user.is_active:
+                raise AuthenticationException("비활성화된 계정입니다")
+            return self._issue_token_pair(user_id=user.id, device_id=device_id)
+
+        existing_email_user = self.repository.find_by_email(email)
+        if existing_email_user:
+            raise ValidationException(
+                "이미 이메일로 가입된 계정입니다",
+                details={"code": "EMAIL_EXISTS"},
+            )
+
+        user = UserModel(
+            id=str(uuid4()),
+            email=email,
+            name=name,
+            oauth_provider="google",
+            oauth_provider_id=google_id,
+        )
+        self.repository.save(user)
+
+        return self._issue_token_pair(user_id=user.id, device_id=device_id)
+
+    @staticmethod
+    def _verify_google_id_token(google_id_token: str, audience: str) -> dict:
+        try:
+            from google.auth.transport import requests as google_requests
+            from google.oauth2 import id_token
+        except ImportError as exc:
+            raise ValidationException("Google 인증 라이브러리가 설치되지 않았습니다") from exc
+
+        try:
+            return id_token.verify_oauth2_token(
+                google_id_token,
+                google_requests.Request(),
+                audience,
+            )
+        except ValueError as exc:
+            raise AuthenticationException("Google id_token 검증에 실패했습니다") from exc
+
     def refresh(self, refresh_token: str, device_id: str) -> TokenResponse:
         self._validate_device_id(device_id)
         token_hash = self._hash_refresh_token(refresh_token)
