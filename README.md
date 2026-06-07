@@ -209,6 +209,22 @@ Google OAuth2 로그인 URL을 반환해요.
 
 Google OAuth2 callback code로 JWT를 발급해요.
 
+### 모바일 Google OAuth 방향
+
+Flutter 모바일 앱은 서버 callback JSON 응답보다 Google Sign-In SDK 기반 로그인을 우선해요. 앱이 Google SDK로 `id_token`을 받은 뒤, 서버의 모바일용 Google 로그인 API가 해당 토큰을 검증하고 자체 `access_token`/`refresh_token`을 발급하는 구조예요.
+
+```text
+Flutter App
+→ Google Sign-In SDK로 로그인
+→ Google id_token 획득
+→ POST /api/auth/google/mobile
+   { "id_token": "...", "device_id": "<installation UUID>" }
+→ 서버가 Google id_token 검증
+→ TokenResponse 반환
+```
+
+`POST /api/auth/google/mobile`은 모바일 앱 구현 전에 추가할 예정이에요. 기존 `/api/auth/google/login`과 `/api/auth/google/callback` 흐름은 Swagger/웹 확인용으로 유지할 수 있지만, 모바일 앱의 기본 흐름은 SDK 기반 token verification 방식이에요.
+
 ### `GET /api/auth/me`
 
 현재 사용자 프로필을 반환해요. 인증이 필요해요.
@@ -348,6 +364,8 @@ Query:
 ```text
 /api/conversations/messages/{message_id}/grammar-feedback/stream?token=<access_token>
 ```
+
+모바일 v1에서는 SSE보다 polling을 우선해요. 앱은 대화 응답의 `message_id`로 `GET /api/grammar/message/{message_id}/`를 반복 호출하고, `404`는 아직 피드백 생성 중인 pending 상태로 처리해요. SSE 엔드포인트는 실시간성이 필요해질 때 선택적으로 사용할 수 있어요.
 
 ## Grammar API
 
@@ -559,9 +577,9 @@ Query:
 | `JWT_ALGORITHM` | 아니오 | `HS256` | JWT 알고리즘 |
 | `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` | 아니오 | `1440` | access token 만료 시간 |
 | `JWT_REFRESH_TOKEN_EXPIRE_DAYS` | 아니오 | `15` | refresh token 만료 기간(일) |
-| `GOOGLE_CLIENT_ID` | Google OAuth 사용 시 | 없음 | Google OAuth client ID |
-| `GOOGLE_CLIENT_SECRET` | Google OAuth 사용 시 | 없음 | Google OAuth client secret |
-| `GOOGLE_REDIRECT_URI` | 아니오 | `http://localhost:8010/api/auth/google/callback` | Google OAuth callback |
+| `GOOGLE_CLIENT_ID` | Google OAuth 사용 시 | 없음 | Google OAuth client ID. 모바일 SDK `id_token` 검증의 audience로도 사용 |
+| `GOOGLE_CLIENT_SECRET` | 서버 callback OAuth 사용 시 | 없음 | 서버 callback 기반 Google OAuth client secret |
+| `GOOGLE_REDIRECT_URI` | 서버 callback OAuth 사용 시 | `http://localhost:8010/api/auth/google/callback` | 서버 callback 기반 Google OAuth callback |
 | `ENV` | 아니오 | `prod` | 실행 환경. `dev`/`development`/`local`이면 개발 전용 API 활성화 |
 | `DEBUG` | 아니오 | `false` | 디버그 모드 |
 | `CORS_ORIGINS` | 아니오 | `[]` | CORS 허용 origin 목록 |
@@ -606,7 +624,7 @@ API, 환경변수, 도메인 계약이 바뀌면 같은 작업 단위에서 아�
 - AI 기반 영어 회화 연습
 - 자유 대화와 롤플레이 대화
 - 사용자별 대화 히스토리 관리
-- 문법 체크 및 SSE 기반 비동기 피드백
+- 문법 체크 및 polling/SSE 기반 비동기 피드백
 - 문법 통계
 - OpenRouter/Ollama LLM provider 추상화
 - ddgs 검색 + query analysis + LLM source judge + LLM 요약

@@ -112,6 +112,7 @@ module Auth {
     POST /api/auth/dev/token             -> issueDevToken
     POST /api/auth/refresh               -> refresh
     POST /api/auth/logout                -> logout
+    POST /api/auth/google/mobile         -> loginWithGoogleIdToken  # planned
     GET  /api/auth/google/login?device_id=...          -> googleLogin
     GET  /api/auth/google/callback?code=...&state=...  -> googleCallback
     GET  /api/auth/me                    -> getCurrentUser
@@ -146,6 +147,11 @@ module Auth {
     device_id: String
   }
 
+  type GoogleMobileLoginRequest {
+    id_token: String
+    device_id: String
+  }
+
   type TokenResponse {
     access_token: String
     refresh_token: String
@@ -161,6 +167,8 @@ module Auth {
   }
 }
 ```
+
+`POST /api/auth/google/mobile`은 모바일 앱 구현 전에 추가할 예정인 계약이에요. Flutter 앱은 Google Sign-In SDK에서 받은 `id_token`과 설치 단위 `device_id`를 서버에 전달하고, 서버는 Google 토큰 검증 후 `TokenResponse`를 반환해요. 기존 `/api/auth/google/login`과 `/api/auth/google/callback`은 서버 callback OAuth 흐름으로 유지해요.
 
 ## 5. Conversation 모듈
 
@@ -252,6 +260,8 @@ module Conversation {
   }
 }
 ```
+
+모바일 v1은 문법 피드백 수신에 SSE보다 polling을 우선해요. 앱은 `ConversationResponse.message_id` 또는 `MessageResponse.message_id`를 받은 뒤 `GET /api/grammar/message/{message_id}/`를 반복 호출하고, `404`를 pending 상태로 처리해요. SSE 스트림은 실시간성이 더 중요해질 때 선택적으로 사용해요.
 
 `GET /api/conversations/`는 `updated_at desc`로 정렬된 `PaginatedConversations`를 반환해요.
 
@@ -476,4 +486,5 @@ env {
 - conversation/message 조회와 삭제는 `user_id` ownership을 검증해요.
 - API key, OAuth secret, JWT secret은 서버 환경변수로만 관리해요.
 - Flutter 앱은 백엔드 secret을 직접 보유하지 않아요.
+- Flutter 앱은 Google Sign-In SDK로 받은 `id_token`만 서버에 전달하고, 서버가 Google 토큰을 검증한 뒤 자체 token pair를 발급해요.
 - 외부 LLM/검색 실패는 `ExternalAPIException` 계열로 감싸 응답해요.
