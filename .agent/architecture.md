@@ -89,13 +89,18 @@ domains/{name}/
          → refresh token 검증 + rotate
          → 새 access_token + 새 refresh_token 발급
 
-[사용자] → GET /api/auth/google/login?device_id=...
-         → OAuth state에 device_id 서명
-         → GET /api/auth/google/callback?code=...&state=...
-         → state 검증 후 token pair 발급
+[Flutter 앱] → Google Sign-In SDK로 Google id_token 획득
+             → POST /api/auth/google/mobile { id_token, device_id }
+             → 서버가 Google id_token 검증
+             → access_token(JWT) + refresh_token 발급
+
+[Swagger/웹 확인] → GET /api/auth/google/login?device_id=...
+                 → OAuth state에 device_id 서명
+                 → GET /api/auth/google/callback?code=...&state=...
+                 → state 검증 후 token pair 발급
 ```
 
-인증이 필요한 API는 `Authorization: Bearer <token>` 헤더를 사용해요. SSE 문법 피드백 스트림은 클라이언트 제약을 고려해 토큰 쿼리 파라미터도 지원해요.
+인증이 필요한 API는 `Authorization: Bearer <token>` 헤더를 사용해요. 모바일 v1은 Google OAuth에서 SDK 기반 id token 검증 흐름을 우선하고, 서버 callback JSON 응답 흐름은 Swagger/웹 확인용으로 유지해요.
 
 ### 대화
 
@@ -111,8 +116,12 @@ domains/{name}/
 ### 문법 피드백
 
 ```text
-[클라이언트] → GET /api/conversations/messages/{message_id}/grammar-feedback/stream
-             → SSE로 GrammarFeedback 또는 timeout/error 수신
+[모바일 앱] → GET /api/grammar/message/{message_id}/
+           → 피드백이 없으면 404를 pending으로 처리하고 짧은 간격으로 재시도
+           → GrammarFeedback 수신 또는 앱 timeout 처리
+
+[선택적 실시간 경로] → GET /api/conversations/messages/{message_id}/grammar-feedback/stream
+                    → SSE로 GrammarFeedback 또는 timeout/error 수신
 ```
 
 ### 검색
@@ -150,6 +159,7 @@ domains/{name}/
 
 - API 키와 JWT secret은 환경변수로만 관리해요.
 - 클라이언트에는 OpenRouter, Google OAuth secret, JWT secret을 노출하지 않아요.
+- Flutter 앱은 Google `id_token`만 서버에 전달하고 Google client secret을 보유하지 않아요.
 - 비밀번호는 bcrypt로 해싱해 저장해요.
 - refresh token은 원문 대신 해시를 저장하고, 기기(installation) 단위로 rotate/revoke 해요.
 - 대화와 메시지는 `user_id`로 소유자를 분리해요.
