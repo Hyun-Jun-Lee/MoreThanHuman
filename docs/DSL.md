@@ -112,7 +112,7 @@ module Auth {
     POST /api/auth/dev/token             -> issueDevToken
     POST /api/auth/refresh               -> refresh
     POST /api/auth/logout                -> logout
-    POST /api/auth/google/mobile         -> loginWithGoogleIdToken  # planned
+    POST /api/auth/google/mobile         -> loginWithGoogleIdToken
     GET  /api/auth/google/login?device_id=...          -> googleLogin
     GET  /api/auth/google/callback?code=...&state=...  -> googleCallback
     GET  /api/auth/me                    -> getCurrentUser
@@ -168,7 +168,7 @@ module Auth {
 }
 ```
 
-`POST /api/auth/google/mobile`은 모바일 앱 구현 전에 추가할 예정인 계약이에요. Flutter 앱은 Google Sign-In SDK에서 받은 `id_token`과 설치 단위 `device_id`를 서버에 전달하고, 서버는 Google 토큰 검증 후 `TokenResponse`를 반환해요. 기존 `/api/auth/google/login`과 `/api/auth/google/callback`은 서버 callback OAuth 흐름으로 유지해요.
+`POST /api/auth/google/mobile`은 Flutter 앱이 Google Sign-In SDK에서 받은 `id_token`과 설치 단위 `device_id`를 서버에 전달하는 모바일 기본 로그인 API예요. 서버는 `GOOGLE_CLIENT_ID`를 audience로 Google 토큰을 검증한 뒤 `TokenResponse`를 반환해요. 같은 Google 계정은 기존 사용자를 재사용하고, 같은 이메일의 비밀번호 계정이 있으면 자동 연결하지 않고 `409`를 반환해요. 기존 `/api/auth/google/login`과 `/api/auth/google/callback`은 서버 callback OAuth 흐름으로 유지해요.
 
 ## 5. Conversation 모듈
 

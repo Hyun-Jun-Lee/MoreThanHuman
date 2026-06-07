@@ -31,6 +31,13 @@ class DevTokenRequest(BaseModel):
     device_id: str = Field(default="swagger-local", min_length=1, max_length=64)
 
 
+class GoogleMobileLoginRequest(BaseModel):
+    """Flutter Google Sign-In SDK id_token 로그인 요청"""
+
+    id_token: str = Field(min_length=1)
+    device_id: str = Field(min_length=1, max_length=64)
+
+
 class RefreshRequest(BaseModel):
     """토큰 갱신 요청"""
 
