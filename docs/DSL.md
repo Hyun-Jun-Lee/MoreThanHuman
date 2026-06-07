@@ -305,8 +305,10 @@ module Search {
   service SearchService {
     async function search(query: String) -> SearchResult
     async function prepareTopic(topic: String) -> TopicPrepResult
-    async function searchDuckDuckGo(query: String) -> List<SearchResultItem>
-    async function summarizeResults(query: String, sources: List<SearchResultItem>) -> String
+    async function prepareSearchResults(query: String) -> PreparedSearchResult
+    async function analyzeQuery(query: String) -> QueryAnalysis
+    async function searchDuckDuckGo(query: String, analysis?: QueryAnalysis) -> List<SearchResultItem>
+    async function summarizeResults(query: String, sources: List<SearchResultItem>, analysis: QueryAnalysis) -> String
   }
 
   type SearchRequest {
@@ -315,8 +317,13 @@ module Search {
 
   type SearchResult {
     query: String
-    summary: String
+    enhanced_query: String
+    ready: Boolean
+    summary?: String
     sources: List<SearchResultItem>
+    quality: SearchQuality
+    retry_guidance?: String
+    example_queries: List<String>
     timestamp: DateTime
   }
 
@@ -324,6 +331,29 @@ module Search {
     title: String
     url: String
     snippet: String
+  }
+
+  type SearchQuality {
+    is_sufficient: Boolean
+    source_count: Integer
+    relevant_source_count: Integer
+    dropped_source_count: Integer
+    relevance: Boolean
+    freshness: Boolean
+    specificity: Boolean
+    reason?: String
+    retry_suggestion?: String
+  }
+
+  type QueryAnalysis {
+    original_query: String
+    canonical_topic: String
+    required_phrases: List<String>
+    required_tokens: List<String>
+    context_terms: List<String>
+    recency_intent: Boolean
+    exclude_terms: List<String>
+    enhanced_query: String
   }
 
   type TopicPrepRequest {
@@ -405,13 +435,13 @@ module LLM {
 ```dsl
 env {
   DATABASE_URL?: String
-  OPENROUTER_API_KEY?: String
-  LLM_PROVIDER: "openrouter" | "ollama"
+  OPENROUTER_API_KEY: String
+  LLM_PROVIDER?: "openrouter" | "ollama" = "openrouter"
   OLLAMA_BASE_URL?: String
   OPENROUTER_MODEL?: String
   OLLAMA_MODEL?: String
 
-  GRAMMAR_MODEL_PROVIDER?: "openrouter" | "ollama"
+  GRAMMAR_MODEL_PROVIDER?: "openrouter" | "ollama" = "openrouter"
   GRAMMAR_OPENROUTER_MODEL?: String
   GRAMMAR_OLLAMA_MODEL?: String
 
@@ -428,6 +458,14 @@ env {
   MAX_TOKENS?: Integer
   TEMPERATURE?: Float
   SEARCH_SUMMARY_MAX_TOKENS?: Integer
+  SEARCH_QUERY_ANALYSIS_MAX_TOKENS?: Integer
+  SEARCH_QUALITY_JUDGE_MAX_TOKENS?: Integer
+  SEARCH_REGION?: String
+  SEARCH_SAFESEARCH?: String
+  SEARCH_RECENT_TIMELIMIT?: String
+  SEARCH_BACKEND?: String
+  SEARCH_MAX_RESULTS?: Integer
+  SEARCH_MIN_RELEVANT_RESULTS?: Integer
   MAX_HISTORY_TURNS?: Integer
 }
 ```

@@ -15,12 +15,51 @@ class SearchResultItem(BaseModel):
     snippet: str
 
 
+class SearchQuality(BaseModel):
+    """검색 품질 판정"""
+
+    is_sufficient: bool
+    source_count: int
+    relevant_source_count: int
+    dropped_source_count: int
+    relevance: bool
+    freshness: bool
+    specificity: bool
+    reason: str | None = None
+    retry_suggestion: str | None = None
+
+
+class RejectedSearchSource(BaseModel):
+    """LLM이 탈락시킨 검색 출처"""
+
+    id: int
+    reason: str
+
+
+class SearchQualityJudgeResult(BaseModel):
+    """LLM source judge 응답"""
+
+    is_sufficient: bool
+    accepted_source_ids: list[int] = Field(default_factory=list)
+    rejected_sources: list[RejectedSearchSource] = Field(default_factory=list)
+    relevance: bool
+    freshness: bool
+    specificity: bool
+    reason: str | None = None
+    retry_suggestion: str | None = None
+
+
 class SearchResult(BaseModel):
     """검색 결과"""
 
     query: str
-    summary: str
+    enhanced_query: str
+    ready: bool
+    summary: str | None = None
     sources: list[SearchResultItem]
+    quality: SearchQuality
+    retry_guidance: str | None = None
+    example_queries: list[str] = Field(default_factory=list)
     timestamp: datetime
 
 

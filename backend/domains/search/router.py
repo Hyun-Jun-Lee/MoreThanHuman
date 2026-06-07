@@ -2,7 +2,7 @@
 Search API Router
 """
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from domains.auth.dependencies import get_current_user
 from domains.auth.models import UserModel
@@ -18,7 +18,7 @@ router = APIRouter(prefix="/api/search", tags=["search"])
 class SearchRequest(BaseModel):
     """검색 요청"""
 
-    query: str
+    query: str = Field(..., min_length=2, max_length=200)
 
 
 # Dependency

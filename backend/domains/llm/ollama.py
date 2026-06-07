@@ -60,7 +60,10 @@ class OllamaProvider(LLMProvider):
                     usage=data.get("usage"),
                 )
             except httpx.HTTPStatusError as e:
-                raise ExternalAPIException(f"Ollama API call failed: {str(e)}")
+                response_body = e.response.text[:500] if e.response is not None else ""
+                raise ExternalAPIException(
+                    f"Ollama API call failed: status={e.response.status_code}, body={response_body}"
+                )
             except httpx.HTTPError as e:
                 raise ExternalAPIException(f"Ollama API call failed: {str(e)}")
 

@@ -4,12 +4,14 @@ import pytest
 
 from domains.search.schemas import (
     ConversationDirection,
+    SearchQuality,
     SearchResultItem,
     TopicPrepCard,
     TopicPrepDirection,
     TopicPrepQuality,
 )
-from domains.search.service import SearchService
+from domains.search.query import build_rule_query_analysis
+from domains.search.service import PreparedSearchResult, SearchService
 
 
 def _raw_result(index: int) -> dict:
@@ -68,6 +70,24 @@ def _sources() -> list[SearchResultItem]:
     ]
 
 
+def _prepared(topic: str, sources: list[SearchResultItem], is_sufficient: bool = True) -> PreparedSearchResult:
+    return PreparedSearchResult(
+        analysis=build_rule_query_analysis(topic, current_date="2026-06-04"),
+        sources=sources,
+        quality=SearchQuality(
+            is_sufficient=is_sufficient,
+            source_count=len(sources),
+            relevant_source_count=len(sources),
+            dropped_source_count=0,
+            relevance=is_sufficient,
+            freshness=True,
+            specificity=is_sufficient,
+            reason=None if is_sufficient else "검색 결과가 너무 일반적이에요.",
+            retry_suggestion=None if is_sufficient else "팀, 날짜, 경기명을 포함해 다시 입력해보세요.",
+        ),
+    )
+
+
 def _direction_payload() -> list[dict]:
     return [
         {
@@ -88,13 +108,13 @@ def _direction_payload() -> list[dict]:
 async def test_prepare_topic_returns_ready_card_when_search_quality_is_sufficient(monkeypatch):
     service = SearchService()
 
-    async def fake_search(_topic: str):
-        return [_raw_result(1), _raw_result(2), _raw_result(3)]
+    async def fake_prepare(topic: str):
+        return _prepared(topic, _sources())
 
-    async def fake_generate(topic: str, sources: list[SearchResultItem]):
+    async def fake_generate(topic: str, sources: list[SearchResultItem], _analysis=None):
         return _card(topic, sources)
 
-    monkeypatch.setattr(service, "_search_duckduckgo", fake_search)
+    monkeypatch.setattr(service, "_prepare_search_results", fake_prepare)
     monkeypatch.setattr(service, "_generate_topic_prep_card", fake_generate)
 
     result = await service.prepare_topic("recent Dodgers game result")
@@ -111,13 +131,13 @@ async def test_prepare_topic_returns_ready_card_when_search_quality_is_sufficien
 async def test_prepare_topic_rejects_when_source_count_is_too_low(monkeypatch):
     service = SearchService()
 
-    async def fake_search(_topic: str):
-        return [_raw_result(1), _raw_result(2)]
+    async def fake_prepare(topic: str):
+        return _prepared(topic, _sources()[:1], is_sufficient=False)
 
-    async def fail_if_called(_topic: str, _sources: list[SearchResultItem]):
+    async def fail_if_called(_topic: str, _sources: list[SearchResultItem], _analysis=None):
         raise AssertionError("LLM card generation should not run for low source count")
 
-    monkeypatch.setattr(service, "_search_duckduckgo", fake_search)
+    monkeypatch.setattr(service, "_prepare_search_results", fake_prepare)
     monkeypatch.setattr(service, "_generate_topic_prep_card", fail_if_called)
 
     result = await service.prepare_topic("recent game")
@@ -133,13 +153,13 @@ async def test_prepare_topic_rejects_when_source_count_is_too_low(monkeypatch):
 async def test_prepare_topic_rejects_when_llm_quality_gate_fails(monkeypatch):
     service = SearchService()
 
-    async def fake_search(_topic: str):
-        return [_raw_result(1), _raw_result(2), _raw_result(3)]
+    async def fake_prepare(topic: str):
+        return _prepared(topic, _sources())
 
-    async def fake_generate(topic: str, sources: list[SearchResultItem]):
+    async def fake_generate(topic: str, sources: list[SearchResultItem], _analysis=None):
         return _card(topic, sources, is_sufficient=False)
 
-    monkeypatch.setattr(service, "_search_duckduckgo", fake_search)
+    monkeypatch.setattr(service, "_prepare_search_results", fake_prepare)
     monkeypatch.setattr(service, "_generate_topic_prep_card", fake_generate)
 
     result = await service.prepare_topic("요즘 이슈")
