@@ -235,7 +235,12 @@ async def stream_grammar_feedback(
     current_user: UserModel = Depends(get_current_user_from_token_param),
     service: ConversationService = Depends(get_conversation_service),
 ):
-    """SSE로 문법 피드백 스트리밍 (토큰은 쿼리 파라미터로 전달)"""
+    """선택적 SSE 문법 피드백 스트리밍 (토큰은 쿼리 파라미터로 전달)"""
+    try:
+        service.repository.ensure_message_belongs_to_user(str(message_id), current_user.id)
+    except NotFoundException as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.message)
+
     async def event_generator():
         """SSE 이벤트 생성기"""
         max_wait_seconds = 20  # 최대 20초 대기

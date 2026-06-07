@@ -29,7 +29,8 @@
 
 - 문법 피드백은 SSE보다 polling을 우선해요.
 - 앱은 대화 응답의 `message_id`를 기준으로 `GET /api/grammar/message/{message_id}/`를 짧은 간격으로 재시도해요.
-- `404`는 “아직 문법 피드백 생성 중” 상태로 처리하고, 일정 시간 이후에도 없으면 timeout 상태를 보여줘요.
+- `404`는 “아직 문법 피드백 생성 중” 또는 “조회할 수 없는 message” 상태로 처리하고, 일정 시간 이후에도 없으면 timeout 상태를 보여줘요.
+- 서버는 현재 사용자 소유 message만 조회하게 하고, 타 사용자 message는 `404`로 숨겨 ID 존재 여부를 노출하지 않아요.
 - SSE 엔드포인트는 당장 제거하지 않고, 실시간성이 필요해질 때 선택적으로 다시 검토해요.
 
 ## 3. 모바일 앱에서 필요한 상태
@@ -49,14 +50,13 @@
 |--------|------|
 | 모바일 네트워크에서 SSE 연결이 끊김 | 모바일 v1은 polling 우선 |
 | LLM 응답 지연 | 앱에서 전송 중 상태와 취소 흐름 제공 |
-| 문법 피드백이 늦게 도착 | 메시지별 pending 상태 분리 |
+| 문법 피드백이 늦게 도착하거나 조회할 수 없음 | 메시지별 pending/timeout 상태 분리 |
 | 토큰 만료 | refresh token 또는 재로그인 흐름 설계 |
 | 검색/LLM 외부 API 실패 | 사용자에게 재시도 가능한 오류로 노출 |
 | 주제 준비 카드 검색 품질 부족 | 더 구체적인 주제 예시를 보여주고 재입력 유도 |
 
 ## 5. 향후 API 후보
 
-- `POST /api/auth/google/mobile`
 - `GET /api/conversations/{conversation_id}/messages/?cursor=...`
 - `POST /api/conversations/{conversation_id}/cancel-current-response`
 - `GET /api/me/learning-summary`

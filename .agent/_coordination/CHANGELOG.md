@@ -51,3 +51,4 @@
 ## 2026-06-07
 
 - **Google 모바일 로그인 API 구현**: Flutter Google SDK `id_token` 검증용 `/api/auth/google/mobile`과 테스트/문서 계약 추가
+- **문법 피드백 polling 계약 구현**: `/api/grammar/message/{message_id}/`를 모바일 polling primary path로 공식화하고 message ownership 검증/문서/테스트 추가

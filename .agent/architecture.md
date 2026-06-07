@@ -117,7 +117,8 @@ domains/{name}/
 
 ```text
 [모바일 앱] → GET /api/grammar/message/{message_id}/
-           → 피드백이 없으면 404를 pending으로 처리하고 짧은 간격으로 재시도
+           → 현재 사용자 소유 message인지 검증
+           → 피드백이 없거나 접근 불가하면 404를 pending/timeout UX로 처리
            → GrammarFeedback 수신 또는 앱 timeout 처리
 
 [선택적 실시간 경로] → GET /api/conversations/messages/{message_id}/grammar-feedback/stream

@@ -261,7 +261,7 @@ module Conversation {
 }
 ```
 
-모바일 v1은 문법 피드백 수신에 SSE보다 polling을 우선해요. 앱은 `ConversationResponse.message_id` 또는 `MessageResponse.message_id`를 받은 뒤 `GET /api/grammar/message/{message_id}/`를 반복 호출하고, `404`를 pending 상태로 처리해요. SSE 스트림은 실시간성이 더 중요해질 때 선택적으로 사용해요.
+모바일 v1은 문법 피드백 수신에 SSE보다 polling을 우선해요. 앱은 `ConversationResponse.message_id` 또는 `MessageResponse.message_id`를 받은 뒤 `GET /api/grammar/message/{message_id}/`를 반복 호출하고, `404`를 pending 또는 접근 불가 상태로 처리해요. SSE 스트림은 실시간성이 더 중요해질 때 선택적으로 사용해요.
 
 `GET /api/conversations/`는 `updated_at desc`로 정렬된 `PaginatedConversations`를 반환해요.
 
@@ -302,6 +302,8 @@ module Grammar {
   }
 }
 ```
+
+`GET /api/grammar/message/{id}/`는 현재 사용자 소유 대화에 속한 message만 조회해요. `200`은 완료된 `GrammarFeedback`, `404`는 피드백 생성 전 pending·없는 message·타 사용자 message를 의미해요. 타 사용자 message도 `404`로 숨겨 ID 존재 여부를 노출하지 않아요. 인증 헤더가 없으면 현재 `HTTPBearer` 동작에 따라 `403`, 유효하지 않은 token은 `401`로 처리해요.
 
 ## 7. Search 모듈
 
