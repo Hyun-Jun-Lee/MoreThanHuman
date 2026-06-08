@@ -164,6 +164,26 @@ class ConversationRepository:
             raise NotFoundException(f"Message {message_id} not found")
         return message
 
+    def ensure_message_belongs_to_user(self, message_id: str, user_id: str) -> None:
+        """
+        메시지가 사용자의 대화에 속하는지 확인
+
+        Args:
+            message_id: 메시지 ID
+            user_id: 사용자 ID
+
+        Raises:
+            NotFoundException: 메시지가 없거나 사용자 소유가 아닐 때
+        """
+        message = (
+            self.db.query(MessageModel)
+            .join(ConversationModel, MessageModel.conversation_id == ConversationModel.id)
+            .filter(MessageModel.id == message_id, ConversationModel.user_id == user_id)
+            .first()
+        )
+        if not message:
+            raise NotFoundException(f"Message {message_id} not found")
+
     def get_messages(self, conversation_id: str, limit: int = 50, offset: int = 0) -> list[MessageModel]:
         """
         대화의 메시지 조회

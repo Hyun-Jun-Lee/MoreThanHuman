@@ -2,6 +2,7 @@
 Grammar Service Layer
 """
 import json
+from typing import Protocol
 from uuid import uuid4
 
 from config import get_grammar_model_config, get_settings
@@ -10,16 +11,28 @@ from domains.grammar.repository import GrammarRepository
 from domains.grammar.schemas import GrammarAnalysis, GrammarFeedback, GrammarStats
 from domains.llm.factory import LLMProviderFactory
 from domains.llm.schemas import LLMMessage, LLMRequest
-from shared.exceptions import ExternalAPIException, RateLimitException
+from shared.exceptions import ExternalAPIException, NotFoundException, RateLimitException
 
 settings = get_settings()
+
+
+class MessageOwnershipRepository(Protocol):
+    """메시지 소유권 검증에 필요한 저장소 인터페이스"""
+
+    def ensure_message_belongs_to_user(self, message_id: str, user_id: str) -> None:
+        """메시지가 사용자 소유가 아니면 NotFoundException을 발생시킨다."""
 
 
 class GrammarService:
     """문법 서비스"""
 
-    def __init__(self, repository: GrammarRepository):
+    def __init__(
+        self,
+        repository: GrammarRepository,
+        message_ownership_repository: MessageOwnershipRepository | None = None,
+    ):
         self.repository = repository
+        self.message_ownership_repository = message_ownership_repository
 
     async def check_grammar(self, text: str, previous_ai_message: str | None = None) -> GrammarFeedback:
         """
@@ -67,16 +80,22 @@ class GrammarService:
         saved = self.repository.save(feedback_model)
         return saved.id
 
-    def get_feedback(self, message_id: str) -> GrammarFeedback:
+    def get_feedback(self, message_id: str, user_id: str | None = None) -> GrammarFeedback:
         """
         메시지 ID로 피드백 조회
 
         Args:
             message_id: 메시지 ID
+            user_id: 사용자 ID. 제공되면 메시지 소유권을 먼저 확인한다.
 
         Returns:
             문법 피드백
         """
+        if user_id and not self.message_ownership_repository:
+            raise NotFoundException(f"Message {message_id} not found")
+        if user_id and self.message_ownership_repository:
+            self.message_ownership_repository.ensure_message_belongs_to_user(message_id, user_id)
+
         feedback = self.repository.find_by_message_id(message_id)
         return GrammarFeedback.model_validate(feedback)
 

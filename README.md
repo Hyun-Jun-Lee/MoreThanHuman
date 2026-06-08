@@ -378,7 +378,7 @@ Query:
 /api/conversations/messages/{message_id}/grammar-feedback/stream?token=<access_token>
 ```
 
-모바일 v1에서는 SSE보다 polling을 우선해요. 앱은 대화 응답의 `message_id`로 `GET /api/grammar/message/{message_id}/`를 반복 호출하고, `404`는 아직 피드백 생성 중인 pending 상태로 처리해요. SSE 엔드포인트는 실시간성이 필요해질 때 선택적으로 사용할 수 있어요.
+모바일 v1에서는 SSE보다 polling을 우선해요. 앱은 대화 응답의 `message_id`로 `GET /api/grammar/message/{message_id}/`를 반복 호출하고, `404`는 pending 또는 접근 불가 상태로 처리해요. SSE 엔드포인트는 실시간성이 필요해질 때 선택적으로 사용할 수 있어요.
 
 ## Grammar API
 
@@ -394,7 +394,14 @@ Query:
 
 ### `GET /api/grammar/message/{message_id}/`
 
-특정 메시지의 문법 피드백을 조회해요.
+특정 메시지의 문법 피드백을 조회해요. 모바일 v1의 primary polling endpoint예요.
+
+- `200`: 현재 사용자 소유 메시지의 문법 피드백 생성 완료
+- `404`: 피드백 생성 전 pending, 없는 message, 또는 타 사용자 message
+- `403`: 인증 헤더 없음
+- `401`: access token이 유효하지 않음
+
+서버는 `message_id`가 현재 사용자 소유 대화에 속하는지 확인하고, 소유자가 아니면 ID 존재 여부를 노출하지 않도록 `404`를 반환해요. 앱은 `404`를 pending으로 재시도하다가 자체 timeout 이후 안내 상태로 전환하는 것을 권장해요.
 
 ### `GET /api/grammar/stats/`
 

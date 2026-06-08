@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from domains.auth.dependencies import get_current_user
 from domains.auth.models import UserModel
+from domains.conversation.repository import ConversationRepository
 from domains.grammar.repository import GrammarRepository
 from domains.grammar.schemas import GrammarFeedback, GrammarStats
 from domains.grammar.service import GrammarService
@@ -28,7 +29,8 @@ class CheckGrammarRequest(BaseModel):
 def get_grammar_service(db: Session = Depends(get_db)) -> GrammarService:
     """Grammar Service 의존성"""
     repository = GrammarRepository(db)
-    return GrammarService(repository)
+    conversation_repository = ConversationRepository(db)
+    return GrammarService(repository, conversation_repository)
 
 
 # Endpoints
@@ -54,9 +56,9 @@ def get_feedback_by_message(
     current_user: UserModel = Depends(get_current_user),
     service: GrammarService = Depends(get_grammar_service),
 ):
-    """메시지의 문법 피드백 조회"""
+    """모바일 polling용 문법 피드백 조회. 404는 pending 또는 접근 불가 상태로 처리한다."""
     try:
-        feedback = service.get_feedback(message_id)
+        feedback = service.get_feedback(message_id, user_id=current_user.id)
         return SuccessResponse(data=feedback)
     except NotFoundException as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
