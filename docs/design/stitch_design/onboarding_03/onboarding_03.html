@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Convia - Onboarding 3</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "pastel-lilac": "#E8E4F4",
+                        "pastel-cream": "#F6F4EB"
+                    },
+                    "fontFamily": {
+                        "sans": ["Inter", "sans-serif"],
+                        "inter": ["Inter", "sans-serif"]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+      font-family: 'Inter', sans-serif;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-white flex flex-col justify-between p-6 md:p-16 md:items-center text-black">
+<!-- Top spacer for layout balance -->
+<div class="flex-none h-4 md:h-12"></div>
+<!-- Main Content Canvas -->
+<main class="flex-1 flex flex-col items-center justify-center w-full max-w-[400px] mx-auto gap-12">
+<!-- Text Content -->
+<div class="text-left w-full flex flex-col gap-4">
+<h1 class="font-inter font-bold text-4xl leading-tight tracking-tight text-black">
+                Improve without pressure.
+            </h1>
+<p class="font-inter text-lg text-gray-600">
+                See gentle suggestions under your messages while the conversation keeps flowing.
+            </p>
+</div>
+<!-- Visual Preview: Chat Bubble with Feedback -->
+<div class="w-full flex flex-col gap-4 mt-8">
+<!-- User Message Bubble -->
+<div class="self-end w-[85%] bg-pastel-lilac text-black rounded-3xl p-6 border-none shadow-none">
+<p class="font-inter text-lg font-medium">I go to Dotonbori yesterday.</p>
+</div>
+<!-- Inline Feedback (Gentle Suggestion) -->
+<div class="self-end w-[95%] bg-pastel-cream rounded-3xl p-6 flex flex-col gap-3 border-none shadow-none">
+<div class="flex items-start gap-3">
+<span class="material-symbols-outlined text-black shrink-0 mt-0.5" style="font-variation-settings: 'FILL' 1;">
+                    lightbulb
+                </span>
+<div class="flex flex-col gap-1">
+<p class="font-inter text-lg text-black">
+<span class="font-semibold mr-1">Try:</span>
+                        I went to Dotonbori yesterday.
+                    </p>
+<p class="font-inter text-sm text-gray-500 font-medium">
+                        Why: past tense + place
+                    </p>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Bottom Navigation / Action Area -->
+<footer class="flex-none w-full max-w-[400px] mx-auto mt-12 flex flex-col items-center gap-8 pb-5">
+<!-- Progress Dots -->
+<div class="flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-gray-200"></div>
+<div class="w-2 h-2 rounded-full bg-gray-200"></div>
+<div class="w-8 h-2 rounded-full bg-black"></div>
+</div>
+<!-- Action Button -->
+<button class="w-full bg-black text-white font-inter font-semibold text-lg py-5 rounded-full shadow-none transition-transform duration-200 active:scale-[0.98] flex items-center justify-center">
+            Get started
+        </button>
+</footer>
+</body></html>

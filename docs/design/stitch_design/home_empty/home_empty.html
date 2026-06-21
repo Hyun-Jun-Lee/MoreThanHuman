@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Convia - Home</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&amp;family=JetBrains+Mono:wght@500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "primary-container": "#1b1b1b",
+                        "surface-variant": "#e2e2e2",
+                        "on-primary": "#ffffff",
+                        "on-surface-variant": "#4c4546",
+                        "secondary-fixed": "#e2e2e2",
+                        "inverse-surface": "#303030",
+                        "surface-container": "#eeeeee",
+                        "tertiary": "#000000",
+                        "surface-container-lowest": "#ffffff",
+                        "outline-variant": "#cfc4c5",
+                        "on-secondary-container": "#616363",
+                        "outline": "#7e7576",
+                        "background": "#f9f9f9",
+                        "surface-dim": "#dadada",
+                        "error-container": "#ffdad6",
+                        "tertiary-container": "#1b1b1b",
+                        "surface-container-highest": "#e2e2e2",
+                        "surface-bright": "#f9f9f9",
+                        "on-tertiary": "#ffffff",
+                        "on-tertiary-container": "#848484",
+                        "tertiary-fixed-dim": "#c6c6c6",
+                        "on-secondary": "#ffffff",
+                        "on-error-container": "#93000a",
+                        "on-secondary-fixed": "#1a1c1c",
+                        "on-tertiary-fixed": "#1b1b1b",
+                        "surface-container-high": "#e8e8e8",
+                        "secondary": "#5d5f5f",
+                        "primary": "#000000",
+                        "surface-container-low": "#f3f3f3",
+                        "error": "#ba1a1a",
+                        "secondary-fixed-dim": "#c6c6c7",
+                        "tertiary-fixed": "#e2e2e2",
+                        "on-primary-fixed": "#1b1b1b",
+                        "on-error": "#ffffff",
+                        "on-background": "#1b1b1b",
+                        "surface": "#f9f9f9",
+                        "secondary-container": "#dfe0e0",
+                        "primary-fixed-dim": "#c6c6c6",
+                        "on-tertiary-fixed-variant": "#474747",
+                        "inverse-on-surface": "#f1f1f1",
+                        "on-secondary-fixed-variant": "#454747",
+                        "primary-fixed": "#e2e2e2",
+                        "on-primary-container": "#848484",
+                        "on-primary-fixed-variant": "#474747",
+                        "surface-tint": "#5e5e5e",
+                        "on-surface": "#1b1b1b",
+                        "inverse-primary": "#c6c6c6",
+                        "block-lime": "#d9f99d"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "2xl": "1.5rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "section-gap": "96px",
+                        "gutter": "24px",
+                        "container-padding": "32px"
+                    },
+                    "fontFamily": {
+                        "headline": ["Inter", "sans-serif"],
+                        "display": ["Inter", "sans-serif"],
+                        "body": ["Inter", "sans-serif"],
+                        "label": ["JetBrains Mono", "monospace"]
+                    },
+                    "fontSize": {
+                        "display-xl": ["80px", { lineHeight: "0.9", letterSpacing: "-0.04em", fontWeight: "800" }],
+                        "display-xl-mobile": ["48px", { lineHeight: "1.0", letterSpacing: "-0.03em", fontWeight: "800" }],
+                        "display-lg": ["56px", { lineHeight: "1.1", letterSpacing: "-0.02em", fontWeight: "700" }],
+                        "headline-md": ["32px", { lineHeight: "1.2", letterSpacing: "-0.01em", fontWeight: "700" }],
+                        "body-lg": ["20px", { lineHeight: "1.5", letterSpacing: "0", fontWeight: "400" }],
+                        "body-sm": ["16px", { lineHeight: "1.6", letterSpacing: "0", fontWeight: "400" }],
+                        "caption-mono": ["12px", { lineHeight: "1.4", letterSpacing: "0.1em", fontWeight: "500" }],
+                        "label-mono": ["14px", { lineHeight: "1.0", letterSpacing: "0.05em", fontWeight: "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .mono-font {
+            font-family: 'JetBrains Mono', monospace;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface-container-lowest text-on-surface min-h-screen flex flex-col antialiased selection:bg-primary selection:text-on-primary">
+<!-- TopAppBar -->
+<header class="w-full top-0 sticky z-40 bg-surface-container-lowest border-b-2 border-primary">
+<div class="flex items-center justify-between px-gutter py-4 w-full">
+<button class="text-primary hover:bg-surface-container transition-colors p-2 rounded-full cursor-pointer active:scale-95 flex items-center justify-center">
+<span class="material-symbols-outlined" data-icon="menu" style="font-variation-settings: 'FILL' 0;">menu</span>
+</button>
+<h1 class="font-headline text-headline-md font-bold tracking-tighter text-primary">CONVIA</h1>
+<button class="text-primary hover:bg-surface-container transition-colors rounded-full cursor-pointer active:scale-95 flex items-center justify-center w-10 h-10 border-2 border-primary overflow-hidden">
+<img alt="User Profile" class="w-full h-full object-cover" data-alt="A minimalist, high-contrast black and white portrait photo of a sophisticated person looking directly at the camera. The lighting is studio quality, creating sharp shadows and bright highlights consistent with a tech-forward, editorial aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBfIC18OV5HKw9jrIe7YLEqoH6av5xLgdxRggXhrOqfGzqbdvr7VX-FkuSXjxrxiJdqS3M3xHVvTySMYTf_7vnFrb3xN9UkVlzA0jCnMQSohsWmackQqVO2bnmvwi6cerDnXy2HYfxnGToKTc-kTg9JyLb0ato9iuDs_QcF41YtUNijdZeN2_Ohb3cnhfArsiuvkcFVzwJP6xxr35GLHZsXTlTaKYcxNW6lGWC5snZj_ZtC4Mp5DPSX_Gp5kLjd4fFxE0nsImZSbZE"/>
+</button>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-grow w-full max-w-[1440px] mx-auto px-gutter py-12 md:py-24 flex flex-col items-center justify-center text-center pb-32">
+<!-- Welcome Typography -->
+<div class="mb-section-gap w-full max-w-3xl">
+<h2 class="font-display text-display-xl-mobile md:text-display-xl text-primary mb-6">Welcome to Convia</h2>
+<p class="font-body text-body-lg text-on-surface-variant max-w-2xl mx-auto">Your intelligent canvas is clear. What would you like to explore today?</p>
+</div>
+<!-- Oversized Color Block: Suggestions -->
+<div class="w-full max-w-4xl bg-block-lime rounded-[24px] p-8 md:p-16 mb-16 border-2 border-primary flex flex-col items-center justify-center relative overflow-hidden group">
+<span class="mono-font text-caption-mono text-primary uppercase mb-8 block">Suggested Starting Points</span>
+<div class="flex flex-wrap justify-center gap-4">
+<button class="bg-surface-container-lowest text-primary font-label text-label-mono uppercase px-6 py-3 rounded-full border-2 border-primary hover:bg-surface-container transition-colors active:scale-95">
+                    Plan Travel
+                </button>
+<button class="bg-surface-container-lowest text-primary font-label text-label-mono uppercase px-6 py-3 rounded-full border-2 border-primary hover:bg-surface-container transition-colors active:scale-95">
+                    Baseball Stats
+                </button>
+<button class="bg-surface-container-lowest text-primary font-label text-label-mono uppercase px-6 py-3 rounded-full border-2 border-primary hover:bg-surface-container transition-colors active:scale-95">
+                    AI News
+                </button>
+</div>
+<!-- Decorative geometric element -->
+<div class="absolute -right-12 -bottom-12 w-32 h-32 border-2 border-primary rounded-full opacity-20 pointer-events-none group-hover:scale-110 transition-transform duration-500"></div>
+</div>
+<!-- Primary Call to Action -->
+<button class="bg-primary text-on-primary font-label text-label-mono uppercase px-8 py-4 rounded-full border-2 border-primary hover:bg-block-lime hover:text-primary transition-colors duration-300 active:scale-95 shadow-none flex items-center gap-2">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">add</span>
+            Start Conversation
+        </button>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 py-2 bg-surface-container-lowest border-t-2 border-primary md:hidden">
+<!-- Active Item: Home -->
+<a class="flex flex-col items-center justify-center bg-primary text-on-primary rounded-full px-6 py-2 active:scale-90 transition-transform duration-150 group" href="#">
+<span class="material-symbols-outlined mb-1 group-hover:animate-bounce" data-icon="home" style="font-variation-settings: 'FILL' 1;">home</span>
+<span class="font-label text-caption-mono uppercase">Home</span>
+</a>
+<!-- Inactive Items -->
+<a class="flex flex-col items-center justify-center text-on-surface-variant p-2 hover:bg-surface-container-highest rounded-2xl transition-all active:scale-90" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="chat_bubble" style="font-variation-settings: 'FILL' 0;">chat_bubble</span>
+<span class="font-label text-caption-mono uppercase">Chat</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant p-2 hover:bg-surface-container-highest rounded-2xl transition-all active:scale-90" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="history" style="font-variation-settings: 'FILL' 0;">history</span>
+<span class="font-label text-caption-mono uppercase">History</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant p-2 hover:bg-surface-container-highest rounded-2xl transition-all active:scale-90" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="person" style="font-variation-settings: 'FILL' 0;">person</span>
+<span class="font-label text-caption-mono uppercase">Profile</span>
+</a>
+</nav>
+<!-- Desktop Side/Top Nav placeholder to satisfy md:hidden constraints on bottom bar, structurally maintaining the canvas layout -->
+<div class="hidden md:flex fixed top-1/2 -translate-y-1/2 right-8 flex-col gap-4 z-40 bg-surface-container-lowest border-2 border-primary rounded-full p-2">
+<a class="w-12 h-12 flex items-center justify-center bg-primary text-on-primary rounded-full hover:scale-105 transition-transform" href="#" title="Home">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">home</span>
+</a>
+<a class="w-12 h-12 flex items-center justify-center text-primary hover:bg-surface-container rounded-full hover:scale-105 transition-transform" href="#" title="Chat">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">chat_bubble</span>
+</a>
+<a class="w-12 h-12 flex items-center justify-center text-primary hover:bg-surface-container rounded-full hover:scale-105 transition-transform" href="#" title="History">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">history</span>
+</a>
+</div>
+</body></html>

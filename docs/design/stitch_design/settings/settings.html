@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
+<title>Convia Settings</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-surface": "#161c27",
+                        "inverse-surface": "#2a303d",
+                        "surface-dim": "#d4daea",
+                        "on-error-container": "#93000a",
+                        "surface-tint": "#904c29",
+                        "on-primary-fixed-variant": "#733513",
+                        "on-primary-container": "#fffbff",
+                        "on-tertiary": "#ffffff",
+                        "error": "#ba1a1a",
+                        "tertiary-fixed-dim": "#dec1b2",
+                        "tertiary-container": "#877063",
+                        "on-secondary": "#ffffff",
+                        "surface-container-high": "#e3e8f9",
+                        "surface-container-highest": "#dde2f3",
+                        "on-secondary-container": "#765300",
+                        "on-tertiary-fixed-variant": "#574238",
+                        "inverse-primary": "#ffb694",
+                        "primary-fixed": "#ffdbcc",
+                        "on-primary-fixed": "#351000",
+                        "error-container": "#ffdad6",
+                        "surface-variant": "#dde2f3",
+                        "surface": "#ffffff",
+                        "on-background": "#161c27",
+                        "on-error": "#ffffff",
+                        "on-secondary-fixed": "#271900",
+                        "on-primary": "#ffffff",
+                        "background": "#ffffff",
+                        "primary": "#000000",
+                        "inverse-on-surface": "#ecf0ff",
+                        "outline-variant": "#d9c2b8",
+                        "tertiary-fixed": "#fbdccd",
+                        "secondary": "#7c5800",
+                        "outline": "#86736b",
+                        "secondary-fixed-dim": "#f1bf62",
+                        "surface-bright": "#ffffff",
+                        "on-tertiary-container": "#fffbff",
+                        "secondary-container": "#fdca6c",
+                        "on-surface-variant": "#54433c",
+                        "tertiary": "#6d574c",
+                        "surface-container-lowest": "#ffffff",
+                        "secondary-fixed": "#ffdea8",
+                        "surface-container-low": "#f1f3ff",
+                        "primary-container": "#ab613c",
+                        "on-tertiary-fixed": "#28180f",
+                        "on-secondary-fixed-variant": "#5e4200",
+                        "surface-container": "#e8eefe",
+                        "primary-fixed-dim": "#ffb694"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px",
+                        "24px": "0px"
+                    },
+                    "spacing": {
+                        "sm": "12px",
+                        "margin-mobile": "20px",
+                        "lg": "32px",
+                        "xl": "48px",
+                        "xs": "4px",
+                        "base": "8px",
+                        "gutter": "16px",
+                        "md": "20px",
+                        "margin-desktop": "64px"
+                    },
+                    "fontFamily": {
+                        "inter": ["Inter", "sans-serif"],
+                        "mono": ["JetBrains Mono", "monospace"]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            background-color: #FFFFFF;
+            color: #000000;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .tactile-button {
+            transition: transform 0.2s cubic-bezier(0.2, 0, 0, 1), opacity 0.2s;
+        }
+        .tactile-button:active {
+            transform: scale(0.97);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="antialiased min-h-screen flex flex-col items-center bg-white">
+<div class="w-full max-w-[1200px] flex-1 flex flex-col relative px-margin-mobile md:px-margin-desktop py-lg pb-xl">
+<!-- Header -->
+<header class="flex items-center justify-between mb-xl w-full pt-4 sticky top-0 bg-white z-10 pb-4 -mx-margin-mobile px-margin-mobile md:-mx-margin-desktop md:px-margin-desktop border-b border-gray-200">
+<button aria-label="Go back" class="tactile-button p-2 -ml-2 text-black hover:opacity-70">
+<span class="material-symbols-outlined text-[28px]">arrow_back_ios_new</span>
+</button>
+<h1 class="font-inter font-bold text-2xl text-center absolute left-1/2 -translate-x-1/2">Settings</h1>
+<div class="w-10"></div> <!-- Spacer for center alignment -->
+</header>
+<main class="flex flex-col gap-12 w-full max-w-md mx-auto flex-1 mt-4">
+<!-- Account Section -->
+<section class="flex flex-col gap-4">
+<h2 class="font-inter font-bold text-sm text-gray-500 uppercase tracking-widest px-2">Account</h2>
+<div class="p-4 flex items-center justify-between border-t border-b border-gray-200 bg-gray-50">
+<div class="flex items-center gap-6">
+<div class="w-16 h-16 rounded-full bg-gray-200 overflow-hidden flex-shrink-0 grayscale">
+<img class="w-full h-full object-cover" data-alt="A softly lit, minimalist portrait avatar illustration of a user named Hyunjun. The style is warm, vector-based, and inviting, utilizing the primary brand colors of muted terracotta and soft off-white. The background is a flat, soft cream color to match the Gentle Immersion theme." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBvFJNSFCwLSvF3WItQJ9ppVj4K4nKJWz7p011OuO0ps8ZjteG3IStunUgXGF5BHYBX5xIbjtSDslbqJ__9-XzeCpuGUzjEvsrEZKr2ces0WJ2C-VO_vpXJlKGtYP14hgXV5qVlIF7uhKxWxEN3M7mdT21UkdDo78Cs7DVDKfFugSzfVdtfUxtr0fUHX6_SY6zDgfQSg6V4Fsk0r_-Iyyu8eIrxUAlVNIBHj4IOu7Hi2UNzgDQz8zBllRK6zCtCw0pVT-C5AHlaJy8"/>
+</div>
+<div class="flex flex-col">
+<span class="font-inter font-bold text-[20px] leading-tight mb-1">Hyunjun</span>
+<span class="font-mono text-sm text-gray-600">hyunjun@example.com</span>
+<div class="flex items-center gap-1 mt-2 text-black font-mono text-xs">
+<span class="material-symbols-outlined text-[14px]">login</span>
+<span>Logged in via Google</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- App Info Section -->
+<section class="flex flex-col gap-4">
+<h2 class="font-inter font-bold text-sm text-gray-500 uppercase tracking-widest px-2">App</h2>
+<div class="p-4 border-t border-b border-gray-200 bg-gray-50">
+<div class="flex items-center justify-between py-2">
+<span class="font-inter font-bold text-lg">Version</span>
+<span class="font-mono text-base text-black">0.1</span>
+</div>
+</div>
+</section>
+<div class="flex-1"></div>
+<!-- Log Out Button -->
+<button class="tactile-button w-full py-4 mt-xl rounded-full text-white font-inter font-bold text-lg bg-black hover:bg-gray-800 flex items-center justify-center gap-2">
+<span class="material-symbols-outlined">logout</span>
+                Log out
+            </button>
+</main>
+</div>
+</body></html>

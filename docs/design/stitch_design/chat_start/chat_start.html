@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Convia - Chat</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        "colors": {
+                "surface-container-low": "#f3f3f3",
+                "inverse-primary": "#c6c6c6",
+                "tertiary-fixed": "#e2e2e2",
+                "surface-variant": "#e2e2e2",
+                "on-primary-container": "#848484",
+                "on-secondary": "#ffffff",
+                "on-tertiary-fixed": "#1b1b1b",
+                "on-secondary-fixed": "#1a1c1c",
+                "on-error": "#ffffff",
+                "surface": "#ffffff",
+                "primary-container": "#1b1b1b",
+                "outline-variant": "#cfc4c5",
+                "error": "#ba1a1a",
+                "tertiary-fixed-dim": "#c6c6c6",
+                "primary-fixed-dim": "#c6c6c6",
+                "on-primary": "#ffffff",
+                "secondary-fixed-dim": "#c6c6c7",
+                "primary-fixed": "#e2e2e2",
+                "surface-container": "#eeeeee",
+                "on-primary-fixed-variant": "#474747",
+                "surface-container-lowest": "#ffffff",
+                "surface-bright": "#f9f9f9",
+                "error-container": "#ffdad6",
+                "inverse-on-surface": "#f1f1f1",
+                "surface-container-high": "#e8e8e8",
+                "secondary": "#5d5f5f",
+                "secondary-container": "#dfe0e0",
+                "secondary-fixed": "#e2e2e2",
+                "on-surface": "#1b1b1b",
+                "on-secondary-container": "#616363",
+                "primary": "#000000",
+                "background": "#ffffff",
+                "outline": "#7e7576",
+                "on-tertiary-container": "#848484",
+                "on-secondary-fixed-variant": "#454747",
+                "tertiary": "#000000",
+                "surface-dim": "#dadada",
+                "tertiary-container": "#1b1b1b",
+                "on-surface-variant": "#4c4546",
+                "on-tertiary": "#ffffff",
+                "inverse-surface": "#303030",
+                "surface-container-highest": "#e2e2e2",
+                "surface-tint": "#5e5e5e",
+                "on-tertiary-fixed-variant": "#474747",
+                "on-primary-fixed": "#1b1b1b",
+                "on-error-container": "#93000a",
+                "on-background": "#1b1b1b",
+                "block-lime": "#D9F3A6",
+                "block-lilac": "#E0C8FA",
+                "block-mint": "#A2F2D4",
+                "block-peach": "#FFD0B5"
+        },
+        "borderRadius": {
+                "DEFAULT": "0.25rem",
+                "lg": "0.5rem",
+                "xl": "0.75rem",
+                "full": "9999px",
+                "pill": "9999px"
+        },
+        "spacing": {
+            "section": "48px"
+        },
+        "fontFamily": {
+                "headline": [
+                        "Inter"
+                ],
+                "display": [
+                        "Inter"
+                ],
+                "body": [
+                        "Inter"
+                ],
+                "label": [
+                        "JetBrains Mono"
+                ]
+        },
+        "fontSize": {}
+},
+    },
+  }
+</script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="font-body text-on-surface antialiased pb-24 md:pb-0 h-screen flex flex-col items-center bg-background">
+<!-- Top Navigation (Web & Mobile Hybrid Setup) -->
+<header class="flex items-center justify-between px-6 h-16 w-full z-50 bg-surface border-b border-surface-container-high docked top-0 max-w-[1200px]">
+<button aria-label="Menu" class="text-on-surface hover:opacity-80 transition-opacity p-2 -ml-2 active:scale-95 transition-transform">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">menu</span>
+</button>
+<div class="font-headline text-xl font-bold text-primary tracking-tight">
+            Convia
+        </div>
+<!-- Desktop Nav Items (Hidden on Mobile) -->
+<nav class="hidden md:flex gap-8 items-center h-full">
+<a class="flex flex-col items-center justify-center text-primary border-b-2 border-primary h-full px-2" href="#">
+<span class="font-label text-sm uppercase">Chat</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-colors px-2" href="#">
+<span class="font-label text-sm uppercase">Topics</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-colors px-2" href="#">
+<span class="font-label text-sm uppercase">Progress</span>
+</a>
+</nav>
+<button aria-label="User Profile" class="hover:opacity-80 transition-opacity w-8 h-8 rounded-full overflow-hidden active:scale-95 transition-transform">
+<img alt="Avatar" class="w-full h-full object-cover" data-alt="A small, circular avatar portrait of a modern user in a bright, clean setting, wearing neutral warm tones, reflecting a calm and premium aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDLcrXOjxlPfVjmFlClZcj_VXoTkWV__183mKeXO4KrmHMPk7z_ESLzE3E6UckwsuBbTXAV00WMXjqnpoVJTUoCj1RXI5FSMuRl3uOWwuI3g3xTqgD_sgxNukQGrMXVbWjCtokdmwZR5mzdwLIgOZzOapnoxo5YHbTQf7x5W29Q-FIwHBC05FwOprFZIkcgQXuwUhqKWmaerVyvKkR2SuNebYhCcD1qXzhYh5riKKB560Un-RfMEnYiK7KuYoLk8HFAx6Zy5V5Df2Q"/>
+</button>
+</header>
+<!-- Main Canvas -->
+<main class="flex-1 w-full max-w-[1200px] flex flex-col px-6 md:px-16 pt-8 pb-32 md:pb-8 overflow-y-auto">
+<!-- Header -->
+<div class="mb-section flex flex-col items-center text-center">
+<h1 class="font-headline text-3xl md:text-4xl font-bold text-primary mb-2 tracking-tight">Osaka Food Trip</h1>
+<p class="font-body text-base text-on-surface-variant">Let's practice ordering and asking for recommendations.</p>
+</div>
+<!-- Topic Context Card -->
+<div class="bg-surface-container-low rounded-xl p-5 mb-section max-w-2xl mx-auto w-full">
+<div class="flex items-center gap-2 mb-4 text-on-surface-variant">
+<span class="material-symbols-outlined text-[18px]">info</span>
+<span class="font-label text-xs uppercase tracking-widest">Context Keywords</span>
+</div>
+<div class="flex flex-wrap gap-2">
+<span class="bg-surface-container-highest text-primary px-4 py-1.5 rounded-pill font-body text-sm font-medium">Dotonbori</span>
+<span class="bg-surface-container-highest text-primary px-4 py-1.5 rounded-pill font-body text-sm font-medium">takoyaki</span>
+<span class="bg-surface-container-highest text-primary px-4 py-1.5 rounded-pill font-body text-sm font-medium">local spots</span>
+</div>
+</div>
+<!-- Question Cards Section -->
+<div class="max-w-2xl mx-auto w-full mb-section">
+<h2 class="font-label text-sm text-on-surface-variant mb-6 uppercase tracking-widest">Pick one question to start</h2>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+<!-- Unselected Card 1 -->
+<button class="bg-block-lime p-5 rounded-lg text-left hover:opacity-90 transition-opacity active:scale-95">
+<p class="font-body text-base font-medium text-primary">Where is the best takoyaki stand around here?</p>
+</button>
+<!-- Selected Card -->
+<button class="bg-block-lilac p-5 rounded-lg text-left active:scale-95 ring-2 ring-primary ring-offset-2 ring-offset-background">
+<p class="font-body text-base font-medium text-primary">Are there any hidden local spots in Dotonbori?</p>
+</button>
+<!-- Unselected Card 3 -->
+<button class="bg-block-mint p-5 rounded-lg text-left hover:opacity-90 transition-opacity active:scale-95">
+<p class="font-body text-base font-medium text-primary">What do you recommend ordering for a beginner?</p>
+</button>
+</div>
+</div>
+<!-- Chat Stream -->
+<div class="max-w-2xl mx-auto w-full flex flex-col gap-6">
+<!-- User Reply Bubble -->
+<div class="flex justify-end w-full">
+<div class="bg-primary text-on-primary rounded-2xl rounded-tr-none px-5 py-3 max-w-[80%]">
+<p class="font-body text-base">Are there any hidden local spots in Dotonbori? I'd love to avoid the huge crowds if possible.</p>
+</div>
+</div>
+<!-- AI Bubble -->
+<div class="flex justify-start w-full gap-3 items-end">
+<div class="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center text-primary flex-shrink-0 mb-1">
+<span class="material-symbols-outlined text-[16px]">robot_2</span>
+</div>
+<div class="bg-surface-container-low text-primary rounded-2xl rounded-tl-none px-5 py-4 max-w-[80%]">
+<p class="font-body text-base">That's a great question! Dotonbori is famous for its bright lights and crowds, but there are definitely quieter alleys. Hozenji Yokocho is a very narrow, stone-paved alley just south of Dotonbori. It feels like stepping back in time. You can find excellent, traditional restaurants there.<br/><br/>Would you like to try asking how to get there in Japanese?</p>
+</div>
+</div>
+</div>
+</main>
+<!-- Bottom Composer Area -->
+<div class="fixed md:sticky bottom-16 md:bottom-0 w-full max-w-2xl mx-auto px-6 pb-6 pt-4 bg-background z-40 border-t border-surface-container-high md:border-none">
+<div class="flex items-center gap-2 bg-surface-container-low rounded-pill p-2 focus-within:ring-2 focus-within:ring-primary transition-all">
+<button class="w-10 h-10 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high transition-colors">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">mic</span>
+</button>
+<input class="flex-1 bg-transparent border-none focus:ring-0 font-body text-base text-primary placeholder:text-on-surface-variant/70 h-10 px-2 outline-none" placeholder="Type or speak your reply..." type="text"/>
+<button class="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-on-primary hover:opacity-90 active:scale-95 transition-all">
+<span class="material-symbols-outlined text-[18px]" style="font-variation-settings: 'FILL' 1;">send</span>
+</button>
+</div>
+</div>
+<!-- Bottom Navigation Shell (Mobile Only) -->
+<nav class="md:hidden fixed bottom-0 w-full z-50 flex justify-around items-center px-4 py-2 bg-surface border-t border-surface-container-high docked bottom-0 pb-safe">
+<a class="flex flex-col items-center justify-center text-primary bg-surface-container-low rounded-pill px-6 py-1 active:scale-95 transition-all" href="#">
+<span class="material-symbols-outlined mb-1" style="font-variation-settings: 'FILL' 1;">chat_bubble</span>
+<span class="font-label text-[10px] uppercase tracking-widest">Chat</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary px-6 py-1 transition-all" href="#">
+<span class="material-symbols-outlined mb-1" style="font-variation-settings: 'FILL' 0;">local_library</span>
+<span class="font-label text-[10px] uppercase tracking-widest">Topics</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary px-6 py-1 transition-all" href="#">
+<span class="material-symbols-outlined mb-1" style="font-variation-settings: 'FILL' 0;">leaderboard</span>
+<span class="font-label text-[10px] uppercase tracking-widest">Progress</span>
+</a>
+</nav>
+</body></html>

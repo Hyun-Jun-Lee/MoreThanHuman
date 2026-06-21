@@ -52,3 +52,23 @@
 
 - **Google 모바일 로그인 API 구현**: Flutter Google SDK `id_token` 검증용 `/api/auth/google/mobile`과 테스트/문서 계약 추가
 - **문법 피드백 polling 계약 구현**: `/api/grammar/message/{message_id}/`를 모바일 polling primary path로 공식화하고 message ownership 검증/문서/테스트 추가
+
+## 2026-06-11
+
+- **모바일 UX flow/wireframe 문서 작성**: Flutter v1 화면 목록, 사용자 흐름, API 연결 지점을 `docs/mobile-flow-spec.md`에 정리
+
+## 2026-06-20
+
+- **모바일 chat/grammar 디자인 레퍼런스 정리**: 생성 이미지를 `docs/design/references/`에 저장하고 Google Stitch용 프롬프트 문서를 추가
+- **Convia 컬러 팔레트 대안 정리**: Stitch 디자인 시스템의 Sage 계열을 대체할 녹색 제외 컬러 조합 3가지를 이미지로 정리
+- **Stitch 화면 생성 TODO 작성**: Flutter v1 화면을 Stitch로 다시 생성하기 위한 체크리스트 문서를 추가
+- **Stitch 온보딩 프롬프트 작성**: Warm Terracotta & Sand 기준의 온보딩 3장 생성 프롬프트를 추가
+- **Stitch login/home 프롬프트 작성**: Warm Terracotta & Sand 기준의 Login, Home, Home Empty 생성 프롬프트를 추가
+- **Stitch 남은 화면 프롬프트 작성**: Start/Topic, Roleplay, Conversation State, Utility 화면 생성 프롬프트를 추가
+
+## 2026-06-21
+
+- **Stitch 디자인 산출물 정리 사전 점검**: `docs/design/stitch_design/` 파일 구조와 계획 화면명 매핑 후보를 확인
+- **Stitch 디자인 산출물 이름 정리**: 화면 폴더와 HTML/PNG 파일명을 계획 화면명 기준으로 변경하고 산출물 README를 추가
+- **Stitch 화면 산출물 누락 점검**: `start_conversation_sheet` 포함 모든 계획 화면의 PNG/HTML 산출물 존재를 확인하고 TODO를 최신화
+- **모바일 wireframe 문서 필요성 점검**: Stitch 산출물 이후에도 UX flow/API 연결 기준 문서로 유지 가치가 있음을 확인

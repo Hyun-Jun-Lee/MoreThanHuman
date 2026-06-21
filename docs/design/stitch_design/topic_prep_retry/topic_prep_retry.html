@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Topic Prep Retry</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800;900&amp;family=JetBrains+Mono:wght@500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "on-tertiary": "#ffffff",
+                        "surface-container-high": "#e8e8e8",
+                        "tertiary-container": "#1b1b1b",
+                        "secondary-container": "#dfe0e0",
+                        "inverse-primary": "#c6c6c6",
+                        "secondary-fixed": "#e2e2e2",
+                        "secondary": "#5d5f5f",
+                        "outline": "#7e7576",
+                        "tertiary": "#000000",
+                        "surface-bright": "#f9f9f9",
+                        "on-tertiary-fixed": "#1b1b1b",
+                        "inverse-surface": "#303030",
+                        "on-secondary-fixed-variant": "#454747",
+                        "on-primary-container": "#848484",
+                        "on-error-container": "#93000a",
+                        "on-background": "#1b1b1b",
+                        "error-container": "#ffdad6",
+                        "background": "#f9f9f9",
+                        "surface-container-lowest": "#ffffff",
+                        "on-tertiary-container": "#848484",
+                        "on-secondary-container": "#616363",
+                        "on-surface-variant": "#4c4546",
+                        "surface-dim": "#dadada",
+                        "surface-variant": "#e2e2e2",
+                        "outline-variant": "#cfc4c5",
+                        "primary-fixed": "#e2e2e2",
+                        "inverse-on-surface": "#f1f1f1",
+                        "primary-fixed-dim": "#c6c6c6",
+                        "surface": "#f9f9f9",
+                        "surface-container": "#eeeeee",
+                        "surface-container-low": "#f3f3f3",
+                        "tertiary-fixed": "#e2e2e2",
+                        "on-secondary": "#ffffff",
+                        "on-primary-fixed-variant": "#474747",
+                        "secondary-fixed-dim": "#c6c6c7",
+                        "on-tertiary-fixed-variant": "#474747",
+                        "on-secondary-fixed": "#1a1c1c",
+                        "tertiary-fixed-dim": "#c6c6c6",
+                        "surface-tint": "#5e5e5e",
+                        "primary-container": "#1b1b1b",
+                        "on-primary-fixed": "#1b1b1b",
+                        "surface-container-highest": "#e2e2e2",
+                        "error": "#ba1a1a",
+                        "on-surface": "#1b1b1b",
+                        "on-error": "#ffffff",
+                        "primary": "#000000",
+                        "on-primary": "#ffffff",
+                        "brand-lilac": "#d8b4e2", // Added Lilac for specific requirement
+                        "brand-lime": "#bce650",  // Added Lime for specific requirement (hover states)
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.5rem",
+                        "lg": "1.5rem", // Mapped to 24px as per design system
+                        "xl": "1.5rem",
+                        "full": "9999px",
+                        "sm": "0.25rem",
+                        "md": "0.75rem" // Mapped to 12px
+                    },
+                    fontFamily: {
+                        "headline": ["Inter"],
+                        "display": ["Inter"],
+                        "body": ["Inter"],
+                        "label": ["JetBrains Mono"]
+                    },
+                    spacing: {
+                        "section-gap": "96px",
+                        "container-padding": "32px",
+                        "stack-lg": "48px",
+                        "stack-md": "24px",
+                        "stack-sm": "12px",
+                        "gutter": "24px"
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        /* Custom typography utilities based on design system */
+        .display-xl { font-family: 'Inter', sans-serif; font-size: 80px; font-weight: 800; line-height: 0.9; letter-spacing: -0.04em; }
+        .display-xl-mobile { font-family: 'Inter', sans-serif; font-size: 48px; font-weight: 800; line-height: 1.0; letter-spacing: -0.03em; }
+        .display-lg { font-family: 'Inter', sans-serif; font-size: 56px; font-weight: 700; line-height: 1.1; letter-spacing: -0.02em; }
+        .headline-md { font-family: 'Inter', sans-serif; font-size: 32px; font-weight: 700; line-height: 1.2; letter-spacing: -0.01em; }
+        .body-lg { font-family: 'Inter', sans-serif; font-size: 20px; font-weight: 400; line-height: 1.5; letter-spacing: 0; }
+        .body-sm { font-family: 'Inter', sans-serif; font-size: 16px; font-weight: 400; line-height: 1.6; letter-spacing: 0; }
+        .caption-mono { font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 500; line-height: 1.4; letter-spacing: 0.1em; text-transform: uppercase; }
+        .label-mono { font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 600; line-height: 1.0; letter-spacing: 0.05em; text-transform: uppercase; }
+        
+        /* Material Symbols Outline */
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .material-symbols-outlined.filled {
+            font-variation-settings: 'FILL' 1;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface-container-lowest text-on-surface min-h-screen flex flex-col font-body">
+<!-- TopAppBar -->
+<header class="docked full-width top-0 bg-surface dark:bg-surface-container border-b border-primary dark:border-outline flat no shadows z-40 relative">
+<div class="flex justify-between items-center w-full px-6 py-4 max-w-7xl mx-auto">
+<button class="text-primary dark:text-inverse-primary hover:bg-surface-container-high transition-colors p-2 rounded-full flex items-center justify-center active:scale-95 duration-150 group">
+<span class="material-symbols-outlined group-hover:-translate-x-1 transition-transform" data-icon="arrow_back">arrow_back</span>
+</button>
+<h1 class="text-headline-md font-black tracking-tighter text-primary dark:text-on-surface">CONVIA</h1>
+<div class="w-10"></div> <!-- Spacer for centering -->
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-grow max-w-7xl mx-auto w-full px-container-padding py-stack-lg flex flex-col gap-section-gap mb-24">
+<!-- Error State Block -->
+<section class="bg-brand-lilac rounded-lg p-8 md:p-12 border-none">
+<div class="max-w-2xl mx-auto text-center flex flex-col items-center gap-stack-md">
+<div class="bg-primary text-on-primary p-4 rounded-full inline-flex mb-4">
+<span class="material-symbols-outlined filled text-4xl" data-icon="warning">warning</span>
+</div>
+<h2 class="display-xl-mobile md:display-lg text-primary">We need a clearer topic</h2>
+<p class="body-lg text-primary max-w-xl">
+                    The topic you provided was a bit too broad or ambiguous for us to prepare a structured session. Let's try narrowing it down to something more specific.
+                </p>
+<div class="w-full h-px bg-primary opacity-20 my-4"></div>
+<div class="flex flex-col w-full gap-4 sm:flex-row sm:justify-center">
+<button class="bg-primary text-on-primary label-mono py-4 px-8 rounded-full hover:bg-brand-lime hover:text-primary transition-colors border-2 border-primary w-full sm:w-auto">
+                        Edit topic
+                    </button>
+<button class="bg-transparent text-primary label-mono py-4 px-8 rounded-full hover:bg-surface-container-low transition-colors border-2 border-primary w-full sm:w-auto">
+                        Try another idea
+                    </button>
+</div>
+</div>
+</section>
+<!-- Examples List -->
+<section class="max-w-3xl mx-auto w-full flex flex-col gap-stack-md">
+<h3 class="label-mono text-secondary mb-2">Examples to Try</h3>
+<div class="flex flex-col border-t border-primary">
+<a class="group flex justify-between items-center py-6 border-b border-primary hover:bg-surface-container-low transition-colors px-4 -mx-4 rounded-sm" href="#">
+<span class="caption-mono text-primary group-hover:pl-2 transition-all duration-300">"Ordering food at a busy Parisian cafe"</span>
+<span class="material-symbols-outlined text-primary group-hover:translate-x-1 transition-transform" data-icon="arrow_forward">arrow_forward</span>
+</a>
+<a class="group flex justify-between items-center py-6 border-b border-primary hover:bg-surface-container-low transition-colors px-4 -mx-4 rounded-sm" href="#">
+<span class="caption-mono text-primary group-hover:pl-2 transition-all duration-300">"Asking for directions to the nearest train station"</span>
+<span class="material-symbols-outlined text-primary group-hover:translate-x-1 transition-transform" data-icon="arrow_forward">arrow_forward</span>
+</a>
+<a class="group flex justify-between items-center py-6 border-b border-primary hover:bg-surface-container-low transition-colors px-4 -mx-4 rounded-sm" href="#">
+<span class="caption-mono text-primary group-hover:pl-2 transition-all duration-300">"Negotiating a price at a local market"</span>
+<span class="material-symbols-outlined text-primary group-hover:translate-x-1 transition-transform" data-icon="arrow_forward">arrow_forward</span>
+</a>
+<a class="group flex justify-between items-center py-6 border-b border-primary hover:bg-surface-container-low transition-colors px-4 -mx-4 rounded-sm" href="#">
+<span class="caption-mono text-primary group-hover:pl-2 transition-all duration-300">"Making small talk about the weather with a neighbor"</span>
+<span class="material-symbols-outlined text-primary group-hover:translate-x-1 transition-transform" data-icon="arrow_forward">arrow_forward</span>
+</a>
+</div>
+</section>
+</main>
+<!-- BottomNavBar (Hidden on desktop, visible on mobile) -->
+<nav class="md:hidden fixed bottom-0 w-full z-50 border-t-2 border-primary dark:border-outline bg-surface dark:bg-surface-container-lowest flat no shadows">
+<div class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 py-3 bg-surface dark:bg-surface-container-lowest">
+<a class="flex flex-col items-center justify-center flex-col items-center justify-center text-secondary dark:text-on-secondary-container px-6 py-1 hover:text-primary dark:hover:text-on-surface transition-all group" href="#">
+<span class="material-symbols-outlined mb-1 group-hover:scale-110 transition-transform" data-icon="school">school</span>
+<span class="text-[14px] font-label-mono font-semibold uppercase tracking-widest caption-mono">Learn</span>
+</a>
+<!-- Intentionally active based on context (Reviewing a topic) -->
+<a class="flex flex-col items-center justify-center flex-col items-center justify-center bg-primary text-on-primary rounded-full px-6 py-1 transform scale-90 duration-200" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="auto_stories">auto_stories</span>
+<span class="text-[14px] font-label-mono font-semibold uppercase tracking-widest caption-mono">Review</span>
+</a>
+<a class="flex flex-col items-center justify-center flex-col items-center justify-center text-secondary dark:text-on-secondary-container px-6 py-1 hover:text-primary dark:hover:text-on-surface transition-all group" href="#">
+<span class="material-symbols-outlined mb-1 group-hover:scale-110 transition-transform" data-icon="mic">mic</span>
+<span class="text-[14px] font-label-mono font-semibold uppercase tracking-widest caption-mono">Speak</span>
+</a>
+<a class="flex flex-col items-center justify-center flex-col items-center justify-center text-secondary dark:text-on-secondary-container px-6 py-1 hover:text-primary dark:hover:text-on-surface transition-all group" href="#">
+<span class="material-symbols-outlined mb-1 group-hover:scale-110 transition-transform" data-icon="person">person</span>
+<span class="text-[14px] font-label-mono font-semibold uppercase tracking-widest caption-mono">Profile</span>
+</a>
+</div>
+</nav>
+</body></html>

@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Convia - Custom Roleplay</title>
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&amp;family=JetBrains+Mono:wght@500;600&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-secondary": "#ffffff",
+                    "tertiary-fixed-dim": "#c6c6c6",
+                    "surface-container-high": "#e8e8e8",
+                    "surface-variant": "#e2e2e2",
+                    "surface-bright": "#f9f9f9",
+                    "primary-fixed-dim": "#c6c6c6",
+                    "on-error": "#ffffff",
+                    "tertiary-fixed": "#e2e2e2",
+                    "on-primary": "#ffffff",
+                    "secondary": "#5d5f5f",
+                    "secondary-fixed-dim": "#c6c6c7",
+                    "surface-container-low": "#f3f3f3",
+                    "on-surface": "#1b1b1b",
+                    "on-primary-fixed-variant": "#474747",
+                    "primary-fixed": "#e2e2e2",
+                    "surface-container-highest": "#e2e2e2",
+                    "error": "#ba1a1a",
+                    "on-tertiary-fixed": "#1b1b1b",
+                    "tertiary": "#000000",
+                    "outline": "#7e7576",
+                    "surface": "#f9f9f9",
+                    "on-tertiary-fixed-variant": "#474747",
+                    "background": "#f9f9f9",
+                    "secondary-fixed": "#e2e2e2",
+                    "on-secondary-fixed": "#1a1c1c",
+                    "on-secondary-container": "#616363",
+                    "surface-container": "#eeeeee",
+                    "surface-container-lowest": "#ffffff",
+                    "on-tertiary-container": "#848484",
+                    "error-container": "#ffdad6",
+                    "on-primary-fixed": "#1b1b1b",
+                    "inverse-primary": "#c6c6c6",
+                    "surface-dim": "#dadada",
+                    "on-error-container": "#93000a",
+                    "inverse-on-surface": "#f1f1f1",
+                    "tertiary-container": "#1b1b1b",
+                    "primary-container": "#1b1b1b",
+                    "on-tertiary": "#ffffff",
+                    "secondary-container": "#dfe0e0",
+                    "on-surface-variant": "#4c4546",
+                    "on-background": "#1b1b1b",
+                    "on-primary-container": "#848484",
+                    "inverse-surface": "#303030",
+                    "primary": "#000000",
+                    "outline-variant": "#cfc4c5",
+                    "surface-tint": "#5e5e5e",
+                    "on-secondary-fixed-variant": "#454747"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "fontFamily": {
+                    "headline": ["Inter"],
+                    "display": ["Inter"],
+                    "body": ["Inter"],
+                    "label": ["JetBrains Mono"]
+            }
+          }
+        }
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        /* Hide scrollbar for a cleaner look in the textarea */
+        textarea::-webkit-scrollbar {
+            width: 8px;
+        }
+        textarea::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        textarea::-webkit-scrollbar-thumb {
+            background-color: #cfc4c5;
+            border-radius: 20px;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface text-primary font-body min-h-screen flex flex-col selection:bg-primary selection:text-on-primary">
+<!-- TopAppBar -->
+<header class="w-full top-0 sticky z-40 bg-surface border-b border-outline">
+<div class="flex justify-between items-center px-8 py-4 max-w-[1440px] mx-auto">
+<div class="flex items-center gap-2 text-primary">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">bubble_chart</span>
+<span class="text-2xl font-black tracking-tighter uppercase">CONVIA</span>
+</div>
+<!-- Desktop Navigation -->
+<nav class="hidden md:flex gap-2 items-center">
+<a class="text-on-surface-variant text-[14px] font-[600] font-label uppercase tracking-widest hover:bg-surface-container-high transition-colors px-6 py-2 rounded-full" href="#">LEARN</a>
+<a class="text-primary font-bold text-[14px] font-label uppercase tracking-widest scale-95 duration-100 bg-surface-container px-6 py-2 rounded-full" href="#">PRACTICE</a>
+<a class="text-on-surface-variant text-[14px] font-[600] font-label uppercase tracking-widest hover:bg-surface-container-high transition-colors px-6 py-2 rounded-full" href="#">PROGRESS</a>
+<a class="text-on-surface-variant text-[14px] font-[600] font-label uppercase tracking-widest hover:bg-surface-container-high transition-colors px-6 py-2 rounded-full" href="#">PROFILE</a>
+</nav>
+</div>
+</header>
+<!-- Main Content -->
+<main class="flex-1 px-4 md:px-8 py-12 md:py-24 max-w-[1024px] mx-auto w-full flex flex-col gap-16 pb-32 md:pb-24">
+<!-- Header Section -->
+<div class="flex flex-col gap-6">
+<h1 class="font-display text-[48px] md:text-[64px] font-[800] leading-[0.9] tracking-[-0.04em] text-primary">
+                Describe your situation.
+            </h1>
+<p class="font-body text-[20px] leading-[1.5] text-on-surface-variant max-w-2xl">
+                Set the scene for your custom roleplay. The AI will adapt perfectly to your scenario, context, and requested difficulty level.
+            </p>
+</div>
+<!-- Input Section -->
+<div class="flex flex-col gap-4">
+<label class="font-label text-[14px] font-[600] tracking-[0.05em] uppercase text-primary ml-2" for="situation-input">
+                Scenario Prompt
+            </label>
+<div class="w-full bg-surface-container-low rounded-[24px] p-6 md:p-8 flex flex-col group transition-colors focus-within:bg-surface-container">
+<textarea class="w-full bg-transparent border-none outline-none resize-none h-48 md:h-56 font-body text-[20px] md:text-[24px] leading-[1.4] text-primary placeholder-outline focus:ring-0 p-0" id="situation-input" placeholder="e.g. I am at a train station in Tokyo and need to buy a ticket to Kyoto, but the machine is broken and I have to ask the staff..."></textarea>
+</div>
+</div>
+<!-- Suggestions / Quick Starts -->
+<div class="flex flex-col gap-4">
+<span class="font-label text-[14px] font-[600] tracking-[0.05em] uppercase text-on-surface-variant ml-2">
+                Quick Starts
+            </span>
+<div class="flex flex-wrap gap-3">
+<button class="quick-start-btn px-6 py-3 rounded-full border-2 border-primary text-primary font-label text-[14px] font-[600] uppercase tracking-widest hover:bg-primary hover:text-on-primary transition-colors" data-text="I am going through airport customs and need to explain the purpose of my visit and what is in my luggage.">Airport Customs</button>
+<button class="quick-start-btn px-6 py-3 rounded-full border-2 border-primary text-primary font-label text-[14px] font-[600] uppercase tracking-widest hover:bg-primary hover:text-on-primary transition-colors" data-text="I am having a formal job interview for a marketing position and need to discuss my past experience.">Job Interview</button>
+<button class="quick-start-btn px-6 py-3 rounded-full border-2 border-primary text-primary font-label text-[14px] font-[600] uppercase tracking-widest hover:bg-primary hover:text-on-primary transition-colors" data-text="I am at the doctor's office trying to describe a persistent headache and ask for a prescription.">Doctor Visit</button>
+<button class="quick-start-btn px-6 py-3 rounded-full border-2 border-primary text-primary font-label text-[14px] font-[600] uppercase tracking-widest hover:bg-primary hover:text-on-primary transition-colors" data-text="I am a lost tourist trying to ask a local for directions to the nearest subway station.">Lost Tourist</button>
+</div>
+</div>
+<!-- Difficulty Configuration -->
+<div class="flex flex-col gap-4">
+<span class="font-label text-[14px] font-[600] tracking-[0.05em] uppercase text-on-surface-variant ml-2">
+                Difficulty Level
+            </span>
+<div class="flex bg-surface-container rounded-full p-1.5 w-full md:max-w-md">
+<button class="difficulty-btn flex-1 py-3 md:py-4 rounded-full text-center font-label text-[14px] font-[600] tracking-widest uppercase text-on-surface-variant hover:text-primary transition-colors">Beginner</button>
+<button class="difficulty-btn flex-1 py-3 md:py-4 rounded-full text-center font-label text-[14px] font-[600] tracking-widest uppercase bg-primary text-on-primary shadow-sm transition-all scale-[0.98]">Intermediate</button>
+<button class="difficulty-btn flex-1 py-3 md:py-4 rounded-full text-center font-label text-[14px] font-[600] tracking-widest uppercase text-on-surface-variant hover:text-primary transition-colors">Advanced</button>
+</div>
+</div>
+<!-- Action Area -->
+<div class="pt-8 flex justify-end">
+<button class="group flex items-center justify-center gap-4 bg-primary text-on-primary px-10 py-6 rounded-full hover:bg-surface-tint transition-all active:scale-95">
+<span class="font-label text-[16px] font-[600] tracking-widest uppercase">Start Roleplay</span>
+<span class="material-symbols-outlined text-[24px] group-hover:translate-x-1 transition-transform" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+</button>
+</div>
+</main>
+<!-- BottomNavBar (Mobile) -->
+<nav class="md:hidden fixed bottom-0 left-0 w-full flex justify-around items-center px-4 bg-surface border-t border-primary z-50 pb-6 pt-2">
+<a class="flex flex-col items-center justify-center text-on-surface-variant px-6 py-2 hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined text-[24px]">school</span>
+<span class="font-label text-[10px] tracking-widest uppercase mt-1">LEARN</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-primary text-on-primary rounded-full px-6 py-2 transition-all scale-90" href="#">
+<span class="material-symbols-outlined text-[24px]" style="font-variation-settings: 'FILL' 1;">forum</span>
+<span class="font-label text-[10px] tracking-widest uppercase mt-1">PRACTICE</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant px-6 py-2 hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined text-[24px]">leaderboard</span>
+<span class="font-label text-[10px] tracking-widest uppercase mt-1">PROGRESS</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant px-6 py-2 hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined text-[24px]">person</span>
+<span class="font-label text-[10px] tracking-widest uppercase mt-1">PROFILE</span>
+</a>
+</nav>
+<!-- Micro-interactions Script -->
+<script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Difficulty Segmented Control Logic
+            const difficultyBtns = document.querySelectorAll('.difficulty-btn');
+            difficultyBtns.forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    difficultyBtns.forEach(b => {
+                        b.classList.remove('bg-primary', 'text-on-primary', 'scale-[0.98]', 'shadow-sm');
+                        b.classList.add('text-on-surface-variant', 'hover:text-primary');
+                    });
+                    const target = e.currentTarget;
+                    target.classList.add('bg-primary', 'text-on-primary', 'scale-[0.98]', 'shadow-sm');
+                    target.classList.remove('text-on-surface-variant', 'hover:text-primary');
+                });
+            });
+
+            // Quick Start Pills Logic
+            const textarea = document.getElementById('situation-input');
+            const quickStartBtns = document.querySelectorAll('.quick-start-btn');
+            quickStartBtns.forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const text = e.currentTarget.getAttribute('data-text');
+                    textarea.value = text;
+                    
+                    // Visual feedback on the pill
+                    quickStartBtns.forEach(b => {
+                        b.classList.remove('bg-primary', 'text-on-primary');
+                        b.classList.add('text-primary');
+                    });
+                    e.currentTarget.classList.remove('text-primary');
+                    e.currentTarget.classList.add('bg-primary', 'text-on-primary');
+                    
+                    // Focus textarea and move cursor to end
+                    textarea.focus();
+                });
+            });
+        });
+    </script>
+</body></html>

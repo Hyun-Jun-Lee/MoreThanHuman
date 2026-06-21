@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Convia - Topic Input</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&amp;family=JetBrains+Mono:wght@500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-tertiary": "#ffffff",
+                        "surface-container-high": "#e8e8e8",
+                        "tertiary-container": "#1b1b1b",
+                        "secondary-container": "#dfe0e0",
+                        "inverse-primary": "#c6c6c6",
+                        "secondary-fixed": "#e2e2e2",
+                        "secondary": "#5d5f5f",
+                        "outline": "#7e7576",
+                        "tertiary": "#000000",
+                        "surface-bright": "#f9f9f9",
+                        "on-tertiary-fixed": "#1b1b1b",
+                        "inverse-surface": "#303030",
+                        "on-secondary-fixed-variant": "#454747",
+                        "on-primary-container": "#848484",
+                        "on-error-container": "#93000a",
+                        "on-background": "#1b1b1b",
+                        "error-container": "#ffdad6",
+                        "background": "#f9f9f9",
+                        "surface-container-lowest": "#ffffff",
+                        "on-tertiary-container": "#848484",
+                        "on-secondary-container": "#616363",
+                        "on-surface-variant": "#4c4546",
+                        "surface-dim": "#dadada",
+                        "surface-variant": "#e2e2e2",
+                        "outline-variant": "#cfc4c5",
+                        "primary-fixed": "#e2e2e2",
+                        "inverse-on-surface": "#f1f1f1",
+                        "primary-fixed-dim": "#c6c6c6",
+                        "surface": "#f9f9f9",
+                        "surface-container": "#eeeeee",
+                        "surface-container-low": "#f3f3f3",
+                        "tertiary-fixed": "#e2e2e2",
+                        "on-secondary": "#ffffff",
+                        "on-primary-fixed-variant": "#474747",
+                        "secondary-fixed-dim": "#c6c6c7",
+                        "on-tertiary-fixed-variant": "#474747",
+                        "on-secondary-fixed": "#1a1c1c",
+                        "tertiary-fixed-dim": "#c6c6c6",
+                        "surface-tint": "#5e5e5e",
+                        "primary-container": "#1b1b1b",
+                        "on-primary-fixed": "#1b1b1b",
+                        "surface-container-highest": "#e2e2e2",
+                        "error": "#ba1a1a",
+                        "on-surface": "#1b1b1b",
+                        "on-error": "#ffffff",
+                        "primary": "#000000",
+                        "on-primary": "#ffffff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.5rem",
+                        "sm": "0.25rem",
+                        "md": "0.75rem",
+                        "lg": "1rem",
+                        "xl": "1.5rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "section-gap": "96px",
+                        "container-padding": "32px",
+                        "stack-lg": "48px",
+                        "stack-md": "24px",
+                        "stack-sm": "12px",
+                        "gutter": "24px"
+                    },
+                    "fontFamily": {
+                        "headline": ["Inter"],
+                        "display": ["Inter"],
+                        "body": ["Inter"],
+                        "label": ["JetBrains Mono"]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #ffffff; /* Explicit pure white background as requested */
+            color: #1b1b1b;
+        }
+        .font-label-mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .tracking-tighter-custom {
+            letter-spacing: -0.04em;
+        }
+        .tracking-widest-custom {
+            letter-spacing: 0.1em;
+        }
+        /* Hide scrollbar for clean horizontal scroll */
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="min-h-screen flex flex-col antialiased">
+<!-- TopAppBar (Transactional - Hidden Navigation Elements) -->
+<header class="flex justify-between items-center w-full px-6 py-4 max-w-7xl mx-auto docked full-width top-0 bg-surface-container-lowest border-b border-primary flat no shadows">
+<button aria-label="Go back" class="flex items-center justify-center p-2 rounded-full hover:bg-surface-container-high transition-colors group">
+<span class="material-symbols-outlined text-primary group-active:scale-95 duration-150 text-2xl" data-icon="arrow_back">arrow_back</span>
+</button>
+<div class="text-headline-md font-black tracking-tighter text-primary">CONVIA</div>
+<!-- Empty div to balance flex-between -->
+<div class="w-10"></div>
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-grow flex flex-col w-full max-w-3xl mx-auto px-6 py-12">
+<!-- Headline Section -->
+<section class="mb-10">
+<h1 class="text-[48px] md:text-[56px] font-extrabold leading-[1.0] tracking-tighter-custom text-primary mb-4">
+                What do you want to talk about?
+            </h1>
+<p class="text-body-lg text-on-surface-variant">
+                Enter a topic, paste a link, or pick an idea to get started.
+            </p>
+</section>
+<!-- Input Area (Subtle Container) -->
+<section class="mb-12">
+<div class="bg-surface-container-low rounded-lg p-1 border border-transparent focus-within:border-primary transition-colors flex items-center shadow-sm">
+<span class="material-symbols-outlined text-secondary ml-4 mr-2" data-icon="search">search</span>
+<input class="w-full bg-transparent border-none focus:ring-0 text-body-lg text-primary placeholder-on-surface-variant py-4 px-2" placeholder="Type a topic or paste a URL..." type="text"/>
+</div>
+</section>
+<!-- Ideas Section -->
+<section class="mb-auto">
+<h2 class="text-[12px] font-label-mono font-semibold uppercase tracking-widest-custom text-secondary mb-6">
+                IDEAS FOR YOU
+            </h2>
+<div class="flex flex-wrap gap-3">
+<!-- Pill 1 -->
+<button class="px-5 py-2.5 rounded-full border border-primary text-primary bg-surface-container-lowest hover:bg-surface-container-high transition-colors font-label-mono text-[14px] font-semibold flex items-center gap-2 group">
+<span class="material-symbols-outlined text-[18px] text-secondary group-hover:text-primary transition-colors" data-icon="smart_toy">smart_toy</span>
+                    AI news
+                </button>
+<!-- Pill 2 -->
+<button class="px-5 py-2.5 rounded-full border border-primary text-primary bg-surface-container-lowest hover:bg-surface-container-high transition-colors font-label-mono text-[14px] font-semibold flex items-center gap-2 group">
+<span class="material-symbols-outlined text-[18px] text-secondary group-hover:text-primary transition-colors" data-icon="laptop_mac">laptop_mac</span>
+                    Apple WWDC
+                </button>
+<!-- Pill 3 -->
+<button class="px-5 py-2.5 rounded-full border border-primary text-primary bg-surface-container-lowest hover:bg-surface-container-high transition-colors font-label-mono text-[14px] font-semibold flex items-center gap-2 group">
+<span class="material-symbols-outlined text-[18px] text-secondary group-hover:text-primary transition-colors" data-icon="sports_baseball">sports_baseball</span>
+                    Lotte Giants
+                </button>
+<!-- Pill 4 -->
+<button class="px-5 py-2.5 rounded-full border border-primary text-primary bg-surface-container-lowest hover:bg-surface-container-high transition-colors font-label-mono text-[14px] font-semibold flex items-center gap-2 group">
+<span class="material-symbols-outlined text-[18px] text-secondary group-hover:text-primary transition-colors" data-icon="movie">movie</span>
+                    Sci-Fi Movies
+                </button>
+</div>
+</section>
+</main>
+<!-- Bottom Action Area (Fixed for mobile, sticky for desktop) -->
+<div class="fixed bottom-0 left-0 w-full bg-gradient-to-t from-white via-white to-transparent pt-12 pb-8 px-6 z-40 flex justify-center pointer-events-none">
+<div class="w-full max-w-3xl flex justify-end pointer-events-auto">
+<button class="bg-primary text-on-primary rounded-full px-8 py-4 flex items-center gap-3 hover:bg-tertiary-container transition-transform active:scale-95 duration-150 shadow-lg">
+<span class="font-label-mono text-[16px] font-semibold tracking-widest-custom uppercase">Prepare</span>
+<span class="material-symbols-outlined text-[24px]" data-icon="arrow_forward">arrow_forward</span>
+</button>
+</div>
+</div>
+<!-- Padding for bottom fixed action area -->
+<div class="h-32"></div>
+<script>
+        // Simple script to handle input focus state visually if needed beyond CSS focus-within
+        const inputField = document.querySelector('input[type="text"]');
+        const inputContainer = inputField.parentElement;
+
+        inputField.addEventListener('focus', () => {
+            inputContainer.classList.add('ring-2', 'ring-primary');
+        });
+
+        inputField.addEventListener('blur', () => {
+            inputContainer.classList.remove('ring-2', 'ring-primary');
+        });
+    </script>
+</body></html>

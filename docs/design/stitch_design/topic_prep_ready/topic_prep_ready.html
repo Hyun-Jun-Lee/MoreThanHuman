@@ -1,0 +1,209 @@
+<!DOCTYPE html><html lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Convia - Topic Prep Ready</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800;900&amp;family=JetBrains+Mono:wght@500;600&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-tertiary": "#ffffff",
+                        "surface-container-high": "#e8e8e8",
+                        "tertiary-container": "#1b1b1b",
+                        "secondary-container": "#dfe0e0",
+                        "inverse-primary": "#c6c6c6",
+                        "secondary-fixed": "#e2e2e2",
+                        "secondary": "#5d5f5f",
+                        "outline": "#7e7576",
+                        "tertiary": "#000000",
+                        "surface-bright": "#f9f9f9",
+                        "on-tertiary-fixed": "#1b1b1b",
+                        "inverse-surface": "#303030",
+                        "on-secondary-fixed-variant": "#454747",
+                        "on-primary-container": "#848484",
+                        "on-error-container": "#93000a",
+                        "on-background": "#1b1b1b",
+                        "error-container": "#ffdad6",
+                        "background": "#f9f9f9",
+                        "surface-container-lowest": "#ffffff",
+                        "on-tertiary-container": "#848484",
+                        "on-secondary-container": "#616363",
+                        "on-surface-variant": "#4c4546",
+                        "surface-dim": "#dadada",
+                        "surface-variant": "#e2e2e2",
+                        "outline-variant": "#cfc4c5",
+                        "primary-fixed": "#e2e2e2",
+                        "inverse-on-surface": "#f1f1f1",
+                        "primary-fixed-dim": "#c6c6c6",
+                        "surface": "#f9f9f9",
+                        "surface-container": "#eeeeee",
+                        "surface-container-low": "#f3f3f3",
+                        "tertiary-fixed": "#e2e2e2",
+                        "on-secondary": "#ffffff",
+                        "on-primary-fixed-variant": "#474747",
+                        "secondary-fixed-dim": "#c6c6c7",
+                        "on-tertiary-fixed-variant": "#474747",
+                        "on-secondary-fixed": "#1a1c1c",
+                        "tertiary-fixed-dim": "#c6c6c6",
+                        "surface-tint": "#5e5e5e",
+                        "primary-container": "#1b1b1b",
+                        "on-primary-fixed": "#1b1b1b",
+                        "surface-container-highest": "#e2e2e2",
+                        "error": "#ba1a1a",
+                        "on-surface": "#1b1b1b",
+                        "on-error": "#ffffff",
+                        "primary": "#000000",
+                        "on-primary": "#ffffff",
+                        "brand-lime": "#D4ED31",
+                        "brand-mint": "#A3E4D7",
+                        "brand-lilac": "#D7BDE2"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "1.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {},
+                    "fontFamily": {
+                        "headline": ["Inter", "sans-serif"],
+                        "display": ["Inter", "sans-serif"],
+                        "body": ["Inter", "sans-serif"],
+                        "label": ["JetBrains Mono", "monospace"]
+                    },
+                    "fontSize": {}
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #ffffff; /* Clean white background */
+            color: #000000;
+        }
+        .font-mono-label {
+            font-family: 'JetBrains Mono', monospace;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .text-display-xl {
+            font-size: 80px;
+            font-weight: 800;
+            line-height: 0.9;
+            letter-spacing: -0.04em;
+        }
+        .text-headline-md {
+            font-size: 32px;
+            font-weight: 700;
+            line-height: 1.2;
+            letter-spacing: -0.01em;
+        }
+        .text-body-lg {
+            font-size: 20px;
+            font-weight: 400;
+            line-height: 1.5;
+        }
+        @media (max-width: 768px) {
+            .text-display-xl {
+                font-size: 48px;
+                line-height: 1.0;
+                letter-spacing: -0.03em;
+            }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased selection:bg-brand-lime selection:text-black">
+<!-- TopAppBar -->
+<header class="flex justify-between items-center w-full px-6 py-4 max-w-7xl mx-auto docked full-width top-0 bg-surface dark:bg-surface-container border-b border-primary dark:border-outline">
+<div class="flex items-center gap-4">
+<button class="text-primary dark:text-inverse-primary hover:bg-surface-container-high transition-colors p-2 rounded-full active:scale-95 duration-150 flex items-center justify-center">
+<span class="material-symbols-outlined">arrow_back</span>
+</button>
+<h1 class="text-headline-md font-black tracking-tighter text-primary dark:text-on-surface">CONVIA</h1>
+</div>
+</header>
+<!-- Main Content -->
+<main class="flex-grow w-full max-w-7xl mx-auto px-6 py-12 md:py-24 space-y-24">
+<!-- Header Section -->
+<section class="space-y-6">
+<h2 class="text-display-xl">Osaka food trip</h2>
+<!-- Summary Block (Mint) -->
+<div class="bg-brand-mint rounded-lg p-8 md:p-12 w-full max-w-4xl border-2 border-transparent">
+<p class="text-headline-md">Dotonbori is known for its vibrant street food scene,g basic menus.</p>
+</div>
+</section>
+<!-- Interaction / Preparation Section -->
+<section class="grid grid-cols-1 md:grid-cols-2 gap-16">
+<!-- Column 1: Direction -->
+<div class="space-y-8">
+<h3 class="font-mono-label text-sm font-semibold text-secondary">Choose a direction</h3>
+<div class="flex flex-wrap gap-4">
+<!-- Outline Pills -->
+<button class="px-6 py-3 rounded-full border-2 border-primary text-primary font-mono-label text-sm hover:bg-brand-lime transition-colors">
+                        Travel guide
+                    </button>
+<button class="px-6 py-3 rounded-full border-2 border-primary text-primary font-mono-label text-sm hover:bg-brand-lime transition-colors">
+                        Restaurant blog
+                    </button>
+<button class="px-6 py-3 rounded-full border-2 border-primary text-primary font-mono-label text-sm hover:bg-brand-lime transition-colors">
+                        Casual chat
+                    </button>
+</div>
+</div>
+<!-- Column 2: First Question -->
+<div class="space-y-8">
+<h3 class="font-mono-label text-sm font-semibold text-secondary">Pick a first question</h3>
+<div class="space-y-4">
+<!-- Selected Black Pill -->
+<button class="w-full text-left px-8 py-4 rounded-full bg-primary text-white font-body text-lg hover:bg-opacity-90 transition-opacity flex justify-between items-center group">
+<span class="">Can you recommend a good takoyaki stand?</span>
+<span class="material-symbols-outlined opacity-0 group-hover:opacity-100 transition-opacity">arrow_forward</span>
+</button>
+<!-- Unselected Outline Pills -->
+<button class="w-full text-left px-8 py-4 rounded-full border-2 border-primary text-primary font-body text-lg hover:bg-surface-container transition-colors">
+                        How do I ask for the check?
+                    </button>
+<button class="w-full text-left px-8 py-4 rounded-full border-2 border-primary text-primary font-body text-lg hover:bg-surface-container transition-colors">
+                        What's the best time to visit Dotonbori?
+                    </button>
+</div>
+</div>
+</section>
+<!-- Action Section -->
+<section class="flex justify-end pt-12 border-t border-primary">
+<button class="flex items-center gap-4 bg-primary text-white px-10 py-5 rounded-full font-mono-label text-base hover:bg-brand-lime hover:text-primary transition-colors group">
+                START ANSWERING
+                <span class="material-symbols-outlined transform group-hover:translate-x-1 transition-transform">arrow_forward</span>
+</button>
+</section>
+</main>
+<!-- BottomNavBar (Hidden on desktop as per rules, visible on mobile) -->
+<nav class="md:hidden fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 py-3 bg-surface dark:bg-surface-container-lowest border-t-2 border-primary dark:border-outline">
+<button class="flex flex-col items-center justify-center text-secondary dark:text-on-secondary-container px-6 py-1 hover:text-primary dark:hover:text-on-surface transition-all">
+<span class="material-symbols-outlined mb-1">school</span>
+<span class="text-[12px] font-label-mono font-semibold uppercase tracking-widest">Learn</span>
+</button>
+<button class="flex flex-col items-center justify-center bg-primary text-on-primary rounded-full px-6 py-1 transform scale-90 duration-200">
+<span class="material-symbols-outlined mb-1">auto_stories</span>
+<span class="text-[12px] font-label-mono font-semibold uppercase tracking-widest">Review</span>
+</button>
+<button class="flex flex-col items-center justify-center text-secondary dark:text-on-secondary-container px-6 py-1 hover:text-primary dark:hover:text-on-surface transition-all">
+<span class="material-symbols-outlined mb-1">mic</span>
+<span class="text-[12px] font-label-mono font-semibold uppercase tracking-widest">Speak</span>
+</button>
+<button class="flex flex-col items-center justify-center text-secondary dark:text-on-secondary-container px-6 py-1 hover:text-primary dark:hover:text-on-surface transition-all">
+<span class="material-symbols-outlined mb-1">person</span>
+<span class="text-[12px] font-label-mono font-semibold uppercase tracking-widest">Profile</span>
+</button>
+</nav>
+<!-- Mobile Padding Spacer -->
+<div class="h-24 md:hidden"></div>
+
+
+</body></html>

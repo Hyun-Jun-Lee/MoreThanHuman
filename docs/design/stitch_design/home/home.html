@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Convia - Home</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&amp;family=JetBrains+Mono:wght@500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "primary-container": "#1b1b1b",
+                      "surface-variant": "#e2e2e2",
+                      "on-primary": "#ffffff",
+                      "on-surface-variant": "#4c4546",
+                      "secondary-fixed": "#e2e2e2",
+                      "inverse-surface": "#303030",
+                      "surface-container": "#eeeeee",
+                      "tertiary": "#000000",
+                      "surface-container-lowest": "#ffffff",
+                      "outline-variant": "#cfc4c5",
+                      "on-secondary-container": "#616363",
+                      "outline": "#7e7576",
+                      "background": "#f9f9f9",
+                      "surface-dim": "#dadada",
+                      "error-container": "#ffdad6",
+                      "tertiary-container": "#1b1b1b",
+                      "surface-container-highest": "#e2e2e2",
+                      "surface-bright": "#f9f9f9",
+                      "on-tertiary": "#ffffff",
+                      "on-tertiary-container": "#848484",
+                      "tertiary-fixed-dim": "#c6c6c6",
+                      "on-secondary": "#ffffff",
+                      "on-error-container": "#93000a",
+                      "on-secondary-fixed": "#1a1c1c",
+                      "on-tertiary-fixed": "#1b1b1b",
+                      "surface-container-high": "#e8e8e8",
+                      "secondary": "#5d5f5f",
+                      "primary": "#000000",
+                      "surface-container-low": "#f3f3f3",
+                      "error": "#ba1a1a",
+                      "secondary-fixed-dim": "#c6c6c7",
+                      "tertiary-fixed": "#e2e2e2",
+                      "on-primary-fixed": "#1b1b1b",
+                      "on-error": "#ffffff",
+                      "on-background": "#1b1b1b",
+                      "surface": "#f9f9f9",
+                      "secondary-container": "#dfe0e0",
+                      "primary-fixed-dim": "#c6c6c6",
+                      "on-tertiary-fixed-variant": "#474747",
+                      "inverse-on-surface": "#f1f1f1",
+                      "on-secondary-fixed-variant": "#454747",
+                      "primary-fixed": "#e2e2e2",
+                      "on-primary-container": "#848484",
+                      "on-primary-fixed-variant": "#474747",
+                      "surface-tint": "#5e5e5e",
+                      "on-surface": "#1b1b1b",
+                      "inverse-primary": "#c6c6c6"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                  "gutter": "24px",
+                  "section-gap": "96px"
+              },
+              "fontFamily": {
+                      "headline": ["Inter", "sans-serif"],
+                      "display": ["Inter", "sans-serif"],
+                      "body": ["Inter", "sans-serif"],
+                      "label": ["JetBrains Mono", "monospace"],
+                      "caption": ["JetBrains Mono", "monospace"]
+              },
+              "fontSize": {}
+            },
+          },
+        }
+    </script>
+<style>
+        /* Custom pastel blocks to supplement the strict palette for the requested aesthetic */
+        .block-lime { background-color: #e5f5d3; }
+        .block-blue { background-color: #dbeafe; }
+        .block-cream { background-color: #fefce8; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-primary font-body antialiased min-h-screen flex flex-col pb-24">
+<!-- TopAppBar -->
+<header class="w-full top-0 sticky bg-background text-primary flex items-center justify-between px-gutter py-4 z-40">
+<div class="flex items-center gap-4 cursor-pointer active:scale-95 transition-transform">
+<span class="material-symbols-outlined text-2xl">menu</span>
+</div>
+<div class="font-headline font-bold tracking-tighter text-2xl text-primary">
+            CONVIA
+        </div>
+<div class="w-8 h-8 rounded-full overflow-hidden bg-surface-variant cursor-pointer active:scale-95 transition-transform flex-shrink-0">
+<img alt="User Profile" class="w-full h-full object-cover" data-alt="A stylized, minimalist avatar illustration of a young person in high contrast black and white with a subtle pastel accent background, suitable for a professional yet energetic tech platform." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB2mg7gUp6Jtw_T_PUoxKOKD91CNJBrhVoKQzTTTikDtPrBIBualA82JiETV4e3HEbL6EC5BabpmQVFbqEtipYYfmu4LQ5wTxk5_BAInoKvwOVEOvKX9p73hKG-_oLKBVeTIQ4iNJkmOHrAvls24Ca_0IbOC-kEsH-0BmtL_t1kh3NnOAJNEAXsWVkXyWR38JklVu5yfoqwPb86H_1oH9hroU20boIJi3hSl5n7g8wqD_1d_MUjlVPXpdruej8WgtJc-evVH9xT9PM"/>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-1 px-gutter pt-8 pb-12 max-w-screen-md mx-auto w-full flex flex-col gap-12">
+<!-- Welcome Section -->
+<section class="flex flex-col gap-6">
+<h1 class="font-display text-5xl md:text-6xl font-extrabold tracking-tighter leading-none text-primary">
+                Hi, Hyunjun
+            </h1>
+<button class="bg-primary text-on-primary rounded-full px-8 py-4 font-label uppercase tracking-widest text-sm flex items-center gap-2 w-max cursor-pointer active:scale-95 transition-transform hover:bg-inverse-surface">
+<span class="material-symbols-outlined text-lg" style="font-variation-settings: 'FILL' 1;">add</span>
+                Start Conversation
+            </button>
+</section>
+<!-- Recent Conversations Section -->
+<section class="flex flex-col gap-6">
+<div class="flex items-center justify-between">
+<h2 class="font-label uppercase tracking-widest text-on-surface-variant text-sm font-semibold">
+                    Recent
+                </h2>
+</div>
+<!-- Bento/Stacked Grid of Blocks -->
+<div class="grid grid-cols-1 gap-4">
+<!-- Lime Block (Travel) -->
+<article class="block-lime rounded-xl p-8 flex flex-col gap-12 cursor-pointer active:scale-[0.98] transition-transform group">
+<div class="flex justify-between items-start">
+<span class="bg-background text-primary px-4 py-1.5 rounded-full font-caption uppercase tracking-widest text-xs font-medium border border-primary/10">
+                            Travel
+                        </span>
+<span class="material-symbols-outlined text-primary opacity-0 group-hover:opacity-100 transition-opacity">arrow_outward</span>
+</div>
+<div>
+<h3 class="font-headline text-3xl font-bold tracking-tight text-primary mb-3">
+                            Osaka food trip
+                        </h3>
+<p class="font-body text-primary/80 text-base leading-relaxed line-clamp-2">
+                            "Let's make sure we hit Dotonbori for Takoyaki first thing. I heard there's a specific stall right by the bridge that's open late."
+                        </p>
+</div>
+</article>
+<!-- Blue Block (Sports) -->
+<article class="block-blue rounded-xl p-8 flex flex-col gap-12 cursor-pointer active:scale-[0.98] transition-transform group">
+<div class="flex justify-between items-start">
+<span class="bg-background text-primary px-4 py-1.5 rounded-full font-caption uppercase tracking-widest text-xs font-medium border border-primary/10">
+                            Sports
+                        </span>
+<span class="material-symbols-outlined text-primary opacity-0 group-hover:opacity-100 transition-opacity">arrow_outward</span>
+</div>
+<div>
+<h3 class="font-headline text-3xl font-bold tracking-tight text-primary mb-3">
+                            Lotte Giants game
+                        </h3>
+<p class="font-body text-primary/80 text-base leading-relaxed line-clamp-2">
+                            "Tickets are secured for section 112. Make sure you wear the away jersey, it's a theme night."
+                        </p>
+</div>
+</article>
+<!-- Cream Block (Roleplay) -->
+<article class="block-cream rounded-xl p-8 flex flex-col gap-12 cursor-pointer active:scale-[0.98] transition-transform group">
+<div class="flex justify-between items-start">
+<span class="bg-background text-primary px-4 py-1.5 rounded-full font-caption uppercase tracking-widest text-xs font-medium border border-primary/10">
+                            Roleplay
+                        </span>
+<span class="material-symbols-outlined text-primary opacity-0 group-hover:opacity-100 transition-opacity">arrow_outward</span>
+</div>
+<div>
+<h3 class="font-headline text-3xl font-bold tracking-tight text-primary mb-3">
+                            Cafe order roleplay
+                        </h3>
+<p class="font-body text-primary/80 text-base leading-relaxed line-clamp-2">
+                            "Hello, welcome to Bean &amp; Leaf. What can I get started for you today? We have a new seasonal oat milk latte."
+                        </p>
+</div>
+</article>
+</div>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 py-3 bg-surface-container-lowest md:hidden">
+<!-- Home (Active) -->
+<a class="flex flex-col items-center justify-center bg-primary text-on-primary rounded-full px-5 py-2 active:scale-90 transition-transform duration-150" href="#">
+<span class="material-symbols-outlined text-xl mb-1" style="font-variation-settings: 'FILL' 1;">home</span>
+<span class="font-label text-[10px] uppercase tracking-wider font-bold">Home</span>
+</a>
+<!-- Chat (Inactive) -->
+<a class="flex flex-col items-center justify-center text-on-surface-variant p-2 active:scale-90 transition-transform duration-150 hover:bg-surface-container rounded-xl" href="#">
+<span class="material-symbols-outlined text-xl mb-1">chat_bubble</span>
+<span class="font-label text-[10px] uppercase tracking-wider">Chat</span>
+</a>
+<!-- History (Inactive) -->
+<a class="flex flex-col items-center justify-center text-on-surface-variant p-2 active:scale-90 transition-transform duration-150 hover:bg-surface-container rounded-xl" href="#">
+<span class="material-symbols-outlined text-xl mb-1">history</span>
+<span class="font-label text-[10px] uppercase tracking-wider">History</span>
+</a>
+<!-- Profile (Inactive) -->
+<a class="flex flex-col items-center justify-center text-on-surface-variant p-2 active:scale-90 transition-transform duration-150 hover:bg-surface-container rounded-xl" href="#">
+<span class="material-symbols-outlined text-xl mb-1">person</span>
+<span class="font-label text-[10px] uppercase tracking-wider">Profile</span>
+</a>
+</nav>
+</body></html>

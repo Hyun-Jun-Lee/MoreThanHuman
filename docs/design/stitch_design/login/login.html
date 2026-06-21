@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Convia - Login</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&amp;family=JetBrains+Mono:wght@500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "primary-container": "#1b1b1b",
+                        "surface-variant": "#e2e2e2",
+                        "on-primary": "#ffffff",
+                        "on-surface-variant": "#4c4546",
+                        "secondary-fixed": "#e2e2e2",
+                        "inverse-surface": "#303030",
+                        "surface-container": "#eeeeee",
+                        "tertiary": "#000000",
+                        "surface-container-lowest": "#ffffff",
+                        "outline-variant": "#cfc4c5",
+                        "on-secondary-container": "#616363",
+                        "outline": "#7e7576",
+                        "background": "#f9f9f9",
+                        "surface-dim": "#dadada",
+                        "error-container": "#ffdad6",
+                        "tertiary-container": "#1b1b1b",
+                        "surface-container-highest": "#e2e2e2",
+                        "surface-bright": "#f9f9f9",
+                        "on-tertiary": "#ffffff",
+                        "on-tertiary-container": "#848484",
+                        "tertiary-fixed-dim": "#c6c6c6",
+                        "on-secondary": "#ffffff",
+                        "on-error-container": "#93000a",
+                        "on-secondary-fixed": "#1a1c1c",
+                        "on-tertiary-fixed": "#1b1b1b",
+                        "surface-container-high": "#e8e8e8",
+                        "secondary": "#5d5f5f",
+                        "primary": "#000000",
+                        "surface-container-low": "#f3f3f3",
+                        "error": "#ba1a1a",
+                        "secondary-fixed-dim": "#c6c6c7",
+                        "tertiary-fixed": "#e2e2e2",
+                        "on-primary-fixed": "#1b1b1b",
+                        "on-error": "#ffffff",
+                        "on-background": "#1b1b1b",
+                        "surface": "#f9f9f9",
+                        "secondary-container": "#dfe0e0",
+                        "primary-fixed-dim": "#c6c6c6",
+                        "on-tertiary-fixed-variant": "#474747",
+                        "inverse-on-surface": "#f1f1f1",
+                        "on-secondary-fixed-variant": "#454747",
+                        "primary-fixed": "#e2e2e2",
+                        "on-primary-container": "#848484",
+                        "on-primary-fixed-variant": "#474747",
+                        "surface-tint": "#5e5e5e",
+                        "on-surface": "#1b1b1b",
+                        "inverse-primary": "#c6c6c6"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {},
+                    "fontFamily": {
+                        "headline": ["Inter"],
+                        "display": ["Inter"],
+                        "body": ["Inter"],
+                        "label": ["JetBrains Mono"]
+                    },
+                    "fontSize": {}
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        
+        /* Typography Scale Utilities based on DS */
+        .text-display-xl { font-size: 80px; font-weight: 800; line-height: 0.9; letter-spacing: -0.04em; }
+        .text-display-xl-mobile { font-size: 48px; font-weight: 800; line-height: 1.0; letter-spacing: -0.03em; }
+        .text-display-lg { font-size: 56px; font-weight: 700; line-height: 1.1; letter-spacing: -0.02em; }
+        .text-headline-md { font-size: 32px; font-weight: 700; line-height: 1.2; letter-spacing: -0.01em; }
+        .text-body-lg { font-size: 20px; font-weight: 400; line-height: 1.5; letter-spacing: 0; }
+        .text-body-sm { font-size: 16px; font-weight: 400; line-height: 1.6; letter-spacing: 0; }
+        .text-caption-mono { font-size: 12px; font-weight: 500; line-height: 1.4; letter-spacing: 0.1em; text-transform: uppercase;}
+        .text-label-mono { font-size: 14px; font-weight: 600; line-height: 1.0; letter-spacing: 0.05em; text-transform: uppercase;}
+        
+        .section-gap { margin-top: 96px; margin-bottom: 96px; }
+        @media (max-width: 768px) {
+            .section-gap { margin-top: 48px; margin-bottom: 48px; }
+        }
+        
+        .bg-pastel-pink { background-color: #ffdad6; } /* Matching error-container for a pastel pink vibe if needed, or custom block color */
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface-container-lowest text-on-surface font-body antialiased min-h-screen flex flex-col">
+<!-- Top Navigation (Shell logic: Supressed for login, but branding kept for top level context if needed, though prompt implies a specific focused layout. Will keep a minimal top bar for brand presence) -->
+<header class="flex items-center justify-between px-6 py-4 w-full bg-surface-container-lowest sticky top-0 z-50">
+<span class="font-headline font-bold text-headline-md tracking-tighter text-primary">CONVIA</span>
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-grow flex flex-col justify-between px-6 md:px-8 max-w-[1440px] mx-auto w-full pt-12 md:pt-24">
+<!-- Hero Section -->
+<div class="flex flex-col gap-6 md:gap-8 max-w-3xl mb-16">
+<h1 class="font-display text-display-xl-mobile md:text-display-xl text-primary">
+                Practice English with your own topics.
+            </h1>
+<p class="font-body text-body-lg text-on-surface-variant max-w-xl">
+                Elevate your fluency by discussing what actually matters to you. Tailored conversations, systematic progress.
+            </p>
+<div class="mt-4">
+<button class="bg-primary text-on-primary font-label text-label-mono px-8 py-4 rounded-full flex items-center justify-center gap-3 hover:bg-[#a3defe] hover:text-primary transition-colors duration-200">
+<img alt="Google Logo" class="w-5 h-5 object-contain" data-alt="A small, stylized, monochrome Google 'G' logo icon designed in a flat, minimalist vector style. High contrast, sharp edges. No background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCkinlYI8aEZE5JA8WcNpQkcf7y-Rmg2Ns7WRug-q_Zwz8dFWuRxwlUK_PvsTa1BTc5gBqSMKWBORPt7NYquOg87aqZdlYUQ37l2ikVltCiYjPqt7wAUupaaxP8f0QOz1rp-IoJZtwdEXwkfCXy7xpbasS21p6ZumOO-xIQyMNHq3mykHcrVQGa_xz7jXDl8OrHeah0eSwxNQmjZ-0AVpcMHKrpA8N-xPO-xRkFuUqNLqJVOQwLRXh8IfoxV3jN-ds-IOYXAz9mmRI"/>
+                    Continue with Google
+                </button>
+</div>
+</div>
+<!-- Topics Block (Color Block Section) -->
+<section class="bg-error-container rounded-t-[24px] rounded-b-none px-6 py-12 md:p-16 w-full -mx-6 md:mx-0 md:w-auto overflow-hidden">
+<div class="flex flex-col gap-8 max-w-4xl mx-auto w-full">
+<h2 class="font-headline text-headline-md text-on-error-container">Your Topics</h2>
+<div class="flex flex-wrap gap-3">
+<!-- Chips -->
+<span class="font-label text-caption-mono bg-surface-container-lowest text-primary px-4 py-2 rounded-full border border-primary hover:bg-primary hover:text-on-primary transition-colors cursor-pointer">
+                        Global News
+                    </span>
+<span class="font-label text-caption-mono bg-surface-container-lowest text-primary px-4 py-2 rounded-full border border-primary hover:bg-primary hover:text-on-primary transition-colors cursor-pointer">
+                        Travel
+                    </span>
+<span class="font-label text-caption-mono bg-surface-container-lowest text-primary px-4 py-2 rounded-full border border-primary hover:bg-primary hover:text-on-primary transition-colors cursor-pointer">
+                        Premier League
+                    </span>
+<span class="font-label text-caption-mono bg-surface-container-lowest text-primary px-4 py-2 rounded-full border border-primary hover:bg-primary hover:text-on-primary transition-colors cursor-pointer">
+                        Technology
+                    </span>
+<span class="font-label text-caption-mono bg-surface-container-lowest text-primary px-4 py-2 rounded-full border border-primary hover:bg-primary hover:text-on-primary transition-colors cursor-pointer">
+                        Modern Art
+                    </span>
+<!-- Add Button -->
+<button class="font-label text-caption-mono bg-transparent text-on-error-container px-4 py-2 rounded-full border-2 border-on-error-container flex items-center gap-1 hover:bg-on-error-container hover:text-error-container transition-colors">
+<span class="material-symbols-outlined text-[16px]">add</span>
+                        Add Topic
+                    </button>
+</div>
+</div>
+</section>
+</main>
+</body></html>

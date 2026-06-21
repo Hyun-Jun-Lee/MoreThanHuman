@@ -1,0 +1,223 @@
+<!DOCTYPE html><html class="light" lang="en" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Convia - Roleplay Setup</title>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect">
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800;900&amp;family=JetBrains+Mono:wght@500;600&amp;display=swap" rel="stylesheet">
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Config from Design System -->
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-secondary": "#ffffff",
+                    "tertiary-fixed-dim": "#c6c6c6",
+                    "surface-container-high": "#e8e8e8",
+                    "surface-variant": "#e2e2e2",
+                    "surface-bright": "#f9f9f9",
+                    "primary-fixed-dim": "#c6c6c6",
+                    "on-error": "#ffffff",
+                    "tertiary-fixed": "#e2e2e2",
+                    "on-primary": "#ffffff",
+                    "secondary": "#5d5f5f",
+                    "secondary-fixed-dim": "#c6c6c7",
+                    "surface-container-low": "#f3f3f3",
+                    "on-surface": "#1b1b1b",
+                    "on-primary-fixed-variant": "#474747",
+                    "primary-fixed": "#e2e2e2",
+                    "surface-container-highest": "#e2e2e2",
+                    "error": "#ba1a1a",
+                    "on-tertiary-fixed": "#1b1b1b",
+                    "tertiary": "#000000",
+                    "outline": "#7e7576",
+                    "surface": "#f9f9f9",
+                    "on-tertiary-fixed-variant": "#474747",
+                    "background": "#f9f9f9",
+                    "secondary-fixed": "#e2e2e2",
+                    "on-secondary-fixed": "#1a1c1c",
+                    "on-secondary-container": "#616363",
+                    "surface-container": "#eeeeee",
+                    "surface-container-lowest": "#ffffff",
+                    "on-tertiary-container": "#848484",
+                    "error-container": "#ffdad6",
+                    "on-primary-fixed": "#1b1b1b",
+                    "inverse-primary": "#c6c6c6",
+                    "surface-dim": "#dadada",
+                    "on-error-container": "#93000a",
+                    "inverse-on-surface": "#f1f1f1",
+                    "tertiary-container": "#1b1b1b",
+                    "primary-container": "#1b1b1b",
+                    "on-tertiary": "#ffffff",
+                    "secondary-container": "#dfe0e0",
+                    "on-surface-variant": "#4c4546",
+                    "on-background": "#1b1b1b",
+                    "on-primary-container": "#848484",
+                    "inverse-surface": "#303030",
+                    "primary": "#000000",
+                    "outline-variant": "#cfc4c5",
+                    "surface-tint": "#5e5e5e",
+                    "on-secondary-fixed-variant": "#454747"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "fontFamily": {
+                    "headline": ["Inter", "sans-serif"],
+                    "display": ["Inter", "sans-serif"],
+                    "body": ["Inter", "sans-serif"],
+                    "label": ["JetBrains Mono", "monospace"]
+            }
+          }
+        }
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        /* Custom utilities based on design system rules */
+        .text-display-xl { font-size: 80px; font-weight: 800; line-height: 0.9; letter-spacing: -0.04em; }
+        .text-display-xl-mobile { font-size: 48px; font-weight: 800; line-height: 1.0; letter-spacing: -0.03em; }
+        .text-headline-md { font-size: 32px; font-weight: 700; line-height: 1.2; letter-spacing: -0.01em; }
+        .text-label-mono { font-size: 14px; font-weight: 600; line-height: 1.0; letter-spacing: 0.05em; }
+        .text-caption-mono { font-size: 12px; font-weight: 500; line-height: 1.4; letter-spacing: 0.1em; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="bg-surface text-on-surface font-body min-h-screen flex flex-col antialiased selection:bg-primary selection:text-on-primary pb-24 md:pb-0">
+<!-- TopAppBar -->
+<header class="w-full top-0 sticky bg-surface dark:bg-background z-40 border-b border-outline dark:border-outline-variant flat no shadows">
+<div class="flex justify-between items-center px-8 py-4 max-w-[1440px] mx-auto">
+<div class="flex items-center gap-4">
+<button aria-label="Go back" class="text-on-surface-variant hover:text-primary transition-colors flex items-center justify-center p-2 rounded-full hover:bg-surface-container-high">
+<span class="material-symbols-outlined text-2xl">arrow_back</span>
+</button>
+</div>
+<div class="text-2xl font-black tracking-tighter text-primary dark:text-on-background">
+                CONVIA
+            </div>
+<div class="w-10"></div> <!-- Spacer for center alignment -->
+</div>
+</header>
+<!-- Main Canvas -->
+<main class="flex-grow w-full max-w-[1440px] mx-auto px-6 md:px-12 xl:px-24 pt-16 md:pt-24 pb-32">
+<!-- Header Section -->
+<section class="max-w-4xl mb-[96px]">
+<p class="font-label text-caption-mono text-on-surface-variant uppercase mb-6">Setup</p>
+<h1 class="font-display text-display-xl-mobile md:text-display-xl text-primary uppercase">
+                Choose a<br>Situation
+            </h1>
+</section>
+<!-- Rhythmic Color Blocks (Scenarios) -->
+<section class="grid md:grid-cols-2 gap-[24px] mb-[96px] grid-cols-2">
+<!-- Block 1 -->
+<button class="group text-left bg-error-container rounded-[24px] flex flex-col justify-between hover:scale-[0.98] transition-transform duration-300 focus:outline-none focus:ring-4 focus:ring-primary focus:ring-offset-4 focus:ring-offset-surface py-6 px-6">
+<div class="flex justify-between items-start w-full">
+<span class="font-label text-caption-mono text-on-error-container uppercase bg-surface/30 px-3 py-1 rounded-full">Casual</span>
+<span class="material-symbols-outlined text-4xl text-on-error-container group-hover:rotate-12 transition-transform">local_cafe</span>
+</div>
+<div>
+<h2 class="font-headline text-on-error-container text-2xl">Cafe Order</h2>
+</div>
+</button>
+<!-- Block 2 -->
+<button class="group text-left bg-secondary-container rounded-[24px] flex flex-col justify-between hover:scale-[0.98] transition-transform duration-300 focus:outline-none focus:ring-4 focus:ring-primary focus:ring-offset-4 focus:ring-offset-surface relative overflow-hidden py-6 px-6">
+<div class="absolute inset-0 bg-primary opacity-0 group-hover:opacity-5 transition-opacity duration-300"></div>
+<div class="flex justify-between items-start w-full relative z-10">
+<span class="font-label text-caption-mono text-on-secondary-container uppercase bg-surface/30 px-3 py-1 rounded-full">Travel</span>
+<span class="material-symbols-outlined text-4xl text-on-secondary-container group-hover:scale-110 transition-transform">hotel</span>
+</div>
+<div class="relative z-10">
+<h2 class="font-headline text-on-secondary-container text-2xl">Hotel Check-in</h2>
+</div>
+</button>
+<!-- Block 3 -->
+<button class="group text-left bg-surface-variant rounded-[24px] flex flex-col justify-between hover:scale-[0.98] transition-transform duration-300 focus:outline-none focus:ring-4 focus:ring-primary focus:ring-offset-4 focus:ring-offset-surface py-6 px-6">
+<div class="flex justify-between items-start w-full">
+<span class="font-label text-caption-mono text-on-surface-variant uppercase bg-surface/30 px-3 py-1 rounded-full">Official</span>
+<span class="material-symbols-outlined text-4xl text-on-surface-variant group-hover:-translate-y-1 transition-transform">flight_takeoff</span>
+</div>
+<div>
+<h2 class="font-headline text-on-surface-variant text-2xl">Airport Immigration</h2>
+</div>
+</button>
+<!-- Block 4 -->
+<button class="group text-left bg-surface-container-high rounded-[24px] flex flex-col justify-between hover:scale-[0.98] transition-transform duration-300 focus:outline-none focus:ring-4 focus:ring-primary focus:ring-offset-4 focus:ring-offset-surface py-6 px-6">
+<div class="flex justify-between items-start w-full">
+<span class="font-label text-caption-mono text-on-surface uppercase bg-surface/30 px-3 py-1 rounded-full">Professional</span>
+<span class="material-symbols-outlined text-4xl text-on-surface group-hover:scale-110 transition-transform">work</span>
+</div>
+<div>
+<h2 class="font-headline text-on-surface text-2xl">Job Interview</h2>
+</div>
+</button>
+</section>
+<!-- System of Pills (Difficulty & Action) -->
+<section class="max-w-4xl border-t-2 border-primary pt-[48px]">
+<p class="font-label text-label-mono text-primary uppercase mb-8">Choose Difficulty</p>
+<div class="flex flex-wrap gap-4 mb-[64px]">
+<!-- Active Pill -->
+<button class="px-8 py-4 rounded-full bg-primary text-on-primary font-label text-label-mono uppercase transition-colors">
+                    Beginner
+                </button>
+<!-- Inactive Pills -->
+<button class="px-8 py-4 rounded-full border-2 border-primary text-primary font-label text-label-mono uppercase hover:bg-surface-container-high transition-colors">
+                    Intermediate
+                </button>
+<button class="px-8 py-4 rounded-full border-2 border-primary text-primary font-label text-label-mono uppercase hover:bg-surface-container-high transition-colors">
+                    Advanced
+                </button>
+</div>
+<!-- Primary Action -->
+<button class="w-full md:w-auto px-12 py-6 rounded-full bg-primary text-on-primary font-label text-[16px] font-bold tracking-widest uppercase flex items-center justify-center gap-4 hover:bg-inverse-surface transition-colors focus:outline-none focus:ring-4 focus:ring-outline focus:ring-offset-4 focus:ring-offset-surface">
+<span class="">Start Roleplay</span>
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">play_circle</span>
+</button>
+</section>
+</main>
+<!-- BottomNavBar (Mobile Only) -->
+<nav class="md:hidden fixed bottom-0 left-0 w-full flex justify-around items-center px-4 bg-surface dark:bg-background border-t border-outline dark:border-outline-variant z-50 pb-6 pt-2 flat no shadows">
+<a class="flex flex-col items-center justify-center text-on-surface-variant px-6 py-2 hover:text-primary dark:hover:text-primary-fixed group" href="#">
+<span class="material-symbols-outlined mb-1 group-hover:scale-110 transition-transform">school</span>
+<span class="font-label text-[10px] tracking-widest uppercase">LEARN</span>
+</a>
+<!-- Active Tab: PRACTICE -->
+<a class="flex flex-col items-center justify-center bg-primary text-on-primary rounded-full px-6 py-2 transition-all scale-95 duration-100 shadow-none" href="#">
+<span class="material-symbols-outlined mb-1" style="font-variation-settings: 'FILL' 1;">forum</span>
+<span class="font-label text-[10px] tracking-widest uppercase">PRACTICE</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant px-6 py-2 hover:text-primary dark:hover:text-primary-fixed group" href="#">
+<span class="material-symbols-outlined mb-1 group-hover:scale-110 transition-transform">leaderboard</span>
+<span class="font-label text-[10px] tracking-widest uppercase">PROGRESS</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant px-6 py-2 hover:text-primary dark:hover:text-primary-fixed group" href="#">
+<span class="material-symbols-outlined mb-1 group-hover:scale-110 transition-transform">person</span>
+<span class="font-label text-[10px] tracking-widest uppercase">PROFILE</span>
+</a>
+</nav>
+<!-- Desktop Navigation Cluster (Top Right - Hidden on Mobile) -->
+<div class="hidden md:flex fixed top-0 right-0 h-[72px] items-center pr-8 gap-8 z-50">
+<a class="font-label text-label-mono text-on-surface-variant hover:text-primary transition-colors uppercase" href="#">Learn</a>
+<!-- Active Tab mapping for desktop -->
+<a class="font-label text-label-mono text-primary font-bold uppercase border-b-2 border-primary pb-1" href="#">Practice</a>
+<a class="font-label text-label-mono text-on-surface-variant hover:text-primary transition-colors uppercase" href="#">Progress</a>
+<a class="font-label text-label-mono text-on-surface-variant hover:text-primary transition-colors uppercase" href="#">Profile</a>
+</div>
+
+
+</body></html>

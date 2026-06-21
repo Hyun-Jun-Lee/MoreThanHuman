@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/>
+<title>Convia - Conversation Loading</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "secondary-fixed-dim": "#f1bf62",
+                        "surface-container-low": "#f1f3ff",
+                        "error": "#ba1a1a",
+                        "surface-tint": "#904c29",
+                        "on-error": "#ffffff",
+                        "secondary-fixed": "#ffdea8",
+                        "on-tertiary-container": "#fffbff",
+                        "surface-bright": "#ffffff",
+                        "outline-variant": "#d9c2b8",
+                        "inverse-surface": "#2a303d",
+                        "error-container": "#ffdad6",
+                        "on-secondary": "#ffffff",
+                        "on-tertiary": "#ffffff",
+                        "on-secondary-container": "#765300",
+                        "inverse-on-surface": "#ecf0ff",
+                        "primary-fixed-dim": "#ffb694",
+                        "on-secondary-fixed-variant": "#5e4200",
+                        "on-primary-container": "#fffbff",
+                        "secondary": "#7c5800",
+                        "on-tertiary-fixed": "#28180f",
+                        "surface-container": "#f3f4f6",
+                        "tertiary": "#6d574c",
+                        "outline": "#86736b",
+                        "on-secondary-fixed": "#271900",
+                        "on-tertiary-fixed-variant": "#574238",
+                        "surface-container-high": "#e5e7eb",
+                        "tertiary-fixed-dim": "#dec1b2",
+                        "surface-variant": "#f3f4f6",
+                        "secondary-container": "#fdca6c",
+                        "on-primary-fixed-variant": "#733513",
+                        "on-primary-fixed": "#351000",
+                        "tertiary-fixed": "#fbdccd",
+                        "surface-container-lowest": "#ffffff",
+                        "tertiary-container": "#877063",
+                        "surface-container-highest": "#d1d5db",
+                        "on-background": "#111827",
+                        "primary-container": "#ab613c",
+                        "on-primary": "#ffffff",
+                        "background": "#ffffff",
+                        "surface-dim": "#d1d5db",
+                        "primary-fixed": "#ffdbcc",
+                        "surface": "#ffffff",
+                        "on-error-container": "#93000a",
+                        "primary": "#8d4926",
+                        "on-surface": "#111827",
+                        "on-surface-variant": "#4b5563",
+                        "inverse-primary": "#ffb694"
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    spacing: {
+                        "gutter": "16px",
+                        "xs": "4px",
+                        "md": "20px",
+                        "base": "8px",
+                        "lg": "32px",
+                        "sm": "12px",
+                        "margin-desktop": "64px",
+                        "xl": "48px",
+                        "margin-mobile": "20px"
+                    },
+                    fontFamily: {
+                        "display": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "body-md": ["Inter"],
+                        "label-sm": ["Inter"],
+                        "label-md": ["Inter"],
+                        "headline-lg-mobile": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "headline-lg": ["Inter"]
+                    },
+                    fontSize: {
+                        "display": ["40px", { lineHeight: "48px", letterSpacing: "-0.02em", fontWeight: "700" }],
+                        "headline-md": ["24px", { lineHeight: "32px", fontWeight: "700", letterSpacing: "-0.02em" }],
+                        "body-md": ["16px", { lineHeight: "24px", fontWeight: "500" }],
+                        "label-sm": ["12px", { lineHeight: "16px", letterSpacing: "0.02em", fontWeight: "600" }],
+                        "label-md": ["14px", { lineHeight: "20px", letterSpacing: "0.01em", fontWeight: "600" }],
+                        "headline-lg-mobile": ["28px", { lineHeight: "34px", fontWeight: "700", letterSpacing: "-0.02em" }],
+                        "body-lg": ["18px", { lineHeight: "28px", fontWeight: "500" }],
+                        "headline-lg": ["32px", { lineHeight: "40px", letterSpacing: "-0.02em", fontWeight: "700" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            background-color: #FFFFFF;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        .message-enter {
+            animation: slideUpFade 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        .thinking-dot {
+            animation: pulse 1.5s infinite cubic-bezier(0.4, 0, 0.6, 1);
+        }
+        .thinking-dot:nth-child(2) { animation-delay: 0.2s; }
+        .thinking-dot:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.4; transform: scale(0.8); }
+            50% { opacity: 1; transform: scale(1); }
+        }
+
+        @keyframes slideUpFade {
+            from { opacity: 0; transform: translateY(16px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="antialiased min-h-screen flex flex-col font-display text-on-surface bg-background">
+<!-- Top Navigation (Transactional/Focused - No Bottom Nav) -->
+<header class="bg-background sticky top-0 z-50 pt-safe-top pb-4 px-margin-mobile flex items-center justify-between border-b border-surface-container-high">
+<button aria-label="Back" class="w-10 h-10 flex items-center justify-center rounded-full bg-surface-container text-on-surface hover:opacity-80 transition-opacity">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">arrow_back</span>
+</button>
+<div class="flex-1 text-center">
+<h1 class="font-headline-md text-headline-md text-on-surface">Osaka food trip</h1>
+<p class="font-label-sm text-label-sm text-on-surface-variant">Convia Guide</p>
+</div>
+<button aria-label="Conversation Settings" class="w-10 h-10 flex items-center justify-center rounded-full bg-surface-container text-on-surface hover:opacity-80 transition-opacity">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">more_horiz</span>
+</button>
+</header>
+<!-- Chat Canvas -->
+<main class="flex-1 overflow-y-auto px-margin-mobile py-md flex flex-col gap-lg pb-32">
+<!-- Date Divider -->
+<div class="flex justify-center">
+<span class="font-label-sm text-label-sm text-on-surface-variant bg-surface-container px-sm py-xs rounded-full">Today, 10:14 AM</span>
+</div>
+<!-- Previous System Message -->
+<div class="flex items-end gap-sm w-full max-w-[90%]">
+<div class="w-8 h-8 rounded-full bg-on-surface text-background flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">eco</span>
+</div>
+<div class="bg-surface-container text-on-surface p-md rounded-2xl rounded-bl-sm font-body-md text-body-md">
+<p>Kuromon Ichiba Market is a fantastic choice for experiencing Osaka's vibrant street food scene. It's often called "Osaka's Kitchen." What kind of flavors are you drawn to? Seafood, sweets, or savory snacks like Takoyaki?</p>
+</div>
+</div>
+<!-- User Message -->
+<div class="flex flex-col items-end gap-xs w-full ml-auto max-w-[85%] message-enter">
+<div class="bg-on-surface text-background p-md rounded-2xl rounded-br-sm font-body-md text-body-md">
+<p>I'm planning to visit a local market next.</p>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant mr-2">Delivered</span>
+</div>
+<!-- Loading State Area -->
+<div class="flex flex-col gap-xs w-full max-w-[90%] mt-base message-enter" style="animation-delay: 0.1s;">
+<!-- Status Label -->
+<div class="flex items-center gap-xs ml-10 mb-1">
+<span class="material-symbols-outlined text-on-surface-variant text-[14px]" style="font-variation-settings: 'FILL' 1;">auto_awesome</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">Checking...</span>
+</div>
+<!-- Thinking Bubble -->
+<div class="flex items-end gap-sm">
+<div class="w-8 h-8 rounded-full bg-on-surface text-background flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">eco</span>
+</div>
+<div class="bg-surface-container p-sm px-md rounded-2xl rounded-bl-sm h-12 flex items-center gap-1.5">
+<div class="w-2 h-2 rounded-full bg-on-surface-variant thinking-dot"></div>
+<div class="w-2 h-2 rounded-full bg-on-surface-variant thinking-dot"></div>
+<div class="w-2 h-2 rounded-full bg-on-surface-variant thinking-dot"></div>
+</div>
+</div>
+</div>
+</main>
+<!-- Bottom Composer (Disabled State) -->
+<div class="fixed bottom-0 left-0 w-full bg-gradient-to-t from-background via-background to-transparent pt-lg pb-safe-bottom px-margin-mobile z-40">
+<div class="bg-on-surface rounded-full flex items-center px-sm py-xs opacity-50 transition-opacity duration-300 mb-4">
+<button aria-label="Add attachment" class="w-10 h-10 flex items-center justify-center text-background rounded-full cursor-not-allowed" disabled="">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">add</span>
+</button>
+<input class="flex-1 bg-transparent border-none focus:ring-0 font-body-md text-body-md text-background placeholder:text-background/50 px-2 cursor-not-allowed" disabled="" placeholder="Convia is thinking..." type="text"/>
+<button aria-label="Voice input" class="w-10 h-10 flex items-center justify-center text-background rounded-full cursor-not-allowed" disabled="">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">mic</span>
+</button>
+</div>
+</div>
+</body></html>

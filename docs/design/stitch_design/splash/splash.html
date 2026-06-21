@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Convia Splash</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-surface": "#161c27",
+                    "inverse-surface": "#2a303d",
+                    "surface-dim": "#d4daea",
+                    "on-error-container": "#93000a",
+                    "surface-tint": "#904c29",
+                    "on-primary-fixed-variant": "#733513",
+                    "on-primary-container": "#fffbff",
+                    "on-tertiary": "#ffffff",
+                    "error": "#ba1a1a",
+                    "tertiary-fixed-dim": "#dec1b2",
+                    "tertiary-container": "#877063",
+                    "on-secondary": "#ffffff",
+                    "surface-container-high": "#e3e8f9",
+                    "surface-container-highest": "#dde2f3",
+                    "on-secondary-container": "#765300",
+                    "on-tertiary-fixed-variant": "#574238",
+                    "inverse-primary": "#ffb694",
+                    "primary-fixed": "#ffdbcc",
+                    "on-primary-fixed": "#351000",
+                    "error-container": "#ffdad6",
+                    "surface-variant": "#dde2f3",
+                    "surface": "#f9f9ff",
+                    "on-background": "#161c27",
+                    "on-error": "#ffffff",
+                    "on-secondary-fixed": "#271900",
+                    "on-primary": "#ffffff",
+                    "background": "#ffffff",
+                    "primary": "#8d4926",
+                    "inverse-on-surface": "#ecf0ff",
+                    "outline-variant": "#d9c2b8",
+                    "tertiary-fixed": "#fbdccd",
+                    "secondary": "#7c5800",
+                    "outline": "#86736b",
+                    "secondary-fixed-dim": "#f1bf62",
+                    "surface-bright": "#f9f9ff",
+                    "on-tertiary-container": "#fffbff",
+                    "secondary-container": "#fdca6c",
+                    "on-surface-variant": "#54433c",
+                    "tertiary": "#6d574c",
+                    "surface-container-lowest": "#ffffff",
+                    "secondary-fixed": "#ffdea8",
+                    "surface-container-low": "#f1f3ff",
+                    "primary-container": "#ab613c",
+                    "on-tertiary-fixed": "#28180f",
+                    "on-secondary-fixed-variant": "#5e4200",
+                    "surface-container": "#e8eefe",
+                    "primary-fixed-dim": "#ffb694"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "sm": "12px",
+                    "margin-mobile": "20px",
+                    "lg": "32px",
+                    "xl": "48px",
+                    "xs": "4px",
+                    "base": "8px",
+                    "gutter": "16px",
+                    "md": "20px",
+                    "margin-desktop": "64px"
+            },
+            "fontFamily": {
+                    "headline-lg": [
+                            "Inter"
+                    ],
+                    "headline-md": [
+                            "Inter"
+                    ],
+                    "label-md": [
+                            "Inter"
+                    ],
+                    "label-sm": [
+                            "Inter"
+                    ],
+                    "display": [
+                            "Inter"
+                    ],
+                    "body-md": [
+                            "Inter"
+                    ],
+                    "headline-lg-mobile": [
+                            "Inter"
+                    ],
+                    "body-lg": [
+                            "Inter"
+                    ]
+            },
+            "fontSize": {
+                    "headline-lg": [
+                            "32px",
+                            {
+                                    "lineHeight": "40px",
+                                    "letterSpacing": "-0.01em",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "headline-md": [
+                            "24px",
+                            {
+                                    "lineHeight": "32px",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "label-md": [
+                            "14px",
+                            {
+                                    "lineHeight": "20px",
+                                    "letterSpacing": "0.01em",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "label-sm": [
+                            "12px",
+                            {
+                                    "lineHeight": "16px",
+                                    "letterSpacing": "0.02em",
+                                    "fontWeight": "700"
+                            }
+                    ],
+                    "display": [
+                            "40px",
+                            {
+                                    "lineHeight": "48px",
+                                    "letterSpacing": "-0.02em",
+                                    "fontWeight": "700"
+                            }
+                    ],
+                    "body-md": [
+                            "16px",
+                            {
+                                    "lineHeight": "24px",
+                                    "fontWeight": "500"
+                            }
+                    ],
+                    "headline-lg-mobile": [
+                            "28px",
+                            {
+                                    "lineHeight": "34px",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "body-lg": [
+                            "18px",
+                            {
+                                    "lineHeight": "28px",
+                                    "fontWeight": "500"
+                            }
+                    ]
+            }
+          }
+        }
+      }
+    </script>
+<style>
+        .loading-dot {
+            animation: bounce 1.4s infinite ease-in-out both;
+        }
+        .loading-dot:nth-child(1) { animation-delay: -0.32s; }
+        .loading-dot:nth-child(2) { animation-delay: -0.16s; }
+        
+        @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0); opacity: 0.3; }
+            40% { transform: scale(1); opacity: 1; }
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="bg-white min-h-screen flex flex-col items-center justify-center relative overflow-hidden antialiased">
+<!-- Central Content Area -->
+<main class="flex flex-col items-center justify-center flex-grow z-10 p-margin-mobile md:p-margin-desktop w-full max-w-[1200px] mx-auto text-center">
+<!-- Brand Wordmark -->
+<h1 class="font-['Inter'] text-4xl font-bold text-black tracking-tighter mb-3 opacity-0 translate-y-4 animate-[fadeInUp_1s_ease-out_0.2s_forwards]">
+            CONVIA
+        </h1>
+<!-- Tagline -->
+<p class="font-['JetBrains_Mono'] text-sm text-gray-500 max-w-sm mx-auto opacity-0 animate-[fadeIn_1.5s_ease-out_0.6s_forwards]">
+            Speak about anything.
+        </p>
+</main>
+<!-- Subtle Loading Indicator at Bottom -->
+<div class="absolute bottom-xl left-0 w-full flex justify-center items-center gap-2 z-10 opacity-0 animate-[fadeIn_2s_ease-in_1s_forwards]">
+<div class="w-2 h-2 rounded-full bg-black/20 loading-dot"></div>
+<div class="w-2 h-2 rounded-full bg-black/20 loading-dot"></div>
+<div class="w-2 h-2 rounded-full bg-black/20 loading-dot"></div>
+</div>
+<script>
+        // Simple inline animations for the splash
+        tailwind.config.theme.extend.keyframes = {
+            fadeInUp: {
+                '0%': { opacity: '0', transform: 'translateY(10px)' },
+                '100%': { opacity: '1', transform: 'translateY(0)' },
+            },
+            fadeIn: {
+                '0%': { opacity: '0' },
+                '100%': { opacity: '1' },
+            }
+        };
+        
+        // Optional: Auto-redirect simulation (commented out for UI display purposes)
+        /*
+        setTimeout(() => {
+            document.body.style.opacity = '0';
+            document.body.style.transition = 'opacity 0.5s ease';
+            // window.location.href = '/home';
+        }, 3000);
+        */
+    </script>
+</body></html>

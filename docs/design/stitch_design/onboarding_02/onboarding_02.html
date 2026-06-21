@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Convia - Onboarding Step 2</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "primary": "#8d4926",
+                    "background": "#ffffff",
+                    "surface": "#ffffff",
+                    "on-surface": "#000000",
+                    "on-surface-variant": "#4b5563",
+                    "outline": "#d1d5db",
+                    "outline-variant": "#9ca3af",
+                    "block-lime": "#d9f99d",
+                    "block-lilac": "#e9d5ff",
+                    "block-cream": "#fef3c7"
+            },
+            "fontFamily": {
+                    "inter": ["Inter", "sans-serif"],
+                    "mono": ["JetBrains Mono", "monospace"]
+            }
+          }
+        }
+      }
+    </script>
+<style>
+        body {
+            background-color: #ffffff;
+            color: #000000;
+        }
+        .material-symbols-outlined {
+          font-variation-settings:
+          'FILL' 0,
+          'wght' 400,
+          'GRAD' 0,
+          'opsz' 24
+        }
+        .material-symbols-outlined.filled {
+          font-variation-settings:
+          'FILL' 1,
+          'wght' 400,
+          'GRAD' 0,
+          'opsz' 24
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center font-inter antialiased overflow-hidden selection:bg-black selection:text-white bg-white">
+<main class="w-full max-w-[400px] h-screen flex flex-col relative bg-white md:h-[850px] overflow-hidden">
+<!-- Header Actions -->
+<header class="w-full flex justify-between items-center p-6 pt-12 z-10">
+<button class="px-6 py-3 rounded-full flex items-center justify-center bg-white text-black border-2 border-black hover:bg-gray-50 transition-colors font-mono text-sm uppercase tracking-widest font-semibold">
+<span class="material-symbols-outlined mr-2">arrow_back</span> Back
+</button>
+<button class="font-mono text-sm text-black/60 hover:text-black transition-colors px-4 py-2 uppercase tracking-widest font-semibold">
+                Skip
+            </button>
+</header>
+<!-- Content Area -->
+<div class="flex-1 px-6 flex flex-col relative z-10 pt-8 pb-[140px] overflow-y-auto hide-scrollbar">
+<!-- Typography Headers -->
+<div class="mb-24">
+<h1 class="font-inter font-bold text-[48px] leading-[1.1] tracking-tighter text-black mb-6 text-balance">
+                    Get ready before you speak.
+                </h1>
+<p class="font-inter text-xl text-black/70 text-pretty">
+                    Convia gathers helpful context and gives you starter questions, so beginning feels easy.
+                </p>
+</div>
+<!-- Visual Presentation Area (Bento-style layout) -->
+<div class="w-full flex flex-col gap-24 relative">
+<!-- Main Topic Summary Card -->
+<div class="bg-block-lime rounded-[40px] p-12 relative overflow-hidden">
+<div class="flex items-center gap-3 mb-6">
+<span class="material-symbols-outlined text-black text-xl filled">psychology</span>
+<h3 class="font-mono text-sm text-black uppercase tracking-widest font-semibold">Topic Summary</h3>
+</div>
+<h2 class="font-inter font-bold text-3xl text-black mb-4 leading-tight tracking-tight">Navigating Career Transitions</h2>
+<p class="font-inter text-lg text-black/80">
+                        Key themes include overcoming imposter syndrome, mapping transferable skills, and preparing for initial networking conversations.
+                    </p>
+</div>
+<div class="flex flex-col">
+<!-- Starter Questions Sub-header -->
+<div class="flex items-center gap-3 mb-8">
+<span class="material-symbols-outlined text-black text-xl">chat_bubble</span>
+<span class="font-mono text-sm text-black uppercase tracking-widest font-semibold">Starter Questions</span>
+</div>
+<!-- Question Cards -->
+<div class="flex flex-col gap-6 relative">
+<!-- Question 1 (Inactive) -->
+<div class="bg-block-cream rounded-[32px] p-8 pr-14 relative group cursor-pointer">
+<p class="font-inter text-lg text-black">What's the biggest hurdle you face when updating your resume?</p>
+<span class="material-symbols-outlined absolute right-6 top-1/2 -translate-y-1/2 text-black/40 group-hover:text-black transition-colors">add_circle</span>
+</div>
+<!-- Question 2 (Active/Selected State) -->
+<div class="bg-block-lilac rounded-[32px] p-8 pr-14 relative z-10">
+<p class="font-inter text-lg text-black font-bold">How do you usually approach someone for an informational interview?</p>
+<span class="material-symbols-outlined absolute right-6 top-1/2 -translate-y-1/2 text-black filled">check_circle</span>
+</div>
+<!-- Question 3 (Inactive) -->
+<div class="bg-block-cream rounded-[32px] p-8 pr-14 relative group cursor-pointer">
+<p class="font-inter text-lg text-black">Can you describe a time you felt underqualified for a role?</p>
+<span class="material-symbols-outlined absolute right-6 top-1/2 -translate-y-1/2 text-black/40 group-hover:text-black transition-colors">add_circle</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Bottom Navigation Area -->
+<div class="absolute bottom-0 w-full p-6 pb-12 bg-gradient-to-t from-white via-white to-transparent flex flex-col items-center gap-6 z-20">
+<!-- Progress Dots -->
+<div class="flex items-center justify-center gap-3 mb-2">
+<div class="w-2 h-2 rounded-full bg-black/20"></div>
+<div class="w-12 h-2 rounded-full bg-black"></div>
+<div class="w-2 h-2 rounded-full bg-black/20"></div>
+<div class="w-2 h-2 rounded-full bg-black/20"></div>
+</div>
+<!-- Primary Action Button -->
+<button class="w-full bg-black text-white font-mono text-sm uppercase tracking-widest font-semibold h-16 rounded-full flex items-center justify-center gap-3 hover:bg-black/90 transition-colors">
+<span>Continue</span>
+<span class="material-symbols-outlined text-lg">arrow_forward</span>
+</button>
+</div>
+</main>
+<style>
+        /* Utility to hide scrollbar but keep functionality */
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</body></html>

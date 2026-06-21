@@ -1,0 +1,125 @@
+<!DOCTYPE html><html class="light" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport">
+<title>Convia - Active Conversation</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        'brand-mint': '#A7F3D0',
+                        'brand-peach': '#FED7AA',
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            background-color: #FFFFFF;
+            min-height: max(884px, 100dvh);
+        }
+        /* Custom scrollbar for webkit */
+        ::-webkit-scrollbar {
+            width: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #000000;
+            border-radius: 0px;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="flex justify-center min-h-screen text-black antialiased selection:bg-black/20 selection:text-black">
+<!-- Mobile Container -->
+<main class="w-full max-w-[428px] h-[884px] flex flex-col relative bg-white overflow-hidden md:my-8 md:h-[850px] md:rounded-[48px] md:border-[8px] md:border-black">
+<!-- Top App Bar -->
+<header class="flex items-center justify-between px-6 h-20 w-full z-50 bg-white sticky top-0 border-b-2 border-black" id="topAppBar">
+<button aria-label="Go back" class="p-2 -ml-2 rounded-full hover:bg-gray-100 transition-colors flex items-center justify-center group">
+<span class="material-symbols-outlined text-black group-hover:-translate-x-1 transition-transform" data-icon="arrow_back">arrow_back</span>
+</button>
+<h1 class="font-sans font-extrabold text-xl tracking-tighter text-black truncate flex-1 text-center px-4">Osaka food trip</h1>
+<button aria-label="More options" class="p-2 -mr-2 rounded-full hover:bg-gray-100 transition-colors flex items-center justify-center group">
+<span class="material-symbols-outlined text-black" data-icon="more_vert">more_vert</span>
+</button>
+</header>
+<!-- Chat Canvas -->
+<div class="flex-1 overflow-y-auto px-6 pt-8 pb-32 flex flex-col gap-8 bg-white" id="chatContainer">
+<!-- AI Message -->
+<div class="flex w-full justify-start animate-[fadeIn_0.5s_ease-out]">
+<div class="bg-[#f3f3f3] max-w-[85%] rounded-[32px] rounded-tl-none px-6 py-4">
+<p class="font-sans font-medium text-base text-black leading-relaxed">Dotonbori is famous for its street food. What did you eat there?</p>
+</div>
+</div>
+<!-- User Message Cluster -->
+<div class="flex flex-col w-full items-end gap-2 animate-[fadeIn_0.5s_ease-out_0.2s_both]">
+<div class="bg-black max-w-[85%] rounded-[32px] rounded-tr-none px-6 py-4">
+<p class="font-sans font-medium text-base text-white leading-relaxed">I tried takoyaki and it was really delicious!</p>
+</div>
+<!-- Natural Indicator -->
+<div class="border-2 border-black rounded-full px-3 py-1 flex items-center gap-1.5 mt-1 mr-2 cursor-pointer hover:bg-gray-50 transition-colors">
+<span class="material-symbols-outlined text-[14px] text-black" data-icon="check_circle" data-weight="fill" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+<span class="font-mono text-[11px] font-bold text-black uppercase tracking-widest">Looks natural</span>
+</div>
+</div>
+<!-- AI Message -->
+<div class="flex w-full justify-start animate-[fadeIn_0.5s_ease-out_0.4s_both]">
+<div class="bg-[#f3f3f3] max-w-[85%] rounded-[32px] rounded-tl-none px-6 py-4">
+<p class="font-sans font-medium text-base text-black leading-relaxed">Takoyaki is a must! Did you try it with the traditional sauce or something else?</p>
+</div>
+</div>
+<!-- User Message -->
+<div class="flex w-full justify-end animate-[fadeIn_0.5s_ease-out_0.6s_both]">
+<div class="bg-black max-w-[85%] rounded-[32px] rounded-tr-none px-6 py-4">
+<p class="font-sans font-medium text-base text-white leading-relaxed">I had it with the spicy sauce. It was very hot!</p>
+</div>
+</div>
+<!-- Typing Indicator -->
+<div class="flex w-full justify-start mt-2 opacity-0 animate-[fadeIn_0.5s_ease-out_1.5s_both]">
+<div class="bg-gray-100 rounded-[24px] rounded-tl-none px-5 py-4 flex items-center gap-1.5">
+<div class="w-2 h-2 rounded-full bg-black animate-[bounce_1s_infinite_0ms]"></div>
+<div class="w-2 h-2 rounded-full bg-black animate-[bounce_1s_infinite_200ms]"></div>
+<div class="w-2 h-2 rounded-full bg-black animate-[bounce_1s_infinite_400ms]"></div>
+</div>
+</div>
+</div>
+<!-- Bottom Composer Area -->
+<div class="absolute bottom-0 w-full bg-white pt-6 pb-8 px-6 z-40 border-t-2 border-black">
+<div class="border-2 border-black rounded-full p-1.5 flex items-center bg-white focus-within:ring-4 focus-within:ring-black/10 transition-all">
+<button aria-label="Voice input" class="p-3 rounded-full text-black hover:bg-gray-100 transition-colors flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[24px]" data-icon="mic">mic</span>
+</button>
+<input class="flex-1 bg-transparent border-none focus:ring-0 text-black font-sans font-medium text-base placeholder-gray-400 px-2 min-w-0" placeholder="Type in English..." type="text">
+<button aria-label="Send message" class="p-3.5 rounded-full bg-black text-white hover:bg-gray-800 active:scale-95 transition-all flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[20px]" data-icon="arrow_upward" data-weight="bold">arrow_upward</span>
+</button>
+</div>
+</div>
+</main>
+<script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const chatContainer = document.getElementById('chatContainer');
+            setTimeout(() => {
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+            }, 100);
+        });
+    </script>
+
+
+
+
+</body></html>

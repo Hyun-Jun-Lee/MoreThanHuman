@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Convia Onboarding 1</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-surface": "#161c27",
+                        "on-error": "#ffffff",
+                        "primary": "#000000",
+                        "on-primary": "#ffffff",
+                        "surface-tint": "#000000",
+                        "primary-container": "#f1f3ff",
+                        "on-primary-fixed": "#000000",
+                        "surface-container-highest": "#dde2f3",
+                        "error": "#ba1a1a",
+                        "on-secondary": "#ffffff",
+                        "on-primary-fixed-variant": "#000000",
+                        "secondary-fixed-dim": "#d1d5db",
+                        "on-tertiary-fixed-variant": "#000000",
+                        "on-secondary-fixed": "#000000",
+                        "tertiary-fixed-dim": "#d1d5db",
+                        "primary-fixed": "#e5e7eb",
+                        "inverse-on-surface": "#ecf0ff",
+                        "primary-fixed-dim": "#d1d5db",
+                        "surface": "#ffffff",
+                        "surface-container": "#f9f9ff",
+                        "surface-container-low": "#ffffff",
+                        "tertiary-fixed": "#e5e7eb",
+                        "surface-container-lowest": "#ffffff",
+                        "on-tertiary-container": "#000000",
+                        "on-secondary-container": "#000000",
+                        "on-surface-variant": "#54433c",
+                        "surface-dim": "#d4daea",
+                        "surface-variant": "#f3f4f6",
+                        "outline-variant": "#e5e7eb",
+                        "tertiary": "#000000",
+                        "surface-bright": "#ffffff",
+                        "on-tertiary-fixed": "#000000",
+                        "inverse-surface": "#2a303d",
+                        "on-secondary-fixed-variant": "#000000",
+                        "on-primary-container": "#000000",
+                        "on-error-container": "#93000a",
+                        "on-background": "#161c27",
+                        "error-container": "#ffdad6",
+                        "background": "#ffffff",
+                        "secondary-fixed": "#e5e7eb",
+                        "secondary": "#000000",
+                        "outline": "#d1d5db",
+                        "on-tertiary": "#ffffff",
+                        "surface-container-high": "#f9fafb",
+                        "tertiary-container": "#f3f4f6",
+                        "secondary-container": "#f3f4f6",
+                        "inverse-primary": "#ffffff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "1rem",
+                        "2xl": "1.5rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "xs": "4px",
+                        "md": "20px",
+                        "margin-mobile": "24px",
+                        "sm": "12px",
+                        "gutter": "16px",
+                        "lg": "32px",
+                        "xl": "48px",
+                        "margin-desktop": "64px",
+                        "base": "8px",
+                        "2xl": "64px",
+                        "3xl": "96px"
+                    },
+                    "fontFamily": {
+                        "headline-md": ["Inter", "sans-serif"],
+                        "headline-lg": ["Inter", "sans-serif"],
+                        "display": ["Inter", "sans-serif"],
+                        "label-sm": ["JetBrains Mono", "monospace"],
+                        "label-md": ["JetBrains Mono", "monospace"],
+                        "headline-lg-mobile": ["Inter", "sans-serif"],
+                        "body-md": ["Inter", "sans-serif"],
+                        "body-lg": ["Inter", "sans-serif"]
+                    },
+                    "fontSize": {
+                        "headline-md": ["24px", {"lineHeight": "1.2", "letterSpacing": "-0.03em", "fontWeight": "700"}],
+                        "headline-lg": ["32px", {"lineHeight": "1.1", "letterSpacing": "-0.04em", "fontWeight": "800"}],
+                        "display": ["48px", {"lineHeight": "1.1", "letterSpacing": "-0.05em", "fontWeight": "900"}],
+                        "label-sm": ["11px", {"lineHeight": "1.5", "letterSpacing": "0.05em", "fontWeight": "500", "textTransform": "uppercase"}],
+                        "label-md": ["13px", {"lineHeight": "1.5", "letterSpacing": "0.02em", "fontWeight": "500"}],
+                        "headline-lg-mobile": ["36px", {"lineHeight": "1.1", "letterSpacing": "-0.04em", "fontWeight": "800"}],
+                        "body-md": ["16px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                        "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            background-color: #ffffff;
+            min-height: max(884px, 100dvh);
+        }
+        .bg-custom-surface {
+            background-color: #f3f4f6;
+        }
+        .text-custom-body {
+            color: #4b5563;
+        }
+        .chip-bg {
+            background-color: #ffffff;
+            color: #000000;
+        }
+        .btn-primary {
+            background-color: #000000;
+            color: #ffffff;
+            transition: transform 0.2s ease, opacity 0.2s ease;
+        }
+        .btn-primary:active {
+            transform: scale(0.98);
+        }
+        .pastel-block {
+            background-color: #f1f3ff;
+            border-radius: 2rem;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-between p-margin-mobile md:p-margin-desktop overflow-hidden">
+<!-- Top App Bar / Skip -->
+<header class="w-full max-w-[1200px] flex justify-end items-center pt-sm">
+<button class="font-label-md text-label-md text-on-surface-variant opacity-70 hover:opacity-100 transition-opacity uppercase tracking-wider">
+            Skip
+        </button>
+</header>
+<!-- Main Content Canvas -->
+<main class="w-full max-w-[1200px] flex flex-col items-center justify-center flex-grow py-lg gap-xl">
+<!-- Typography Section -->
+<div class="text-center max-w-[600px] flex flex-col gap-sm px-sm">
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile text-on-surface md:hidden">
+                Talk about what you actually care about.
+            </h1>
+<h1 class="font-display text-display text-on-surface hidden md:block">
+                Talk about what you actually care about.
+            </h1>
+<p class="font-body-lg text-body-lg text-custom-body mt-xs">
+                Practice English with news, hobbies, sports, travel, or anything on your mind.
+            </p>
+</div>
+<!-- Visual Section -->
+<div class="w-full max-w-[400px] md:max-w-[500px] mt-md pastel-block p-lg md:p-xl flex flex-col gap-xl">
+<!-- Conversation Preview -->
+<div class="flex flex-col gap-md w-full">
+<!-- System Bubble -->
+<div class="self-start max-w-[85%] bg-white text-on-surface rounded-2xl rounded-tl-sm px-gutter py-sm font-body-md text-body-md shadow-sm">
+                        Hi! I heard you're planning a trip. Where are you heading?
+                    </div>
+<!-- User Bubble -->
+<div class="self-end max-w-[85%] bg-black text-white rounded-2xl rounded-tr-sm px-gutter py-sm font-body-md text-body-md shadow-sm">
+                        I'm going to Osaka next week!
+                    </div>
+</div>
+<!-- Interest Chips Floating Area -->
+<div class="flex flex-wrap gap-sm justify-center">
+<span class="chip-bg px-md py-sm rounded-full font-label-md text-label-md flex items-center gap-base shadow-sm">
+<span class="material-symbols-outlined text-[18px]">restaurant</span>
+                        Osaka food
+                    </span>
+<span class="chip-bg px-md py-sm rounded-full font-label-md text-label-md flex items-center gap-base shadow-sm">
+<span class="material-symbols-outlined text-[18px]">sports_baseball</span>
+                        Baseball
+                    </span>
+<span class="chip-bg px-md py-sm rounded-full font-label-md text-label-md flex items-center gap-base shadow-sm">
+<span class="material-symbols-outlined text-[18px]">smart_toy</span>
+                        AI news
+                    </span>
+</div>
+</div>
+</main>
+<!-- Bottom Navigation / Actions -->
+<footer class="w-full max-w-[1200px] flex flex-col items-center gap-lg pb-md">
+<!-- Progress Dots -->
+<div class="flex items-center gap-sm">
+<div class="w-2 h-2 rounded-full bg-black"></div>
+<div class="w-2 h-2 rounded-full bg-outline-variant"></div>
+<div class="w-2 h-2 rounded-full bg-outline-variant"></div>
+</div>
+<!-- Next Button -->
+<button class="btn-primary w-full max-w-[300px] py-gutter rounded-full font-label-md text-label-md text-center flex items-center justify-center gap-sm uppercase tracking-wider">
+            Next
+            <span class="material-symbols-outlined text-[20px]">arrow_forward</span>
+</button>
+</footer>
+</body></html>

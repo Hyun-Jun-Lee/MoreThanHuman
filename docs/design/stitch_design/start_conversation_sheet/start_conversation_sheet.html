@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Convia - Start a conversation</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "primary-fixed-dim": "#ffb694",
+                    "on-secondary-container": "#765300",
+                    "on-primary-container": "#fffbff",
+                    "tertiary": "#6d574c",
+                    "surface-bright": "#f9f9ff",
+                    "secondary": "#7c5800",
+                    "on-primary-fixed": "#351000",
+                    "on-tertiary": "#ffffff",
+                    "on-tertiary-fixed": "#28180f",
+                    "on-background": "#161c27",
+                    "on-tertiary-fixed-variant": "#574238",
+                    "error-container": "#ffdad6",
+                    "secondary-container": "#fdca6c",
+                    "surface-container": "#e8eefe",
+                    "surface-variant": "#dde2f3",
+                    "surface-container-highest": "#dde2f3",
+                    "inverse-primary": "#ffb694",
+                    "primary-fixed": "#ffdbcc",
+                    "on-surface-variant": "#54433c",
+                    "tertiary-fixed-dim": "#dec1b2",
+                    "on-surface": "#161c27",
+                    "surface-tint": "#904c29",
+                    "tertiary-fixed": "#fbdccd",
+                    "on-error-container": "#93000a",
+                    "outline-variant": "#d9c2b8",
+                    "surface-container-low": "#f1f3ff",
+                    "primary-container": "#ab613c",
+                    "surface-container-lowest": "#ffffff",
+                    "on-secondary-fixed-variant": "#5e4200",
+                    "inverse-on-surface": "#ecf0ff",
+                    "surface": "#f9f9ff",
+                    "on-secondary-fixed": "#271900",
+                    "on-primary-fixed-variant": "#733513",
+                    "on-secondary": "#ffffff",
+                    "secondary-fixed-dim": "#f1bf62",
+                    "error": "#ba1a1a",
+                    "surface-dim": "#d4daea",
+                    "on-error": "#ffffff",
+                    "inverse-surface": "#2a303d",
+                    "outline": "#86736b",
+                    "tertiary-container": "#877063",
+                    "primary": "#8d4926",
+                    "on-tertiary-container": "#fffbff",
+                    "surface-container-high": "#e3e8f9",
+                    "on-primary": "#ffffff",
+                    "secondary-fixed": "#ffdea8",
+                    "background": "#f9f9ff"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "2xl": "1.5rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "md": "20px",
+                    "lg": "32px",
+                    "xl": "48px",
+                    "xs": "4px",
+                    "sm": "12px",
+                    "base": "8px",
+                    "gutter": "16px",
+                    "margin-desktop": "64px",
+                    "margin-mobile": "20px"
+            },
+            "fontFamily": {
+                    "label-sm": [
+                            "Quicksand"
+                    ],
+                    "label-md": [
+                            "Quicksand"
+                    ],
+                    "headline-md": [
+                            "Quicksand"
+                    ],
+                    "headline-lg-mobile": [
+                            "Quicksand"
+                    ],
+                    "body-lg": [
+                            "Quicksand"
+                    ],
+                    "body-md": [
+                            "Quicksand"
+                    ],
+                    "headline-lg": [
+                            "Quicksand"
+                    ],
+                    "display": [
+                            "Quicksand"
+                    ]
+            },
+            "fontSize": {
+                    "label-sm": [
+                            "12px",
+                            {
+                                    "lineHeight": "16px",
+                                    "letterSpacing": "0.02em",
+                                    "fontWeight": "700"
+                            }
+                    ],
+                    "label-md": [
+                            "14px",
+                            {
+                                    "lineHeight": "20px",
+                                    "letterSpacing": "0.01em",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "headline-md": [
+                            "24px",
+                            {
+                                    "lineHeight": "32px",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "headline-lg-mobile": [
+                            "28px",
+                            {
+                                    "lineHeight": "34px",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "body-lg": [
+                            "18px",
+                            {
+                                    "lineHeight": "28px",
+                                    "fontWeight": "500"
+                            }
+                    ],
+                    "body-md": [
+                            "16px",
+                            {
+                                    "lineHeight": "24px",
+                                    "fontWeight": "500"
+                            }
+                    ],
+                    "headline-lg": [
+                            "32px",
+                            {
+                                    "lineHeight": "40px",
+                                    "letterSpacing": "-0.01em",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "display": [
+                            "40px",
+                            {
+                                    "lineHeight": "48px",
+                                    "letterSpacing": "-0.02em",
+                                    "fontWeight": "700"
+                            }
+                    ]
+            }
+        },
+        },
+      }
+    </script>
+<style>
+        .bottom-sheet-shadow {
+            box-shadow: 0 -12px 48px rgba(141, 73, 38, 0.08);
+        }
+        .card-shadow {
+            box-shadow: 0 4px 12px rgba(141, 73, 38, 0.03);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface-dim font-body-md text-body-md text-on-surface h-screen w-full overflow-hidden antialiased flex flex-col justify-end relative">
+<!-- Dimmed Background Overlay (Simulating app underneath) -->
+<div class="absolute inset-0 bg-on-surface/40 backdrop-blur-sm z-0"></div>
+<!-- Bottom Sheet Container -->
+<div class="bg-surface-container-lowest w-full max-w-[600px] mx-auto rounded-t-[32px] bottom-sheet-shadow z-10 relative flex flex-col pt-sm pb-[40px] px-margin-mobile md:px-lg animate-[slideUp_0.4s_ease-out]">
+<!-- Drag Handle -->
+<div class="w-12 h-[5px] bg-surface-variant rounded-full mx-auto mb-lg"></div>
+<!-- Header -->
+<div class="text-center mb-xl">
+<h2 class="font-headline-lg-mobile text-headline-lg-mobile text-on-surface mb-xs">Start a conversation</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">Choose how you want to practice today.</p>
+</div>
+<!-- Options Stack -->
+<div class="flex flex-col gap-sm mb-xl">
+<!-- Free Chat Card -->
+<button class="w-full text-left bg-surface rounded-2xl p-md flex items-center gap-md card-shadow hover:bg-surface-container transition-all active:scale-[0.98] group">
+<div class="w-12 h-12 rounded-full bg-primary-container flex items-center justify-center shrink-0 group-hover:bg-primary transition-colors">
+<span class="material-symbols-outlined text-on-primary-container" style="font-variation-settings: 'FILL' 1;">chat_bubble</span>
+</div>
+<div>
+<h3 class="font-body-lg text-body-lg text-on-surface font-semibold mb-xs">Free Chat</h3>
+<p class="font-body-md text-body-md text-on-surface-variant">Bring your own topic.</p>
+</div>
+</button>
+<!-- Roleplay Card -->
+<button class="w-full text-left bg-surface rounded-2xl p-md flex items-center gap-md card-shadow hover:bg-surface-container transition-all active:scale-[0.98] group">
+<div class="w-12 h-12 rounded-full bg-surface-container-high flex items-center justify-center shrink-0 group-hover:bg-primary-container transition-colors">
+<span class="material-symbols-outlined text-on-surface-variant group-hover:text-on-primary-container" style="font-variation-settings: 'FILL' 0;">theater_comedy</span>
+</div>
+<div>
+<h3 class="font-body-lg text-body-lg text-on-surface font-semibold mb-xs">Roleplay</h3>
+<p class="font-body-md text-body-md text-on-surface-variant">Practice a real-life situation.</p>
+</div>
+</button>
+</div>
+<!-- Cancel Action -->
+<div class="flex justify-center mt-auto">
+<button class="font-label-md text-label-md text-on-surface-variant hover:text-on-surface px-lg py-sm rounded-full transition-colors">
+                Cancel
+            </button>
+</div>
+</div>
+<style>
+        @keyframes slideUp {
+            from {
+                transform: translateY(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+    </style>
+</body></html>
