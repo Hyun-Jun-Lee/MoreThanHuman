@@ -35,4 +35,5 @@
 
 ## Design System
 
-- `design_system/DESIGN.md`: Stitch가 생성한 디자인 시스템 원본이에요.
+- `../DESIGN_SYSTEM.md`: Stitch 화면을 정규화한 Curitalk 모바일 디자인 시스템 기준이에요.
+- 화면별 HTML의 임시 theme 값보다 `DESIGN_SYSTEM.md`의 token과 사용 규칙을 우선해요.
