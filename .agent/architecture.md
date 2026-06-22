@@ -33,15 +33,20 @@
 
 | 기술 | 상태 |
 |------|------|
-| Flutter | 향후 모바일 앱 클라이언트로 개발 예정 |
+| Flutter 3.44.2 / Dart 3.12.2 | `mobile/` iOS·Android 프로젝트 초기화 |
+| Riverpod 3 | 앱 상태와 비동기 상태 관리 |
+| go_router 17 | 선언형 라우팅과 인증 redirect |
+| Dio 5 | FastAPI HTTP client와 interceptor |
+| flutter_secure_storage 10 | JWT와 설치 단위 device ID 보관 |
+| google_sign_in 7 | Google SDK 기반 모바일 인증 |
 
-현재 저장소의 기준 범위는 FastAPI 백엔드 API예요. 사용자-facing 클라이언트는 향후 Flutter 모바일 앱에서 구현해요.
+현재 저장소는 FastAPI 백엔드 API와 Flutter 모바일 앱을 함께 관리해요.
 
 ---
 
 ## 2. 시스템 구조
 
-**아키텍처 패턴**: Modular Monolith (FastAPI)
+**아키텍처 패턴**: FastAPI Modular Monolith + Flutter Mobile Client
 
 ```text
 backend/
@@ -56,6 +61,16 @@ backend/
     ├── llm/                 # LLM 프로바이더 추상화
     ├── search/              # ddgs 검색 + query analysis + LLM source judge + LLM 요약
     └── web/                 # 서버 렌더링 HTML 라우트
+
+mobile/
+├── android/                 # Android runner
+├── ios/                     # iOS runner
+├── lib/
+│   ├── main.dart            # ProviderScope 앱 진입점
+│   ├── app/                 # 앱, router, theme
+│   └── core/                # 공통 기반 기능과 widget
+├── test/                    # Flutter 테스트
+└── pubspec.yaml             # Dart/Flutter 의존성
 ```
 
 도메인은 기본적으로 아래 계층을 따라요:

@@ -1,8 +1,8 @@
-# MoreThanHuman Backend API
+# MoreThanHuman
 
-AI 기반 영어 회화 학습 플랫폼 Convia의 FastAPI 백엔드예요.
+AI 기반 영어 회화 학습 플랫폼의 FastAPI 백엔드와 Curitalk Flutter 모바일 앱을 함께 관리해요.
 
-현재 저장소의 기준 범위는 백엔드 API예요. 사용자-facing 클라이언트는 향후 Flutter 기반 모바일 앱으로 별도 개발할 예정이에요.
+백엔드는 `backend/`, iOS·Android 모바일 앱은 `mobile/`에 있어요.
 
 ## 빠른 시작
 
@@ -76,21 +76,33 @@ uv run uvicorn main:app --reload --port 8010
 | `http://localhost:8010/redoc` | ReDoc |
 | `http://localhost:8010/health` | 헬스 체크 |
 
+### 5. 모바일 앱 확인
+
+```bash
+cd mobile
+flutter pub get
+flutter analyze
+flutter test
+```
+
+실제 iOS·Android 실행에는 Xcode 또는 Android SDK 설정이 추가로 필요해요.
+
 ## 프로젝트 구조
 
 ```text
-backend/
-├── main.py                 # FastAPI 앱 초기화 및 라우터 등록
-├── config.py               # 환경 설정
-├── database.py             # SQLAlchemy DB 연결 및 세션 관리
-├── shared/                 # 공통 타입, 예외, 유틸리티
-└── domains/
-    ├── auth/               # 회원가입, 로그인, JWT, Google OAuth
-    ├── conversation/       # 대화 관리
-    ├── grammar/            # 문법 체크 및 통계
-    ├── llm/                # OpenRouter/Ollama 추상화
-    ├── search/             # DuckDuckGo 검색 + LLM 요약
-    └── web/                # 서버 렌더링 HTML 라우트
+MoreThanHuman/
+├── backend/
+│   ├── main.py             # FastAPI 앱 초기화 및 라우터 등록
+│   ├── config.py           # 환경 설정
+│   ├── database.py         # SQLAlchemy DB 연결 및 세션 관리
+│   ├── shared/             # 공통 타입, 예외, 유틸리티
+│   └── domains/            # auth, conversation, grammar, llm, search, web
+└── mobile/
+    ├── android/            # Android runner
+    ├── ios/                # iOS runner
+    ├── lib/                # Flutter 애플리케이션 코드
+    ├── test/               # Flutter 테스트
+    └── pubspec.yaml        # Dart/Flutter 의존성
 ```
 
 ## API 공통 규칙

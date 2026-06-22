@@ -1,8 +1,8 @@
 # MoreThanHuman Backend DSL
 
-> 최종 갱신: 2026-05-26 · 범위: FastAPI 백엔드 API
+> 최종 갱신: 2026-06-22 · 범위: FastAPI 백엔드 API + Flutter 모바일 연동
 
-향후 사용자 클라이언트는 Flutter 기반 모바일 앱으로 개발해요. 이 문서는 모바일 앱이 연동할 백엔드 도메인, 데이터 모델, API 계약을 정의해요.
+사용자 클라이언트는 `mobile/`의 Flutter 기반 모바일 앱으로 개발해요. 이 문서는 모바일 앱이 연동할 백엔드 도메인, 데이터 모델, API 계약을 정의해요.
 
 ## 1. 시스템
 
@@ -13,7 +13,7 @@ system MoreThanHuman {
   architecture: ModularMonolith
   database: SQLiteDevelopment | PostgreSQLProduction
   packageManager: uv
-  futureClient: FlutterMobileApp
+  client: FlutterMobileApp
 
   modules: [
     Auth,

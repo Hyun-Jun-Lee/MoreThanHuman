@@ -29,7 +29,7 @@
 |------|------|
 | **Lead** | 아키텍처 결정, 코드 리뷰, 머지 승인 |
 | **Backend** | FastAPI 도메인 개발 (conversation, grammar, search, auth, llm) |
-| **Mobile** | 향후 Flutter 기반 모바일 앱 개발 |
+| **Mobile** | `mobile/` Flutter 기반 iOS·Android 앱 개발 |
 
 ---
 
@@ -96,9 +96,9 @@
 
 ## 6. 클라이언트 방향
 
-- 현재 저장소의 기준 범위는 FastAPI 백엔드 API예요.
-- 사용자 앱은 향후 Flutter 기반 모바일 앱으로 개발해요.
-- 이 SSoT는 백엔드 API와 향후 모바일 앱 연동 계약만 다뤄요.
+- 현재 저장소는 `backend/` FastAPI API와 `mobile/` Flutter 앱을 함께 관리해요.
+- 사용자 앱은 Flutter 기반 iOS·Android 클라이언트로 개발해요.
+- 이 SSoT는 백엔드 API, 모바일 앱, 두 영역의 연동 계약을 다뤄요.
 
 ---
 
@@ -123,7 +123,7 @@
 |------|------|------|
 | 프로젝트 README | `README.md` | API 레퍼런스, 환경변수, 실행법 |
 | DSL 명세 | `docs/DSL.md` | 도메인별 상세 스펙 |
-| 모바일 UX 메모 | `docs/UX_FEEDBACK.md` | 향후 Flutter 앱 UX 방향 |
+| 모바일 UX 메모 | `docs/UX_FEEDBACK.md` | Flutter 앱 UX 방향 |
 | 아키텍처 | `.agent/architecture.md` | 시스템 아키텍처 상세 |
 | 정책 | `.agent/rules.md` | 코딩·문서·git·협업 정책 |
 | 문서화된 해결책 | `docs/solutions/` | 과거 문제 해결·패턴·워크플로우 learning |
