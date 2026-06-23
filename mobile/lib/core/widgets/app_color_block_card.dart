@@ -24,6 +24,7 @@ class AppColorBlockCard extends StatelessWidget {
     return Semantics(
       button: onTap != null,
       label: semanticLabel,
+      excludeSemantics: semanticLabel != null,
       child: Material(
         color: color,
         borderRadius: const BorderRadius.all(Radius.circular(AppRadius.lg)),

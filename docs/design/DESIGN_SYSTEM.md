@@ -122,6 +122,7 @@ motion:
   fast: 120ms
   standard: 240ms
   slow: 300ms
+  typing: 900ms
 ---
 
 ## 1. 시스템 방향

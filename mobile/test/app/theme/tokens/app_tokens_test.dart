@@ -40,5 +40,11 @@ void main() {
       expect(AppSize.iconButton, 44);
       expect(AppSize.bottomNavigationHeight, 72);
     });
+
+    test('uses documented interaction durations', () {
+      expect(AppMotion.fast, const Duration(milliseconds: 120));
+      expect(AppMotion.standard, const Duration(milliseconds: 240));
+      expect(AppMotion.typing, const Duration(milliseconds: 900));
+    });
   });
 }

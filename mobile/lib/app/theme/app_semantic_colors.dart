@@ -50,6 +50,10 @@ class AppSemanticColors extends ThemeExtension<AppSemanticColors> {
     scrim: AppPalette.overlayScrim.withValues(alpha: scrimOpacity),
   );
 
+  static AppSemanticColors of(BuildContext context) {
+    return Theme.of(context).extension<AppSemanticColors>() ?? light;
+  }
+
   final Color userMessageSurface;
   final Color onUserMessage;
   final Color aiMessageSurface;

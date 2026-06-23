@@ -42,15 +42,20 @@ lib/
 │       ├── app_semantic_colors.dart
 │       ├── app_theme.dart
 │       └── tokens/          # 기본 디자인 토큰
-└── core/
-    └── widgets/             # 화면 공통 레이아웃과 상호작용 위젯
+├── core/
+│   └── widgets/             # 화면 공통 레이아웃과 상호작용 위젯
+└── features/
+    ├── conversation/
+    │   └── presentation/widgets/
+    └── home/
+        └── presentation/widgets/
 
 assets/
 ├── fonts/                   # Inter, JetBrains Mono variable font
 └── licenses/                # 번들 font 라이선스
 ```
 
-기능별 폴더는 실제 화면 구현을 시작할 때 `features/` 아래에 추가해요.
+화면과 상태는 `features/` 아래에 feature-first로 배치하고, 여러 기능에서 재사용하는 UI만 `core/widgets/`에 둬요.
 
 ## 디자인 토큰
 
@@ -85,3 +90,16 @@ assets/
 | `AppPageIndicator` | 온보딩 등에 사용하는 현재 페이지 표시 |
 | `AppModalSheet` | 키보드와 Safe area를 고려한 공통 bottom sheet |
 | `MainNavigationBar` | Home·Chat·History·Profile 주 내비게이션 |
+
+## 2차 도메인 컴포넌트
+
+선택 UI처럼 여러 기능이 공유하는 요소는 `core/widgets/`, 대화와 Home 전용 요소는 각 feature의 `presentation/widgets/`에서 제공해요.
+
+| 컴포넌트 | 역할 |
+|----------|------|
+| `AppSelectionChip` | 대화 방향·난이도 등의 단일 선택 chip |
+| `AppSelectionCard` | 대화 방식·롤플레이 상황 등의 선택 카드 |
+| `RecentConversationCard` | Home의 pastel 최근 대화 카드 |
+| `ChatBubble` | 사용자·AI 역할별 정렬과 semantic color가 적용된 말풍선 |
+| `GrammarFeedbackCard` | 사용자 메시지 아래의 교정 문장과 설명 |
+| `TypingIndicator` | Reduce Motion 설정을 따르는 AI 응답 대기 표시 |

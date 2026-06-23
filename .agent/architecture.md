@@ -68,7 +68,10 @@ mobile/
 ├── lib/
 │   ├── main.dart            # ProviderScope 앱 진입점
 │   ├── app/                 # 앱, router, theme
-│   └── core/                # 공통 기반 기능과 widget
+│   ├── core/                # 여러 feature가 공유하는 기반 기능과 widget
+│   └── features/            # feature-first 화면, 상태, 도메인 widget
+│       ├── conversation/    # 채팅, 문법 피드백 UI
+│       └── home/            # 최근 대화 UI
 ├── test/                    # Flutter 테스트
 └── pubspec.yaml             # Dart/Flutter 의존성
 ```
