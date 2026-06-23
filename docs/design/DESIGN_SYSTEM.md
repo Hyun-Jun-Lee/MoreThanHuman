@@ -311,6 +311,8 @@ Color block 자체에는 그림자를 추가하지 않아요. focus와 pressed �
 - AI 메시지: canvas 배경 + ink, 필요한 경우 1px hairline
 - 대화 시작 질문: block-lilac-soft 또는 block-cream의 큰 panel
 - typing/loading: 색상보다 motion과 짧은 상태 문구로 표현
+- composer는 pill outline 안에 입력창과 원형 send action을 배치해요.
+- 자연스러운 문장 상태는 check icon과 mono label을 함께 표시해요.
 - 말풍선 radius는 24\~32px이며 꼬리 모양은 사용하지 않아요.
 
 ### 8.4 Grammar Feedback
@@ -336,7 +338,13 @@ Color block 자체에는 그림자를 추가하지 않아요. focus와 pressed �
 - rounded.pill, caption-mono
 - 선택 상태는 Black fill + White text
 
-### 8.6 Navigation & Bottom Sheet
+### 8.6 Source & Retry State
+
+- 검색 출처 행은 제목, host, 외부 이동 icon을 함께 표시해요.
+- 검색 품질 부족 상태는 searchRetry semantic surface 하나로 묶어요.
+- 재시도 카드에는 주제 수정과 다른 아이디어 선택을 모두 제공해 막힌 흐름을 만들지 않아요.
+
+### 8.7 Navigation & Bottom Sheet
 
 **Bottom Navigation**
 

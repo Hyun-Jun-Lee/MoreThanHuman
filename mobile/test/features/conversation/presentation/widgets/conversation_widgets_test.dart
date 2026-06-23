@@ -5,6 +5,83 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('ChatComposer sends trimmed text and supports voice input', (
+    WidgetTester tester,
+  ) async {
+    final TextEditingController controller = TextEditingController();
+    addTearDown(controller.dispose);
+    String? sentMessage;
+    int voiceCount = 0;
+
+    await tester.pumpWidget(
+      _themedApp(
+        ChatComposer(
+          controller: controller,
+          onSend: (String message) => sentMessage = message,
+          onVoiceInput: () => voiceCount += 1,
+        ),
+      ),
+    );
+
+    IconButton sendButton = tester.widget<IconButton>(
+      find.widgetWithIcon(IconButton, Icons.arrow_upward_rounded),
+    );
+    expect(sendButton.onPressed, isNull);
+
+    await tester.enterText(find.byType(TextField), '  I tried takoyaki.  ');
+    await tester.pump();
+    sendButton = tester.widget<IconButton>(
+      find.widgetWithIcon(IconButton, Icons.arrow_upward_rounded),
+    );
+    expect(sendButton.onPressed, isNotNull);
+
+    await tester.tap(find.byTooltip('Send message'));
+    await tester.tap(find.byTooltip('Voice input'));
+    expect(sentMessage, 'I tried takoyaki.');
+    expect(voiceCount, 1);
+  });
+
+  testWidgets('ChatComposer shows and locks its sending state', (
+    WidgetTester tester,
+  ) async {
+    final TextEditingController controller = TextEditingController(
+      text: 'Hello',
+    );
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      _themedApp(
+        ChatComposer(controller: controller, isSending: true, onSend: (_) {}),
+      ),
+    );
+
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(tester.widget<TextField>(find.byType(TextField)).enabled, isFalse);
+    final IconButton sendButton = tester.widget<IconButton>(
+      find.ancestor(
+        of: find.byType(CircularProgressIndicator),
+        matching: find.byType(IconButton),
+      ),
+    );
+    expect(
+      sendButton.style?.backgroundColor?.resolve(<WidgetState>{
+        WidgetState.disabled,
+      }),
+      AppSemanticColors.light.selectedSurface,
+    );
+  });
+
+  testWidgets('NaturalFeedbackBadge reports taps', (WidgetTester tester) async {
+    int tapCount = 0;
+    await tester.pumpWidget(
+      _themedApp(NaturalFeedbackBadge(onTap: () => tapCount += 1)),
+    );
+
+    expect(find.text('LOOKS NATURAL'), findsOneWidget);
+    await tester.tap(find.byType(ActionChip));
+    expect(tapCount, 1);
+  });
+
   testWidgets('ChatBubble applies speaker alignment and semantic colors', (
     WidgetTester tester,
   ) async {

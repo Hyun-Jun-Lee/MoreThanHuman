@@ -71,7 +71,8 @@ mobile/
 │   ├── core/                # 여러 feature가 공유하는 기반 기능과 widget
 │   └── features/            # feature-first 화면, 상태, 도메인 widget
 │       ├── conversation/    # 채팅, 문법 피드백 UI
-│       └── home/            # 최근 대화 UI
+│       ├── home/            # 최근 대화 UI
+│       └── topic_prep/      # 검색 출처, 품질 재시도 UI
 ├── test/                    # Flutter 테스트
 └── pubspec.yaml             # Dart/Flutter 의존성
 ```

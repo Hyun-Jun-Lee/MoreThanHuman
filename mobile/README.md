@@ -47,7 +47,9 @@ lib/
 └── features/
     ├── conversation/
     │   └── presentation/widgets/
-    └── home/
+    ├── home/
+    │   └── presentation/widgets/
+    └── topic_prep/
         └── presentation/widgets/
 
 assets/
@@ -103,3 +105,15 @@ assets/
 | `ChatBubble` | 사용자·AI 역할별 정렬과 semantic color가 적용된 말풍선 |
 | `GrammarFeedbackCard` | 사용자 메시지 아래의 교정 문장과 설명 |
 | `TypingIndicator` | Reduce Motion 설정을 따르는 AI 응답 대기 표시 |
+
+## 3차 입력·상태 컴포넌트
+
+입력과 상태 전환처럼 화면 구현 시 오류가 생기기 쉬운 상호작용을 공통 컴포넌트로 제공해요.
+
+| 컴포넌트 | 역할 |
+|----------|------|
+| `AppTextField` | 오류·제출·접근성 레이블을 지원하는 기본 입력창 |
+| `SourceLinkTile` | 검색 출처의 제목·host와 열기 동작을 표시하는 행 |
+| `TopicRetryCard` | 검색 품질 부족 안내와 두 가지 복구 동작 제공 |
+| `ChatComposer` | 빈 메시지 차단, 전송·음성·sending 상태를 처리하는 입력창 |
+| `NaturalFeedbackBadge` | 자연스러운 사용자 문장에 표시하는 접근 가능한 상태 chip |
