@@ -114,9 +114,14 @@ borders:
   focused: 2px
 sizes:
   touch-target: 48px
+  icon: 24px
   icon-button: 44px
   input-min-height: 48px
   bottom-nav-height: 72px
+motion:
+  fast: 120ms
+  standard: 240ms
+  slow: 300ms
 ---
 
 ## 1. 시스템 방향

@@ -79,3 +79,10 @@
 - **Curitalk Flutter 기반 의존성 추가**: Riverpod, go_router, Dio, secure storage, Google Sign-In을 추가하고 Android minSdk 23 및 문서를 동기화
 - **Curitalk Flutter 최소 구조 생성**: ProviderScope 앱 진입점, go_router 앱 골격, theme/core 위치, 기본 widget test를 추가
 - **Curitalk 디자인 시스템 재정의**: Figma 편집형 원칙과 Stitch 화면을 대조해 monochrome core, pastel block, typography, 모바일 컴포넌트 및 Flutter 적용 기준을 정규화
+- **Curitalk Flutter 기본 토큰 구현**: palette, typography, spacing, radius, border, size token과 번들 font, 단위 테스트를 추가
+- **Curitalk Flutter 의미 토큰 구현**: Material 3 ColorScheme과 대화·문법·검색 상태 ThemeExtension을 정의하고 앱 light theme에 연결
+- **Curitalk Flutter 컴포넌트 토큰 구현**: 버튼·입력창·Chip·카드·Bottom sheet·Bottom navigation theme과 상태별 테스트를 추가
+
+## 2026-06-23
+
+- **Curitalk Flutter 1차 공통 컴포넌트 구현**: 페이지 골격, 핵심 CTA, 컬러 블록, 비동기 상태, modal sheet, page indicator, 주 내비게이션 공통 위젯과 테스트 추가
