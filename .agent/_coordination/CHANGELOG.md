@@ -91,3 +91,5 @@
 - **Flutter API·secure storage 기반 구현**: Dio 공통 envelope parser와 오류 매핑, Bearer interceptor, token pair·installation ID 보안 저장, Riverpod provider와 테스트 추가
 - **Flutter 인증 상태·token refresh 구현**: Riverpod 세션 복원·Google token 로그인·로그아웃과 단일화 refresh, rotate 저장, stale session 경쟁 방지 및 테스트 추가
 - **Flutter 앱 시작 흐름 구현**: Stitch 기반 Splash·3장 Onboarding·Google Login·Home 화면과 go_router 인증 redirect, 최근 대화 API 상태 및 flow 테스트 추가
+- **Flutter Topic Prep 구현 계획 작성**: Home Free Chat에서 Topic Input·Topic Prep까지 연결하는 모바일 구현 범위, 2자 validation, source link defer, ready/low-quality 상태와 테스트 계획 정리
+- **Flutter Topic Prep 화면 구현**: Home Free Chat에서 Topic Input과 Topic Prep API 상태를 연결하고, 2자 validation, 준비 카드 ready/low-quality/error UI, 방향·첫 질문 선택과 테스트 추가

@@ -75,7 +75,7 @@ void main() {
     ) async {
       await tester.pumpWidget(const ProviderScope(child: CuritalkApp()));
 
-      final BuildContext context = tester.element(find.text('Curitalk'));
+      final BuildContext context = tester.element(find.text('CURITALK'));
       final ThemeData theme = Theme.of(context);
 
       expect(theme.colorScheme.primary, AppPalette.primary);

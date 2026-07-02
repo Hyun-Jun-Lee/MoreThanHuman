@@ -1,6 +1,7 @@
 import 'package:curitalk/features/auth/auth.dart';
 import 'package:curitalk/features/home/home.dart';
 import 'package:curitalk/features/onboarding/onboarding.dart';
+import 'package:curitalk/features/topic_prep/topic_prep.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -10,6 +11,8 @@ abstract final class AppRoute {
   static const String onboarding = '/onboarding';
   static const String login = '/login';
   static const String home = '/home';
+  static const String topicInput = '/topic-input';
+  static const String topicPrep = '/topic-prep';
 }
 
 final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
@@ -68,7 +71,33 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
       ),
       GoRoute(
         path: AppRoute.home,
-        builder: (context, state) => const HomeScreen(),
+        builder: (context, state) {
+          return HomeScreen(
+            onStartTypeSelected: (ConversationStartType type) {
+              if (type == ConversationStartType.freeChat) {
+                context.push(AppRoute.topicInput);
+              }
+            },
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoute.topicInput,
+        builder: (context, state) {
+          return TopicInputScreen(
+            initialTopic: state.uri.queryParameters['topic'],
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoute.topicPrep,
+        builder: (context, state) {
+          final String? topic = state.uri.queryParameters['topic'];
+          if (topic == null || topic.trim().isEmpty) {
+            return const TopicInputScreen();
+          }
+          return TopicPrepScreen(initialTopic: topic);
+        },
       ),
     ],
   );

@@ -55,7 +55,10 @@ lib/
     ├── home/
     │   └── presentation/widgets/
     └── topic_prep/
-        └── presentation/widgets/
+        ├── application/      # topic prep API 상태
+        ├── data/             # topic prep API repository
+        ├── domain/           # 준비 카드 응답 모델
+        └── presentation/     # Topic Input, Topic Prep 화면과 widgets
 
 assets/
 ├── fonts/                   # Inter, JetBrains Mono variable font
@@ -145,6 +148,22 @@ Splash → Onboarding(최초 1회) → Google Login → Home
 - Onboarding: 3장 소개 후 완료 상태를 secure storage에 저장
 - Login: Google Sign-In SDK의 id token을 백엔드 `/auth/google/mobile`로 전달
 - Home: 사용자 이름과 최근 대화 5개를 표시하고, 없으면 시작 제안을 표시
+- Free Chat: Home sheet에서 Topic Input으로 이동한 뒤 `POST /api/search/topic-prep/`로 준비 카드를 불러옴
+
+## Topic Prep 흐름
+
+Home의 `START CONVERSATION`에서 Free Chat을 선택하면 Topic Input 화면으로 이동해요. Topic Input은 2자 미만 입력을 클라이언트에서 막고, 예시 topic chip으로 빠르게 주제를 채울 수 있게 해요.
+
+Topic Prep 화면은 전달받은 topic으로 `POST /api/search/topic-prep/`를 호출해 loading, ready, low-quality, error 상태를 표시해요.
+
+| 상태 | 표시 |
+|------|------|
+| `loading` | 준비 중 안내 |
+| `ready=true` | summary, sources, direction 4개, 선택 direction의 첫 질문 3개 |
+| `ready=false` | retry guidance, example topic chip, edit topic 복귀 |
+| `error` | 재시도 가능한 오류 상태 |
+
+기본 선택은 `CASUAL_CHAT`과 첫 번째 질문이에요. 출처 링크는 현재 화면에 표시만 하고, 외부 브라우저 열기는 `url_launcher`를 도입하는 후속 작업에서 연결해요. 첫 답변 입력과 `POST /api/conversations/start/free-chat/` 연동도 다음 단계에서 구현해요.
 
 Google Sign-In 실행 시 다음 `dart-define`을 사용할 수 있어요.
 

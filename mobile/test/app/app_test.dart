@@ -3,6 +3,7 @@ import 'package:curitalk/core/storage/storage.dart';
 import 'package:curitalk/features/auth/auth.dart';
 import 'package:curitalk/features/home/home.dart';
 import 'package:curitalk/features/onboarding/onboarding.dart';
+import 'package:curitalk/features/topic_prep/topic_prep.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -45,6 +46,16 @@ void main() {
       expect(onboardingStorage.completed, isTrue);
       expect(tokenStorage.tokens?.accessToken, 'access-token');
       expect(authRepository.lastIdToken, 'google-id-token');
+
+      await tester.tap(find.text('START CONVERSATION').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Free Chat'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('What topic do you want to talk about?'),
+        findsOneWidget,
+      );
     },
   );
 
@@ -102,6 +113,9 @@ ProviderScope _appScope({
       ),
       authRepositoryProvider.overrideWithValue(authRepository),
       homeRepositoryProvider.overrideWithValue(const _FakeHomeRepository()),
+      topicPrepRepositoryProvider.overrideWithValue(
+        const _FakeTopicPrepRepository(),
+      ),
     ],
     child: const CuritalkApp(),
   );
@@ -147,6 +161,15 @@ class _FakeHomeRepository implements HomeRepository {
     int limit = 5,
   }) async {
     return const <ConversationSummary>[];
+  }
+}
+
+class _FakeTopicPrepRepository implements TopicPrepRepository {
+  const _FakeTopicPrepRepository();
+
+  @override
+  Future<TopicPrepResult> prepareTopic(String topic) {
+    throw UnimplementedError('Topic prep is not exercised in app flow tests.');
   }
 }
 

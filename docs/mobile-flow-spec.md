@@ -576,6 +576,7 @@ Timeout:
 ## 9. 구현 순서
 
 1. `Splash → Onboarding → Google Login → Home` 시작 흐름을 연결해요.
-2. Home의 대화 시작 sheet를 Topic Input과 Roleplay Setup에 연결해요.
-3. Topic Prep API와 Conversation 시작 흐름을 연결해요.
-4. Conversation 메시지와 grammar feedback polling을 연결해요.
+2. Home의 Free Chat 시작을 Topic Input과 Topic Prep API에 연결해요.
+3. Roleplay Setup을 연결해요.
+4. Free Chat Start와 Conversation 생성 흐름을 연결해요.
+5. Conversation 메시지와 grammar feedback polling을 연결해요.
