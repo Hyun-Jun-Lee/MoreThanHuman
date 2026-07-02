@@ -92,7 +92,7 @@ flowchart TD
 ```text
 ┌─────────────────────────┐
 │                         │
-│          Convia         │
+│        Curitalk         │
 │   Speak about anything  │
 │                         │
 │        Loading...       │
@@ -573,10 +573,9 @@ Timeout:
 - WebSocket/SSE 기반 실시간 피드백
 - 결제/구독
 
-## 9. 다음 단계
+## 9. 구현 순서
 
-1. 이 문서를 기준으로 low-fi 화면 스케치를 확정해요.
-2. 디자인 레퍼런스를 수집해 앱의 감정 톤을 정해요.
-3. 색상, 타이포그래피, spacing, radius 중심의 디자인 토큰을 정의해요.
-4. Button, TextField, Card, ChatBubble, GrammarFeedback 컴포넌트를 디자인 시스템으로 정리해요.
-5. Flutter 프로젝트에서 `Auth → Home → Topic Prep → Conversation` 순서로 얇게 연결해요.
+1. `Splash → Onboarding → Google Login → Home` 시작 흐름을 연결해요.
+2. Home의 대화 시작 sheet를 Topic Input과 Roleplay Setup에 연결해요.
+3. Topic Prep API와 Conversation 시작 흐름을 연결해요.
+4. Conversation 메시지와 grammar feedback polling을 연결해요.

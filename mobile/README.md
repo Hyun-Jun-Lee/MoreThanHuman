@@ -43,8 +43,13 @@ lib/
 │       ├── app_theme.dart
 │       └── tokens/          # 기본 디자인 토큰
 ├── core/
+│   ├── config/              # dart-define 기반 앱 설정
+│   ├── network/             # Dio client, 응답 envelope, 오류 매핑
+│   ├── storage/             # token pair와 installation ID 보안 저장
 │   └── widgets/             # 화면 공통 레이아웃과 상호작용 위젯
 └── features/
+    ├── auth/                # 인증 API, 세션 모델, Riverpod controller
+    ├── onboarding/          # 완료 상태와 3장 onboarding 화면
     ├── conversation/
     │   └── presentation/widgets/
     ├── home/
@@ -117,3 +122,46 @@ assets/
 | `TopicRetryCard` | 검색 품질 부족 안내와 두 가지 복구 동작 제공 |
 | `ChatComposer` | 빈 메시지 차단, 전송·음성·sending 상태를 처리하는 입력창 |
 | `NaturalFeedbackBadge` | 자연스러운 사용자 문장에 표시하는 접근 가능한 상태 chip |
+
+## API와 보안 저장소
+
+`ApiClient`는 백엔드의 `{ success, data, message }` envelope를 `ApiResponse<T>`로 변환하고, FastAPI·네트워크·timeout 오류를 `ApiException`으로 통일해요. 인증 요청에는 secure storage의 access token을 `Authorization: Bearer` 헤더로 자동 추가하며 로그인처럼 공개 요청은 `requiresAuth: false`로 제외할 수 있어요.
+
+`SecureTokenStorage`는 access token과 refresh token을 하나의 JSON 값으로 저장해 token pair가 부분 저장되는 상황을 방지해요. `clearTokens()`는 installation ID를 유지하므로 로그아웃 후에도 같은 설치 식별자를 재사용할 수 있어요.
+
+`authControllerProvider`는 앱 시작 시 저장된 token pair로 `/auth/me`를 조회해 `authenticated` 또는 `unauthenticated` 상태를 제공해요. `AsyncLoading`은 최초 확인과 로그인·로그아웃 처리 중 상태예요. Google SDK에서 받은 id token은 `signInWithGoogleIdToken()`에 전달하고, 로그아웃은 서버 revoke가 실패해도 로컬 token을 반드시 삭제해요.
+
+인증 API가 `401`을 반환하면 `TokenRefreshInterceptor`가 `/auth/refresh`를 호출해 token pair를 rotate하고 원 요청을 한 번 재시도해요. 동시 `401`은 하나의 refresh 작업을 공유해요. 세션 revision을 함께 확인하므로 로그아웃이나 새 로그인 뒤에 늦게 도착한 refresh 결과는 저장하지 않아요. refresh token이 거절되면 secure storage를 비우고 Riverpod 상태를 `unauthenticated`로 전환하지만, 네트워크·서버 일시 장애에서는 token을 보존해 다음 재시도를 허용해요.
+
+## 앱 시작 흐름
+
+`go_router`는 onboarding 완료 상태와 `authControllerProvider`를 관찰해 아래 순서로 이동해요.
+
+```text
+Splash → Onboarding(최초 1회) → Google Login → Home
+```
+
+- Splash: 저장된 세션과 onboarding 완료 여부 확인
+- Onboarding: 3장 소개 후 완료 상태를 secure storage에 저장
+- Login: Google Sign-In SDK의 id token을 백엔드 `/auth/google/mobile`로 전달
+- Home: 사용자 이름과 최근 대화 5개를 표시하고, 없으면 시작 제안을 표시
+
+Google Sign-In 실행 시 다음 `dart-define`을 사용할 수 있어요.
+
+```bash
+flutter run \
+  --dart-define=GOOGLE_CLIENT_ID=<ios-oauth-client-id> \
+  --dart-define=GOOGLE_SERVER_CLIENT_ID=<web-oauth-client-id>
+```
+
+Android에서 `google-services.json`을 사용하지 않으면 `GOOGLE_SERVER_CLIENT_ID`가 필요해요. iOS는 `GOOGLE_CLIENT_ID`와 별개로 OAuth 설정의 `REVERSED_CLIENT_ID` URL scheme을 `Info.plist`에 등록해야 실제 로그인이 동작해요. 서버의 `GOOGLE_CLIENT_ID`는 동일한 Web OAuth client ID를 사용해요.
+
+기본 API 주소는 `http://localhost:8010/api/`예요. 실행 환경에 따라 `--dart-define`으로 변경해요.
+
+```bash
+# iOS simulator / macOS
+flutter run --dart-define=API_BASE_URL=http://localhost:8010/api/
+
+# Android emulator
+flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8010/api/
+```

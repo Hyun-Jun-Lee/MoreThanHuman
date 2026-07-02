@@ -68,14 +68,20 @@ mobile/
 ├── lib/
 │   ├── main.dart            # ProviderScope 앱 진입점
 │   ├── app/                 # 앱, router, theme
-│   ├── core/                # 여러 feature가 공유하는 기반 기능과 widget
+│   ├── core/                # config, Dio API, secure token storage, 공통 widget
 │   └── features/            # feature-first 화면, 상태, 도메인 widget
+│       ├── auth/            # Riverpod 인증 상태, 모바일 auth API
 │       ├── conversation/    # 채팅, 문법 피드백 UI
-│       ├── home/            # 최근 대화 UI
+│       ├── home/            # 최근 대화 API 상태와 Home UI
+│       ├── onboarding/      # 완료 상태 저장과 3장 onboarding UI
 │       └── topic_prep/      # 검색 출처, 품질 재시도 UI
 ├── test/                    # Flutter 테스트
 └── pubspec.yaml             # Dart/Flutter 의존성
 ```
+
+Flutter API 요청은 `ApiClient → AuthTokenInterceptor → TokenRefreshInterceptor → Dio` 순서로 실행돼요. 응답은 공통 envelope parser를 거쳐 feature decoder로 전달하고, access/refresh token pair와 installation ID는 `flutter_secure_storage`에 분리 저장해요. 여러 요청이 동시에 `401`을 받아도 refresh는 하나만 실행하며, rotate된 token pair 저장 후 각 요청을 한 번만 재시도해요.
+
+Flutter 앱 시작은 `Splash → Onboarding(최초 1회) → Google Login → Home` 순서예요. `go_router`가 onboarding 완료 상태와 Riverpod 인증 상태를 함께 관찰하며, 인증 복원 중에는 Splash를 유지하고 로그인 성공 또는 세션 만료 시 Home/Login으로 redirect해요. Home은 `/api/conversations/?limit=5&offset=0`에서 최근 대화를 불러와 loaded/empty/error 상태를 표시해요.
 
 도메인은 기본적으로 아래 계층을 따라요:
 
@@ -112,6 +118,13 @@ domains/{name}/
              → POST /api/auth/google/mobile { id_token, device_id }
              → 서버가 Google id_token 검증
              → access_token(JWT) + refresh_token 발급
+
+[Flutter 앱] → 인증 API에서 401 수신
+             → 진행 중인 refresh가 있으면 같은 결과 대기
+             → POST /api/auth/refresh { refresh_token, device_id }
+             → rotate된 token pair 보안 저장
+             → 원 요청 1회 재시도
+             → refresh가 400/401/403/422이면 token 삭제 + unauthenticated 전환
 
 [Swagger/웹 확인] → GET /api/auth/google/login?device_id=...
                  → OAuth state에 device_id 서명
@@ -184,3 +197,4 @@ domains/{name}/
 - refresh token은 원문 대신 해시를 저장하고, 기기(installation) 단위로 rotate/revoke 해요.
 - 대화와 메시지는 `user_id`로 소유자를 분리해요.
 - 모바일 앱은 백엔드 API와 HTTPS로 통신하는 별도 클라이언트로 취급해요.
+- refresh 네트워크·5xx 실패는 세션 만료로 취급하지 않고 로컬 token pair를 보존해요.

@@ -16,7 +16,7 @@ class RecentConversationCard extends StatelessWidget {
   final String title;
   final String preview;
   final Color color;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {

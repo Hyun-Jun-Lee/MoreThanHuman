@@ -88,3 +88,6 @@
 - **Curitalk Flutter 1차 공통 컴포넌트 구현**: 페이지 골격, 핵심 CTA, 컬러 블록, 비동기 상태, modal sheet, page indicator, 주 내비게이션 공통 위젯과 테스트 추가
 - **Curitalk Flutter 2차 도메인 컴포넌트 구현**: 선택 UI, 최근 대화 카드, 역할별 chat bubble, 인라인 문법 피드백, Reduce Motion 대응 typing indicator와 테스트 추가
 - **Curitalk Flutter 3차 입력·상태 컴포넌트 구현**: 기본 입력창, 검색 출처·재시도 UI, 빈 메시지 차단 chat composer, 자연스러운 문장 badge와 테스트 추가
+- **Flutter API·secure storage 기반 구현**: Dio 공통 envelope parser와 오류 매핑, Bearer interceptor, token pair·installation ID 보안 저장, Riverpod provider와 테스트 추가
+- **Flutter 인증 상태·token refresh 구현**: Riverpod 세션 복원·Google token 로그인·로그아웃과 단일화 refresh, rotate 저장, stale session 경쟁 방지 및 테스트 추가
+- **Flutter 앱 시작 흐름 구현**: Stitch 기반 Splash·3장 Onboarding·Google Login·Home 화면과 go_router 인증 redirect, 최근 대화 API 상태 및 flow 테스트 추가
