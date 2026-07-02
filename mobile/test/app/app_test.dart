@@ -79,6 +79,32 @@ void main() {
     expect(find.text('Hi, Learner'), findsOneWidget);
     expect(find.text('Practice English with your own topics.'), findsNothing);
   });
+
+  testWidgets('authenticated user can open Roleplay Setup from Home', (
+    WidgetTester tester,
+  ) async {
+    final _MemoryTokenStorage tokenStorage = _MemoryTokenStorage(
+      tokens: _tokens,
+      deviceId: _deviceId,
+    );
+
+    await tester.pumpWidget(
+      _appScope(
+        tokenStorage: tokenStorage,
+        onboardingStorage: _MemoryOnboardingStorage(true),
+        authRepository: _FakeAuthRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('START CONVERSATION').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Roleplay'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Choose a situation'), findsOneWidget);
+    expect(find.text('Cafe order'), findsOneWidget);
+  });
 }
 
 const String _deviceId = '550e8400-e29b-41d4-a716-446655440000';

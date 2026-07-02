@@ -1,6 +1,7 @@
 import 'package:curitalk/features/auth/auth.dart';
 import 'package:curitalk/features/home/home.dart';
 import 'package:curitalk/features/onboarding/onboarding.dart';
+import 'package:curitalk/features/roleplay_setup/roleplay_setup.dart';
 import 'package:curitalk/features/topic_prep/topic_prep.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,6 +14,7 @@ abstract final class AppRoute {
   static const String home = '/home';
   static const String topicInput = '/topic-input';
   static const String topicPrep = '/topic-prep';
+  static const String roleplaySetup = '/roleplay-setup';
 }
 
 final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
@@ -76,6 +78,8 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
             onStartTypeSelected: (ConversationStartType type) {
               if (type == ConversationStartType.freeChat) {
                 context.push(AppRoute.topicInput);
+              } else if (type == ConversationStartType.roleplay) {
+                context.push(AppRoute.roleplaySetup);
               }
             },
           );
@@ -98,6 +102,10 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
           }
           return TopicPrepScreen(initialTopic: topic);
         },
+      ),
+      GoRoute(
+        path: AppRoute.roleplaySetup,
+        builder: (context, state) => const RoleplaySetupScreen(),
       ),
     ],
   );

@@ -54,6 +54,10 @@ lib/
     │   └── presentation/widgets/
     ├── home/
     │   └── presentation/widgets/
+    ├── roleplay_setup/
+    │   ├── application/      # roleplay 상황·난이도 선택 상태
+    │   ├── domain/           # preset, difficulty, role_character helper
+    │   └── presentation/     # Roleplay Setup 화면과 widgets
     └── topic_prep/
         ├── application/      # topic prep API 상태
         ├── data/             # topic prep API repository
@@ -149,6 +153,7 @@ Splash → Onboarding(최초 1회) → Google Login → Home
 - Login: Google Sign-In SDK의 id token을 백엔드 `/auth/google/mobile`로 전달
 - Home: 사용자 이름과 최근 대화 5개를 표시하고, 없으면 시작 제안을 표시
 - Free Chat: Home sheet에서 Topic Input으로 이동한 뒤 `POST /api/search/topic-prep/`로 준비 카드를 불러옴
+- Roleplay: Home sheet에서 Roleplay Setup으로 이동한 뒤 상황과 난이도를 선택함
 
 ## Topic Prep 흐름
 
@@ -164,6 +169,18 @@ Topic Prep 화면은 전달받은 topic으로 `POST /api/search/topic-prep/`를 
 | `error` | 재시도 가능한 오류 상태 |
 
 기본 선택은 `CASUAL_CHAT`과 첫 번째 질문이에요. 출처 링크는 현재 화면에 표시만 하고, 외부 브라우저 열기는 `url_launcher`를 도입하는 후속 작업에서 연결해요. 첫 답변 입력과 `POST /api/conversations/start/free-chat/` 연동도 다음 단계에서 구현해요.
+
+## Roleplay Setup 흐름
+
+Home의 `START CONVERSATION`에서 Roleplay를 선택하면 Roleplay Setup 화면으로 이동해요. 사용자는 preset 상황 카드 7개 중 하나를 고르거나, custom 입력으로 원하는 상황을 직접 작성할 수 있어요.
+
+| 선택 | 동작 |
+|------|------|
+| preset 상황 | 선택 즉시 Start Roleplay CTA 활성화 |
+| custom 상황 | 2자 이상 입력 시 Start Roleplay CTA 활성화 |
+| 난이도 | `Easy`, `Normal`, `Challenge` 중 선택하며 기본값은 `Normal` |
+
+현재 단계에서는 선택 결과를 백엔드 계약에 맞는 `role_character` 문자열로 합성할 수 있게 준비해요. 실제 `POST /api/conversations/start/roleplay/` 호출과 Conversation 화면 이동은 Conversation 화면 구현 단계에서 연결해요.
 
 Google Sign-In 실행 시 다음 `dart-define`을 사용할 수 있어요.
 

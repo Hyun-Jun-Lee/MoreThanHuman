@@ -74,6 +74,7 @@ mobile/
 │       ├── conversation/    # 채팅, 문법 피드백 UI
 │       ├── home/            # 최근 대화 API 상태와 Home UI
 │       ├── onboarding/      # 완료 상태 저장과 3장 onboarding UI
+│       ├── roleplay_setup/  # 롤플레이 상황·난이도 선택 UI
 │       └── topic_prep/      # Topic Input, 검색 준비 카드 API 상태와 UI
 ├── test/                    # Flutter 테스트
 └── pubspec.yaml             # Dart/Flutter 의존성
@@ -81,7 +82,7 @@ mobile/
 
 Flutter API 요청은 `ApiClient → AuthTokenInterceptor → TokenRefreshInterceptor → Dio` 순서로 실행돼요. 응답은 공통 envelope parser를 거쳐 feature decoder로 전달하고, access/refresh token pair와 installation ID는 `flutter_secure_storage`에 분리 저장해요. 여러 요청이 동시에 `401`을 받아도 refresh는 하나만 실행하며, rotate된 token pair 저장 후 각 요청을 한 번만 재시도해요.
 
-Flutter 앱 시작은 `Splash → Onboarding(최초 1회) → Google Login → Home` 순서예요. `go_router`가 onboarding 완료 상태와 Riverpod 인증 상태를 함께 관찰하며, 인증 복원 중에는 Splash를 유지하고 로그인 성공 또는 세션 만료 시 Home/Login으로 redirect해요. Home은 `/api/conversations/?limit=5&offset=0`에서 최근 대화를 불러와 loaded/empty/error 상태를 표시하고, Free Chat 선택 시 `Topic Input → Topic Prep`으로 이어져 `POST /api/search/topic-prep/`의 ready/low-quality/error 상태를 보여줘요.
+Flutter 앱 시작은 `Splash → Onboarding(최초 1회) → Google Login → Home` 순서예요. `go_router`가 onboarding 완료 상태와 Riverpod 인증 상태를 함께 관찰하며, 인증 복원 중에는 Splash를 유지하고 로그인 성공 또는 세션 만료 시 Home/Login으로 redirect해요. Home은 `/api/conversations/?limit=5&offset=0`에서 최근 대화를 불러와 loaded/empty/error 상태를 표시해요. Free Chat 선택 시 `Topic Input → Topic Prep`으로 이어져 `POST /api/search/topic-prep/`의 ready/low-quality/error 상태를 보여주고, Roleplay 선택 시 `Roleplay Setup`으로 이어져 preset/custom 상황과 난이도를 선택해 후속 `role_character` payload를 준비해요.
 
 도메인은 기본적으로 아래 계층을 따라요:
 
