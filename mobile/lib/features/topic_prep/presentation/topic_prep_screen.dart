@@ -1,6 +1,7 @@
 import 'package:curitalk/app/router/app_router.dart';
 import 'package:curitalk/app/theme/tokens/tokens.dart';
 import 'package:curitalk/core/widgets/widgets.dart';
+import 'package:curitalk/features/conversation/conversation.dart';
 import 'package:curitalk/features/topic_prep/topic_prep.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -17,19 +18,31 @@ class TopicPrepScreen extends ConsumerStatefulWidget {
 
 class _TopicPrepScreenState extends ConsumerState<TopicPrepScreen> {
   late String _topic;
+  late final TextEditingController _answerController;
   TopicPrepDirectionType? _selectedDirection;
   int _selectedQuestionIndex = 0;
+  String? _answerErrorText;
 
   @override
   void initState() {
     super.initState();
     _topic = widget.initialTopic.trim();
+    _answerController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _answerController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final AsyncValue<TopicPrepResult> result = ref.watch(
       topicPrepControllerProvider(_topic),
+    );
+    final StartConversationState startState = ref.watch(
+      startConversationControllerProvider,
     );
 
     return AppScaffold(
@@ -55,8 +68,12 @@ class _TopicPrepScreenState extends ConsumerState<TopicPrepScreen> {
           }
           return _ReadyTopicPrepView(
             card: result.card!,
+            answerController: _answerController,
             selectedDirection: _selectedDirection,
             selectedQuestionIndex: _selectedQuestionIndex,
+            answerErrorText: _answerErrorText,
+            startErrorText: startState.errorMessage,
+            isStarting: startState.isStarting,
             onDirectionSelected: (TopicPrepDirectionType direction) {
               setState(() {
                 _selectedDirection = direction;
@@ -66,6 +83,12 @@ class _TopicPrepScreenState extends ConsumerState<TopicPrepScreen> {
             onQuestionSelected: (int index) {
               setState(() => _selectedQuestionIndex = index);
             },
+            onAnswerChanged: (_) {
+              if (_answerErrorText != null) {
+                setState(() => _answerErrorText = null);
+              }
+            },
+            onStart: () => _startFreeChat(result.card!),
           );
         },
       ),
@@ -77,6 +100,8 @@ class _TopicPrepScreenState extends ConsumerState<TopicPrepScreen> {
       _topic = topic.trim();
       _selectedDirection = null;
       _selectedQuestionIndex = 0;
+      _answerController.clear();
+      _answerErrorText = null;
     });
   }
 
@@ -85,22 +110,71 @@ class _TopicPrepScreenState extends ConsumerState<TopicPrepScreen> {
       '${AppRoute.topicInput}?topic=${Uri.encodeQueryComponent(_topic)}',
     );
   }
+
+  Future<void> _startFreeChat(TopicPrepCard card) async {
+    final String firstMessage = _answerController.text.trim();
+    if (firstMessage.length < 2) {
+      setState(() => _answerErrorText = 'Enter at least 2 characters.');
+      return;
+    }
+
+    final TopicPrepDirection direction = _resolveSelectedDirection(card);
+    final String? selectedQuestion =
+        direction.firstQuestions.isEmpty ||
+            _selectedQuestionIndex >= direction.firstQuestions.length
+        ? null
+        : direction.firstQuestions[_selectedQuestionIndex];
+    final ConversationResponse? response = await ref
+        .read(startConversationControllerProvider.notifier)
+        .startFreeChat(
+          firstMessage: firstMessage,
+          searchContext: card.summary,
+          topic: card.topic,
+          conversationDirection: direction.direction.value,
+          selectedQuestion: selectedQuestion,
+        );
+    if (!mounted || response == null) {
+      return;
+    }
+    context.go(AppRoute.conversationPath(response.conversationId));
+  }
+
+  TopicPrepDirection _resolveSelectedDirection(TopicPrepCard card) {
+    final TopicPrepDirectionType preferred =
+        _selectedDirection ?? TopicPrepDirectionType.casualChat;
+    return card.directions.firstWhere(
+      (TopicPrepDirection direction) => direction.direction == preferred,
+      orElse: () => card.directions.first,
+    );
+  }
 }
 
 class _ReadyTopicPrepView extends StatelessWidget {
   const _ReadyTopicPrepView({
     required this.card,
+    required this.answerController,
     required this.selectedQuestionIndex,
     required this.onDirectionSelected,
     required this.onQuestionSelected,
+    required this.onAnswerChanged,
+    required this.onStart,
     this.selectedDirection,
+    this.answerErrorText,
+    this.startErrorText,
+    this.isStarting = false,
   });
 
   final TopicPrepCard card;
+  final TextEditingController answerController;
   final TopicPrepDirectionType? selectedDirection;
   final int selectedQuestionIndex;
+  final String? answerErrorText;
+  final String? startErrorText;
+  final bool isStarting;
   final ValueChanged<TopicPrepDirectionType> onDirectionSelected;
   final ValueChanged<int> onQuestionSelected;
+  final ValueChanged<String> onAnswerChanged;
+  final VoidCallback onStart;
 
   @override
   Widget build(BuildContext context) {
@@ -158,8 +232,34 @@ class _ReadyTopicPrepView extends StatelessWidget {
           if (index != questions.length - 1)
             const SizedBox(height: AppSpacing.sm),
         ],
-        const SizedBox(height: AppSpacing.xxl),
-        AppPrimaryButton(label: 'START ANSWERING', onPressed: null),
+        const SizedBox(height: AppSpacing.xl),
+        const AppSectionLabel('Answer to begin'),
+        const SizedBox(height: AppSpacing.md),
+        AppTextField(
+          controller: answerController,
+          hintText: 'Type your first answer in English...',
+          errorText: answerErrorText,
+          enabled: !isStarting,
+          maxLines: 4,
+          textInputAction: TextInputAction.newline,
+          semanticLabel: 'First answer',
+          onChanged: onAnswerChanged,
+        ),
+        if (startErrorText != null) ...<Widget>[
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            startErrorText!,
+            style: AppTypography.bodySm.copyWith(
+              color: Theme.of(context).colorScheme.error,
+            ),
+          ),
+        ],
+        const SizedBox(height: AppSpacing.md),
+        AppPrimaryButton(
+          label: 'START ANSWERING',
+          isLoading: isStarting,
+          onPressed: isStarting ? null : onStart,
+        ),
         const SizedBox(height: AppSpacing.xl),
       ],
     );

@@ -71,7 +71,7 @@ mobile/
 │   ├── core/                # config, Dio API, secure token storage, 공통 widget
 │   └── features/            # feature-first 화면, 상태, 도메인 widget
 │       ├── auth/            # Riverpod 인증 상태, 모바일 auth API
-│       ├── conversation/    # 채팅, 문법 피드백 UI
+│       ├── conversation/    # 대화 API, 메시지 전송, grammar polling, UI
 │       ├── home/            # 최근 대화 API 상태와 Home UI
 │       ├── onboarding/      # 완료 상태 저장과 3장 onboarding UI
 │       ├── roleplay_setup/  # 롤플레이 상황·난이도 선택 UI
@@ -82,7 +82,7 @@ mobile/
 
 Flutter API 요청은 `ApiClient → AuthTokenInterceptor → TokenRefreshInterceptor → Dio` 순서로 실행돼요. 응답은 공통 envelope parser를 거쳐 feature decoder로 전달하고, access/refresh token pair와 installation ID는 `flutter_secure_storage`에 분리 저장해요. 여러 요청이 동시에 `401`을 받아도 refresh는 하나만 실행하며, rotate된 token pair 저장 후 각 요청을 한 번만 재시도해요.
 
-Flutter 앱 시작은 `Splash → Onboarding(최초 1회) → Google Login → Home` 순서예요. `go_router`가 onboarding 완료 상태와 Riverpod 인증 상태를 함께 관찰하며, 인증 복원 중에는 Splash를 유지하고 로그인 성공 또는 세션 만료 시 Home/Login으로 redirect해요. Home은 `/api/conversations/?limit=5&offset=0`에서 최근 대화를 불러와 loaded/empty/error 상태를 표시해요. Free Chat 선택 시 `Topic Input → Topic Prep`으로 이어져 `POST /api/search/topic-prep/`의 ready/low-quality/error 상태를 보여주고, Roleplay 선택 시 `Roleplay Setup`으로 이어져 preset/custom 상황과 난이도를 선택해 후속 `role_character` payload를 준비해요.
+Flutter 앱 시작은 `Splash → Onboarding(최초 1회) → Google Login → Home` 순서예요. `go_router`가 onboarding 완료 상태와 Riverpod 인증 상태를 함께 관찰하며, 인증 복원 중에는 Splash를 유지하고 로그인 성공 또는 세션 만료 시 Home/Login으로 redirect해요. Home은 `/api/conversations/?limit=5&offset=0`에서 최근 대화를 불러와 loaded/empty/error 상태를 표시해요. Free Chat 선택 시 `Topic Input → Topic Prep`으로 이어져 `POST /api/search/topic-prep/`의 ready/low-quality/error 상태를 보여주고, 첫 답변 제출 후 `POST /api/conversations/start/free-chat/`로 Conversation 화면에 진입해요. Roleplay 선택 시 `Roleplay Setup`에서 preset/custom 상황과 난이도를 고르고 `POST /api/conversations/start/roleplay/`로 같은 Conversation 화면에 진입해요. Home 최근 대화 카드도 `/conversation/:conversationId`로 이동해 기존 메시지를 이어가요.
 
 도메인은 기본적으로 아래 계층을 따라요:
 
@@ -144,6 +144,16 @@ domains/{name}/
          ├── LLMProvider → OpenRouter / Ollama
          ├── GrammarService 백그라운드 문법 체크
          └── Response { conversation_id, response, message_id }
+
+[Flutter 앱] → Topic Prep 첫 답변 또는 Roleplay Setup CTA
+             → start conversation API
+             → /conversation/{conversation_id}
+             → GET /api/conversations/{conversation_id}/messages/?limit=50&offset=0
+
+[Flutter 앱] → Conversation composer 전송
+             → POST /api/conversations/{conversation_id}/message/
+             → optimistic user bubble + TypingIndicator
+             → AI 응답 표시 후 canonical messages refresh
 ```
 
 ### 문법 피드백
@@ -151,6 +161,7 @@ domains/{name}/
 ```text
 [모바일 앱] → GET /api/grammar/message/{message_id}/
            → 현재 사용자 소유 message인지 검증
+           → 2초 간격, 최대 30초 polling
            → 피드백이 없거나 접근 불가하면 404를 pending/timeout UX로 처리
            → GrammarFeedback 수신 또는 앱 timeout 처리
 

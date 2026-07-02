@@ -1,8 +1,11 @@
+import 'package:curitalk/app/router/app_router.dart';
 import 'package:curitalk/app/theme/tokens/tokens.dart';
 import 'package:curitalk/core/widgets/widgets.dart';
+import 'package:curitalk/features/conversation/conversation.dart';
 import 'package:curitalk/features/roleplay_setup/roleplay_setup.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 class RoleplaySetupScreen extends ConsumerStatefulWidget {
   const RoleplaySetupScreen({super.key});
@@ -30,6 +33,9 @@ class _RoleplaySetupScreenState extends ConsumerState<RoleplaySetupScreen> {
   @override
   Widget build(BuildContext context) {
     final RoleplaySetupState state = ref.watch(roleplaySetupControllerProvider);
+    final StartConversationState startState = ref.watch(
+      startConversationControllerProvider,
+    );
     final RoleplaySetupController controller = ref.read(
       roleplaySetupControllerProvider.notifier,
     );
@@ -39,17 +45,22 @@ class _RoleplaySetupScreenState extends ConsumerState<RoleplaySetupScreen> {
       bottomNavigationBar: AppBottomActionBar(
         child: AppPrimaryButton(
           label: 'START ROLEPLAY',
-          onPressed: state.canStart
-              ? () {
+          isLoading: startState.isStarting,
+          onPressed: state.canStart && !startState.isStarting
+              ? () async {
                   final RoleplaySetupPayload? payload = controller
                       .prepareStart();
                   if (payload == null) {
                     return;
                   }
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Ready: ${payload.situation.displayText}'),
-                    ),
+                  final ConversationResponse? response = await ref
+                      .read(startConversationControllerProvider.notifier)
+                      .startRoleplay(roleCharacter: payload.roleCharacter);
+                  if (!context.mounted || response == null) {
+                    return;
+                  }
+                  context.go(
+                    AppRoute.conversationPath(response.conversationId),
                   );
                 }
               : null,
@@ -71,6 +82,15 @@ class _RoleplaySetupScreenState extends ConsumerState<RoleplaySetupScreen> {
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
+          if (startState.errorMessage != null) ...<Widget>[
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              startState.errorMessage!,
+              style: AppTypography.bodySm.copyWith(
+                color: Theme.of(context).colorScheme.error,
+              ),
+            ),
+          ],
           const SizedBox(height: AppSpacing.xl),
           for (final RoleplayScenario scenario in roleplayPresetScenarios) ...[
             RoleplayScenarioCard(

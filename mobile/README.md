@@ -51,7 +51,10 @@ lib/
     ├── auth/                # 인증 API, 세션 모델, Riverpod controller
     ├── onboarding/          # 완료 상태와 3장 onboarding 화면
     ├── conversation/
-    │   └── presentation/widgets/
+    │   ├── application/      # 메시지 목록·전송·grammar polling 상태
+    │   ├── data/             # conversation, grammar API repository
+    │   ├── domain/           # 대화·메시지·문법 피드백 모델
+    │   └── presentation/     # Conversation 화면과 widgets
     ├── home/
     │   └── presentation/widgets/
     ├── roleplay_setup/
@@ -152,8 +155,9 @@ Splash → Onboarding(최초 1회) → Google Login → Home
 - Onboarding: 3장 소개 후 완료 상태를 secure storage에 저장
 - Login: Google Sign-In SDK의 id token을 백엔드 `/auth/google/mobile`로 전달
 - Home: 사용자 이름과 최근 대화 5개를 표시하고, 없으면 시작 제안을 표시
-- Free Chat: Home sheet에서 Topic Input으로 이동한 뒤 `POST /api/search/topic-prep/`로 준비 카드를 불러옴
-- Roleplay: Home sheet에서 Roleplay Setup으로 이동한 뒤 상황과 난이도를 선택함
+- Free Chat: Home sheet에서 Topic Input → Topic Prep으로 이동한 뒤 첫 답변으로 대화를 시작
+- Roleplay: Home sheet에서 Roleplay Setup으로 이동한 뒤 상황과 난이도로 롤플레이 대화를 시작
+- Conversation: 최근 대화, Free Chat 시작, Roleplay 시작이 모두 `/conversation/:conversationId`로 합류
 
 ## Topic Prep 흐름
 
@@ -168,7 +172,9 @@ Topic Prep 화면은 전달받은 topic으로 `POST /api/search/topic-prep/`를 
 | `ready=false` | retry guidance, example topic chip, edit topic 복귀 |
 | `error` | 재시도 가능한 오류 상태 |
 
-기본 선택은 `CASUAL_CHAT`과 첫 번째 질문이에요. 출처 링크는 현재 화면에 표시만 하고, 외부 브라우저 열기는 `url_launcher`를 도입하는 후속 작업에서 연결해요. 첫 답변 입력과 `POST /api/conversations/start/free-chat/` 연동도 다음 단계에서 구현해요.
+기본 선택은 `CASUAL_CHAT`과 첫 번째 질문이에요. 사용자는 선택한 첫 질문에 대한 답변을 입력하고, 앱은 `POST /api/conversations/start/free-chat/`에 `first_message`, `search_context`, `topic`, `conversation_direction`, `selected_question`을 보내 Conversation 화면으로 이동해요. 첫 답변은 2자 미만이면 클라이언트에서 막아요.
+
+출처 링크는 현재 화면에 표시만 하고, 외부 브라우저 열기는 `url_launcher`를 도입하는 후속 작업에서 연결해요.
 
 ## Roleplay Setup 흐름
 
@@ -180,7 +186,23 @@ Home의 `START CONVERSATION`에서 Roleplay를 선택하면 Roleplay Setup 화�
 | custom 상황 | 2자 이상 입력 시 Start Roleplay CTA 활성화 |
 | 난이도 | `Easy`, `Normal`, `Challenge` 중 선택하며 기본값은 `Normal` |
 
-현재 단계에서는 선택 결과를 백엔드 계약에 맞는 `role_character` 문자열로 합성할 수 있게 준비해요. 실제 `POST /api/conversations/start/roleplay/` 호출과 Conversation 화면 이동은 Conversation 화면 구현 단계에서 연결해요.
+Start Roleplay를 누르면 선택 결과를 백엔드 계약에 맞는 `role_character` 문자열로 합성하고 `POST /api/conversations/start/roleplay/`를 호출해 Conversation 화면으로 이동해요. Roleplay 시작 응답의 `message_id`는 AI 첫 인사 메시지 ID로 취급하므로 사용자 문법 피드백 polling 대상이 아니에요.
+
+## Conversation 흐름
+
+Conversation 화면은 Free Chat 시작, Roleplay 시작, Home 최근 대화 진입이 합류하는 대화 화면이에요.
+
+| 동작 | API |
+|------|-----|
+| 기존 메시지 로드 | `GET /api/conversations/{conversation_id}/messages/?limit=50&offset=0` |
+| 메시지 전송 | `POST /api/conversations/{conversation_id}/message/` |
+| 문법 피드백 조회 | `GET /api/grammar/message/{message_id}/` |
+
+메시지는 서버의 시간순 목록을 기준으로 표시해요. 전송 중에는 사용자 메시지를 즉시 보여주고 `TypingIndicator`를 표시한 뒤, 성공하면 AI 응답을 반영하고 canonical 메시지 목록을 다시 불러와요. 실패하면 같은 메시지를 Retry할 수 있어요.
+
+사용자 메시지의 문법 피드백은 2초 간격으로 최대 30초 polling해요. `404`는 pending으로 보고 계속 기다리며, `200`이면 `has_errors=false`는 `NaturalFeedbackBadge`, `has_errors=true`는 `GrammarFeedbackCard`로 표시해요. 30초 동안 준비되지 않으면 timeout 안내를 표시해요.
+
+SSE 기반 실시간 피드백, 음성 녹음, 50개 이후 pagination은 후속 작업으로 남겨요.
 
 Google Sign-In 실행 시 다음 `dart-define`을 사용할 수 있어요.
 

@@ -1,5 +1,6 @@
 import 'package:curitalk/app/router/app_router.dart';
 import 'package:curitalk/app/theme/app_theme.dart';
+import 'package:curitalk/features/conversation/conversation.dart';
 import 'package:curitalk/features/topic_prep/topic_prep.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -76,10 +77,48 @@ void main() {
     expect(find.text('Lotte won 8-3.'), findsOneWidget);
     expect(repository.topics, <String>['flaky topic', 'flaky topic']);
   });
+
+  testWidgets('first answer starts free-chat conversation', (
+    WidgetTester tester,
+  ) async {
+    final _FakeConversationRepository conversationRepository =
+        _FakeConversationRepository();
+    await tester.pumpWidget(
+      _app(
+        repository: _FakeTopicPrepRepository(),
+        conversationRepository: conversationRepository,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.bySemanticsLabel('First answer'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.enterText(
+      find.bySemanticsLabel('First answer'),
+      'I liked the bullpen today.',
+    );
+    await tester.tap(find.text('START ANSWERING'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Conversation conversation-id'), findsOneWidget);
+    expect(
+      conversationRepository.lastFirstMessage,
+      'I liked the bullpen today.',
+    );
+    expect(conversationRepository.lastDirection, 'CASUAL_CHAT');
+    expect(
+      conversationRepository.lastSelectedQuestion,
+      'What stood out in the game?',
+    );
+  });
 }
 
 Widget _app({
   required TopicPrepRepository repository,
+  ConversationRepository? conversationRepository,
   String initialLocation = '${AppRoute.topicPrep}?topic=recent%20lotte',
 }) {
   final GoRouter router = GoRouter(
@@ -101,10 +140,22 @@ Widget _app({
           );
         },
       ),
+      GoRoute(
+        path: '${AppRoute.conversation}/:conversationId',
+        builder: (_, GoRouterState state) {
+          return Text('Conversation ${state.pathParameters['conversationId']}');
+        },
+      ),
     ],
   );
   return ProviderScope(
-    overrides: [topicPrepRepositoryProvider.overrideWithValue(repository)],
+    overrides: [
+      topicPrepRepositoryProvider.overrideWithValue(repository),
+      if (conversationRepository != null)
+        conversationRepositoryProvider.overrideWithValue(
+          conversationRepository,
+        ),
+    ],
     child: MaterialApp.router(theme: AppTheme.light, routerConfig: router),
   );
 }
@@ -189,6 +240,56 @@ TopicPrepDirection _direction(
     description: '$title practice',
     firstQuestions: questions,
   );
+}
+
+class _FakeConversationRepository implements ConversationRepository {
+  String? lastFirstMessage;
+  String? lastDirection;
+  String? lastSelectedQuestion;
+
+  @override
+  Future<ConversationResponse> startFreeChat({
+    required String firstMessage,
+    String? searchContext,
+    String? topic,
+    String? conversationDirection,
+    String? selectedQuestion,
+  }) async {
+    lastFirstMessage = firstMessage;
+    lastDirection = conversationDirection;
+    lastSelectedQuestion = selectedQuestion;
+    return const ConversationResponse(
+      conversationId: 'conversation-id',
+      messageId: 'message-id',
+      conversationType: ConversationType.freeChat,
+      response: 'Great. Tell me more.',
+    );
+  }
+
+  @override
+  Future<ConversationResponse> startRoleplay({
+    required String roleCharacter,
+    String? searchContext,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<PaginatedMessages> listMessages(
+    String conversationId, {
+    int limit = 50,
+    int offset = 0,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<MessageResponse> sendMessage({
+    required String conversationId,
+    required String message,
+  }) {
+    throw UnimplementedError();
+  }
 }
 
 TopicPrepQuality _quality({bool isSufficient = true}) {

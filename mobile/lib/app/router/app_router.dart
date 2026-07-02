@@ -1,4 +1,5 @@
 import 'package:curitalk/features/auth/auth.dart';
+import 'package:curitalk/features/conversation/conversation.dart';
 import 'package:curitalk/features/home/home.dart';
 import 'package:curitalk/features/onboarding/onboarding.dart';
 import 'package:curitalk/features/roleplay_setup/roleplay_setup.dart';
@@ -15,6 +16,11 @@ abstract final class AppRoute {
   static const String topicInput = '/topic-input';
   static const String topicPrep = '/topic-prep';
   static const String roleplaySetup = '/roleplay-setup';
+  static const String conversation = '/conversation';
+
+  static String conversationPath(String conversationId) {
+    return '$conversation/${Uri.encodeComponent(conversationId)}';
+  }
 }
 
 final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
@@ -75,6 +81,9 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
         path: AppRoute.home,
         builder: (context, state) {
           return HomeScreen(
+            onConversationSelected: (String conversationId) {
+              context.push(AppRoute.conversationPath(conversationId));
+            },
             onStartTypeSelected: (ConversationStartType type) {
               if (type == ConversationStartType.freeChat) {
                 context.push(AppRoute.topicInput);
@@ -106,6 +115,16 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
       GoRoute(
         path: AppRoute.roleplaySetup,
         builder: (context, state) => const RoleplaySetupScreen(),
+      ),
+      GoRoute(
+        path: '${AppRoute.conversation}/:conversationId',
+        builder: (context, state) {
+          final String? conversationId = state.pathParameters['conversationId'];
+          if (conversationId == null || conversationId.trim().isEmpty) {
+            return const HomeScreen();
+          }
+          return ConversationScreen(conversationId: conversationId);
+        },
       ),
     ],
   );
