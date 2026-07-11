@@ -125,6 +125,26 @@ void main() {
     expect(userDecoration.color, AppSemanticColors.light.userMessageSurface);
   });
 
+  testWidgets('ChatBubble formats multi-sentence AI responses', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      _themedApp(
+        const ChatBubble(
+          message: 'Hi there!Welcome in.What can I get started for you today?',
+          speaker: ChatSpeaker.assistant,
+        ),
+      ),
+    );
+
+    expect(
+      find.text(
+        'Hi there!\n\nWelcome in.\n\nWhat can I get started for you today?',
+      ),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('GrammarFeedbackCard renders suggestion and explanation', (
     WidgetTester tester,
   ) async {

@@ -35,17 +35,36 @@ void main() {
   ) async {
     await tester.pumpWidget(_app());
 
-    await tester.scrollUntilVisible(
-      find.text('CHALLENGE'),
-      300,
-      scrollable: find.byType(Scrollable).first,
-    );
     await tester.tap(find.text('CHALLENGE'));
     await tester.pumpAndSettle();
 
     expect(
       find.text('Unexpected questions that invite longer answers.'),
       findsOneWidget,
+    );
+  });
+
+  testWidgets('difficulty selector stays above scenarios in one row', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(_app());
+
+    expect(find.text('CHOOSE DIFFICULTY'), findsOneWidget);
+    final double difficultyTop = tester
+        .getTopLeft(find.text('CHOOSE DIFFICULTY'))
+        .dy;
+    final double firstScenarioTop = tester
+        .getTopLeft(find.text('Cafe order'))
+        .dy;
+
+    expect(difficultyTop, lessThan(firstScenarioTop));
+    expect(
+      tester.getCenter(find.text('EASY')).dy,
+      closeTo(tester.getCenter(find.text('NORMAL')).dy, 0.1),
+    );
+    expect(
+      tester.getCenter(find.text('NORMAL')).dy,
+      closeTo(tester.getCenter(find.text('CHALLENGE')).dy, 0.1),
     );
   });
 
@@ -62,7 +81,7 @@ void main() {
     await tester.tap(find.text('CUSTOM ROLEPLAY'));
     await tester.pumpAndSettle();
     await tester.enterText(
-      find.bySemanticsLabel('Custom roleplay situation'),
+      find.bySemanticsLabel('Custom roleplay situation or your role'),
       'A',
     );
     await tester.pumpAndSettle();
@@ -71,8 +90,8 @@ void main() {
     expect(_startButton(tester).enabled, isFalse);
 
     await tester.enterText(
-      find.bySemanticsLabel('Custom roleplay situation'),
-      '오사카 식당에서 예약 확인하기',
+      find.bySemanticsLabel('Custom roleplay situation or your role'),
+      'I am working at a cafe as a barista.',
     );
     await tester.pumpAndSettle();
 

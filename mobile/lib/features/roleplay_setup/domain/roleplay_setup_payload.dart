@@ -35,7 +35,11 @@ class CustomRoleplaySituation extends RoleplaySituation {
   String get displayText => normalizedInput;
 
   @override
-  String get promptBase => normalizedInput;
+  String get promptBase {
+    return 'a realistic counterpart in a learner-defined roleplay where the learner described their situation or role as "$normalizedInput"; '
+        'if the learner describes their own role, play the opposite role in that situation; '
+        'for example, if the learner is working as a cafe barista, play a customer placing an order';
+  }
 
   @override
   bool get isValid => normalizedInput.length >= 2;

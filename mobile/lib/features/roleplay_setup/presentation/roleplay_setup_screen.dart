@@ -82,6 +82,13 @@ class _RoleplaySetupScreenState extends ConsumerState<RoleplaySetupScreen> {
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
+          const SizedBox(height: AppSpacing.xl),
+          const AppSectionLabel('Choose difficulty'),
+          const SizedBox(height: AppSpacing.md),
+          _RoleplayDifficultySelector(
+            selected: state.difficulty,
+            onSelected: controller.selectDifficulty,
+          ),
           if (startState.errorMessage != null) ...<Widget>[
             const SizedBox(height: AppSpacing.md),
             Text(
@@ -117,34 +124,64 @@ class _RoleplaySetupScreenState extends ConsumerState<RoleplaySetupScreen> {
             const SizedBox(height: AppSpacing.md),
             AppTextField(
               controller: _customController,
-              hintText: '오사카 식당에서 예약 확인하기',
+              hintText: 'I am working at a cafe as a barista.',
               errorText: state.customErrorText,
               autofocus: state.customInput.isEmpty,
               maxLines: 3,
               textInputAction: TextInputAction.done,
-              semanticLabel: 'Custom roleplay situation',
+              semanticLabel: 'Custom roleplay situation or your role',
               onChanged: controller.updateCustomInput,
             ),
           ],
-          const SizedBox(height: AppSpacing.xl),
-          const AppSectionLabel('Choose difficulty'),
-          const SizedBox(height: AppSpacing.md),
-          Wrap(
-            spacing: AppSpacing.sm,
-            runSpacing: AppSpacing.md,
-            children: <Widget>[
-              for (final RoleplayDifficulty difficulty
-                  in RoleplayDifficulty.values)
-                RoleplayDifficultyChip(
-                  difficulty: difficulty,
-                  selected: state.difficulty == difficulty,
-                  onSelected: () => controller.selectDifficulty(difficulty),
-                ),
-            ],
-          ),
           const SizedBox(height: AppSpacing.sectionGap),
         ],
       ),
+    );
+  }
+}
+
+class _RoleplayDifficultySelector extends StatelessWidget {
+  const _RoleplayDifficultySelector({
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final RoleplayDifficulty selected;
+  final ValueChanged<RoleplayDifficulty> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            for (final RoleplayDifficulty difficulty
+                in RoleplayDifficulty.values) ...<Widget>[
+              Expanded(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: AppSelectionChip(
+                    label: difficulty.label,
+                    selected: selected == difficulty,
+                    onSelected: (_) => onSelected(difficulty),
+                  ),
+                ),
+              ),
+              if (difficulty != RoleplayDifficulty.values.last)
+                const SizedBox(width: AppSpacing.xs),
+            ],
+          ],
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          selected.description,
+          style: AppTypography.bodySm.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ],
     );
   }
 }

@@ -1,5 +1,6 @@
 import 'package:curitalk/app/theme/app_semantic_colors.dart';
 import 'package:curitalk/app/theme/tokens/tokens.dart';
+import 'package:curitalk/features/conversation/presentation/widgets/conversation_text_formatter.dart';
 import 'package:flutter/material.dart';
 
 enum ChatSpeaker { assistant, user }
@@ -27,6 +28,9 @@ class ChatBubble extends StatelessWidget {
     final Color foregroundColor = _isUser
         ? colors.onUserMessage
         : colors.onAiMessage;
+    final String displayMessage = _isUser
+        ? message
+        : ConversationTextFormatter.formatAssistantMessage(message);
 
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
@@ -61,7 +65,7 @@ class ChatBubble extends StatelessWidget {
                     vertical: AppSpacing.md,
                   ),
                   child: Text(
-                    message,
+                    displayMessage,
                     style: AppTypography.bodySm.copyWith(
                       color: foregroundColor,
                     ),

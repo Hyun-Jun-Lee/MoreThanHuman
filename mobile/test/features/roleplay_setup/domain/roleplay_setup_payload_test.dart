@@ -60,7 +60,19 @@ void main() {
     const CustomRoleplaySituation invalid = CustomRoleplaySituation(' A ');
 
     expect(valid.isValid, isTrue);
-    expect(valid.promptBase, '오사카 식당에서 예약 확인하기');
+    expect(valid.displayText, '오사카 식당에서 예약 확인하기');
+    expect(valid.promptBase, contains('learner-defined roleplay'));
+    expect(valid.promptBase, contains('opposite role'));
     expect(invalid.isValid, isFalse);
+  });
+
+  test('custom roleplay treats learner role as the counterpart target', () {
+    const RoleplaySetupPayload payload = RoleplaySetupPayload(
+      situation: CustomRoleplaySituation("i'm working on cafe as a barista"),
+      difficulty: RoleplayDifficulty.normal,
+    );
+
+    expect(payload.roleCharacter, contains('play a customer'));
+    expect(payload.roleCharacter, isNot(contains('play the learner')));
   });
 }

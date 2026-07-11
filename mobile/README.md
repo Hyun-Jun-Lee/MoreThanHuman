@@ -178,19 +178,19 @@ Topic Prep 화면은 전달받은 topic으로 `POST /api/search/topic-prep/`를 
 
 ## Roleplay Setup 흐름
 
-Home의 `START CONVERSATION`에서 Roleplay를 선택하면 Roleplay Setup 화면으로 이동해요. 사용자는 preset 상황 카드 7개 중 하나를 고르거나, custom 입력으로 원하는 상황을 직접 작성할 수 있어요.
+Home의 `START CONVERSATION`에서 Roleplay를 선택하면 Roleplay Setup 화면으로 이동해요. 사용자는 상단에서 난이도를 먼저 고른 뒤 preset 상황 카드 7개 중 하나를 고르거나, custom 입력으로 원하는 상황을 직접 작성할 수 있어요.
 
 | 선택 | 동작 |
 |------|------|
 | preset 상황 | 선택 즉시 Start Roleplay CTA 활성화 |
 | custom 상황 | 2자 이상 입력 시 Start Roleplay CTA 활성화 |
-| 난이도 | `Easy`, `Normal`, `Challenge` 중 선택하며 기본값은 `Normal` |
+| 난이도 | `Easy`, `Normal`, `Challenge`가 한 줄 selector로 표시되며 기본값은 `Normal` |
 
-Start Roleplay를 누르면 선택 결과를 백엔드 계약에 맞는 `role_character` 문자열로 합성하고 `POST /api/conversations/start/roleplay/`를 호출해 Conversation 화면으로 이동해요. Roleplay 시작 응답의 `message_id`는 AI 첫 인사 메시지 ID로 취급하므로 사용자 문법 피드백 polling 대상이 아니에요.
+Start Roleplay를 누르면 선택 결과를 백엔드 계약에 맞는 `role_character` 문자열로 합성하고 `POST /api/conversations/start/roleplay/`를 호출해 Conversation 화면으로 이동해요. Custom 입력은 사용자의 상황이나 사용자 역할을 설명하는 값으로 보고, AI는 그 상황의 상대역을 맡도록 prompt를 합성해요. Roleplay 시작 응답의 `message_id`는 AI 첫 인사 메시지 ID로 취급하므로 사용자 문법 피드백 polling 대상이 아니에요.
 
 ## Conversation 흐름
 
-Conversation 화면은 Free Chat 시작, Roleplay 시작, Home 최근 대화 진입이 합류하는 대화 화면이에요.
+Conversation 화면은 Free Chat 시작, Roleplay 시작, Home 최근 대화 진입이 합류하는 대화 화면이에요. 상단에는 명시적인 뒤로가기 버튼을 두고, navigation stack이 없을 때는 Home으로 이동해요.
 
 | 동작 | API |
 |------|-----|
@@ -198,7 +198,7 @@ Conversation 화면은 Free Chat 시작, Roleplay 시작, Home 최근 대화 진
 | 메시지 전송 | `POST /api/conversations/{conversation_id}/message/` |
 | 문법 피드백 조회 | `GET /api/grammar/message/{message_id}/` |
 
-메시지는 서버의 시간순 목록을 기준으로 표시해요. 전송 중에는 사용자 메시지를 즉시 보여주고 `TypingIndicator`를 표시한 뒤, 성공하면 AI 응답을 반영하고 canonical 메시지 목록을 다시 불러와요. 실패하면 같은 메시지를 Retry할 수 있어요.
+메시지는 서버의 시간순 목록을 기준으로 표시해요. 전송 중에는 사용자 메시지를 즉시 보여주고 `TypingIndicator`를 표시한 뒤, 성공하면 AI 응답을 반영하고 canonical 메시지 목록을 다시 불러와요. 실패하면 같은 메시지를 Retry할 수 있어요. AI 응답은 서버 원문을 바꾸지 않고 화면 표시 단계에서 문장 단위 줄바꿈과 누락된 공백을 보정해 읽기 쉽게 보여줘요.
 
 사용자 메시지의 문법 피드백은 2초 간격으로 최대 30초 polling해요. `404`는 pending으로 보고 계속 기다리며, `200`이면 `has_errors=false`는 `NaturalFeedbackBadge`, `has_errors=true`는 `GrammarFeedbackCard`로 표시해요. 30초 동안 준비되지 않으면 timeout 안내를 표시해요.
 

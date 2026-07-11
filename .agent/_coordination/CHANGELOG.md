@@ -97,3 +97,7 @@
 - **Flutter Roleplay Setup 화면 구현**: Home Roleplay route, preset/custom 상황 선택, 난이도 선택, role_character 합성 helper와 테스트 추가
 - **Flutter Conversation 구현 계획 작성**: Free Chat·Roleplay 시작, 메시지 화면, 전송, grammar polling, 최근 대화 진입 범위와 테스트 계획 정리
 - **Flutter Conversation 화면 구현**: Free Chat·Roleplay 시작 API, 최근 대화 route, 메시지 전송·refresh, grammar feedback polling, Conversation UI와 테스트 추가
+
+## 2026-07-11
+
+- **Flutter 수동 QA 피드백 반영**: Conversation 뒤로가기, AI 응답 표시 formatter, Roleplay 난이도 상단 한 줄 배치, custom roleplay 상대역 prompt 합성을 개선

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:curitalk/app/router/app_router.dart';
 import 'package:curitalk/app/theme/tokens/tokens.dart';
 import 'package:curitalk/core/widgets/widgets.dart';
 import 'package:curitalk/features/conversation/application/conversation_controller.dart';
@@ -7,6 +8,7 @@ import 'package:curitalk/features/conversation/domain/conversation_models.dart';
 import 'package:curitalk/features/conversation/presentation/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 class ConversationScreen extends ConsumerStatefulWidget {
   const ConversationScreen({required this.conversationId, super.key});
@@ -40,7 +42,14 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
     final bool isSending = conversation.value?.isSending == true;
 
     return AppScaffold(
-      appBar: AppBar(title: const Text('Conversation')),
+      appBar: AppBar(
+        leading: IconButton(
+          tooltip: 'Back to home',
+          icon: const Icon(Icons.arrow_back_rounded),
+          onPressed: _goBack,
+        ),
+        title: const Text('Conversation'),
+      ),
       bottomNavigationBar: AppBottomActionBar(
         child: ChatComposer(
           controller: _composerController,
@@ -76,6 +85,15 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
           .read(conversationControllerProvider(widget.conversationId).notifier)
           .send(message),
     );
+  }
+
+  void _goBack() {
+    final NavigatorState navigator = Navigator.of(context);
+    if (navigator.canPop()) {
+      navigator.pop();
+      return;
+    }
+    context.go(AppRoute.home);
   }
 }
 
