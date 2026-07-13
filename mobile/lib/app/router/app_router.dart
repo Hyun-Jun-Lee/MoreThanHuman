@@ -1,5 +1,6 @@
 import 'package:curitalk/features/auth/auth.dart';
 import 'package:curitalk/features/conversation/conversation.dart';
+import 'package:curitalk/features/history/history.dart';
 import 'package:curitalk/features/home/home.dart';
 import 'package:curitalk/features/onboarding/onboarding.dart';
 import 'package:curitalk/features/roleplay_setup/roleplay_setup.dart';
@@ -13,6 +14,7 @@ abstract final class AppRoute {
   static const String onboarding = '/onboarding';
   static const String login = '/login';
   static const String home = '/home';
+  static const String history = '/history';
   static const String topicInput = '/topic-input';
   static const String topicPrep = '/topic-prep';
   static const String roleplaySetup = '/roleplay-setup';
@@ -81,6 +83,27 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
         path: AppRoute.home,
         builder: (context, state) {
           return HomeScreen(
+            onConversationSelected: (String conversationId) {
+              context.push(AppRoute.conversationPath(conversationId));
+            },
+            onHistorySelected: () {
+              context.push(AppRoute.history);
+            },
+            onStartTypeSelected: (ConversationStartType type) {
+              if (type == ConversationStartType.freeChat) {
+                context.push(AppRoute.topicInput);
+              } else if (type == ConversationStartType.roleplay) {
+                context.push(AppRoute.roleplaySetup);
+              }
+            },
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoute.history,
+        builder: (context, state) {
+          return HistoryScreen(
+            onHomeSelected: () => context.go(AppRoute.home),
             onConversationSelected: (String conversationId) {
               context.push(AppRoute.conversationPath(conversationId));
             },

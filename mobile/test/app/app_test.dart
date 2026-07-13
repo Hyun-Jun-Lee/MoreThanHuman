@@ -105,6 +105,55 @@ void main() {
     expect(find.text('Choose a situation'), findsOneWidget);
     expect(find.text('Cafe order'), findsOneWidget);
   });
+
+  testWidgets('authenticated user can open History from bottom navigation', (
+    WidgetTester tester,
+  ) async {
+    final _MemoryTokenStorage tokenStorage = _MemoryTokenStorage(
+      tokens: _tokens,
+      deviceId: _deviceId,
+    );
+
+    await tester.pumpWidget(
+      _appScope(
+        tokenStorage: tokenStorage,
+        onboardingStorage: _MemoryOnboardingStorage(true),
+        authRepository: _FakeAuthRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('History'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('No conversations yet.'), findsOneWidget);
+  });
+
+  testWidgets('authenticated user can log out from Profile tab', (
+    WidgetTester tester,
+  ) async {
+    final _MemoryTokenStorage tokenStorage = _MemoryTokenStorage(
+      tokens: _tokens,
+      deviceId: _deviceId,
+    );
+
+    await tester.pumpWidget(
+      _appScope(
+        tokenStorage: tokenStorage,
+        onboardingStorage: _MemoryOnboardingStorage(true),
+        authRepository: _FakeAuthRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Profile'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('LOG OUT'));
+    await tester.pumpAndSettle();
+
+    expect(tokenStorage.tokens, isNull);
+    expect(find.text('Practice English with your own topics.'), findsOneWidget);
+  });
 }
 
 const String _deviceId = '550e8400-e29b-41d4-a716-446655440000';

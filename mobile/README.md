@@ -155,9 +155,25 @@ Splash → Onboarding(최초 1회) → Google Login → Home
 - Onboarding: 3장 소개 후 완료 상태를 secure storage에 저장
 - Login: Google Sign-In SDK의 id token을 백엔드 `/auth/google/mobile`로 전달
 - Home: 사용자 이름과 최근 대화 5개를 표시하고, 없으면 시작 제안을 표시
+- Home Navigation: `Chat`은 새 대화 시작 sheet, `History`는 대화 목록 화면, `Profile`은 account sheet를 열어요.
+- Account: 우상단 프로필 아바타 또는 `Profile` 탭에서 이름/email과 `LOG OUT`을 표시하고, 로그아웃 시 앱 token 삭제·서버 revoke·Google sign out을 best-effort로 처리해요.
 - Free Chat: Home sheet에서 Topic Input → Topic Prep으로 이동한 뒤 첫 답변으로 대화를 시작
 - Roleplay: Home sheet에서 Roleplay Setup으로 이동한 뒤 상황과 난이도로 롤플레이 대화를 시작
+- History: 하단 `History` 탭에서 대화 목록을 보고 기존 대화로 다시 진입
 - Conversation: 최근 대화, Free Chat 시작, Roleplay 시작이 모두 `/conversation/:conversationId`로 합류
+
+## Home Navigation 흐름
+
+Home의 좌측 햄버거 메뉴는 v1에서 제거했어요. 하단 네비게이션은 다음처럼 동작해요.
+
+| 탭 | 동작 |
+|----|------|
+| `Home` | 현재 Home 유지 |
+| `Chat` | `Start a conversation` sheet 열기 |
+| `History` | `/history`로 이동 |
+| `Profile` | account sheet 열기 |
+
+History 화면은 v1에서 기존 대화 목록 API를 재사용해 목록, loading, empty, error/retry 상태를 보여줘요. 향후 전체 pagination API가 준비되면 History 전용 provider로 확장해요.
 
 ## Topic Prep 흐름
 
@@ -200,7 +216,7 @@ Conversation 화면은 Free Chat 시작, Roleplay 시작, Home 최근 대화 진
 
 메시지는 서버의 시간순 목록을 기준으로 표시해요. 전송 중에는 사용자 메시지를 즉시 보여주고 `TypingIndicator`를 표시한 뒤, 성공하면 AI 응답을 반영하고 canonical 메시지 목록을 다시 불러와요. 실패하면 같은 메시지를 Retry할 수 있어요. AI 응답은 서버 원문을 바꾸지 않고 화면 표시 단계에서 문장 단위 줄바꿈과 누락된 공백을 보정해 읽기 쉽게 보여줘요.
 
-사용자 메시지의 문법 피드백은 2초 간격으로 최대 30초 polling해요. `404`는 pending으로 보고 계속 기다리며, `200`이면 `has_errors=false`는 `NaturalFeedbackBadge`, `has_errors=true`는 `GrammarFeedbackCard`로 표시해요. 30초 동안 준비되지 않으면 timeout 안내를 표시해요.
+사용자 메시지의 문법 피드백은 2초 간격으로 최대 30초 polling해요. `404`는 pending으로 보고 계속 기다리며, `200`이면 `has_errors=false`는 `NaturalFeedbackBadge`, `has_errors=true`는 `GrammarFeedbackCard`로 표시해요. 문법 피드백의 교정 문장과 설명도 서버 원문은 유지하고 화면 표시 단계에서 문장 단위 줄바꿈과 누락된 공백을 보정해요. 30초 동안 준비되지 않으면 timeout 안내를 표시해요.
 
 SSE 기반 실시간 피드백, 음성 녹음, 50개 이후 pagination은 후속 작업으로 남겨요.
 

@@ -180,6 +180,31 @@ void main() {
     expect(card.color, AppSemanticColors.light.grammarSuggestionSurface);
   });
 
+  testWidgets('GrammarFeedbackCard formats dense feedback text', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      _themedApp(
+        const GrammarFeedbackCard(
+          suggestion: 'I went there yesterday.It was fun.',
+          explanation:
+              'Use past tense for completed actions.Add a space after punctuation.',
+        ),
+      ),
+    );
+
+    expect(
+      find.textContaining('I went there yesterday.\n\nIt was fun.'),
+      findsOneWidget,
+    );
+    expect(
+      find.text(
+        'Use past tense for completed actions.\n\nAdd a space after punctuation.',
+      ),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('TypingIndicator exposes status with motion disabled', (
     WidgetTester tester,
   ) async {

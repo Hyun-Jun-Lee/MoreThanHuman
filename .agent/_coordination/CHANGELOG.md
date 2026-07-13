@@ -101,3 +101,6 @@
 ## 2026-07-11
 
 - **Flutter 수동 QA 피드백 반영**: Conversation 뒤로가기, AI 응답 표시 formatter, Roleplay 난이도 상단 한 줄 배치, custom roleplay 상대역 prompt 합성을 개선
+- **Flutter 문법 피드백 표시 개선**: GrammarFeedbackCard의 교정 문장과 설명에도 표시 formatter를 적용해 붙어 있는 문장을 읽기 좋게 보정
+- **Flutter 메인 네비게이션 구현 계획 작성**: 햄버거 제거, account sheet/logout, Chat/Profile/History 탭 동작, History 화면 구현 계획을 추가
+- **Flutter 메인 네비게이션 구현**: 햄버거 제거, account sheet/logout, Chat/Profile 탭 sheet 연결, History route/screen과 테스트를 추가

@@ -1,5 +1,6 @@
 import 'package:curitalk/app/theme/app_semantic_colors.dart';
 import 'package:curitalk/app/theme/tokens/tokens.dart';
+import 'package:curitalk/features/conversation/presentation/widgets/conversation_text_formatter.dart';
 import 'package:flutter/material.dart';
 
 class GrammarFeedbackCard extends StatelessWidget {
@@ -19,6 +20,10 @@ class GrammarFeedbackCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppSemanticColors colors = AppSemanticColors.of(context);
+    final String displaySuggestion =
+        ConversationTextFormatter.formatAssistantMessage(suggestion);
+    final String displayExplanation =
+        ConversationTextFormatter.formatAssistantMessage(explanation);
 
     return Semantics(
       container: true,
@@ -49,7 +54,7 @@ class GrammarFeedbackCard extends StatelessWidget {
                             style: AppTypography.button,
                           ),
                           TextSpan(
-                            text: suggestion,
+                            text: displaySuggestion,
                             style: AppTypography.bodySm,
                           ),
                         ],
@@ -88,7 +93,7 @@ class GrammarFeedbackCard extends StatelessWidget {
                     const SizedBox(width: AppSpacing.sm),
                     Expanded(
                       child: Text(
-                        explanation,
+                        displayExplanation,
                         style: AppTypography.bodySm.copyWith(
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),

@@ -3,21 +3,24 @@ import 'package:curitalk/core/widgets/widgets.dart';
 import 'package:curitalk/features/auth/auth.dart';
 import 'package:curitalk/features/home/application/recent_conversations_controller.dart';
 import 'package:curitalk/features/home/domain/conversation_summary.dart';
+import 'package:curitalk/features/home/domain/conversation_start_type.dart';
+import 'package:curitalk/features/home/presentation/account_sheet.dart';
+import 'package:curitalk/features/home/presentation/conversation_start_sheet.dart';
 import 'package:curitalk/features/home/presentation/widgets/recent_conversation_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-enum ConversationStartType { freeChat, roleplay }
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({
     this.onConversationSelected,
     this.onStartTypeSelected,
+    this.onHistorySelected,
     super.key,
   });
 
   final ValueChanged<String>? onConversationSelected;
   final ValueChanged<ConversationStartType>? onStartTypeSelected;
+  final VoidCallback? onHistorySelected;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -32,11 +35,18 @@ class HomeScreen extends ConsumerWidget {
       safeAreaBottom: false,
       bottomNavigationBar: MainNavigationBar(
         destination: MainNavigationDestination.home,
-        onDestinationSelected: (_) {},
+        onDestinationSelected: (MainNavigationDestination destination) =>
+            _handleDestinationSelected(context, ref, destination, user),
       ),
       body: CustomScrollView(
         slivers: <Widget>[
-          SliverToBoxAdapter(child: _HomeHeader(user: user)),
+          SliverToBoxAdapter(
+            child: _HomeHeader(
+              user: user,
+              onProfileTap: () =>
+                  showAccountSheet(context: context, ref: ref, user: user),
+            ),
+          ),
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(
               AppSpacing.screenPadding,
@@ -86,57 +96,29 @@ class HomeScreen extends ConsumerWidget {
   }
 
   Future<void> _showStartSheet(BuildContext context) async {
-    final ConversationStartType?
-    selected = await showAppModalSheet<ConversationStartType>(
-      context: context,
-      builder: (BuildContext sheetContext) {
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            Center(
-              child: Container(
-                width: AppSpacing.xxl,
-                height: AppSpacing.xxs,
-                decoration: const BoxDecoration(
-                  color: AppPalette.hairline,
-                  borderRadius: BorderRadius.all(
-                    Radius.circular(AppRadius.full),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            const Text('Start a conversation', style: AppTypography.headlineMd),
-            const SizedBox(height: AppSpacing.lg),
-            AppSelectionCard(
-              title: 'Free Chat',
-              description: 'Bring your own topic',
-              icon: const Icon(Icons.forum_outlined),
-              selected: false,
-              onTap: () =>
-                  Navigator.pop(sheetContext, ConversationStartType.freeChat),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            AppSelectionCard(
-              title: 'Roleplay',
-              description: 'Practice a real-world situation',
-              icon: const Icon(Icons.theater_comedy_outlined),
-              selected: false,
-              onTap: () =>
-                  Navigator.pop(sheetContext, ConversationStartType.roleplay),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            TextButton(
-              onPressed: () => Navigator.pop(sheetContext),
-              child: const Text('CANCEL'),
-            ),
-          ],
-        );
-      },
+    final ConversationStartType? selected = await showConversationStartSheet(
+      context,
     );
     if (selected != null) {
       onStartTypeSelected?.call(selected);
+    }
+  }
+
+  void _handleDestinationSelected(
+    BuildContext context,
+    WidgetRef ref,
+    MainNavigationDestination destination,
+    UserProfile? user,
+  ) {
+    switch (destination) {
+      case MainNavigationDestination.home:
+        return;
+      case MainNavigationDestination.chat:
+        _showStartSheet(context);
+      case MainNavigationDestination.history:
+        onHistorySelected?.call();
+      case MainNavigationDestination.profile:
+        showAccountSheet(context: context, ref: ref, user: user);
     }
   }
 
@@ -150,9 +132,10 @@ class HomeScreen extends ConsumerWidget {
 }
 
 class _HomeHeader extends StatelessWidget {
-  const _HomeHeader({required this.user});
+  const _HomeHeader({required this.user, required this.onProfileTap});
 
   final UserProfile? user;
+  final VoidCallback onProfileTap;
 
   @override
   Widget build(BuildContext context) {
@@ -167,20 +150,22 @@ class _HomeHeader extends StatelessWidget {
       ),
       child: Row(
         children: <Widget>[
-          const Icon(Icons.menu_rounded),
           const Expanded(
-            child: Text(
-              'CURITALK',
-              textAlign: TextAlign.center,
-              style: AppTypography.headlineMd,
-            ),
+            child: Text('CURITALK', style: AppTypography.headlineMd),
           ),
           Semantics(
+            button: true,
             label: 'Profile for ${user?.name ?? 'user'}',
-            child: CircleAvatar(
-              radius: AppSize.iconButton / 2,
-              backgroundColor: AppPalette.blockPink,
-              child: Text(initial, style: AppTypography.button),
+            child: InkWell(
+              borderRadius: const BorderRadius.all(
+                Radius.circular(AppRadius.full),
+              ),
+              onTap: onProfileTap,
+              child: CircleAvatar(
+                radius: AppSize.iconButton / 2,
+                backgroundColor: AppPalette.blockPink,
+                child: Text(initial, style: AppTypography.button),
+              ),
             ),
           ),
         ],
