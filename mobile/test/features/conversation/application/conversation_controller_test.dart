@@ -23,7 +23,7 @@ void main() {
         .read(conversationControllerProvider('conversation-id'))
         .value!;
 
-    expect(repository.sentMessages, <String>['I was surprise.']);
+    expect(repository.sentTextTurns, <String>['I was surprise.']);
     expect(repository.listCallCount, 2);
     expect(state.isSending, isFalse);
     expect(state.messages.last.content, 'Canonical response');
@@ -51,13 +51,87 @@ void main() {
     expect(state.failedMessage, 'Retry me');
     expect(state.errorMessage, 'Message could not be sent.');
   });
+
+  test(
+    'uses transcript as the user message after audio send succeeds',
+    () async {
+      final _FakeConversationRepository repository =
+          _FakeConversationRepository();
+      final ProviderContainer container = ProviderContainer(
+        overrides: [
+          conversationRepositoryProvider.overrideWithValue(repository),
+        ],
+      );
+      addTearDown(container.dispose);
+      await container.read(
+        conversationControllerProvider('conversation-id').future,
+      );
+
+      await container
+          .read(conversationControllerProvider('conversation-id').notifier)
+          .sendAudio(
+            const ConversationAudioFile(
+              bytes: <int>[1, 2, 3],
+              filename: 'recording.webm',
+              contentType: 'audio/webm',
+            ),
+          );
+      final ConversationState state = container
+          .read(conversationControllerProvider('conversation-id'))
+          .value!;
+
+      expect(repository.sentAudioFilenames, <String>['recording.webm']);
+      expect(state.isSending, isFalse);
+      expect(
+        state.messages[state.messages.length - 2].content,
+        'Audio transcript',
+      );
+      expect(state.messages.last.content, 'AI response');
+    },
+  );
+
+  test('keeps audio retry target when audio send fails', () async {
+    final _FakeConversationRepository repository = _FakeConversationRepository(
+      failAudioSend: true,
+    );
+    final ProviderContainer container = ProviderContainer(
+      overrides: [conversationRepositoryProvider.overrideWithValue(repository)],
+    );
+    addTearDown(container.dispose);
+    await container.read(
+      conversationControllerProvider('conversation-id').future,
+    );
+
+    await container
+        .read(conversationControllerProvider('conversation-id').notifier)
+        .sendAudio(
+          const ConversationAudioFile(
+            bytes: <int>[1, 2, 3],
+            filename: 'retry.webm',
+            contentType: 'audio/webm',
+          ),
+        );
+    final ConversationState state = container
+        .read(conversationControllerProvider('conversation-id'))
+        .value!;
+
+    expect(state.failedAudioFile?.filename, 'retry.webm');
+    expect(state.failedMessage, isNull);
+    expect(state.errorMessage, 'Voice message could not be sent.');
+  });
 }
 
 class _FakeConversationRepository implements ConversationRepository {
-  _FakeConversationRepository({this.failSend = false});
+  _FakeConversationRepository({
+    this.failSend = false,
+    this.failAudioSend = false,
+  });
 
   final bool failSend;
+  final bool failAudioSend;
+  final List<String> sentTextTurns = <String>[];
   final List<String> sentMessages = <String>[];
+  final List<String> sentAudioFilenames = <String>[];
   int listCallCount = 0;
 
   @override
@@ -112,6 +186,44 @@ class _FakeConversationRepository implements ConversationRepository {
       messageId: 'user-1',
       response: 'AI response',
       turnCount: 2,
+    );
+  }
+
+  @override
+  Future<MultimodalMessageResponse> sendTextTurn({
+    required String conversationId,
+    required String text,
+    bool includeAudioResponse = false,
+  }) async {
+    sentTextTurns.add(text);
+    if (failSend) {
+      throw StateError('Network failure');
+    }
+    return MultimodalMessageResponse(
+      messageId: 'user-1',
+      response: 'AI response',
+      turnCount: 2,
+      inputMode: ConversationInputMode.text,
+      transcript: text,
+    );
+  }
+
+  @override
+  Future<MultimodalMessageResponse> sendAudioTurn({
+    required String conversationId,
+    required ConversationAudioFile audioFile,
+    bool includeAudioResponse = false,
+  }) async {
+    sentAudioFilenames.add(audioFile.filename);
+    if (failAudioSend) {
+      throw StateError('Network failure');
+    }
+    return const MultimodalMessageResponse(
+      messageId: 'user-audio-1',
+      response: 'AI response',
+      turnCount: 2,
+      inputMode: ConversationInputMode.audio,
+      transcript: 'Audio transcript',
     );
   }
 

@@ -29,7 +29,7 @@ void main() {
       ProviderScope(
         overrides: [
           conversationRepositoryProvider.overrideWithValue(
-            const _FakeConversationRepository(),
+            _FakeConversationRepository(),
           ),
         ],
         child: MaterialApp.router(theme: AppTheme.light, routerConfig: router),
@@ -43,10 +43,60 @@ void main() {
 
     expect(find.text('Home'), findsOneWidget);
   });
+
+  testWidgets('voice input records and sends audio turn', (
+    WidgetTester tester,
+  ) async {
+    final _FakeConversationRepository repository =
+        _FakeConversationRepository();
+    final _FakeConversationAudioRecorder recorder =
+        _FakeConversationAudioRecorder();
+    final GoRouter router = _router();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          conversationRepositoryProvider.overrideWithValue(repository),
+          conversationAudioRecorderProvider.overrideWithValue(recorder),
+        ],
+        child: MaterialApp.router(theme: AppTheme.light, routerConfig: router),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Voice input'));
+    await tester.pump();
+    expect(recorder.startCount, 1);
+    expect(find.byTooltip('Stop recording'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Stop recording'));
+    await tester.pumpAndSettle();
+
+    expect(recorder.stopCount, 1);
+    expect(repository.sentAudioFilenames, <String>['recording.m4a']);
+    expect(find.text('Audio transcript'), findsOneWidget);
+  });
+}
+
+GoRouter _router() {
+  return GoRouter(
+    initialLocation: AppRoute.conversationPath('conversation-id'),
+    routes: <RouteBase>[
+      GoRoute(path: AppRoute.home, builder: (_, _) => const Text('Home')),
+      GoRoute(
+        path: '${AppRoute.conversation}/:conversationId',
+        builder: (_, GoRouterState state) {
+          return ConversationScreen(
+            conversationId: state.pathParameters['conversationId']!,
+          );
+        },
+      ),
+    ],
+  );
 }
 
 class _FakeConversationRepository implements ConversationRepository {
-  const _FakeConversationRepository();
+  final List<String> sentAudioFilenames = <String>[];
 
   @override
   Future<PaginatedMessages> listMessages(
@@ -82,6 +132,31 @@ class _FakeConversationRepository implements ConversationRepository {
   }
 
   @override
+  Future<MultimodalMessageResponse> sendTextTurn({
+    required String conversationId,
+    required String text,
+    bool includeAudioResponse = false,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<MultimodalMessageResponse> sendAudioTurn({
+    required String conversationId,
+    required ConversationAudioFile audioFile,
+    bool includeAudioResponse = false,
+  }) async {
+    sentAudioFilenames.add(audioFile.filename);
+    return const MultimodalMessageResponse(
+      messageId: 'user-audio-id',
+      response: 'AI response',
+      turnCount: 2,
+      inputMode: ConversationInputMode.audio,
+      transcript: 'Audio transcript',
+    );
+  }
+
+  @override
   Future<ConversationResponse> startFreeChat({
     required String firstMessage,
     String? searchContext,
@@ -99,4 +174,30 @@ class _FakeConversationRepository implements ConversationRepository {
   }) {
     throw UnimplementedError();
   }
+}
+
+class _FakeConversationAudioRecorder implements ConversationAudioRecorder {
+  int startCount = 0;
+  int stopCount = 0;
+
+  @override
+  Future<void> start() async {
+    startCount++;
+  }
+
+  @override
+  Future<ConversationAudioFile> stop() async {
+    stopCount++;
+    return const ConversationAudioFile(
+      bytes: <int>[1, 2, 3],
+      filename: 'recording.m4a',
+      contentType: 'audio/m4a',
+    );
+  }
+
+  @override
+  Future<void> cancel() async {}
+
+  @override
+  Future<void> dispose() async {}
 }

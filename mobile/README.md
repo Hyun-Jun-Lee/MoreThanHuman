@@ -26,6 +26,9 @@ flutter test
 | `dio` | FastAPI HTTP client와 interceptor |
 | `flutter_secure_storage` | access/refresh token과 device ID 보관 |
 | `google_sign_in` | Google 모바일 로그인 |
+| `record` | 대화 화면의 음성 입력 녹음 |
+| `path_provider` | 녹음 파일을 저장할 임시 디렉터리 조회 |
+| `audioplayers` | AI 음성 응답 base64 재생 |
 
 ## 현재 구조
 
@@ -211,10 +214,13 @@ Conversation 화면은 Free Chat 시작, Roleplay 시작, Home 최근 대화 진
 | 동작 | API |
 |------|-----|
 | 기존 메시지 로드 | `GET /api/conversations/{conversation_id}/messages/?limit=50&offset=0` |
-| 메시지 전송 | `POST /api/conversations/{conversation_id}/message/` |
+| 텍스트 turn 전송 | `POST /api/conversations/{conversation_id}/turn/` JSON |
+| 음성 turn 전송 | `POST /api/conversations/{conversation_id}/turn/` multipart |
 | 문법 피드백 조회 | `GET /api/grammar/message/{message_id}/` |
 
-메시지는 서버의 시간순 목록을 기준으로 표시해요. 전송 중에는 사용자 메시지를 즉시 보여주고 `TypingIndicator`를 표시한 뒤, 성공하면 AI 응답을 반영하고 canonical 메시지 목록을 다시 불러와요. 실패하면 같은 메시지를 Retry할 수 있어요. AI 응답은 서버 원문을 바꾸지 않고 화면 표시 단계에서 문장 단위 줄바꿈과 누락된 공백을 보정해 읽기 쉽게 보여줘요.
+메시지는 서버의 시간순 목록을 기준으로 표시해요. 텍스트 전송 중에는 사용자 메시지를 즉시 보여주고 `TypingIndicator`를 표시한 뒤, 성공하면 AI 응답을 반영하고 canonical 메시지 목록을 다시 불러와요. 실패하면 같은 메시지를 Retry할 수 있어요. AI 응답은 서버 원문을 바꾸지 않고 화면 표시 단계에서 문장 단위 줄바꿈과 누락된 공백을 보정해 읽기 쉽게 보여줘요.
+
+새 채팅 composer는 기존 텍스트 전용 `/message/` 대신 `/turn/` API를 사용해요. 텍스트 입력은 JSON body의 `text`와 `include_audio_response=false`를 보내고, 음성 입력은 마이크 버튼으로 `.m4a`를 녹음한 뒤 multipart `audio_file`과 `include_audio_response=false`를 보내요. 음성 turn 응답의 `transcript`는 사용자 말풍선으로 표시하고, `audio`가 포함되면 AI 말풍선 아래에 재생 버튼을 보여줘요. `audio_error`는 대화 전송 실패와 분리된 비차단 안내로 표시해요.
 
 사용자 메시지의 문법 피드백은 2초 간격으로 최대 30초 polling해요. `404`는 pending으로 보고 계속 기다리며, `200`이면 `has_errors=false`는 `NaturalFeedbackBadge`, `has_errors=true`는 `GrammarFeedbackCard`로 표시해요. 문법 피드백의 교정 문장과 설명도 서버 원문은 유지하고 화면 표시 단계에서 문장 단위 줄바꿈과 누락된 공백을 보정해요. 빈 줄로 나뉜 텍스트는 문단 간격을 두고 표시하며, 1줄을 넘는 피드백은 기본 접힘 상태에서 `SHOW MORE`/`SHOW LESS`로 확장할 수 있어요. 설명 텍스트는 gray 계열을 유지하고 피드백 카드는 일반 AI 말풍선과 다른 semantic color를 사용해요. 30초 동안 준비되지 않으면 timeout 안내를 표시해요.
 

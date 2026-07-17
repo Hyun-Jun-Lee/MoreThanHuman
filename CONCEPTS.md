@@ -23,3 +23,10 @@ LLM 기반 흐름에서 Ready State는 모델의 품질 판단만으로 결정�
 주제나 생성 결과가 사용자에게 보여주기에는 부족할 때 반환하는 회복 안내예요.
 
 Retry Guidance는 불완전한 출력을 성공 경험으로 포장하지 않고, 사용자가 더 구체적인 입력으로 다시 시도할 수 있게 해요.
+
+## Conversation
+
+### Multimodal Conversation Turn
+진행 중인 conversation에 사용자가 텍스트 또는 녹음 파일 중 하나를 입력으로 보내는 한 번의 대화 차례예요.
+
+녹음 파일은 백엔드 STT를 거쳐 transcript가 canonical user message가 되고, 선택적으로 assistant response의 TTS audio가 같은 응답에 포함될 수 있어요.

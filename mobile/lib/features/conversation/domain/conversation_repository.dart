@@ -1,5 +1,17 @@
 import 'package:curitalk/features/conversation/domain/conversation_models.dart';
 
+class ConversationAudioFile {
+  const ConversationAudioFile({
+    required this.bytes,
+    required this.filename,
+    required this.contentType,
+  });
+
+  final List<int> bytes;
+  final String filename;
+  final String contentType;
+}
+
 abstract interface class ConversationRepository {
   Future<ConversationResponse> startFreeChat({
     required String firstMessage,
@@ -23,5 +35,17 @@ abstract interface class ConversationRepository {
   Future<MessageResponse> sendMessage({
     required String conversationId,
     required String message,
+  });
+
+  Future<MultimodalMessageResponse> sendTextTurn({
+    required String conversationId,
+    required String text,
+    bool includeAudioResponse = false,
+  });
+
+  Future<MultimodalMessageResponse> sendAudioTurn({
+    required String conversationId,
+    required ConversationAudioFile audioFile,
+    bool includeAudioResponse = false,
   });
 }

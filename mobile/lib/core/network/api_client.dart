@@ -59,6 +59,7 @@ class ApiClient {
     required ApiDataDecoder<T> decodeData,
     Object? data,
     Map<String, dynamic>? queryParameters,
+    String? contentType,
     bool requiresAuth = true,
     CancelToken? cancelToken,
   }) {
@@ -68,6 +69,7 @@ class ApiClient {
       decodeData: decodeData,
       data: data,
       queryParameters: queryParameters,
+      contentType: contentType,
       requiresAuth: requiresAuth,
       cancelToken: cancelToken,
     );
@@ -79,6 +81,7 @@ class ApiClient {
     required ApiDataDecoder<T> decodeData,
     Object? data,
     Map<String, dynamic>? queryParameters,
+    String? contentType,
     bool requiresAuth = true,
     CancelToken? cancelToken,
   }) async {
@@ -90,6 +93,7 @@ class ApiClient {
         cancelToken: cancelToken,
         options: Options(
           method: method,
+          contentType: contentType,
           extra: <String, Object?>{
             AuthTokenInterceptor.requiresAuthKey: requiresAuth,
           },

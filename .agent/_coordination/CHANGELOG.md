@@ -110,3 +110,5 @@
 - **Flutter UI 피드백 반영 계획 작성**: Pretendard+Newsreader 폰트 조합, 문단-aware 텍스트, 문법 피드백 접기/강조, 대화 타입 뱃지 제거 계획을 추가
 - **Flutter UI 피드백 반영 구현**: Pretendard+Newsreader 폰트 asset, 문단-aware 채팅 텍스트, 접기 가능한 문법 피드백, 대화 타입 뱃지 제거를 적용
 - **멀티모달 대화 API 구현**: free-chat 음성 시작과 conversation turn 텍스트/음성 입력, OpenAI STT/TTS provider, 문서/테스트를 추가
+- **Flutter 멀티모달 turn 연동 계획 작성**: 모바일 텍스트 `/turn/` migration, multipart audio turn, transcript reconciliation, optional TTS playback 계획을 추가
+- **Flutter 멀티모달 turn 연동 구현**: Conversation composer를 `/turn/` 텍스트·음성 입력으로 전환하고 녹음 업로드, transcript 표시, optional TTS 재생을 연결

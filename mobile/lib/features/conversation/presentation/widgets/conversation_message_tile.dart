@@ -1,4 +1,5 @@
 import 'package:curitalk/app/theme/tokens/tokens.dart';
+import 'package:curitalk/features/conversation/application/conversation_audio_services.dart';
 import 'package:curitalk/features/conversation/application/grammar_feedback_polling_controller.dart';
 import 'package:curitalk/features/conversation/domain/conversation_models.dart';
 import 'package:curitalk/features/conversation/domain/grammar_feedback.dart';
@@ -41,7 +42,50 @@ class ConversationMessageTile extends ConsumerWidget {
           const SizedBox(height: AppSpacing.xs),
           _GrammarFeedbackSlot(message: message),
         ],
+        if (!isUser &&
+            (message.audio != null || message.audioError != null)) ...<Widget>[
+          const SizedBox(height: AppSpacing.xs),
+          _AssistantAudioSlot(message: message),
+        ],
       ],
+    );
+  }
+}
+
+class _AssistantAudioSlot extends ConsumerWidget {
+  const _AssistantAudioSlot({required this.message});
+
+  final ConversationMessage message;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final VoiceAudioError? audioError = message.audioError;
+    if (audioError != null) {
+      return _FeedbackStatusText(label: audioError.message);
+    }
+
+    final VoiceAudioResponse? audio = message.audio;
+    if (audio == null) {
+      return const SizedBox.shrink();
+    }
+
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: OutlinedButton.icon(
+        onPressed: () async {
+          try {
+            await ref.read(conversationAudioPlayerProvider).play(audio);
+          } on ConversationAudioException catch (error) {
+            if (context.mounted) {
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(SnackBar(content: Text(error.message)));
+            }
+          }
+        },
+        icon: const Icon(Icons.volume_up_rounded),
+        label: const Text('Play response'),
+      ),
     );
   }
 }

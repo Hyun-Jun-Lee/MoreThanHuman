@@ -71,6 +71,31 @@ void main() {
     );
   });
 
+  testWidgets('ChatComposer shows recording stop affordance', (
+    WidgetTester tester,
+  ) async {
+    final TextEditingController controller = TextEditingController();
+    addTearDown(controller.dispose);
+    int voiceCount = 0;
+
+    await tester.pumpWidget(
+      _themedApp(
+        ChatComposer(
+          controller: controller,
+          isRecording: true,
+          onSend: (_) {},
+          onVoiceInput: () => voiceCount += 1,
+        ),
+      ),
+    );
+
+    expect(find.byTooltip('Stop recording'), findsOneWidget);
+    expect(find.byIcon(Icons.stop_rounded), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Stop recording'));
+    expect(voiceCount, 1);
+  });
+
   testWidgets('NaturalFeedbackBadge reports taps', (WidgetTester tester) async {
     int tapCount = 0;
     await tester.pumpWidget(

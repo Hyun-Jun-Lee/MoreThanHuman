@@ -1,3 +1,4 @@
+export 'application/conversation_audio_services.dart';
 export 'application/conversation_controller.dart';
 export 'application/grammar_feedback_polling_controller.dart';
 export 'application/start_conversation_controller.dart';

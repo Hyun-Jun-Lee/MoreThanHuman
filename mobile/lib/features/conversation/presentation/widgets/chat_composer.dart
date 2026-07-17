@@ -10,6 +10,7 @@ class ChatComposer extends StatefulWidget {
     this.hintText = 'Type in English...',
     this.enabled = true,
     this.isSending = false,
+    this.isRecording = false,
     super.key,
   });
 
@@ -19,6 +20,7 @@ class ChatComposer extends StatefulWidget {
   final String hintText;
   final bool enabled;
   final bool isSending;
+  final bool isRecording;
 
   @override
   State<ChatComposer> createState() => _ChatComposerState();
@@ -75,6 +77,7 @@ class _ChatComposerState extends State<ChatComposer> {
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
     final AppSemanticColors colors = AppSemanticColors.of(context);
+    final bool voiceEnabled = widget.enabled && !widget.isSending;
 
     return Material(
       color: theme.colorScheme.surface,
@@ -92,15 +95,22 @@ class _ChatComposerState extends State<ChatComposer> {
           children: <Widget>[
             if (widget.onVoiceInput != null)
               IconButton(
-                onPressed: widget.enabled && !widget.isSending
-                    ? widget.onVoiceInput
-                    : null,
-                tooltip: 'Voice input',
+                onPressed: voiceEnabled ? widget.onVoiceInput : null,
+                tooltip: widget.isRecording ? 'Stop recording' : 'Voice input',
                 style: IconButton.styleFrom(
-                  backgroundColor: Colors.transparent,
+                  backgroundColor: widget.isRecording
+                      ? colors.selectedSurface
+                      : Colors.transparent,
+                  foregroundColor: widget.isRecording
+                      ? colors.onSelected
+                      : null,
                   disabledBackgroundColor: Colors.transparent,
                 ),
-                icon: const Icon(Icons.mic_none_rounded),
+                icon: Icon(
+                  widget.isRecording
+                      ? Icons.stop_rounded
+                      : Icons.mic_none_rounded,
+                ),
               ),
             Expanded(
               child: TextField(

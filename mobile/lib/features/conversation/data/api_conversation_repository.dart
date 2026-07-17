@@ -1,6 +1,7 @@
 import 'package:curitalk/core/network/network.dart';
 import 'package:curitalk/features/conversation/domain/conversation_models.dart';
 import 'package:curitalk/features/conversation/domain/conversation_repository.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class ApiConversationRepository implements ConversationRepository {
@@ -73,6 +74,48 @@ class ApiConversationRepository implements ConversationRepository {
           'conversations/$conversationId/message/',
           data: <String, String>{'message': message},
           decodeData: MessageResponse.fromJson,
+        );
+    return response.data;
+  }
+
+  @override
+  Future<MultimodalMessageResponse> sendTextTurn({
+    required String conversationId,
+    required String text,
+    bool includeAudioResponse = false,
+  }) async {
+    final ApiResponse<MultimodalMessageResponse> response = await apiClient
+        .post<MultimodalMessageResponse>(
+          'conversations/$conversationId/turn/',
+          data: <String, Object?>{
+            'text': text,
+            'include_audio_response': includeAudioResponse,
+          },
+          decodeData: MultimodalMessageResponse.fromJson,
+        );
+    return response.data;
+  }
+
+  @override
+  Future<MultimodalMessageResponse> sendAudioTurn({
+    required String conversationId,
+    required ConversationAudioFile audioFile,
+    bool includeAudioResponse = false,
+  }) async {
+    final FormData formData = FormData.fromMap(<String, Object?>{
+      'audio_file': MultipartFile.fromBytes(
+        audioFile.bytes,
+        filename: audioFile.filename,
+        contentType: DioMediaType.parse(audioFile.contentType),
+      ),
+      'include_audio_response': includeAudioResponse.toString(),
+    });
+    final ApiResponse<MultimodalMessageResponse> response = await apiClient
+        .post<MultimodalMessageResponse>(
+          'conversations/$conversationId/turn/',
+          data: formData,
+          contentType: Headers.multipartFormDataContentType,
+          decodeData: MultimodalMessageResponse.fromJson,
         );
     return response.data;
   }

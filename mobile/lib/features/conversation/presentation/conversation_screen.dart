@@ -3,8 +3,10 @@ import 'dart:async';
 import 'package:curitalk/app/router/app_router.dart';
 import 'package:curitalk/app/theme/tokens/tokens.dart';
 import 'package:curitalk/core/widgets/widgets.dart';
+import 'package:curitalk/features/conversation/application/conversation_audio_services.dart';
 import 'package:curitalk/features/conversation/application/conversation_controller.dart';
 import 'package:curitalk/features/conversation/domain/conversation_models.dart';
+import 'package:curitalk/features/conversation/domain/conversation_repository.dart';
 import 'package:curitalk/features/conversation/presentation/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -21,6 +23,8 @@ class ConversationScreen extends ConsumerStatefulWidget {
 
 class _ConversationScreenState extends ConsumerState<ConversationScreen> {
   late final TextEditingController _composerController;
+  bool _isRecording = false;
+  String? _voiceErrorMessage;
 
   @override
   void initState() {
@@ -30,6 +34,9 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
 
   @override
   void dispose() {
+    if (_isRecording) {
+      unawaited(ref.read(conversationAudioRecorderProvider).cancel());
+    }
     _composerController.dispose();
     super.dispose();
   }
@@ -55,7 +62,9 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
           controller: _composerController,
           enabled: conversation.hasValue,
           isSending: isSending,
+          isRecording: _isRecording,
           onSend: _sendMessage,
+          onVoiceInput: _toggleVoiceInput,
         ),
       ),
       body: conversation.when(
@@ -73,6 +82,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
         data: (ConversationState state) => _ConversationMessageList(
           conversationId: widget.conversationId,
           state: state,
+          voiceErrorMessage: _voiceErrorMessage,
         ),
       ),
     );
@@ -85,6 +95,51 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
           .read(conversationControllerProvider(widget.conversationId).notifier)
           .send(message),
     );
+  }
+
+  Future<void> _toggleVoiceInput() async {
+    final ConversationController controller = ref.read(
+      conversationControllerProvider(widget.conversationId).notifier,
+    );
+    final ConversationAudioRecorder recorder = ref.read(
+      conversationAudioRecorderProvider,
+    );
+    if (!_isRecording) {
+      try {
+        await recorder.start();
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _isRecording = true;
+          _voiceErrorMessage = null;
+        });
+      } on ConversationAudioException catch (error) {
+        if (mounted) {
+          setState(() => _voiceErrorMessage = error.message);
+        }
+      }
+      return;
+    }
+
+    try {
+      final ConversationAudioFile audioFile = await recorder.stop();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isRecording = false;
+        _voiceErrorMessage = null;
+      });
+      unawaited(controller.sendAudio(audioFile));
+    } on ConversationAudioException catch (error) {
+      if (mounted) {
+        setState(() {
+          _isRecording = false;
+          _voiceErrorMessage = error.message;
+        });
+      }
+    }
   }
 
   void _goBack() {
@@ -101,15 +156,18 @@ class _ConversationMessageList extends ConsumerWidget {
   const _ConversationMessageList({
     required this.conversationId,
     required this.state,
+    this.voiceErrorMessage,
   });
 
   final String conversationId;
   final ConversationState state;
+  final String? voiceErrorMessage;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (state.messages.isEmpty &&
         state.failedMessage == null &&
+        state.failedAudioFile == null &&
         state.errorMessage == null &&
         !state.isSending) {
       return const AppAsyncStateView.empty(
@@ -131,10 +189,31 @@ class _ConversationMessageList extends ConsumerWidget {
       if (state.failedMessage != null || state.errorMessage != null)
         _SendFailureCard(
           message: state.errorMessage ?? 'Message could not be sent.',
-          onRetry: () => ref
-              .read(conversationControllerProvider(conversationId).notifier)
-              .retryFailedMessage(),
+          onRetry: () {
+            final ConversationController controller = ref.read(
+              conversationControllerProvider(conversationId).notifier,
+            );
+            if (state.failedAudioFile != null) {
+              controller.retryFailedAudio();
+            } else {
+              controller.retryFailedMessage();
+            }
+          },
         ),
+      if (state.audioErrorMessage != null) ...<Widget>[
+        AppColorBlockCard(
+          color: AppPalette.blockCream,
+          child: Text(state.audioErrorMessage!, style: AppTypography.bodySm),
+        ),
+        const SizedBox(height: AppSpacing.md),
+      ],
+      if (voiceErrorMessage != null) ...<Widget>[
+        AppColorBlockCard(
+          color: AppPalette.blockPink,
+          child: Text(voiceErrorMessage!, style: AppTypography.bodySm),
+        ),
+        const SizedBox(height: AppSpacing.md),
+      ],
       const SizedBox(height: AppSpacing.xl),
     ];
 

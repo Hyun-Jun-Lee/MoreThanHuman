@@ -290,6 +290,24 @@ class _FakeConversationRepository implements ConversationRepository {
   }) {
     throw UnimplementedError();
   }
+
+  @override
+  Future<MultimodalMessageResponse> sendTextTurn({
+    required String conversationId,
+    required String text,
+    bool includeAudioResponse = false,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<MultimodalMessageResponse> sendAudioTurn({
+    required String conversationId,
+    required ConversationAudioFile audioFile,
+    bool includeAudioResponse = false,
+  }) {
+    throw UnimplementedError();
+  }
 }
 
 TopicPrepQuality _quality({bool isSufficient = true}) {

@@ -43,6 +43,86 @@ enum ConversationMessageRole {
   }
 }
 
+enum ConversationInputMode {
+  text('text'),
+  audio('audio');
+
+  const ConversationInputMode(this.value);
+
+  final String value;
+
+  static ConversationInputMode fromJson(Object? value) {
+    if (value is! String) {
+      throw const FormatException('Conversation input mode is invalid.');
+    }
+    return ConversationInputMode.values.firstWhere(
+      (ConversationInputMode mode) => mode.value == value,
+      orElse: () {
+        throw const FormatException('Conversation input mode is invalid.');
+      },
+    );
+  }
+}
+
+class VoiceAudioResponse {
+  const VoiceAudioResponse({
+    required this.contentType,
+    required this.base64,
+    required this.format,
+  });
+
+  factory VoiceAudioResponse.fromJson(Object? json) {
+    if (json is! Map<String, dynamic>) {
+      throw const FormatException('Voice audio response must be an object.');
+    }
+
+    final Object? contentType = json['content_type'];
+    final Object? base64 = json['base64'];
+    final Object? format = json['format'];
+    if (contentType is! String ||
+        contentType.isEmpty ||
+        base64 is! String ||
+        base64.isEmpty ||
+        format is! String ||
+        format.isEmpty) {
+      throw const FormatException('Voice audio response payload is invalid.');
+    }
+
+    return VoiceAudioResponse(
+      contentType: contentType,
+      base64: base64,
+      format: format,
+    );
+  }
+
+  final String contentType;
+  final String base64;
+  final String format;
+}
+
+class VoiceAudioError {
+  const VoiceAudioError({required this.message, this.provider});
+
+  factory VoiceAudioError.fromJson(Object? json) {
+    if (json is! Map<String, dynamic>) {
+      throw const FormatException('Voice audio error must be an object.');
+    }
+
+    final Object? message = json['message'];
+    final Object? provider = json['provider'];
+    if (message is! String ||
+        message.isEmpty ||
+        (provider != null && provider is! String)) {
+      throw const FormatException('Voice audio error payload is invalid.');
+    }
+
+    return VoiceAudioError(message: message, provider: provider as String?);
+  }
+
+  final String message;
+  final String? provider;
+}
+
 class ConversationResponse {
   const ConversationResponse({
     required this.conversationId,
@@ -93,6 +173,53 @@ class ConversationResponse {
   final GrammarFeedback? grammarFeedback;
 }
 
+class MultimodalConversationResponse extends ConversationResponse {
+  const MultimodalConversationResponse({
+    required super.conversationId,
+    required super.messageId,
+    required super.conversationType,
+    required super.response,
+    required this.inputMode,
+    super.roleCharacter,
+    super.grammarFeedback,
+    this.transcript,
+    this.audio,
+    this.audioError,
+  });
+
+  factory MultimodalConversationResponse.fromJson(Object? json) {
+    final ConversationResponse response = ConversationResponse.fromJson(json);
+    if (json is! Map<String, dynamic>) {
+      throw const FormatException(
+        'Multimodal conversation response must be a JSON object.',
+      );
+    }
+    return MultimodalConversationResponse(
+      conversationId: response.conversationId,
+      messageId: response.messageId,
+      conversationType: response.conversationType,
+      roleCharacter: response.roleCharacter,
+      response: response.response,
+      grammarFeedback: response.grammarFeedback,
+      inputMode: ConversationInputMode.fromJson(
+        json['input_mode'] ?? ConversationInputMode.text.value,
+      ),
+      transcript: _optionalString(json['transcript'], 'transcript'),
+      audio: json['audio'] == null
+          ? null
+          : VoiceAudioResponse.fromJson(json['audio']),
+      audioError: json['audio_error'] == null
+          ? null
+          : VoiceAudioError.fromJson(json['audio_error']),
+    );
+  }
+
+  final ConversationInputMode inputMode;
+  final String? transcript;
+  final VoiceAudioResponse? audio;
+  final VoiceAudioError? audioError;
+}
+
 class MessageResponse {
   const MessageResponse({
     required this.messageId,
@@ -133,6 +260,49 @@ class MessageResponse {
   final GrammarFeedback? grammarFeedback;
 }
 
+class MultimodalMessageResponse extends MessageResponse {
+  const MultimodalMessageResponse({
+    required super.messageId,
+    required super.response,
+    required super.turnCount,
+    required this.inputMode,
+    super.grammarFeedback,
+    this.transcript,
+    this.audio,
+    this.audioError,
+  });
+
+  factory MultimodalMessageResponse.fromJson(Object? json) {
+    final MessageResponse response = MessageResponse.fromJson(json);
+    if (json is! Map<String, dynamic>) {
+      throw const FormatException(
+        'Multimodal message response must be a JSON object.',
+      );
+    }
+    return MultimodalMessageResponse(
+      messageId: response.messageId,
+      response: response.response,
+      turnCount: response.turnCount,
+      grammarFeedback: response.grammarFeedback,
+      inputMode: ConversationInputMode.fromJson(
+        json['input_mode'] ?? ConversationInputMode.text.value,
+      ),
+      transcript: _optionalString(json['transcript'], 'transcript'),
+      audio: json['audio'] == null
+          ? null
+          : VoiceAudioResponse.fromJson(json['audio']),
+      audioError: json['audio_error'] == null
+          ? null
+          : VoiceAudioError.fromJson(json['audio_error']),
+    );
+  }
+
+  final ConversationInputMode inputMode;
+  final String? transcript;
+  final VoiceAudioResponse? audio;
+  final VoiceAudioError? audioError;
+}
+
 class ConversationMessage {
   const ConversationMessage({
     required this.id,
@@ -141,6 +311,8 @@ class ConversationMessage {
     required this.content,
     required this.createdAt,
     this.grammarFeedback,
+    this.audio,
+    this.audioError,
     this.isLocalPending = false,
   });
 
@@ -182,6 +354,8 @@ class ConversationMessage {
   final String content;
   final DateTime createdAt;
   final GrammarFeedback? grammarFeedback;
+  final VoiceAudioResponse? audio;
+  final VoiceAudioError? audioError;
   final bool isLocalPending;
 
   ConversationMessage copyWith({
@@ -190,6 +364,8 @@ class ConversationMessage {
     String? content,
     DateTime? createdAt,
     GrammarFeedback? grammarFeedback,
+    VoiceAudioResponse? audio,
+    VoiceAudioError? audioError,
     bool? isLocalPending,
   }) {
     return ConversationMessage(
@@ -199,9 +375,21 @@ class ConversationMessage {
       content: content ?? this.content,
       createdAt: createdAt ?? this.createdAt,
       grammarFeedback: grammarFeedback ?? this.grammarFeedback,
+      audio: audio ?? this.audio,
+      audioError: audioError ?? this.audioError,
       isLocalPending: isLocalPending ?? this.isLocalPending,
     );
   }
+}
+
+String? _optionalString(Object? value, String fieldName) {
+  if (value == null) {
+    return null;
+  }
+  if (value is String) {
+    return value;
+  }
+  throw FormatException('$fieldName must be a string.');
 }
 
 class PaginatedMessages {

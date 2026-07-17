@@ -35,7 +35,7 @@ void main() {
     });
   });
 
-  test('loads messages and sends a conversation message', () async {
+  test('loads messages and sends a text conversation turn', () async {
     final _ConversationHttpClientAdapter adapter =
         _ConversationHttpClientAdapter();
     final ApiConversationRepository repository = _repository(adapter);
@@ -43,20 +43,53 @@ void main() {
     final PaginatedMessages page = await repository.listMessages(
       'conversation-id',
     );
-    final MessageResponse response = await repository.sendMessage(
+    final MultimodalMessageResponse response = await repository.sendTextTurn(
       conversationId: 'conversation-id',
-      message: 'Hello again',
+      text: 'Hello again',
     );
 
     expect(page.results.single.content, 'Hello!');
     expect(response.response, 'AI response');
+    expect(response.inputMode, ConversationInputMode.text);
+    expect(response.transcript, 'Hello again');
     expect(
       adapter.requests.last.uri.path,
-      '/api/conversations/conversation-id/message/',
+      '/api/conversations/conversation-id/turn/',
     );
-    expect(adapter.requests.last.data, <String, String>{
-      'message': 'Hello again',
+    expect(adapter.requests.last.data, <String, Object?>{
+      'text': 'Hello again',
+      'include_audio_response': false,
     });
+  });
+
+  test('sends an audio conversation turn as multipart form data', () async {
+    final _ConversationHttpClientAdapter adapter =
+        _ConversationHttpClientAdapter();
+    final ApiConversationRepository repository = _repository(adapter);
+
+    final MultimodalMessageResponse response = await repository.sendAudioTurn(
+      conversationId: 'conversation-id',
+      audioFile: const ConversationAudioFile(
+        bytes: <int>[1, 2, 3],
+        filename: 'recording.webm',
+        contentType: 'audio/webm',
+      ),
+    );
+
+    final RequestOptions request = adapter.lastRequest!;
+    final FormData formData = request.data as FormData;
+    expect(response.inputMode, ConversationInputMode.audio);
+    expect(response.transcript, 'I want to order a latte.');
+    expect(request.uri.path, '/api/conversations/conversation-id/turn/');
+    expect(
+      request.contentType,
+      startsWith(Headers.multipartFormDataContentType),
+    );
+    expect(formData.fields.single.key, 'include_audio_response');
+    expect(formData.fields.single.value, 'false');
+    expect(formData.files.single.key, 'audio_file');
+    expect(formData.files.single.value.filename, 'recording.webm');
+    expect(formData.files.single.value.contentType.toString(), 'audio/webm');
   });
 }
 
@@ -107,6 +140,18 @@ class _ConversationHttpClientAdapter implements HttpClientAdapter {
         'response': 'AI response',
         'grammar_feedback': null,
         'turn_count': 2,
+      },
+      '/api/conversations/conversation-id/turn/' => <String, dynamic>{
+        'message_id': 'user-id',
+        'response': 'AI response',
+        'grammar_feedback': null,
+        'turn_count': 2,
+        'input_mode': options.data is FormData ? 'audio' : 'text',
+        'transcript': options.data is FormData
+            ? 'I want to order a latte.'
+            : 'Hello again',
+        'audio': null,
+        'audio_error': null,
       },
       _ => <String, dynamic>{
         'conversation_id': 'conversation-id',
