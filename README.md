@@ -19,6 +19,7 @@ cp .env.example .env
 | `LLM_PROVIDER` | `openrouter` 또는 `ollama` |
 | `OPENROUTER_API_KEY` | OpenRouter API 키 |
 | `OPENROUTER_MODEL` | OpenRouter 모델명 |
+| `OPENAI_API_KEY` | STT/TTS 음성 기능을 사용할 때 필요한 OpenAI API 키 |
 | `OLLAMA_BASE_URL` | Ollama 서버 URL |
 | `OLLAMA_MODEL` | Ollama 모델명 |
 | `JWT_SECRET_KEY` | JWT 서명 secret |
@@ -260,7 +261,7 @@ Flutter App
 
 ### `POST /api/conversations/start/free-chat/`
 
-자유 대화를 시작해요.
+자유 대화를 시작해요. JSON 텍스트 요청과 multipart 음성 요청을 모두 지원해요.
 
 ```json
 {
@@ -270,6 +271,16 @@ Flutter App
   "conversation_direction": null,
   "selected_question": null
 }
+```
+
+음성으로 시작하는 경우:
+
+```http
+POST /api/conversations/start/free-chat/
+Content-Type: multipart/form-data
+
+audio_file=<recording.webm>
+include_audio_response=true
 ```
 
 주제 준비 카드에서 시작하는 경우:
@@ -294,11 +305,59 @@ Flutter App
 
 ### `POST /api/conversations/{conversation_id}/message/`
 
-진행 중인 대화에 메시지를 전송해요.
+진행 중인 대화에 텍스트 메시지를 전송해요. 기존 텍스트 전용 API이며, 새 채팅 composer는 아래 `/turn/` API를 사용하면 텍스트와 음성을 한 경로로 처리할 수 있어요.
 
 ```json
 {
   "message": "I want to order a latte."
+}
+```
+
+### `POST /api/conversations/{conversation_id}/turn/`
+
+진행 중인 대화에 텍스트 또는 음성 파일을 전송해요. `text`와 `audio_file` 중 정확히 하나만 보내야 해요.
+
+텍스트 이어 말하기:
+
+```http
+POST /api/conversations/{conversation_id}/turn/
+Content-Type: application/json
+
+{
+  "text": "I want to order a latte.",
+  "include_audio_response": true
+}
+```
+
+음성 이어 말하기:
+
+```http
+POST /api/conversations/{conversation_id}/turn/
+Content-Type: multipart/form-data
+
+audio_file=<recording.webm>
+include_audio_response=true
+```
+
+응답은 공통 envelope 안에 사용자 입력으로 확정된 `transcript`, AI 텍스트 `response`, 선택적 TTS `audio`, TTS 실패 시 `audio_error`를 포함해요.
+
+```json
+{
+  "success": true,
+  "data": {
+    "message_id": "550e8400-e29b-41d4-a716-446655440000",
+    "response": "Sure. What size would you like?",
+    "grammar_feedback": null,
+    "turn_count": 2,
+    "input_mode": "audio",
+    "transcript": "I want to order a latte.",
+    "audio": {
+      "content_type": "audio/mpeg",
+      "base64": "...",
+      "format": "mp3"
+    },
+    "audio_error": null
+  }
 }
 ```
 
@@ -598,6 +657,7 @@ Query:
 |------|------|--------|------|
 | `DATABASE_URL` | 아니오 | `sqlite:///./english_learning.db` | DB 연결 문자열 |
 | `OPENROUTER_API_KEY` | 예 | 없음 | OpenRouter API 키 |
+| `OPENAI_API_KEY` | 음성 기능 사용 시 | 없음 | OpenAI STT/TTS API 키. Flutter 앱에는 노출하지 않음 |
 | `LLM_PROVIDER` | 아니오 | `openrouter` | 기본 LLM provider. `ollama`는 로컬 Ollama 서버를 의도적으로 사용할 때만 설정 |
 | `OLLAMA_BASE_URL` | Ollama 사용 시 | 없음 | Ollama 서버 URL |
 | `OPENROUTER_MODEL` | OpenRouter 사용 시 | 없음 | 대화용 OpenRouter 모델 |
@@ -617,6 +677,16 @@ Query:
 | `CORS_ORIGINS` | 아니오 | `[]` | CORS 허용 origin 목록 |
 | `MAX_TOKENS` | 아니오 | `4000` | LLM 최대 토큰 |
 | `TEMPERATURE` | 아니오 | `0.7` | LLM temperature |
+| `STT_PROVIDER` | 아니오 | `openai` | STT provider |
+| `STT_MODEL` | 아니오 | `gpt-4o-mini-transcribe` | 음성 파일을 텍스트로 변환할 STT 모델 |
+| `TTS_PROVIDER` | 아니오 | `openai` | TTS provider |
+| `TTS_MODEL` | 아니오 | `gpt-4o-mini-tts` | AI 응답을 음성으로 변환할 TTS 모델 |
+| `TTS_VOICE` | 아니오 | `alloy` | TTS 음성 preset |
+| `TTS_RESPONSE_FORMAT` | 아니오 | `mp3` | TTS 응답 오디오 포맷 |
+| `TTS_MAX_INPUT_CHARS` | 아니오 | `4000` | TTS로 보낼 최대 텍스트 길이 |
+| `TTS_MAX_OUTPUT_MB` | 아니오 | `5` | base64 인코딩 전 TTS 응답 오디오 최대 크기 |
+| `VOICE_MAX_UPLOAD_MB` | 아니오 | `10` | STT 업로드 음성 파일 최대 크기 |
+| `VOICE_PROVIDER_TIMEOUT_SECONDS` | 아니오 | `60` | STT/TTS provider 요청 timeout |
 | `SEARCH_SUMMARY_MAX_TOKENS` | 아니오 | `600` | 검색 요약 최대 토큰 |
 | `SEARCH_QUERY_ANALYSIS_MAX_TOKENS` | 아니오 | `500` | 검색어 분석 LLM 최대 토큰 |
 | `SEARCH_QUALITY_JUDGE_MAX_TOKENS` | 아니오 | `500` | 검색 품질 판정 LLM 최대 토큰 |

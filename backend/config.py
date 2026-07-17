@@ -15,6 +15,7 @@ class Settings(BaseSettings):
 
     # External APIs
     openrouter_api_key: str
+    openai_api_key: str | None = None
 
     # Application
     env: str = "prod"
@@ -64,6 +65,18 @@ class Settings(BaseSettings):
 
     # Conversation Settings
     max_history_turns: int = 10
+
+    # Voice Settings
+    stt_provider: str = "openai"
+    stt_model: str = "gpt-4o-mini-transcribe"
+    tts_provider: str = "openai"
+    tts_model: str = "gpt-4o-mini-tts"
+    tts_voice: str = "alloy"
+    tts_response_format: str = "mp3"
+    tts_max_input_chars: int = 4000
+    tts_max_output_mb: int = 5
+    voice_max_upload_mb: int = 10
+    voice_provider_timeout_seconds: float = 60.0
 
     @property
     def is_dev(self) -> bool:

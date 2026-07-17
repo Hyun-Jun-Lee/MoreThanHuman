@@ -178,6 +178,7 @@ module Conversation {
     POST   /api/conversations/start/free-chat/       -> startFreeChat
     POST   /api/conversations/start/roleplay/        -> startRoleplay
     POST   /api/conversations/{id}/message/          -> sendMessage
+    POST   /api/conversations/{id}/turn/             -> sendMultimodalTurn
     GET    /api/conversations/                       -> listConversations
     GET    /api/conversations/{id}/                  -> getConversation
     GET    /api/conversations/{id}/messages/         -> listMessages
@@ -189,11 +190,12 @@ module Conversation {
   }
 
   type StartFreeChatRequest {
-    first_message: String
+    first_message: String | File(audio_file)
     search_context?: String
     topic?: String
     conversation_direction?: "CASUAL_CHAT" | "DEBATE" | "INTERVIEW_QA" | "EXPLANATION_PRACTICE"
     selected_question?: String
+    include_audio_response?: Boolean = false
   }
 
   type StartRoleplayRequest {
@@ -203,6 +205,11 @@ module Conversation {
 
   type SendMessageRequest {
     message: String
+  }
+
+  type SendTurnRequest {
+    text: String | File(audio_file)
+    include_audio_response?: Boolean = false
   }
 
   type Pagination {
@@ -258,8 +265,44 @@ module Conversation {
     grammar_feedback?: GrammarFeedback
     turn_count: Integer
   }
+
+  type VoiceAudioResponse {
+    content_type: String
+    base64: String
+    format: String
+  }
+
+  type VoiceAudioError {
+    message: String
+    provider?: String
+  }
+
+  type MultimodalConversationResponse extends ConversationResponse {
+    input_mode: "text" | "audio"
+    transcript?: String
+    audio?: VoiceAudioResponse
+    audio_error?: VoiceAudioError
+  }
+
+  type MultimodalMessageResponse extends MessageResponse {
+    input_mode: "text" | "audio"
+    transcript?: String
+    audio?: VoiceAudioResponse
+    audio_error?: VoiceAudioError
+  }
 }
 ```
+
+멀티모달 대화 API는 아래 네 가지 요청 형태를 기본 계약으로 사용해요.
+
+```dsl
+TextStart      = POST /api/conversations/start/free-chat/  { first_message }
+AudioStart     = POST /api/conversations/start/free-chat/  multipart { audio_file }
+TextContinue   = POST /api/conversations/{id}/turn/        { text }
+AudioContinue  = POST /api/conversations/{id}/turn/        multipart { audio_file }
+```
+
+`first_message`/`text`와 `audio_file`은 같은 요청에서 동시에 보낼 수 없어요. `audio_file` 요청은 백엔드가 STT로 `transcript`를 만든 뒤 기존 conversation flow에 전달해요. `include_audio_response=true`이면 AI 응답 텍스트를 TTS로 변환해 `audio`에 담고, 대화 저장 이후 TTS만 실패하면 `audio_error`를 반환해 중복 메시지 재시도를 방지해요.
 
 모바일 v1은 문법 피드백 수신에 SSE보다 polling을 우선해요. 앱은 `ConversationResponse.message_id` 또는 `MessageResponse.message_id`를 받은 뒤 `GET /api/grammar/message/{message_id}/`를 반복 호출하고, `404`를 pending 또는 접근 불가 상태로 처리해요. SSE 스트림은 실시간성이 더 중요해질 때 선택적으로 사용해요.
 
@@ -448,6 +491,7 @@ module LLM {
 env {
   DATABASE_URL?: String
   OPENROUTER_API_KEY: String
+  OPENAI_API_KEY?: String
   LLM_PROVIDER?: "openrouter" | "ollama" = "openrouter"
   OLLAMA_BASE_URL?: String
   OPENROUTER_MODEL?: String
@@ -456,6 +500,17 @@ env {
   GRAMMAR_MODEL_PROVIDER?: "openrouter" | "ollama" = "openrouter"
   GRAMMAR_OPENROUTER_MODEL?: String
   GRAMMAR_OLLAMA_MODEL?: String
+
+  STT_PROVIDER?: "openai" = "openai"
+  STT_MODEL?: String = "gpt-4o-mini-transcribe"
+  TTS_PROVIDER?: "openai" = "openai"
+  TTS_MODEL?: String = "gpt-4o-mini-tts"
+  TTS_VOICE?: String = "alloy"
+  TTS_RESPONSE_FORMAT?: "mp3" | "opus" | "aac" | "flac" | "wav" | "pcm" = "mp3"
+  TTS_MAX_INPUT_CHARS?: Integer = 4000
+  TTS_MAX_OUTPUT_MB?: Integer = 5
+  VOICE_MAX_UPLOAD_MB?: Integer = 10
+  VOICE_PROVIDER_TIMEOUT_SECONDS?: Float = 60
 
   JWT_SECRET_KEY: String
   JWT_ALGORITHM?: String

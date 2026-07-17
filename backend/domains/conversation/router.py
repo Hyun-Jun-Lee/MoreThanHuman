@@ -7,12 +7,12 @@ import json
 import logging
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
-logger = logging.getLogger(__name__)
-
+from config import get_settings
 from database import get_db
 from domains.auth.dependencies import get_current_user, get_current_user_from_token_param
 from domains.auth.models import UserModel
@@ -22,6 +22,8 @@ from domains.conversation.schemas import (
     Conversation,
     ConversationResponse,
     MessageResponse,
+    MultimodalConversationResponse,
+    MultimodalMessageResponse,
     PaginatedConversations,
     PaginatedMessages,
     SendMessageRequest,
@@ -30,10 +32,106 @@ from domains.conversation.schemas import (
     UpdateTitleRequest,
 )
 from domains.conversation.service import ConversationService
-from shared.exceptions import AppException, NotFoundException, RateLimitException
+from domains.voice.schemas import VoiceAudioError, VoiceAudioResponse
+from domains.voice.service import VoiceService
+from shared.exceptions import (
+    AppException,
+    ExternalAPIException,
+    NotFoundException,
+    RateLimitException,
+    ValidationException,
+)
 from shared.types import ErrorResponse, SuccessResponse
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/api/conversations", tags=["conversations"])
+settings = get_settings()
+
+
+FREE_CHAT_REQUEST_BODY_OPENAPI = {
+    "content": {
+        "application/json": {
+            "schema": {
+                "type": "object",
+                "required": ["first_message"],
+                "properties": {
+                    "first_message": {"type": "string"},
+                    "search_context": {"type": "string", "nullable": True},
+                    "topic": {"type": "string", "nullable": True},
+                    "conversation_direction": {"type": "string", "nullable": True},
+                    "selected_question": {"type": "string", "nullable": True},
+                    "include_audio_response": {"type": "boolean", "default": False},
+                },
+            }
+        },
+        "multipart/form-data": {
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "first_message": {"type": "string"},
+                    "text": {"type": "string"},
+                    "audio_file": {"type": "string", "format": "binary"},
+                    "search_context": {"type": "string"},
+                    "topic": {"type": "string"},
+                    "conversation_direction": {"type": "string"},
+                    "selected_question": {"type": "string"},
+                    "include_audio_response": {"type": "boolean", "default": False},
+                },
+            }
+        },
+        "application/x-www-form-urlencoded": {
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "first_message": {"type": "string"},
+                    "text": {"type": "string"},
+                    "search_context": {"type": "string"},
+                    "topic": {"type": "string"},
+                    "conversation_direction": {"type": "string"},
+                    "selected_question": {"type": "string"},
+                    "include_audio_response": {"type": "boolean", "default": False},
+                },
+            }
+        },
+    }
+}
+
+TURN_REQUEST_BODY_OPENAPI = {
+    "content": {
+        "application/json": {
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string"},
+                    "message": {"type": "string"},
+                    "include_audio_response": {"type": "boolean", "default": False},
+                },
+            }
+        },
+        "multipart/form-data": {
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string"},
+                    "message": {"type": "string"},
+                    "audio_file": {"type": "string", "format": "binary"},
+                    "include_audio_response": {"type": "boolean", "default": False},
+                },
+            }
+        },
+        "application/x-www-form-urlencoded": {
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string"},
+                    "message": {"type": "string"},
+                    "include_audio_response": {"type": "boolean", "default": False},
+                },
+            }
+        },
+    }
+}
 
 
 # Dependency
@@ -46,17 +144,166 @@ def get_conversation_service(db: Session = Depends(get_db)) -> ConversationServi
     return ConversationService(repository, grammar_repository)
 
 
+def get_voice_service() -> VoiceService:
+    """Voice Service 의존성"""
+    return VoiceService()
+
+
+def _parse_bool_form_value(value: object, *, default: bool = False) -> bool:
+    """form/json bool 값을 안전하게 변환"""
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def _validation_error_response(exc: ValidationError) -> HTTPException:
+    """Pydantic validation error를 FastAPI 422 형태로 변환"""
+    return HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        detail=exc.errors(),
+    )
+
+
+def _is_form_content_type(content_type: str) -> bool:
+    """form 요청 여부 확인"""
+    return content_type.startswith("multipart/form-data") or content_type.startswith(
+        "application/x-www-form-urlencoded"
+    )
+
+
+def _is_json_content_type(content_type: str) -> bool:
+    """JSON 요청 여부 확인"""
+    return content_type.startswith("application/json")
+
+
+def _enforce_voice_content_length_limit(http_request: Request) -> None:
+    """multipart/form 요청의 body 크기를 form 파싱 전에 1차 제한"""
+    content_length = http_request.headers.get("content-length")
+    if not content_length:
+        return
+
+    try:
+        length = int(content_length)
+    except ValueError:
+        return
+
+    max_bytes = settings.voice_max_upload_mb * 1024 * 1024
+    form_overhead_allowance = 1024 * 1024
+    if length > max_bytes + form_overhead_allowance:
+        raise ValidationException(
+            f"request body exceeds {settings.voice_max_upload_mb} MB upload limit.",
+            details={"max_upload_mb": settings.voice_max_upload_mb},
+        )
+
+
+def _reject_unsupported_content_type(content_type: str) -> None:
+    """지원하지 않는 요청 Content-Type 거절"""
+    if _is_json_content_type(content_type) or _is_form_content_type(content_type):
+        return
+    raise HTTPException(
+        status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+        detail=(
+            "Unsupported Content-Type. Use application/json, multipart/form-data, "
+            "or application/x-www-form-urlencoded."
+        ),
+    )
+
+
+async def _parse_free_chat_input(http_request: Request) -> tuple[StartFreeChatRequest, bool, object | None]:
+    """JSON 또는 multipart free-chat 시작 요청 파싱"""
+    content_type = http_request.headers.get("content-type", "")
+    _reject_unsupported_content_type(content_type)
+
+    if _is_form_content_type(content_type):
+        _enforce_voice_content_length_limit(http_request)
+        form = await http_request.form()
+        audio_file = form.get("audio_file")
+        include_audio_response = _parse_bool_form_value(form.get("include_audio_response"))
+        payload = {
+            "first_message": form.get("first_message") or form.get("text") or "",
+            "search_context": form.get("search_context"),
+            "topic": form.get("topic"),
+            "conversation_direction": form.get("conversation_direction"),
+            "selected_question": form.get("selected_question"),
+        }
+        return StartFreeChatRequest.model_validate(payload), include_audio_response, audio_file
+
+    try:
+        payload = await http_request.json()
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Malformed JSON body.")
+    include_audio_response = _parse_bool_form_value(payload.get("include_audio_response"))
+    return StartFreeChatRequest.model_validate(payload), include_audio_response, None
+
+
+async def _parse_turn_input(http_request: Request) -> tuple[str | None, bool, object | None]:
+    """JSON 또는 multipart turn 요청 파싱"""
+    content_type = http_request.headers.get("content-type", "")
+    _reject_unsupported_content_type(content_type)
+
+    if _is_form_content_type(content_type):
+        _enforce_voice_content_length_limit(http_request)
+        form = await http_request.form()
+        return (
+            form.get("text") or form.get("message"),
+            _parse_bool_form_value(form.get("include_audio_response")),
+            form.get("audio_file"),
+        )
+
+    try:
+        payload = await http_request.json()
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Malformed JSON body.")
+    return (
+        payload.get("text") or payload.get("message"),
+        _parse_bool_form_value(payload.get("include_audio_response")),
+        None,
+    )
+
+
+async def _synthesize_optional_audio(
+    *,
+    include_audio_response: bool,
+    response_text: str,
+    voice_service: VoiceService,
+) -> tuple[VoiceAudioResponse | None, VoiceAudioError | None]:
+    """요청 시 AI 응답 TTS를 생성하고 실패는 응답 필드로 격리"""
+    if not include_audio_response:
+        return None, None
+
+    try:
+        audio = await voice_service.synthesize_response(response_text)
+        return audio, None
+    except AppException as exc:
+        return None, VoiceAudioError(
+            message=exc.message,
+            provider=voice_service.provider.get_provider_name(),
+        )
+
+
 # Endpoints
-@router.post("/start/free-chat/", response_model=SuccessResponse[ConversationResponse])
+@router.post(
+    "/start/free-chat/",
+    response_model=SuccessResponse[MultimodalConversationResponse],
+    openapi_extra={"requestBody": FREE_CHAT_REQUEST_BODY_OPENAPI},
+)
 async def start_free_chat_conversation(
-    request: StartFreeChatRequest,
+    http_request: Request,
     current_user: UserModel = Depends(get_current_user),
     service: ConversationService = Depends(get_conversation_service),
+    voice_service: VoiceService = Depends(get_voice_service),
 ):
     """자유 대화 시작"""
     try:
+        request, include_audio_response, audio_file = await _parse_free_chat_input(http_request)
+        input_mode, first_message = await voice_service.resolve_input_text(
+            text=request.first_message,
+            audio_file=audio_file,
+        )
         response = await service.start_free_chat_conversation(
-            request.first_message,
+            first_message,
             request.search_context,
             user_id=current_user.id,
             topic=request.topic,
@@ -67,13 +314,32 @@ async def start_free_chat_conversation(
             ),
             selected_question=request.selected_question,
         )
-        return SuccessResponse(data=response, message="자유 대화가 시작되었습니다")
+        audio, audio_error = await _synthesize_optional_audio(
+            include_audio_response=include_audio_response,
+            response_text=response.response,
+            voice_service=voice_service,
+        )
+        data = MultimodalConversationResponse(
+            **response.model_dump(),
+            input_mode=input_mode,
+            transcript=first_message,
+            audio=audio,
+            audio_error=audio_error,
+        )
+        return SuccessResponse(data=data, message="자유 대화가 시작되었습니다")
+    except ValidationError as e:
+        raise _validation_error_response(e)
     except RateLimitException as e:
         logger.warning(f"RateLimitException in start_free_chat_conversation: {e.message}")
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=e.message)
+    except ExternalAPIException as e:
+        logger.error(f"ExternalAPIException in start_free_chat_conversation: {e.message}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=e.message)
     except AppException as e:
         logger.error(f"AppException in start_free_chat_conversation: {e.message}", exc_info=True)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Unexpected error in start_free_chat_conversation: {str(e)}", exc_info=True)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
@@ -128,6 +394,64 @@ async def send_message(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
     except Exception as e:
         logger.error(f"Unexpected error in send_message: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.post(
+    "/{conversation_id}/turn/",
+    response_model=SuccessResponse[MultimodalMessageResponse],
+    openapi_extra={"requestBody": TURN_REQUEST_BODY_OPENAPI},
+)
+async def send_multimodal_turn(
+    conversation_id: UUID,
+    http_request: Request,
+    current_user: UserModel = Depends(get_current_user),
+    service: ConversationService = Depends(get_conversation_service),
+    voice_service: VoiceService = Depends(get_voice_service),
+):
+    """텍스트 또는 음성 파일로 대화 이어가기"""
+    try:
+        text, include_audio_response, audio_file = await _parse_turn_input(http_request)
+        input_mode, user_text = await voice_service.resolve_input_text(
+            text=text,
+            audio_file=audio_file,
+        )
+        response = await service.continue_conversation(
+            str(conversation_id),
+            user_text,
+            user_id=current_user.id,
+        )
+        audio, audio_error = await _synthesize_optional_audio(
+            include_audio_response=include_audio_response,
+            response_text=response.response,
+            voice_service=voice_service,
+        )
+        data = MultimodalMessageResponse(
+            **response.model_dump(),
+            input_mode=input_mode,
+            transcript=user_text,
+            audio=audio,
+            audio_error=audio_error,
+        )
+        return SuccessResponse(data=data)
+    except ValidationError as e:
+        raise _validation_error_response(e)
+    except RateLimitException as e:
+        logger.warning(f"RateLimitException in send_multimodal_turn: {e.message}")
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=e.message)
+    except ExternalAPIException as e:
+        logger.error(f"ExternalAPIException in send_multimodal_turn: {e.message}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=e.message)
+    except NotFoundException as e:
+        logger.error(f"NotFoundException in send_multimodal_turn: {e.message}")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
+    except AppException as e:
+        logger.error(f"AppException in send_multimodal_turn: {e.message}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error in send_multimodal_turn: {str(e)}", exc_info=True)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
