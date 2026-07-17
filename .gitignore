@@ -29,6 +29,7 @@ wheels/
 # Environment
 .env
 .env.local
+mobile/.env*
 
 # Database
 *.db
