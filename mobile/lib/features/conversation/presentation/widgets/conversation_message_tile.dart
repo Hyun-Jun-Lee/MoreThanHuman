@@ -52,43 +52,116 @@ class ConversationMessageTile extends ConsumerWidget {
   }
 }
 
-class _AssistantAudioSlot extends ConsumerWidget {
+class _AssistantAudioSlot extends ConsumerStatefulWidget {
   const _AssistantAudioSlot({required this.message});
 
   final ConversationMessage message;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final VoiceAudioError? audioError = message.audioError;
+  ConsumerState<_AssistantAudioSlot> createState() =>
+      _AssistantAudioSlotState();
+}
+
+class _AssistantAudioSlotState extends ConsumerState<_AssistantAudioSlot> {
+  _AssistantAudioPhase _phase = _AssistantAudioPhase.idle;
+  String? _playbackError;
+
+  @override
+  void didUpdateWidget(covariant _AssistantAudioSlot oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_audioIdentity(oldWidget.message) != _audioIdentity(widget.message)) {
+      _phase = _AssistantAudioPhase.idle;
+      _playbackError = null;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final VoiceAudioError? audioError = widget.message.audioError;
     if (audioError != null) {
       return _FeedbackStatusText(label: audioError.message);
     }
 
-    final VoiceAudioResponse? audio = message.audio;
+    final VoiceAudioResponse? audio = widget.message.audio;
     if (audio == null) {
       return const SizedBox.shrink();
     }
 
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: OutlinedButton.icon(
-        onPressed: () async {
-          try {
-            await ref.read(conversationAudioPlayerProvider).play(audio);
-          } on ConversationAudioException catch (error) {
-            if (context.mounted) {
-              ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(SnackBar(content: Text(error.message)));
-            }
-          }
-        },
-        icon: const Icon(Icons.volume_up_rounded),
-        label: const Text('Play response'),
-      ),
+    final bool isBusy =
+        _phase == _AssistantAudioPhase.loading ||
+        _phase == _AssistantAudioPhase.playing;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            onPressed: isBusy ? null : () => _play(audio),
+            icon: _phase == _AssistantAudioPhase.loading
+                ? SizedBox.square(
+                    dimension: AppSize.icon,
+                    child: CircularProgressIndicator(
+                      strokeWidth: AppBorderWidth.focused,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  )
+                : Icon(
+                    _phase == _AssistantAudioPhase.playing
+                        ? Icons.graphic_eq_rounded
+                        : Icons.volume_up_rounded,
+                  ),
+            label: Text(switch (_phase) {
+              _AssistantAudioPhase.loading => 'Loading audio',
+              _AssistantAudioPhase.playing => 'Playing response',
+              _ => 'Play response',
+            }),
+          ),
+        ),
+        if (_playbackError != null) ...<Widget>[
+          const SizedBox(height: AppSpacing.xxs),
+          _FeedbackStatusText(label: _playbackError!),
+        ],
+      ],
     );
   }
+
+  Future<void> _play(VoiceAudioResponse audio) async {
+    setState(() {
+      _phase = _AssistantAudioPhase.loading;
+      _playbackError = null;
+    });
+    try {
+      final Future<void> playFuture = ref
+          .read(conversationAudioPlayerProvider)
+          .play(audio);
+      if (!mounted) {
+        return;
+      }
+      setState(() => _phase = _AssistantAudioPhase.playing);
+      await playFuture;
+      if (mounted) {
+        setState(() => _phase = _AssistantAudioPhase.idle);
+      }
+    } on ConversationAudioException catch (error) {
+      if (mounted) {
+        setState(() {
+          _phase = _AssistantAudioPhase.error;
+          _playbackError = error.message;
+        });
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    }
+  }
+
+  String _audioIdentity(ConversationMessage message) {
+    final VoiceAudioResponse? audio = message.audio;
+    return '${message.id}:${audio?.contentType}:${audio?.format}:${audio?.base64.hashCode}:${message.audioError?.message}';
+  }
 }
+
+enum _AssistantAudioPhase { idle, loading, playing, error }
 
 class _GrammarFeedbackSlot extends ConsumerWidget {
   const _GrammarFeedbackSlot({required this.message});

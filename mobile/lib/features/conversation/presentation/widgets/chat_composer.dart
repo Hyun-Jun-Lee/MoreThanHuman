@@ -11,6 +11,10 @@ class ChatComposer extends StatefulWidget {
     this.enabled = true,
     this.isSending = false,
     this.isRecording = false,
+    this.isVoiceBusy = false,
+    this.recordingElapsedText,
+    this.voiceStatusLabel,
+    this.onCancelVoiceInput,
     super.key,
   });
 
@@ -21,6 +25,10 @@ class ChatComposer extends StatefulWidget {
   final bool enabled;
   final bool isSending;
   final bool isRecording;
+  final bool isVoiceBusy;
+  final String? recordingElapsedText;
+  final String? voiceStatusLabel;
+  final VoidCallback? onCancelVoiceInput;
 
   @override
   State<ChatComposer> createState() => _ChatComposerState();
@@ -29,7 +37,12 @@ class ChatComposer extends StatefulWidget {
 class _ChatComposerState extends State<ChatComposer> {
   late bool _hasText;
 
-  bool get _canSend => widget.enabled && !widget.isSending && _hasText;
+  bool get _canSend =>
+      widget.enabled &&
+      !widget.isSending &&
+      !widget.isRecording &&
+      !widget.isVoiceBusy &&
+      _hasText;
 
   @override
   void initState() {
@@ -77,7 +90,13 @@ class _ChatComposerState extends State<ChatComposer> {
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
     final AppSemanticColors colors = AppSemanticColors.of(context);
-    final bool voiceEnabled = widget.enabled && !widget.isSending;
+    final bool voiceEnabled =
+        widget.enabled && !widget.isSending && !widget.isVoiceBusy;
+    final bool showVoiceStatus =
+        widget.isRecording || widget.voiceStatusLabel != null;
+    final String voiceStatusText = widget.isRecording
+        ? 'Recording ${widget.recordingElapsedText ?? '0:00'}'
+        : widget.voiceStatusLabel ?? '';
 
     return Material(
       color: theme.colorScheme.surface,
@@ -96,7 +115,9 @@ class _ChatComposerState extends State<ChatComposer> {
             if (widget.onVoiceInput != null)
               IconButton(
                 onPressed: voiceEnabled ? widget.onVoiceInput : null,
-                tooltip: widget.isRecording ? 'Stop recording' : 'Voice input',
+                tooltip: widget.isRecording
+                    ? 'Stop recording'
+                    : widget.voiceStatusLabel ?? 'Voice input',
                 style: IconButton.styleFrom(
                   backgroundColor: widget.isRecording
                       ? colors.selectedSurface
@@ -113,27 +134,58 @@ class _ChatComposerState extends State<ChatComposer> {
                 ),
               ),
             Expanded(
-              child: TextField(
-                controller: widget.controller,
-                enabled: widget.enabled && !widget.isSending,
-                minLines: 1,
-                maxLines: 4,
-                textInputAction: TextInputAction.send,
-                onSubmitted: (_) => _send(),
-                decoration: InputDecoration(
-                  hintText: widget.hintText,
-                  filled: false,
-                  border: InputBorder.none,
-                  enabledBorder: InputBorder.none,
-                  focusedBorder: InputBorder.none,
-                  disabledBorder: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.xs,
-                    vertical: AppSpacing.sm,
-                  ),
-                ),
-              ),
+              child: showVoiceStatus
+                  ? Semantics(
+                      liveRegion: true,
+                      label: voiceStatusText,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.xs,
+                          vertical: AppSpacing.sm,
+                        ),
+                        child: Text(
+                          voiceStatusText,
+                          style: AppTypography.bodySm.copyWith(
+                            color: widget.isRecording
+                                ? theme.colorScheme.onSurface
+                                : theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                    )
+                  : TextField(
+                      controller: widget.controller,
+                      enabled:
+                          widget.enabled &&
+                          !widget.isSending &&
+                          !widget.isRecording &&
+                          !widget.isVoiceBusy,
+                      minLines: 1,
+                      maxLines: 4,
+                      textInputAction: TextInputAction.send,
+                      onSubmitted: (_) => _send(),
+                      decoration: InputDecoration(
+                        hintText: widget.hintText,
+                        filled: false,
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        disabledBorder: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.xs,
+                          vertical: AppSpacing.sm,
+                        ),
+                      ),
+                    ),
             ),
+            if (widget.onCancelVoiceInput != null)
+              IconButton(
+                onPressed: widget.isVoiceBusy
+                    ? null
+                    : widget.onCancelVoiceInput,
+                tooltip: 'Cancel recording',
+                icon: const Icon(Icons.close_rounded),
+              ),
             IconButton(
               onPressed: _canSend ? _send : null,
               tooltip: 'Send message',

@@ -222,9 +222,11 @@ Conversation 화면은 Free Chat 시작, Roleplay 시작, Home 최근 대화 진
 
 새 채팅 composer는 기존 텍스트 전용 `/message/` 대신 `/turn/` API를 사용해요. 텍스트 입력은 JSON body의 `text`와 `include_audio_response=false`를 보내고, 음성 입력은 마이크 버튼으로 `.m4a`를 녹음한 뒤 multipart `audio_file`과 `include_audio_response=false`를 보내요. 음성 turn 응답의 `transcript`는 사용자 말풍선으로 표시하고, `audio`가 포함되면 AI 말풍선 아래에 재생 버튼을 보여줘요. `audio_error`는 대화 전송 실패와 분리된 비차단 안내로 표시해요.
 
+음성 입력은 `Voice input → Stop recording` 흐름으로 동작하며, 녹음 중에는 타이머와 cancel 버튼을 보여주고 텍스트 입력·전송을 잠가 한 turn에 text와 audio가 섞이지 않게 해요. cancel은 업로드 없이 녹음을 폐기하고, 권한 거부·빈 녹음·녹음 실패는 대화 전송 실패와 분리된 안내로 표시해요. 녹음 임시 파일은 성공적으로 읽은 뒤와 cancel/dispose 시 best-effort로 정리해요. assistant audio 재생은 메시지 단위 loading/playing/error 상태를 가지며, 중복 재생 탭을 막고 playback failure를 send retry와 분리해요.
+
 사용자 메시지의 문법 피드백은 2초 간격으로 최대 30초 polling해요. `404`는 pending으로 보고 계속 기다리며, `200`이면 `has_errors=false`는 `NaturalFeedbackBadge`, `has_errors=true`는 `GrammarFeedbackCard`로 표시해요. 문법 피드백의 교정 문장과 설명도 서버 원문은 유지하고 화면 표시 단계에서 문장 단위 줄바꿈과 누락된 공백을 보정해요. 빈 줄로 나뉜 텍스트는 문단 간격을 두고 표시하며, 1줄을 넘는 피드백은 기본 접힘 상태에서 `SHOW MORE`/`SHOW LESS`로 확장할 수 있어요. 설명 텍스트는 gray 계열을 유지하고 피드백 카드는 일반 AI 말풍선과 다른 semantic color를 사용해요. 30초 동안 준비되지 않으면 timeout 안내를 표시해요.
 
-SSE 기반 실시간 피드백, 음성 녹음, 50개 이후 pagination은 후속 작업으로 남겨요.
+SSE 기반 실시간 피드백, waveform 표시, 50개 이후 pagination은 후속 작업으로 남겨요. 실제 기기 QA에서는 microphone permission denied, 녹음 cancel, stop/upload, assistant audio playback, playback failure를 확인해요.
 
 Google Sign-In 실행 시 다음 `dart-define`을 사용할 수 있어요.
 

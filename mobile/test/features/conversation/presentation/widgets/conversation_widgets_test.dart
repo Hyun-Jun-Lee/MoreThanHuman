@@ -74,27 +74,72 @@ void main() {
   testWidgets('ChatComposer shows recording stop affordance', (
     WidgetTester tester,
   ) async {
-    final TextEditingController controller = TextEditingController();
+    final TextEditingController controller = TextEditingController(
+      text: 'Typed draft',
+    );
     addTearDown(controller.dispose);
     int voiceCount = 0;
+    int cancelCount = 0;
 
     await tester.pumpWidget(
       _themedApp(
         ChatComposer(
           controller: controller,
           isRecording: true,
+          recordingElapsedText: '0:05',
           onSend: (_) {},
           onVoiceInput: () => voiceCount += 1,
+          onCancelVoiceInput: () => cancelCount += 1,
         ),
       ),
     );
 
     expect(find.byTooltip('Stop recording'), findsOneWidget);
     expect(find.byIcon(Icons.stop_rounded), findsOneWidget);
+    expect(find.text('Recording 0:05'), findsOneWidget);
+    expect(find.byTooltip('Cancel recording'), findsOneWidget);
+    expect(find.byType(TextField), findsNothing);
+    final IconButton sendButton = tester.widget<IconButton>(
+      find.widgetWithIcon(IconButton, Icons.arrow_upward_rounded),
+    );
+    expect(sendButton.onPressed, isNull);
 
     await tester.tap(find.byTooltip('Stop recording'));
+    await tester.tap(find.byTooltip('Cancel recording'));
     expect(voiceCount, 1);
+    expect(cancelCount, 1);
   });
+
+  testWidgets(
+    'ChatComposer disables duplicate voice taps while voice is busy',
+    (WidgetTester tester) async {
+      final TextEditingController controller = TextEditingController();
+      addTearDown(controller.dispose);
+
+      await tester.pumpWidget(
+        _themedApp(
+          ChatComposer(
+            controller: controller,
+            isVoiceBusy: true,
+            voiceStatusLabel: 'Finishing recording...',
+            onSend: (_) {},
+            onVoiceInput: () {},
+            onCancelVoiceInput: () {},
+          ),
+        ),
+      );
+
+      expect(find.text('Finishing recording...'), findsOneWidget);
+      final IconButton voiceButton = tester.widget<IconButton>(
+        find.widgetWithIcon(IconButton, Icons.mic_none_rounded),
+      );
+      expect(voiceButton.onPressed, isNull);
+      final IconButton cancelButton = tester.widget<IconButton>(
+        find.widgetWithIcon(IconButton, Icons.close_rounded),
+      );
+      expect(cancelButton.onPressed, isNull);
+    },
+  );
 
   testWidgets('NaturalFeedbackBadge reports taps', (WidgetTester tester) async {
     int tapCount = 0;

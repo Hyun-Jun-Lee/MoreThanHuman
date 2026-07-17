@@ -112,3 +112,5 @@
 - **멀티모달 대화 API 구현**: free-chat 음성 시작과 conversation turn 텍스트/음성 입력, OpenAI STT/TTS provider, 문서/테스트를 추가
 - **Flutter 멀티모달 turn 연동 계획 작성**: 모바일 텍스트 `/turn/` migration, multipart audio turn, transcript reconciliation, optional TTS playback 계획을 추가
 - **Flutter 멀티모달 turn 연동 구현**: Conversation composer를 `/turn/` 텍스트·음성 입력으로 전환하고 녹음 업로드, transcript 표시, optional TTS 재생을 연결
+- **Flutter 음성 녹음·재생 UX 계획 작성**: 녹음 상태, 취소·권한 실패, 임시 파일 정리, assistant audio playback 상태 강화 계획을 추가
+- **Flutter 음성 녹음·재생 UX 구현**: 녹음 타이머·취소·권한/빈 녹음 오류, 임시 파일 정리, assistant audio playback 상태와 중복 재생 방지를 적용
