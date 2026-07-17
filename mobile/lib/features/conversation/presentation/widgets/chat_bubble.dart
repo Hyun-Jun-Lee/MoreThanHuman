@@ -1,5 +1,6 @@
 import 'package:curitalk/app/theme/app_semantic_colors.dart';
 import 'package:curitalk/app/theme/tokens/tokens.dart';
+import 'package:curitalk/core/widgets/widgets.dart';
 import 'package:curitalk/features/conversation/presentation/widgets/conversation_text_formatter.dart';
 import 'package:flutter/material.dart';
 
@@ -64,8 +65,8 @@ class ChatBubble extends StatelessWidget {
                     horizontal: AppSpacing.lg,
                     vertical: AppSpacing.md,
                   ),
-                  child: Text(
-                    displayMessage,
+                  child: AppParagraphText(
+                    text: displayMessage,
                     style: AppTypography.bodySm.copyWith(
                       color: foregroundColor,
                     ),

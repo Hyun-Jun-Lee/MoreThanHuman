@@ -43,6 +43,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Osaka food trip'), findsOneWidget);
+    expect(find.text('FREE CHAT'), findsNothing);
 
     await tester.tap(find.text('Osaka food trip'));
 

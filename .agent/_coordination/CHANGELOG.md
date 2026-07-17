@@ -107,4 +107,6 @@
 
 ## 2026-07-17
 
+- **Flutter UI 피드백 반영 계획 작성**: Pretendard+Newsreader 폰트 조합, 문단-aware 텍스트, 문법 피드백 접기/강조, 대화 타입 뱃지 제거 계획을 추가
+- **Flutter UI 피드백 반영 구현**: Pretendard+Newsreader 폰트 asset, 문단-aware 채팅 텍스트, 접기 가능한 문법 피드백, 대화 타입 뱃지 제거를 적용
 - **멀티모달 대화 API 구현**: free-chat 음성 시작과 conversation turn 텍스트/음성 입력, OpenAI STT/TTS provider, 문서/테스트를 추가

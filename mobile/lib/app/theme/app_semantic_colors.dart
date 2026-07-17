@@ -34,7 +34,7 @@ class AppSemanticColors extends ThemeExtension<AppSemanticColors> {
     onAiMessage: AppPalette.ink,
     grammarOriginalSurface: AppPalette.blockLilac,
     onGrammarOriginal: AppPalette.ink,
-    grammarSuggestionSurface: AppPalette.blockCream,
+    grammarSuggestionSurface: AppPalette.blockBlue,
     onGrammarSuggestion: AppPalette.ink,
     topicReadySurface: AppPalette.blockLime,
     onTopicReady: AppPalette.ink,

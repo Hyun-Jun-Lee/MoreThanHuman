@@ -68,7 +68,7 @@ lib/
         └── presentation/     # Topic Input, Topic Prep 화면과 widgets
 
 assets/
-├── fonts/                   # Inter, JetBrains Mono variable font
+├── fonts/                   # Pretendard, Newsreader, JetBrains Mono variable font
 └── licenses/                # 번들 font 라이선스
 ```
 
@@ -81,7 +81,7 @@ assets/
 | 토큰 | 역할 |
 |------|------|
 | `AppPalette` | monochrome core, pastel block, 상태 색상 |
-| `AppTypography` | Inter·JetBrains Mono 기반 TextStyle |
+| `AppTypography` | Pretendard·Newsreader·JetBrains Mono 기반 TextStyle |
 | `AppSpacing` | 8px 기반 간격과 화면 padding |
 | `AppRadius` | 입력창, 카드, pill radius |
 | `AppBorderWidth` | 기본·focus 테두리 굵기 |
@@ -116,9 +116,9 @@ assets/
 |----------|------|
 | `AppSelectionChip` | 대화 방향·난이도 등의 단일 선택 chip |
 | `AppSelectionCard` | 대화 방식·롤플레이 상황 등의 선택 카드 |
-| `RecentConversationCard` | Home의 pastel 최근 대화 카드 |
-| `ChatBubble` | 사용자·AI 역할별 정렬과 semantic color가 적용된 말풍선 |
-| `GrammarFeedbackCard` | 사용자 메시지 아래의 교정 문장과 설명 |
+| `RecentConversationCard` | 대화 타입 뱃지 없이 title·preview 중심으로 보여주는 pastel 최근 대화 카드 |
+| `ChatBubble` | 사용자·AI 역할별 정렬과 semantic color, 문단-aware 텍스트가 적용된 말풍선 |
+| `GrammarFeedbackCard` | 사용자 메시지 아래의 접기·펼치기 가능한 교정 문장과 설명 |
 | `TypingIndicator` | Reduce Motion 설정을 따르는 AI 응답 대기 표시 |
 
 ## 3차 입력·상태 컴포넌트
@@ -216,7 +216,7 @@ Conversation 화면은 Free Chat 시작, Roleplay 시작, Home 최근 대화 진
 
 메시지는 서버의 시간순 목록을 기준으로 표시해요. 전송 중에는 사용자 메시지를 즉시 보여주고 `TypingIndicator`를 표시한 뒤, 성공하면 AI 응답을 반영하고 canonical 메시지 목록을 다시 불러와요. 실패하면 같은 메시지를 Retry할 수 있어요. AI 응답은 서버 원문을 바꾸지 않고 화면 표시 단계에서 문장 단위 줄바꿈과 누락된 공백을 보정해 읽기 쉽게 보여줘요.
 
-사용자 메시지의 문법 피드백은 2초 간격으로 최대 30초 polling해요. `404`는 pending으로 보고 계속 기다리며, `200`이면 `has_errors=false`는 `NaturalFeedbackBadge`, `has_errors=true`는 `GrammarFeedbackCard`로 표시해요. 문법 피드백의 교정 문장과 설명도 서버 원문은 유지하고 화면 표시 단계에서 문장 단위 줄바꿈과 누락된 공백을 보정해요. 30초 동안 준비되지 않으면 timeout 안내를 표시해요.
+사용자 메시지의 문법 피드백은 2초 간격으로 최대 30초 polling해요. `404`는 pending으로 보고 계속 기다리며, `200`이면 `has_errors=false`는 `NaturalFeedbackBadge`, `has_errors=true`는 `GrammarFeedbackCard`로 표시해요. 문법 피드백의 교정 문장과 설명도 서버 원문은 유지하고 화면 표시 단계에서 문장 단위 줄바꿈과 누락된 공백을 보정해요. 빈 줄로 나뉜 텍스트는 문단 간격을 두고 표시하며, 1줄을 넘는 피드백은 기본 접힘 상태에서 `SHOW MORE`/`SHOW LESS`로 확장할 수 있어요. 설명 텍스트는 gray 계열을 유지하고 피드백 카드는 일반 AI 말풍선과 다른 semantic color를 사용해요. 30초 동안 준비되지 않으면 timeout 안내를 표시해요.
 
 SSE 기반 실시간 피드백, 음성 녹음, 50개 이후 pagination은 후속 작업으로 남겨요.
 

@@ -31,49 +31,49 @@ colors:
   overlay-scrim: '#000000'
 typography:
   display-xl:
-    fontFamily: Inter
+    fontFamily: Pretendard
     fontSize: 48px
     fontWeight: '800'
     lineHeight: '1.0'
     letterSpacing: -1.44px
   display-lg:
-    fontFamily: Inter
+    fontFamily: Newsreader
     fontSize: 40px
-    fontWeight: '800'
+    fontWeight: '700'
     lineHeight: '1.05'
-    letterSpacing: -0.8px
+    letterSpacing: 0
   headline-lg:
-    fontFamily: Inter
+    fontFamily: Pretendard
     fontSize: 32px
     fontWeight: '700'
     lineHeight: '1.15'
     letterSpacing: -0.32px
   headline-md:
-    fontFamily: Inter
+    fontFamily: Pretendard
     fontSize: 26px
     fontWeight: '700'
     lineHeight: '1.25'
     letterSpacing: -0.26px
   body-lg:
-    fontFamily: Inter
+    fontFamily: Pretendard
     fontSize: 20px
     fontWeight: '400'
     lineHeight: '1.4'
     letterSpacing: -0.14px
   body:
-    fontFamily: Inter
+    fontFamily: Pretendard
     fontSize: 18px
     fontWeight: '400'
     lineHeight: '1.45'
     letterSpacing: -0.14px
   body-sm:
-    fontFamily: Inter
+    fontFamily: Pretendard
     fontSize: 16px
     fontWeight: '400'
     lineHeight: '1.45'
     letterSpacing: 0
   button:
-    fontFamily: Inter
+    fontFamily: Pretendard
     fontSize: 16px
     fontWeight: '600'
     lineHeight: '1.25'
@@ -137,7 +137,7 @@ Curitalk은 Figma 마케팅 시스템의 편집형 대비와 컬러 블록 문�
 - Lime, Lilac, Cream, Mint 계열, Blue, Coral, Pink는 콘텐츠를 구분하는 큰 면으로 사용해요.
 - 버튼은 pill, 주요 카드와 패널은 24px 이상의 큰 radius를 사용해요.
 - 그림자와 gradient보다 색상 면, 여백, 테두리 굵기로 계층을 만들어요.
-- 큰 Inter 제목과 uppercase JetBrains Mono 레이블을 함께 사용해 편집형 리듬을 만들어요.
+- Pretendard 본문, 제한적인 Newsreader display, uppercase JetBrains Mono 레이블을 함께 사용해 편집형 리듬을 만들어요.
 
 ## 2. 기준 자료와 우선순위
 
@@ -201,15 +201,16 @@ Primary CTA, 앱 배경, 전체 화면 theme에는 사용하지 않아요.
 
 ### 4.1 Font Family
 
-- **Inter**: 모든 display, headline, body, button
+- **Pretendard**: 앱 기본 산세리프 폰트. display-xl, headline, body, button에 사용해 한글·영문 본문 가독성을 담당해요.
+- **Newsreader**: 서브 디스플레이 폰트. 1차 적용 범위는 `display-lg`로 제한하고 Splash, Login hero, Home greeting처럼 짧은 강조 문구에만 사용해요.
 - **JetBrains Mono**: category, eyebrow, caption, metadata
 
-figmaSans와 figmaMono의 오픈소스 대체로 사용해요. Stitch 산출물에 포함된 Quicksand 같은 화면별 임시 font는 구현 기준에 포함하지 않아요.
+`headline-lg`와 `headline-md`는 실사용 화면 제목에 자주 등장하므로 Newsreader로 확장하지 않고 Pretendard를 유지해요. Stitch 산출물에 포함된 Quicksand 같은 화면별 임시 font는 구현 기준에 포함하지 않아요.
 
 ### 4.2 사용 규칙
 
-- display-xl: 온보딩과 핵심 empty state의 짧은 제목
-- display-lg: Home 인사말과 화면의 강한 opener
+- display-xl: 온보딩과 핵심 empty state의 짧은 제목. 현재는 Pretendard를 유지해요.
+- display-lg: Splash 로고성 문구, Login hero, Home 인사말처럼 짧고 브랜드감 있는 opener
 - headline-lg: 화면 제목과 큰 카드 제목
 - headline-md: 대화 주제, 준비 카드, bottom sheet 제목
 - body-lg: 온보딩 설명과 핵심 학습 문장
@@ -219,7 +220,7 @@ figmaSans와 figmaMono의 오픈소스 대체로 사용해요. Stitch 산출물�
 - label-mono: 버튼의 기술적 레이블, category chip
 - caption-mono: metadata, 진행 단계, 작은 상태 레이블
 
-Mono 역할은 항상 uppercase를 기본으로 하며 문장형 본문에는 사용하지 않아요. Display는 두 줄에서 세 줄 이내로 유지하고, 큰 제목일수록 line height와 letter spacing을 더 촘촘하게 사용해요.
+Mono 역할은 항상 uppercase를 기본으로 하며 문장형 본문에는 사용하지 않아요. Newsreader는 긴 문장형 본문이나 입력/채팅 텍스트에 사용하지 않아요. Display는 두 줄에서 세 줄 이내로 유지하고, 큰 제목일수록 line height를 더 촘촘하게 사용해요.
 
 ## 5. Layout & Spacing
 
@@ -376,7 +377,7 @@ Color block 자체에는 그림자를 추가하지 않아요. focus와 pressed �
 - Black Primary CTA를 화면의 가장 중요한 행동 하나에만 사용해요.
 - 하나의 정보 묶음에는 하나의 pastel block을 충분히 크게 사용해요.
 - 화면 사이에 White canvas를 남겨 color block이 의도적으로 보이게 해요.
-- Inter의 크기와 weight, JetBrains Mono의 taxonomy 대비로 계층을 만들어요.
+- Pretendard의 크기와 weight, Newsreader의 제한적인 display 대비, JetBrains Mono의 taxonomy 대비로 계층을 만들어요.
 - 버튼과 선택 chip은 pill 형태를 유지해요.
 - 대화와 문법 피드백에는 앱 전용 semantic color 역할을 사용해요.
 
@@ -404,4 +405,4 @@ Color block 자체에는 그림자를 추가하지 않아요. focus와 pressed �
 - Pastel Hex 값은 Stitch PNG와 HTML에서 정규화한 값이며 향후 실제 기기 검수에서 미세 조정할 수 있어요.
 - Stitch 화면에는 Convia 명칭과 Quicksand, Terracotta 중심 theme 같은 과거 생성 흔적이 남아 있어요. Flutter 구현에서는 이 문서의 Curitalk token을 우선해요.
 - Dark theme은 v1 범위가 아니며 block-navy는 light flow 안의 제한적인 inverse panel이에요.
-- 문법 피드백의 success/warning/error 세부 상태는 실제 Flutter 화면 구현 시 접근성 검증 후 확정해요.
+- 문법 피드백은 일반 AI 말풍선과 구분되도록 `grammarSuggestionSurface`를 사용하고, 설명 텍스트는 gray 계열 보조 텍스트를 유지해요. 긴 교정/설명은 기본 접힘 상태에서 1줄로 표시하고 `SHOW MORE`/`SHOW LESS`로 확장해요.

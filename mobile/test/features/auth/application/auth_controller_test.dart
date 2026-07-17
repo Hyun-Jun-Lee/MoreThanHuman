@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:curitalk/core/network/network.dart';
 import 'package:curitalk/core/storage/storage.dart';
 import 'package:curitalk/features/auth/auth.dart';
@@ -100,12 +102,22 @@ void main() {
       );
       final ProviderContainer container = _createContainer(storage, repository);
       addTearDown(container.dispose);
+      final Completer<Object?> errorCompleter = Completer<Object?>();
+      final ProviderSubscription<AsyncValue<AuthSession>> subscription =
+          container.listen(authControllerProvider, (
+            _,
+            AsyncValue<AuthSession> next,
+          ) {
+            if (next.hasError && !errorCompleter.isCompleted) {
+              errorCompleter.complete(next.error);
+            }
+          });
+      addTearDown(subscription.close);
 
-      await expectLater(
-        container.read(authControllerProvider.future),
-        throwsA(isA<ApiException>()),
-      );
+      container.read(authControllerProvider);
+      final Object? error = await errorCompleter.future;
 
+      expect(error, isA<ApiException>());
       expect(storage.tokens, same(_tokens));
     },
   );

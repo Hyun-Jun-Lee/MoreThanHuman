@@ -27,8 +27,6 @@ class RecentConversationCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Chip(label: Text(category.toUpperCase())),
-          const SizedBox(height: AppSpacing.xl),
           Text(
             title,
             maxLines: 2,

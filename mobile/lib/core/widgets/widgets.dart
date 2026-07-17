@@ -3,6 +3,7 @@ export 'app_bottom_action_bar.dart';
 export 'app_color_block_card.dart';
 export 'app_modal_sheet.dart';
 export 'app_page_indicator.dart';
+export 'app_paragraph_text.dart';
 export 'app_primary_button.dart';
 export 'app_scaffold.dart';
 export 'app_section_label.dart';

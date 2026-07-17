@@ -63,9 +63,12 @@ flutter:
   uses-material-design: true
 
   fonts:
-    - family: Inter
+    - family: Pretendard
       fonts:
-        - asset: assets/fonts/InterVariable.ttf
+        - asset: assets/fonts/PretendardVariable.ttf
+    - family: Newsreader
+      fonts:
+        - asset: assets/fonts/NewsreaderVariable.ttf
     - family: JetBrains Mono
       fonts:
         - asset: assets/fonts/JetBrainsMonoVariable.ttf

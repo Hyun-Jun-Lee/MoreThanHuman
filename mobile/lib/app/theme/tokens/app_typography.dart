@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
 abstract final class AppTypography {
-  static const String sansFontFamily = 'Inter';
+  static const String sansFontFamily = 'Pretendard';
+  static const String displayFontFamily = 'Newsreader';
   static const String monoFontFamily = 'JetBrains Mono';
 
   static const TextStyle displayXl = TextStyle(
@@ -13,11 +14,10 @@ abstract final class AppTypography {
   );
 
   static const TextStyle displayLg = TextStyle(
-    fontFamily: sansFontFamily,
+    fontFamily: displayFontFamily,
     fontSize: 40,
-    fontWeight: FontWeight.w800,
+    fontWeight: FontWeight.w700,
     height: 1.05,
-    letterSpacing: -0.8,
   );
 
   static const TextStyle headlineLg = TextStyle(

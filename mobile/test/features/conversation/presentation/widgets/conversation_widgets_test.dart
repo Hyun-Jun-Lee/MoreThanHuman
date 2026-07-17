@@ -137,12 +137,9 @@ void main() {
       ),
     );
 
-    expect(
-      find.text(
-        'Hi there!\n\nWelcome in.\n\nWhat can I get started for you today?',
-      ),
-      findsOneWidget,
-    );
+    expect(find.text('Hi there!'), findsOneWidget);
+    expect(find.text('Welcome in.'), findsOneWidget);
+    expect(find.text('What can I get started for you today?'), findsOneWidget);
   });
 
   testWidgets('GrammarFeedbackCard renders suggestion and explanation', (
@@ -159,6 +156,9 @@ void main() {
 
     expect(find.textContaining('I went to Dotonbori'), findsOneWidget);
     expect(find.text('WHY'), findsOneWidget);
+    expect(find.byIcon(Icons.lightbulb_outline_rounded), findsNothing);
+    expect(find.textContaining('Try'), findsNothing);
+    expect(find.text('SHOW MORE'), findsNothing);
     final Semantics semantics = tester
         .widgetList<Semantics>(
           find.descendant(
@@ -180,29 +180,34 @@ void main() {
     expect(card.color, AppSemanticColors.light.grammarSuggestionSurface);
   });
 
-  testWidgets('GrammarFeedbackCard formats dense feedback text', (
+  testWidgets('GrammarFeedbackCard expands dense feedback text', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
       _themedApp(
-        const GrammarFeedbackCard(
-          suggestion: 'I went there yesterday.It was fun.',
-          explanation:
-              'Use past tense for completed actions.Add a space after punctuation.',
+        const SizedBox(
+          width: 220,
+          child: GrammarFeedbackCard(
+            suggestion: 'I went there yesterday.It was fun.',
+            explanation:
+                'Use past tense for completed actions.Add a space after punctuation.',
+          ),
         ),
       ),
     );
 
-    expect(
-      find.textContaining('I went there yesterday.\n\nIt was fun.'),
-      findsOneWidget,
-    );
-    expect(
-      find.text(
-        'Use past tense for completed actions.\n\nAdd a space after punctuation.',
-      ),
-      findsOneWidget,
-    );
+    expect(find.text('SHOW MORE'), findsOneWidget);
+    expect(find.text('SHOW LESS'), findsNothing);
+    expect(find.text('I went there yesterday.'), findsNothing);
+
+    await tester.tap(find.text('SHOW MORE'));
+    await tester.pump();
+
+    expect(find.text('SHOW LESS'), findsOneWidget);
+    expect(find.text('I went there yesterday.'), findsOneWidget);
+    expect(find.text('It was fun.'), findsOneWidget);
+    expect(find.text('Use past tense for completed actions.'), findsOneWidget);
+    expect(find.text('Add a space after punctuation.'), findsOneWidget);
   });
 
   testWidgets('TypingIndicator exposes status with motion disabled', (

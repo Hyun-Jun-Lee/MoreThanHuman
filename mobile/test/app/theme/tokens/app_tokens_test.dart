@@ -25,11 +25,17 @@ void main() {
     });
 
     test('uses bundled font families and mobile type values', () {
-      expect(AppTypography.sansFontFamily, 'Inter');
+      expect(AppTypography.sansFontFamily, 'Pretendard');
+      expect(AppTypography.displayFontFamily, 'Newsreader');
       expect(AppTypography.monoFontFamily, 'JetBrains Mono');
       expect(AppTypography.displayXl.fontSize, 48);
       expect(AppTypography.displayXl.fontWeight, FontWeight.w800);
+      expect(AppTypography.displayLg.fontFamily, 'Newsreader');
+      expect(AppTypography.headlineLg.fontFamily, 'Pretendard');
+      expect(AppTypography.headlineMd.fontFamily, 'Pretendard');
       expect(AppTypography.body.fontSize, 18);
+      expect(AppTypography.body.fontFamily, 'Pretendard');
+      expect(AppTypography.button.fontFamily, 'Pretendard');
       expect(AppTypography.labelMono.letterSpacing, 0.7);
     });
 

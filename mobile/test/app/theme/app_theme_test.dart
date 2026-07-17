@@ -29,7 +29,7 @@ void main() {
       expect(colors.userMessageSurface, AppPalette.inverseCanvas);
       expect(colors.onUserMessage, AppPalette.inverseInk);
       expect(colors.grammarOriginalSurface, AppPalette.blockLilac);
-      expect(colors.grammarSuggestionSurface, AppPalette.blockCream);
+      expect(colors.grammarSuggestionSurface, AppPalette.blockBlue);
       expect(colors.topicReadySurface, AppPalette.blockLime);
       expect(colors.onSearchRetry, AppPalette.semanticWarning);
       expect(colors.selectedSurface, AppPalette.primary);
@@ -67,7 +67,7 @@ void main() {
         same(AppSemanticColors.light),
       );
       expect(theme.materialTapTargetSize, MaterialTapTargetSize.padded);
-      expect(theme.textTheme.bodyMedium?.fontFamily, 'Inter');
+      expect(theme.textTheme.bodyMedium?.fontFamily, 'Pretendard');
     });
 
     testWidgets('is applied at the Curitalk app root', (

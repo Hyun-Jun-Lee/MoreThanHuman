@@ -21,7 +21,7 @@ void main() {
       ),
     );
 
-    expect(find.text('TRAVEL'), findsOneWidget);
+    expect(find.text('TRAVEL'), findsNothing);
     expect(find.text('Osaka food trip'), findsOneWidget);
     final Semantics semantics = tester
         .widgetList<Semantics>(
