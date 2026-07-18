@@ -1,5 +1,11 @@
 # CHANGELOG — 완료된 작업 기록
 
+## 2026-07-18
+
+- **Alembic env.py 연결**: Alembic migration이 기존 SQLAlchemy `Base.metadata`와 `DATABASE_URL`을 사용하도록 설정
+- **Supabase Auth 전환 계획 작성**: FastAPI JWT에서 Supabase Auth 세션으로 전환하는 모바일/백엔드/스키마 구현 계획 추가
+- **Supabase Auth 전환 구현**: 백엔드 Supabase access token 검증, profiles 스키마, Flutter Supabase Google 로그인·session refresh 흐름과 문서/테스트를 동기화
+
 ## 2026-05-20
 
 - **AI Native 마이그레이션**: EstreGenesis v1.6.0 기반 `.agent/` 스캐폴딩 + `AGENTS.md` SSoT 생성 (Migration A)

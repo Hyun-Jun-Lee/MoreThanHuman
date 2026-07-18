@@ -29,6 +29,8 @@ wheels/
 # Environment
 .env
 .env.local
+.env.*
+!.env.example
 mobile/.env*
 
 # Database
@@ -53,6 +55,7 @@ uv.lock
 
 # Project specific
 web_example.html
+explan_diff_htmls/
 
 # Seed artifacts
 .agent/_questions/open/*.draft.md

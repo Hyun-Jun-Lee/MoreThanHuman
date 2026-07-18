@@ -17,7 +17,8 @@
 | pydantic-settings | 2.1.0 | 환경 설정 |
 | uvicorn | 0.27.0 | ASGI 서버 |
 | httpx | 0.26.0 | 외부 HTTP 클라이언트 |
-| python-jose | ≥ 3.3.0 | JWT 인증 |
+| Supabase Auth | managed | 모바일 소셜 로그인과 세션 관리 |
+| python-jose | ≥ 3.3.0 | 레거시 JWT tooling / JWT 유틸리티 |
 | bcrypt | ≥ 4.0.0 | 비밀번호 해싱 |
 | ddgs | ≥ 9.0.0 | 웹 검색 |
 | psycopg2-binary | 2.9.9 | PostgreSQL 드라이버 |
@@ -37,7 +38,8 @@
 | Riverpod 3 | 앱 상태와 비동기 상태 관리 |
 | go_router 17 | 선언형 라우팅과 인증 redirect |
 | Dio 5 | FastAPI HTTP client와 interceptor |
-| flutter_secure_storage 10 | JWT와 설치 단위 device ID 보관 |
+| flutter_secure_storage 10 | 설치 단위 device ID와 온보딩 상태 보관 |
+| supabase_flutter 2 | Supabase Auth 세션 관리 |
 | google_sign_in 7 | Google SDK 기반 모바일 인증 |
 
 현재 저장소는 FastAPI 백엔드 API와 Flutter 모바일 앱을 함께 관리해요.
@@ -55,7 +57,7 @@ backend/
 ├── database.py              # SQLAlchemy 엔진·세션 팩토리
 ├── shared/                  # 공통 타입, 예외, 유틸리티
 └── domains/                 # 도메인별 수직 슬라이스
-    ├── auth/                # 회원가입, 로그인, JWT, Google OAuth
+    ├── auth/                # Supabase token 검증, profiles 연결
     ├── conversation/        # 대화 관리
     ├── grammar/             # 문법 체크 및 통계
     ├── llm/                 # LLM 프로바이더 추상화
@@ -81,7 +83,7 @@ mobile/
 └── pubspec.yaml             # Dart/Flutter 의존성
 ```
 
-Flutter API 요청은 `ApiClient → AuthTokenInterceptor → TokenRefreshInterceptor → Dio` 순서로 실행돼요. 응답은 공통 envelope parser를 거쳐 feature decoder로 전달하고, access/refresh token pair와 installation ID는 `flutter_secure_storage`에 분리 저장해요. 여러 요청이 동시에 `401`을 받아도 refresh는 하나만 실행하며, rotate된 token pair 저장 후 각 요청을 한 번만 재시도해요.
+Flutter API 요청은 `ApiClient → AuthTokenInterceptor → TokenRefreshInterceptor → Dio` 순서로 실행돼요. 응답은 공통 envelope parser를 거쳐 feature decoder로 전달해요. Supabase SDK가 access/refresh session을 관리하고, `AuthTokenInterceptor`는 현재 Supabase access token을 `Authorization: Bearer` 헤더로 주입해요. 여러 요청이 동시에 `401`을 받아도 Supabase refresh는 하나만 공유하며, 새 access token으로 각 요청을 한 번만 재시도해요.
 
 Flutter 앱 시작은 `Splash → Onboarding(최초 1회) → Google Login → Home` 순서예요. `go_router`가 onboarding 완료 상태와 Riverpod 인증 상태를 함께 관찰하며, 인증 복원 중에는 Splash를 유지하고 로그인 성공 또는 세션 만료 시 Home/Login으로 redirect해요. Home은 `/api/conversations/?limit=5&offset=0`에서 최근 대화를 불러와 loaded/empty/error 상태를 표시해요. Free Chat 선택 시 `Topic Input → Topic Prep`으로 이어져 `POST /api/search/topic-prep/`의 ready/low-quality/error 상태를 보여주고, 첫 답변 제출 후 `POST /api/conversations/start/free-chat/`로 Conversation 화면에 진입해요. Roleplay 선택 시 `Roleplay Setup`에서 preset/custom 상황과 난이도를 고르고 `POST /api/conversations/start/roleplay/`로 같은 Conversation 화면에 진입해요. Home 최근 대화 카드도 `/conversation/:conversationId`로 이동해 기존 메시지를 이어가요.
 
@@ -106,35 +108,25 @@ domains/{name}/
 ### 인증
 
 ```text
-[사용자] → POST /api/auth/register 또는 /api/auth/login
-         → device_id와 함께 AuthRouter 진입
-         → AuthService
-         → AuthRepository
-         → access_token(JWT) + refresh_token 발급
-
-[사용자] → POST /api/auth/refresh
-         → refresh token 검증 + rotate
-         → 새 access_token + 새 refresh_token 발급
-
 [Flutter 앱] → Google Sign-In SDK로 Google id_token 획득
-             → POST /api/auth/google/mobile { id_token, device_id }
-             → 서버가 Google id_token 검증
-             → access_token(JWT) + refresh_token 발급
+             → Google access_token 획득
+             → Supabase Auth signInWithIdToken(provider=google)
+             → Supabase session/access_token 발급
 
 [Flutter 앱] → 인증 API에서 401 수신
-             → 진행 중인 refresh가 있으면 같은 결과 대기
-             → POST /api/auth/refresh { refresh_token, device_id }
-             → rotate된 token pair 보안 저장
+             → 진행 중인 Supabase refresh가 있으면 같은 결과 대기
+             → Supabase SDK refreshSession
+             → 새 Supabase access_token으로 Authorization 갱신
              → 원 요청 1회 재시도
-             → refresh가 400/401/403/422이면 token 삭제 + unauthenticated 전환
+             → refresh가 실패하거나 세션이 없으면 unauthenticated 전환
 
-[Swagger/웹 확인] → GET /api/auth/google/login?device_id=...
-                 → OAuth state에 device_id 서명
-                 → GET /api/auth/google/callback?code=...&state=...
-                 → state 검증 후 token pair 발급
+[FastAPI] → Authorization: Bearer <supabase_access_token>
+          → Supabase Auth /user 검증
+          → profiles upsert/select
+          → current_user.id를 ownership boundary로 사용
 ```
 
-인증이 필요한 API는 `Authorization: Bearer <token>` 헤더를 사용해요. 모바일 v1은 Google OAuth에서 SDK 기반 id token 검증 흐름을 우선하고, 서버 callback JSON 응답 흐름은 Swagger/웹 확인용으로 유지해요.
+인증이 필요한 API는 `Authorization: Bearer <supabase_access_token>` 헤더를 사용해요. 모바일 v1은 Supabase Auth의 Google native sign-in 흐름을 기본 로그인 경로로 사용해요.
 
 ### 대화
 
@@ -211,17 +203,17 @@ domains/{name}/
 | Ollama | 로컬 LLM 대안 | 502 계열 외부 API 오류 |
 | OpenAI Audio API | STT/TTS 음성 대화 입출력 | STT 실패 시 대화 저장 전 오류, TTS 실패 시 `audio_error` |
 | DuckDuckGo(ddgs) | 검색 자료 수집 | 검색 실패 오류 |
-| Google OAuth2 | 선택적 소셜 로그인 | 인증 오류 |
+| Supabase Auth | Google 로그인, 세션 refresh, token 검증 | 인증 오류 |
+| Google Sign-In | 모바일 native Google 계정 선택 | 인증 오류 |
 
 ---
 
 ## 5. 보안 경계
 
-- API 키와 JWT secret은 환경변수로만 관리해요.
-- 클라이언트에는 OpenRouter, OpenAI, Google OAuth secret, JWT secret을 노출하지 않아요.
-- Flutter 앱은 Google `id_token`만 서버에 전달하고 Google client secret을 보유하지 않아요.
-- 비밀번호는 bcrypt로 해싱해 저장해요.
-- refresh token은 원문 대신 해시를 저장하고, 기기(installation) 단위로 rotate/revoke 해요.
+- API 키와 서버 전용 secret은 환경변수로만 관리해요.
+- 클라이언트에는 OpenRouter, OpenAI, Supabase service role key를 노출하지 않아요.
+- Flutter 앱은 Google `id_token`과 Google `access_token`으로 Supabase 세션을 만들고, FastAPI에는 Supabase access token만 전달해요.
+- Supabase가 refresh token 저장과 rotate를 관리해요.
 - 대화와 메시지는 `user_id`로 소유자를 분리해요.
 - 모바일 앱은 백엔드 API와 HTTPS로 통신하는 별도 클라이언트로 취급해요.
-- refresh 네트워크·5xx 실패는 세션 만료로 취급하지 않고 로컬 token pair를 보존해요.
+- refresh 네트워크·5xx 실패는 세션 만료로 즉시 단정하지 않고 Supabase 세션 복구를 우선해요.

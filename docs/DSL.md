@@ -29,32 +29,20 @@ system MoreThanHuman {
 
 ```dsl
 database Schema {
-  table users {
+  table profiles {
     id: UUID PRIMARY KEY
     email: STRING UNIQUE NOT NULL
-    hashed_password: STRING?
     name: STRING NOT NULL
     is_active: BOOLEAN
     oauth_provider: STRING?
-    oauth_provider_id: STRING?
+    avatar_url: STRING?
     created_at: DATETIME
     updated_at: DATETIME
   }
 
-  table refresh_tokens {
-    id: UUID PRIMARY KEY
-    user_id: UUID FOREIGN KEY -> users(id)
-    device_id: STRING NOT NULL
-    token_hash: STRING NOT NULL
-    expires_at: DATETIME
-    revoked_at: DATETIME?
-    created_at: DATETIME
-    last_used_at: DATETIME?
-  }
-
   table conversations {
     id: UUID PRIMARY KEY
-    user_id: UUID FOREIGN KEY -> users(id)
+    user_id: UUID FOREIGN KEY -> profiles(id)
     title: STRING?
     conversation_type: "FREE_CHAT" | "ROLE_PLAYING"
     role_character: STRING?
@@ -107,55 +95,7 @@ type ErrorResponse {
 ```dsl
 module Auth {
   router AuthRouter {
-    POST /api/auth/register              -> register
-    POST /api/auth/login                 -> login
-    POST /api/auth/dev/token             -> issueDevToken
-    POST /api/auth/refresh               -> refresh
-    POST /api/auth/logout                -> logout
-    POST /api/auth/google/mobile         -> loginWithGoogleIdToken
-    GET  /api/auth/google/login?device_id=...          -> googleLogin
-    GET  /api/auth/google/callback?code=...&state=...  -> googleCallback
     GET  /api/auth/me                    -> getCurrentUser
-  }
-
-  type RegisterRequest {
-    email: String
-    password: String
-    name: String
-    device_id: String
-  }
-
-  type LoginRequest {
-    email: String
-    password: String
-    device_id: String
-  }
-
-  type DevTokenRequest {
-    email?: String = "swagger-test@example.com"
-    name?: String = "Swagger Test User"
-    device_id?: String = "swagger-local"
-  }
-
-  type RefreshRequest {
-    refresh_token: String
-    device_id: String
-  }
-
-  type LogoutRequest {
-    refresh_token: String
-    device_id: String
-  }
-
-  type GoogleMobileLoginRequest {
-    id_token: String
-    device_id: String
-  }
-
-  type TokenResponse {
-    access_token: String
-    refresh_token: String
-    token_type: "bearer"
   }
 
   type UserProfile {
@@ -164,11 +104,12 @@ module Auth {
     name: String
     is_active: Boolean
     oauth_provider?: String
+    avatar_url?: String
   }
 }
 ```
 
-`POST /api/auth/google/mobile`은 Flutter 앱이 Google Sign-In SDK에서 받은 `id_token`과 설치 단위 `device_id`를 서버에 전달하는 모바일 기본 로그인 API예요. 서버는 `GOOGLE_CLIENT_ID`를 audience로 Google 토큰을 검증한 뒤 `TokenResponse`를 반환해요. 같은 Google 계정은 기존 사용자를 재사용하고, 같은 이메일의 비밀번호 계정이 있으면 자동 연결하지 않고 `409`를 반환해요. 기존 `/api/auth/google/login`과 `/api/auth/google/callback`은 서버 callback OAuth 흐름으로 유지해요.
+모바일 앱은 Supabase Auth로 Google 로그인을 완료한 뒤 Supabase `access_token`을 FastAPI 보호 API의 `Authorization: Bearer` 헤더에 전달해요. `GET /api/auth/me`는 Supabase token을 검증하고, `profiles` row를 생성 또는 갱신한 뒤 기존 envelope 형식으로 `UserProfile`을 반환해요.
 
 ## 5. Conversation 모듈
 
@@ -512,13 +453,13 @@ env {
   VOICE_MAX_UPLOAD_MB?: Integer = 10
   VOICE_PROVIDER_TIMEOUT_SECONDS?: Float = 60
 
-  JWT_SECRET_KEY: String
-  JWT_ALGORITHM?: String
-  JWT_ACCESS_TOKEN_EXPIRE_MINUTES?: Integer
+  SUPABASE_URL: String
+  SUPABASE_PUBLISHABLE_KEY: String
+  SUPABASE_AUTH_VERIFY_MODE?: "remote" = "remote"
+  SUPABASE_AUTH_TIMEOUT_SECONDS?: Float = 5
+  AUTO_CREATE_TABLES?: Boolean = false
 
-  GOOGLE_CLIENT_ID?: String
-  GOOGLE_CLIENT_SECRET?: String
-  GOOGLE_REDIRECT_URI?: String
+  JWT_SECRET_KEY?: String
 
   DEBUG?: Boolean
   CORS_ORIGINS?: List<String>
@@ -541,7 +482,7 @@ env {
 
 - 모든 사용자 데이터 접근은 인증 사용자 기준으로 제한해요.
 - conversation/message 조회와 삭제는 `user_id` ownership을 검증해요.
-- API key, OAuth secret, JWT secret은 서버 환경변수로만 관리해요.
-- Flutter 앱은 백엔드 secret을 직접 보유하지 않아요.
-- Flutter 앱은 Google Sign-In SDK로 받은 `id_token`만 서버에 전달하고, 서버가 Google 토큰을 검증한 뒤 자체 token pair를 발급해요.
+- API key와 서버 전용 secret은 서버 환경변수로만 관리해요.
+- Flutter 앱은 OpenRouter/OpenAI secret이나 Supabase service role key를 직접 보유하지 않아요.
+- Flutter 앱은 Google Sign-In SDK로 받은 `id_token`과 Google `access_token`으로 Supabase 세션을 생성하고, FastAPI에는 Supabase `access_token`만 전달해요.
 - 외부 LLM/검색 실패는 `ExternalAPIException` 계열로 감싸 응답해요.
