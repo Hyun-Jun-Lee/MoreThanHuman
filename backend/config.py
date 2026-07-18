@@ -3,6 +3,8 @@
 """
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
+
 from pydantic_settings import BaseSettings
 from shared.exceptions import AppException
 
@@ -43,6 +45,13 @@ class Settings(BaseSettings):
     jwt_access_token_expire_minutes: int = 1440  # 24시간
     jwt_refresh_token_expire_days: int = 15
 
+    # Supabase Auth
+    supabase_url: str | None = None
+    supabase_publishable_key: str | None = None
+    supabase_auth_verify_mode: Literal["remote"] = "remote"
+    supabase_auth_timeout_seconds: float = 5.0
+    auto_create_tables: bool = False
+
     # Google OAuth2
     google_client_id: str | None = None
     google_client_secret: str | None = None
@@ -82,6 +91,30 @@ class Settings(BaseSettings):
     def is_dev(self) -> bool:
         """개발 전용 기능 활성화 여부"""
         return self.env.lower() in {"dev", "development", "local"}
+
+    @property
+    def normalized_supabase_url(self) -> str:
+        """후행 slash가 제거된 Supabase project URL"""
+        if not self.supabase_url or not self.supabase_url.strip():
+            raise AppException("SUPABASE_URL is required for Supabase Auth.")
+        return self.supabase_url.strip().rstrip("/")
+
+    @property
+    def supabase_auth_url(self) -> str:
+        """Supabase Auth base URL"""
+        return f"{self.normalized_supabase_url}/auth/v1"
+
+    @property
+    def supabase_jwks_url(self) -> str:
+        """Supabase JWKS discovery URL"""
+        return f"{self.supabase_auth_url}/.well-known/jwks.json"
+
+    @property
+    def required_supabase_publishable_key(self) -> str:
+        """Supabase publishable key 필수값"""
+        if not self.supabase_publishable_key or not self.supabase_publishable_key.strip():
+            raise AppException("SUPABASE_PUBLISHABLE_KEY is required for Supabase Auth.")
+        return self.supabase_publishable_key.strip()
 
     class Config:
         # 프로젝트 루트의 .env 파일 경로 (backend/config.py 기준 상위 디렉토리)

@@ -6,9 +6,10 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 from database import get_db
-from domains.auth.models import UserModel
+from domains.auth.models import ProfileModel
 from domains.auth.repository import AuthRepository
 from domains.auth.service import AuthService
+from domains.auth.supabase import SupabaseAuthVerifier
 from shared.exceptions import AuthenticationException, NotFoundException
 
 security = HTTPBearer()
@@ -19,21 +20,26 @@ def get_auth_service(db: Session = Depends(get_db)) -> AuthService:
     return AuthService(AuthRepository(db))
 
 
-def get_current_user(
+def get_supabase_auth_verifier() -> SupabaseAuthVerifier:
+    """Supabase Auth verifier 의존성"""
+    return SupabaseAuthVerifier()
+
+
+async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db),
-) -> UserModel:
-    """현재 인증된 사용자 반환 (Bearer 토큰 검증)"""
+    service: AuthService = Depends(get_auth_service),
+    verifier: SupabaseAuthVerifier = Depends(get_supabase_auth_verifier),
+) -> ProfileModel:
+    """현재 인증된 프로필 반환 (Supabase Bearer 토큰 검증)"""
     try:
-        user_id = AuthService.decode_access_token(credentials.credentials)
-        repository = AuthRepository(db)
-        user = repository.find_by_id(user_id)
-        if not user.is_active:
+        claims = await verifier.verify_access_token(credentials.credentials)
+        profile = service.get_or_create_profile_from_claims(claims)
+        if not profile.is_active:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="비활성화된 계정입니다",
             )
-        return user
+        return profile
     except AuthenticationException as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -48,21 +54,21 @@ def get_current_user(
         )
 
 
-def get_current_user_from_token_param(
-    token: str = Query(..., description="JWT access token"),
-    db: Session = Depends(get_db),
-) -> UserModel:
-    """쿼리 파라미터로 전달된 토큰에서 사용자 반환 (SSE 엔드포인트용)"""
+async def get_current_user_from_token_param(
+    token: str = Query(..., description="Supabase access token"),
+    service: AuthService = Depends(get_auth_service),
+    verifier: SupabaseAuthVerifier = Depends(get_supabase_auth_verifier),
+) -> ProfileModel:
+    """쿼리 파라미터로 전달된 Supabase token에서 프로필 반환 (SSE 엔드포인트용)"""
     try:
-        user_id = AuthService.decode_access_token(token)
-        repository = AuthRepository(db)
-        user = repository.find_by_id(user_id)
-        if not user.is_active:
+        claims = await verifier.verify_access_token(token)
+        profile = service.get_or_create_profile_from_claims(claims)
+        if not profile.is_active:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="비활성화된 계정입니다",
             )
-        return user
+        return profile
     except AuthenticationException as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from domains.auth.dependencies import get_current_user
-from domains.auth.models import UserModel
+from domains.auth.models import ProfileModel
 from domains.conversation.repository import ConversationRepository
 from domains.grammar.repository import GrammarRepository
 from domains.grammar.schemas import GrammarFeedback, GrammarStats
@@ -37,7 +37,7 @@ def get_grammar_service(db: Session = Depends(get_db)) -> GrammarService:
 @router.post("/check/", response_model=SuccessResponse[GrammarFeedback])
 async def check_grammar(
     request: CheckGrammarRequest,
-    current_user: UserModel = Depends(get_current_user),
+    current_user: ProfileModel = Depends(get_current_user),
     service: GrammarService = Depends(get_grammar_service),
 ):
     """문법 체크"""
@@ -53,7 +53,7 @@ async def check_grammar(
 @router.get("/message/{message_id}/", response_model=SuccessResponse[GrammarFeedback])
 def get_feedback_by_message(
     message_id: str,
-    current_user: UserModel = Depends(get_current_user),
+    current_user: ProfileModel = Depends(get_current_user),
     service: GrammarService = Depends(get_grammar_service),
 ):
     """모바일 polling용 문법 피드백 조회. 404는 pending 또는 접근 불가 상태로 처리한다."""
@@ -69,7 +69,7 @@ def get_feedback_by_message(
 @router.get("/stats/", response_model=SuccessResponse[GrammarStats])
 def get_stats(
     time_range: str | None = None,
-    current_user: UserModel = Depends(get_current_user),
+    current_user: ProfileModel = Depends(get_current_user),
     service: GrammarService = Depends(get_grammar_service),
 ):
     """문법 통계 조회"""

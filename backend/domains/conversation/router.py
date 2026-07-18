@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from config import get_settings
 from database import get_db
 from domains.auth.dependencies import get_current_user, get_current_user_from_token_param
-from domains.auth.models import UserModel
+from domains.auth.models import ProfileModel
 from domains.conversation.enums import ConversationType
 from domains.conversation.repository import ConversationRepository
 from domains.conversation.schemas import (
@@ -291,7 +291,7 @@ async def _synthesize_optional_audio(
 )
 async def start_free_chat_conversation(
     http_request: Request,
-    current_user: UserModel = Depends(get_current_user),
+    current_user: ProfileModel = Depends(get_current_user),
     service: ConversationService = Depends(get_conversation_service),
     voice_service: VoiceService = Depends(get_voice_service),
 ):
@@ -348,7 +348,7 @@ async def start_free_chat_conversation(
 @router.post("/start/roleplay/", response_model=SuccessResponse[ConversationResponse])
 async def start_roleplay_conversation(
     request: StartRoleplayRequest,
-    current_user: UserModel = Depends(get_current_user),
+    current_user: ProfileModel = Depends(get_current_user),
     service: ConversationService = Depends(get_conversation_service),
 ):
     """롤플레이 대화 시작 (AI가 먼저 인사)"""
@@ -374,7 +374,7 @@ async def start_roleplay_conversation(
 async def send_message(
     conversation_id: UUID,
     request: SendMessageRequest,
-    current_user: UserModel = Depends(get_current_user),
+    current_user: ProfileModel = Depends(get_current_user),
     service: ConversationService = Depends(get_conversation_service),
 ):
     """메시지 전송"""
@@ -405,7 +405,7 @@ async def send_message(
 async def send_multimodal_turn(
     conversation_id: UUID,
     http_request: Request,
-    current_user: UserModel = Depends(get_current_user),
+    current_user: ProfileModel = Depends(get_current_user),
     service: ConversationService = Depends(get_conversation_service),
     voice_service: VoiceService = Depends(get_voice_service),
 ):
@@ -459,7 +459,7 @@ async def send_multimodal_turn(
 def get_conversations(
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    current_user: UserModel = Depends(get_current_user),
+    current_user: ProfileModel = Depends(get_current_user),
     service: ConversationService = Depends(get_conversation_service),
 ):
     """대화 목록 조회"""
@@ -473,7 +473,7 @@ def get_conversations(
 @router.get("/{conversation_id}/", response_model=SuccessResponse[Conversation])
 def get_conversation(
     conversation_id: UUID,
-    current_user: UserModel = Depends(get_current_user),
+    current_user: ProfileModel = Depends(get_current_user),
     service: ConversationService = Depends(get_conversation_service),
 ):
     """대화 조회"""
@@ -491,7 +491,7 @@ def get_messages(
     conversation_id: UUID,
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    current_user: UserModel = Depends(get_current_user),
+    current_user: ProfileModel = Depends(get_current_user),
     service: ConversationService = Depends(get_conversation_service),
 ):
     """메시지 목록 조회"""
@@ -507,7 +507,7 @@ def get_messages(
 @router.put("/{conversation_id}/end/", response_model=SuccessResponse[dict])
 def end_conversation(
     conversation_id: UUID,
-    current_user: UserModel = Depends(get_current_user),
+    current_user: ProfileModel = Depends(get_current_user),
     service: ConversationService = Depends(get_conversation_service),
 ):
     """대화 종료"""
@@ -524,7 +524,7 @@ def end_conversation(
 def update_conversation_title(
     conversation_id: UUID,
     request: UpdateTitleRequest,
-    current_user: UserModel = Depends(get_current_user),
+    current_user: ProfileModel = Depends(get_current_user),
     service: ConversationService = Depends(get_conversation_service),
 ):
     """대화 제목 수정"""
@@ -540,7 +540,7 @@ def update_conversation_title(
 @router.delete("/{conversation_id}/", response_model=SuccessResponse[dict])
 def delete_conversation(
     conversation_id: UUID,
-    current_user: UserModel = Depends(get_current_user),
+    current_user: ProfileModel = Depends(get_current_user),
     service: ConversationService = Depends(get_conversation_service),
 ):
     """대화 삭제"""
@@ -556,7 +556,7 @@ def delete_conversation(
 @router.get("/messages/{message_id}/grammar-feedback/stream")
 async def stream_grammar_feedback(
     message_id: UUID,
-    current_user: UserModel = Depends(get_current_user_from_token_param),
+    current_user: ProfileModel = Depends(get_current_user_from_token_param),
     service: ConversationService = Depends(get_conversation_service),
 ):
     """선택적 SSE 문법 피드백 스트리밍 (토큰은 쿼리 파라미터로 전달)"""

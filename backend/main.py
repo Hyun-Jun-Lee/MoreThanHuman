@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 
 from config import get_settings
 from database import Base, engine
-from domains.auth.models import RefreshTokenModel, UserModel  # noqa: F401 - 테이블 생성용 import
+from domains.auth.models import ProfileModel  # noqa: F401 - 테이블 생성용 import
 from domains.auth.router import router as auth_router
 from domains.conversation.router import router as conversation_router
 from domains.grammar.router import router as grammar_router
@@ -27,8 +27,11 @@ settings = get_settings()
 async def lifespan(_app: FastAPI):
     """애플리케이션 생명주기 관리"""
     # Startup
-    Base.metadata.create_all(bind=engine)
-    print("✅ Database tables created")
+    if settings.auto_create_tables:
+        Base.metadata.create_all(bind=engine)
+        print("✅ Database tables created via SQLAlchemy metadata")
+    else:
+        print("✅ Database migrations are managed by Alembic")
     print(f"✅ Application started in {'DEBUG' if settings.debug else 'PRODUCTION'} mode")
 
     yield
