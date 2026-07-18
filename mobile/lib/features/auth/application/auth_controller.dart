@@ -1,30 +1,40 @@
+import 'dart:async';
+
 import 'package:curitalk/core/network/network.dart';
-import 'package:curitalk/core/storage/storage.dart';
 import 'package:curitalk/features/auth/data/api_auth_repository.dart';
+import 'package:curitalk/features/auth/data/google_identity_service.dart';
+import 'package:curitalk/features/auth/data/supabase_auth_service.dart';
 import 'package:curitalk/features/auth/domain/auth_repository.dart';
 import 'package:curitalk/features/auth/domain/auth_session.dart';
 import 'package:curitalk/features/auth/domain/user_profile.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class AuthController extends AsyncNotifier<AuthSession> {
   late AuthRepository _repository;
-  late TokenStorage _tokenStorage;
-  late InstallationIdService _installationIdService;
+  late SupabaseAuthService _supabaseAuthService;
+  late GoogleIdentityService _googleIdentityService;
   late AuthSessionCoordinator _sessionCoordinator;
+  StreamSubscription<SupabaseSessionChange>? _authSubscription;
 
   @override
   Future<AuthSession> build() async {
     _repository = ref.watch(authRepositoryProvider);
-    _tokenStorage = ref.watch(tokenStorageProvider);
-    _installationIdService = ref.watch(installationIdServiceProvider);
+    _supabaseAuthService = ref.watch(supabaseAuthServiceProvider);
+    _googleIdentityService = ref.watch(googleIdentityServiceProvider);
     final AuthSessionCoordinator sessionCoordinator = ref.watch(
       authSessionCoordinatorProvider,
     );
     _sessionCoordinator = sessionCoordinator;
     sessionCoordinator.addExpirationListener(_handleSessionExpired);
-    ref.onDispose(
-      () => sessionCoordinator.removeExpirationListener(_handleSessionExpired),
+    _authSubscription = _supabaseAuthService.authStateChanges.listen(
+      _handleSupabaseSessionChange,
+      onError: (_) {},
     );
+    ref.onDispose(() {
+      sessionCoordinator.removeExpirationListener(_handleSessionExpired);
+      unawaited(_authSubscription?.cancel());
+    });
     return _restoreSession();
   }
 
@@ -33,34 +43,35 @@ class AuthController extends AsyncNotifier<AuthSession> {
     state = await AsyncValue.guard(_restoreSession);
   }
 
-  Future<void> signInWithGoogleIdToken(String idToken) async {
-    final String normalizedIdToken = idToken.trim();
-    if (normalizedIdToken.isEmpty) {
-      throw ArgumentError.value(idToken, 'idToken', 'Must not be empty.');
+  Future<void> signInWithGoogleTokens(GoogleIdentityTokens tokens) async {
+    if (tokens.idToken.trim().isEmpty || tokens.accessToken.trim().isEmpty) {
+      throw ArgumentError.value(tokens, 'tokens', 'Must not be empty.');
     }
 
     final AuthSession previousSession =
         state.value ?? const AuthSession.unauthenticated();
     state = const AsyncLoading<AuthSession>();
     try {
-      final String deviceId = await _installationIdService.getOrCreate();
-      final AuthTokens tokens = await _repository.signInWithGoogleIdToken(
-        idToken: normalizedIdToken,
-        deviceId: deviceId,
+      debugPrint('CuritalkAuth controller: signing in with Supabase');
+      await _supabaseAuthService.signInWithGoogleTokens(
+        idToken: tokens.idToken.trim(),
+        accessToken: tokens.accessToken.trim(),
       );
-      _sessionCoordinator.deactivateSession();
-      await _tokenStorage.writeTokens(tokens);
+      debugPrint('CuritalkAuth controller: Supabase sign-in completed');
       _sessionCoordinator.activateSession();
+      debugPrint('CuritalkAuth controller: requesting /auth/me');
       final UserProfile user = await _repository.getCurrentUser();
+      debugPrint('CuritalkAuth controller: /auth/me success userId=${user.id}');
       state = AsyncData<AuthSession>(AuthSession.authenticated(user));
     } on Object catch (error, stackTrace) {
-      final bool hasTokens = await _tokenStorage.readTokens() != null;
-      if (!hasTokens) {
-        state = const AsyncData<AuthSession>(AuthSession.unauthenticated());
-      } else if (previousSession.isAuthenticated) {
+      debugPrint('CuritalkAuth controller sign-in failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      await _signOutSafely();
+      if (previousSession.isAuthenticated) {
         _sessionCoordinator.activateSession();
         state = AsyncData<AuthSession>(previousSession);
       } else {
+        _sessionCoordinator.deactivateSession();
         state = AsyncError<AuthSession>(error, stackTrace);
       }
       rethrow;
@@ -68,34 +79,37 @@ class AuthController extends AsyncNotifier<AuthSession> {
   }
 
   Future<void> logout() async {
-    _sessionCoordinator.deactivateSession();
-    final AuthTokens? tokens = await _tokenStorage.readTokens();
-    final String? deviceId = await _tokenStorage.readDeviceId();
     state = const AsyncLoading<AuthSession>();
-    await _tokenStorage.clearTokens();
-    if (tokens != null && deviceId != null && deviceId.isNotEmpty) {
-      await _revokeSession(tokens.refreshToken, deviceId);
-    }
+    _sessionCoordinator.deactivateSession();
+    await _signOutSafely();
     state = const AsyncData<AuthSession>(AuthSession.unauthenticated());
   }
 
   Future<AuthSession> _restoreSession() async {
-    final AuthTokens? tokens = await _tokenStorage.readTokens();
-    if (tokens == null) {
+    final bool hasSession = await _supabaseAuthService.hasCurrentSession();
+    if (!hasSession) {
       _sessionCoordinator.deactivateSession();
       return const AuthSession.unauthenticated();
     }
 
     try {
       final UserProfile user = await _repository.getCurrentUser();
+      _sessionCoordinator.activateSession();
       return AuthSession.authenticated(user);
     } on ApiException catch (error) {
       if (error.kind != ApiErrorKind.unauthorized) {
         rethrow;
       }
       _sessionCoordinator.deactivateSession();
-      await _tokenStorage.clearTokens();
+      await _signOutSafely();
       return const AuthSession.unauthenticated();
+    }
+  }
+
+  void _handleSupabaseSessionChange(SupabaseSessionChange change) {
+    if (change.event == SupabaseSessionEvent.signedOut) {
+      _sessionCoordinator.deactivateSession();
+      state = const AsyncData<AuthSession>(AuthSession.unauthenticated());
     }
   }
 
@@ -103,11 +117,16 @@ class AuthController extends AsyncNotifier<AuthSession> {
     state = const AsyncData<AuthSession>(AuthSession.unauthenticated());
   }
 
-  Future<void> _revokeSession(String refreshToken, String deviceId) async {
+  Future<void> _signOutSafely() async {
     try {
-      await _repository.logout(refreshToken: refreshToken, deviceId: deviceId);
+      await _supabaseAuthService.signOut();
     } on Object {
-      return;
+      // 로컬 상태 정리가 더 중요하므로 무시해요.
+    }
+    try {
+      await _googleIdentityService.signOut();
+    } on Object {
+      // Google SDK 로그아웃 실패는 다음 로그인에서 복구 가능해요.
     }
   }
 }

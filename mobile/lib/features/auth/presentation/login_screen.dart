@@ -22,23 +22,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         await ref.read(authControllerProvider.notifier).restoreSession();
         return;
       }
-      final String? idToken = await ref
+      final GoogleIdentityTokens? tokens = await ref
           .read(googleIdentityServiceProvider)
           .signIn();
-      if (idToken == null) {
+      if (tokens == null) {
         return;
       }
       await ref
           .read(authControllerProvider.notifier)
-          .signInWithGoogleIdToken(idToken);
+          .signInWithGoogleTokens(tokens);
     } on GoogleIdentityException catch (error) {
       _showError(error.message);
     } on ApiException catch (error) {
+      debugPrint('CuritalkAuth login screen ApiException: $error');
       if (!ref.read(authControllerProvider).hasError) {
         await _signOutGoogleSafely();
       }
       _showError(error.message);
-    } on Object {
+    } on Object catch (error, stackTrace) {
+      debugPrint('CuritalkAuth login screen unexpected error: $error');
+      debugPrintStack(stackTrace: stackTrace);
       _showError('Sign-in could not be completed. Please try again.');
     }
   }

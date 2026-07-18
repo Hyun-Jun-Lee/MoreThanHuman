@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:curitalk/app/theme/app_theme.dart';
 import 'package:curitalk/core/storage/storage.dart';
 import 'package:curitalk/features/auth/auth.dart';
@@ -144,6 +146,9 @@ Widget _historyApp({
       googleIdentityServiceProvider.overrideWithValue(
         const _FakeGoogleIdentityService(),
       ),
+      supabaseAuthServiceProvider.overrideWithValue(
+        _FakeSupabaseAuthService(hasSession: true),
+      ),
       homeRepositoryProvider.overrideWithValue(
         homeRepository ?? _FakeHomeRepository(conversations: conversations),
       ),
@@ -163,7 +168,12 @@ class _FakeGoogleIdentityService implements GoogleIdentityService {
   const _FakeGoogleIdentityService();
 
   @override
-  Future<String?> signIn() async => 'google-id-token';
+  Future<GoogleIdentityTokens?> signIn() async {
+    return const GoogleIdentityTokens(
+      idToken: 'google-id-token',
+      accessToken: 'google-access-token',
+    );
+  }
 
   @override
   Future<void> signOut() async {}
@@ -174,19 +184,45 @@ class _FakeAuthRepository implements AuthRepository {
 
   @override
   Future<UserProfile> getCurrentUser() async => _user;
+}
+
+class _FakeSupabaseAuthService implements SupabaseAuthService {
+  _FakeSupabaseAuthService({this.hasSession = false});
+
+  bool hasSession;
 
   @override
-  Future<void> logout({
-    required String refreshToken,
-    required String deviceId,
-  }) async {}
+  Stream<SupabaseSessionChange> get authStateChanges =>
+      const Stream<SupabaseSessionChange>.empty();
 
   @override
-  Future<AuthTokens> signInWithGoogleIdToken({
-    required String idToken,
-    required String deviceId,
+  Future<void> expireSession() => signOut();
+
+  @override
+  Future<bool> hasCurrentSession() async => hasSession;
+
+  @override
+  Future<String?> readAccessToken() async =>
+      hasSession ? 'supabase-access-token' : null;
+
+  @override
+  Future<String?> refreshAccessToken({
+    required String? previousAccessToken,
   }) async {
-    return _tokens;
+    return hasSession ? 'supabase-refreshed-token' : null;
+  }
+
+  @override
+  Future<void> signInWithGoogleTokens({
+    required String idToken,
+    required String accessToken,
+  }) async {
+    hasSession = true;
+  }
+
+  @override
+  Future<void> signOut() async {
+    hasSession = false;
   }
 }
 

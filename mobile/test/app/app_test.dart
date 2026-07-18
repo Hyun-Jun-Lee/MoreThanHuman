@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:curitalk/app/app.dart';
 import 'package:curitalk/core/storage/storage.dart';
 import 'package:curitalk/features/auth/auth.dart';
@@ -15,12 +17,14 @@ void main() {
       final _MemoryOnboardingStorage onboardingStorage =
           _MemoryOnboardingStorage(false);
       final _FakeAuthRepository authRepository = _FakeAuthRepository();
+      final _FakeSupabaseAuthService supabaseAuth = _FakeSupabaseAuthService();
 
       await tester.pumpWidget(
         _appScope(
           tokenStorage: tokenStorage,
           onboardingStorage: onboardingStorage,
           authRepository: authRepository,
+          supabaseAuth: supabaseAuth,
         ),
       );
       await tester.pumpAndSettle();
@@ -44,8 +48,8 @@ void main() {
       expect(find.text('Hi, Learner'), findsOneWidget);
       expect(find.text('Welcome to Curitalk'), findsOneWidget);
       expect(onboardingStorage.completed, isTrue);
-      expect(tokenStorage.tokens?.accessToken, 'access-token');
-      expect(authRepository.lastIdToken, 'google-id-token');
+      expect(supabaseAuth.hasSession, isTrue);
+      expect(supabaseAuth.lastIdToken, 'google-id-token');
 
       await tester.tap(find.text('START CONVERSATION').first);
       await tester.pumpAndSettle();
@@ -72,6 +76,7 @@ void main() {
         tokenStorage: tokenStorage,
         onboardingStorage: _MemoryOnboardingStorage(true),
         authRepository: _FakeAuthRepository(),
+        supabaseAuth: _FakeSupabaseAuthService(hasSession: true),
       ),
     );
     await tester.pumpAndSettle();
@@ -93,6 +98,7 @@ void main() {
         tokenStorage: tokenStorage,
         onboardingStorage: _MemoryOnboardingStorage(true),
         authRepository: _FakeAuthRepository(),
+        supabaseAuth: _FakeSupabaseAuthService(hasSession: true),
       ),
     );
     await tester.pumpAndSettle();
@@ -119,6 +125,7 @@ void main() {
         tokenStorage: tokenStorage,
         onboardingStorage: _MemoryOnboardingStorage(true),
         authRepository: _FakeAuthRepository(),
+        supabaseAuth: _FakeSupabaseAuthService(hasSession: true),
       ),
     );
     await tester.pumpAndSettle();
@@ -136,12 +143,16 @@ void main() {
       tokens: _tokens,
       deviceId: _deviceId,
     );
+    final _FakeSupabaseAuthService supabaseAuth = _FakeSupabaseAuthService(
+      hasSession: true,
+    );
 
     await tester.pumpWidget(
       _appScope(
         tokenStorage: tokenStorage,
         onboardingStorage: _MemoryOnboardingStorage(true),
         authRepository: _FakeAuthRepository(),
+        supabaseAuth: supabaseAuth,
       ),
     );
     await tester.pumpAndSettle();
@@ -151,7 +162,7 @@ void main() {
     await tester.tap(find.text('LOG OUT'));
     await tester.pumpAndSettle();
 
-    expect(tokenStorage.tokens, isNull);
+    expect(supabaseAuth.hasSession, isFalse);
     expect(find.text('Practice English with your own topics.'), findsOneWidget);
   });
 }
@@ -175,6 +186,7 @@ ProviderScope _appScope({
   required _MemoryTokenStorage tokenStorage,
   required _MemoryOnboardingStorage onboardingStorage,
   required _FakeAuthRepository authRepository,
+  _FakeSupabaseAuthService? supabaseAuth,
 }) {
   return ProviderScope(
     overrides: [
@@ -187,6 +199,9 @@ ProviderScope _appScope({
         const _FakeGoogleIdentityService(),
       ),
       authRepositoryProvider.overrideWithValue(authRepository),
+      supabaseAuthServiceProvider.overrideWithValue(
+        supabaseAuth ?? _FakeSupabaseAuthService(),
+      ),
       homeRepositoryProvider.overrideWithValue(const _FakeHomeRepository()),
       topicPrepRepositoryProvider.overrideWithValue(
         const _FakeTopicPrepRepository(),
@@ -200,31 +215,61 @@ class _FakeGoogleIdentityService implements GoogleIdentityService {
   const _FakeGoogleIdentityService();
 
   @override
-  Future<String?> signIn() async => 'google-id-token';
+  Future<GoogleIdentityTokens?> signIn() async {
+    return const GoogleIdentityTokens(
+      idToken: 'google-id-token',
+      accessToken: 'google-access-token',
+    );
+  }
 
   @override
   Future<void> signOut() async {}
 }
 
 class _FakeAuthRepository implements AuthRepository {
+  @override
+  Future<UserProfile> getCurrentUser() async => _user;
+}
+
+class _FakeSupabaseAuthService implements SupabaseAuthService {
+  _FakeSupabaseAuthService({this.hasSession = false});
+
+  bool hasSession;
   String? lastIdToken;
 
   @override
-  Future<UserProfile> getCurrentUser() async => _user;
+  Stream<SupabaseSessionChange> get authStateChanges =>
+      const Stream<SupabaseSessionChange>.empty();
 
   @override
-  Future<void> logout({
-    required String refreshToken,
-    required String deviceId,
-  }) async {}
+  Future<void> expireSession() => signOut();
 
   @override
-  Future<AuthTokens> signInWithGoogleIdToken({
+  Future<bool> hasCurrentSession() async => hasSession;
+
+  @override
+  Future<String?> readAccessToken() async =>
+      hasSession ? 'supabase-access-token' : null;
+
+  @override
+  Future<String?> refreshAccessToken({
+    required String? previousAccessToken,
+  }) async {
+    return hasSession ? 'supabase-refreshed-token' : null;
+  }
+
+  @override
+  Future<void> signInWithGoogleTokens({
     required String idToken,
-    required String deviceId,
+    required String accessToken,
   }) async {
     lastIdToken = idToken;
-    return _tokens;
+    hasSession = true;
+  }
+
+  @override
+  Future<void> signOut() async {
+    hasSession = false;
   }
 }
 

@@ -63,7 +63,6 @@ Future<void> showAccountSheet({
                     ? null
                     : () async {
                         setSheetState(() => isLoggingOut = true);
-                        await _signOutGoogleSafely(ref);
                         await ref
                             .read(authControllerProvider.notifier)
                             .logout();
@@ -93,12 +92,4 @@ String _initialFor(String name) {
     return '?';
   }
   return normalized.characters.first.toUpperCase();
-}
-
-Future<void> _signOutGoogleSafely(WidgetRef ref) async {
-  try {
-    await ref.read(googleIdentityServiceProvider).signOut();
-  } on Object {
-    return;
-  }
 }

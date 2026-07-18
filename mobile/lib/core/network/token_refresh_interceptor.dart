@@ -1,16 +1,12 @@
-import 'package:curitalk/core/network/api_exception.dart';
-import 'package:curitalk/core/network/api_response.dart';
 import 'package:curitalk/core/network/auth_session_coordinator.dart';
 import 'package:curitalk/core/network/auth_token_interceptor.dart';
-import 'package:curitalk/core/storage/auth_tokens.dart';
-import 'package:curitalk/core/storage/token_storage.dart';
+import 'package:curitalk/features/auth/data/supabase_auth_service.dart';
 import 'package:dio/dio.dart';
 
 class TokenRefreshInterceptor extends Interceptor {
   TokenRefreshInterceptor({
     required this.requestDio,
-    required this.refreshDio,
-    required this.tokenStorage,
+    required this.sessionRefreshProvider,
     required this.sessionCoordinator,
   });
 
@@ -18,11 +14,10 @@ class TokenRefreshInterceptor extends Interceptor {
   static const String sessionRevisionKey = 'authSessionRevision';
 
   final Dio requestDio;
-  final Dio refreshDio;
-  final TokenStorage tokenStorage;
+  final SessionRefreshProvider sessionRefreshProvider;
   final AuthSessionCoordinator sessionCoordinator;
 
-  Future<AuthTokens?>? _refreshOperation;
+  Future<String?>? _refreshOperation;
 
   @override
   Future<void> onError(
@@ -47,37 +42,12 @@ class TokenRefreshInterceptor extends Interceptor {
       return;
     }
 
-    AuthTokens? storedTokens;
+    final String? previousAccessToken = _authorizationToken(request);
+    String? accessToken;
     try {
-      storedTokens = await tokenStorage.readTokens();
-    } on Object {
-      await _expireSession();
-      handler.next(err);
-      return;
-    }
-    if (!sessionCoordinator.refreshAllowed) {
-      handler.next(err);
-      return;
-    }
-    AuthTokens? tokens;
-    try {
-      tokens =
-          storedTokens != null &&
-              !_requestUsedToken(request, storedTokens.accessToken)
-          ? storedTokens
-          : await _refreshTokens();
+      accessToken = await _refreshAccessToken(previousAccessToken);
     } on DioException catch (refreshError) {
       handler.next(refreshError);
-      return;
-    } on ApiException catch (refreshError) {
-      handler.next(
-        DioException(
-          requestOptions: request,
-          type: DioExceptionType.unknown,
-          error: refreshError,
-          message: refreshError.message,
-        ),
-      );
       return;
     } on Object catch (refreshError) {
       handler.next(
@@ -90,14 +60,15 @@ class TokenRefreshInterceptor extends Interceptor {
       );
       return;
     }
-    if (tokens == null) {
+    if (accessToken == null || accessToken.isEmpty) {
+      await _expireSession();
       handler.next(err);
       return;
     }
 
     request.extra[retryAttemptedKey] = true;
     request.extra[sessionRevisionKey] = sessionCoordinator.captureRevision();
-    request.headers['Authorization'] = 'Bearer ${tokens.accessToken}';
+    request.headers['Authorization'] = 'Bearer $accessToken';
 
     try {
       handler.resolve(await requestDio.fetch<Object?>(request));
@@ -112,16 +83,18 @@ class TokenRefreshInterceptor extends Interceptor {
     }
   }
 
-  Future<AuthTokens?> _refreshTokens() {
+  Future<String?> _refreshAccessToken(String? previousAccessToken) {
     if (!sessionCoordinator.refreshAllowed) {
-      return Future<AuthTokens?>.value();
+      return Future<String?>.value();
     }
-    final Future<AuthTokens?>? activeOperation = _refreshOperation;
+    final Future<String?>? activeOperation = _refreshOperation;
     if (activeOperation != null) {
       return activeOperation;
     }
 
-    final Future<AuthTokens?> operation = _performRefresh();
+    final Future<String?> operation = sessionRefreshProvider.refreshAccessToken(
+      previousAccessToken: previousAccessToken,
+    );
     _refreshOperation = operation;
     return operation.whenComplete(() {
       if (identical(_refreshOperation, operation)) {
@@ -130,65 +103,21 @@ class TokenRefreshInterceptor extends Interceptor {
     });
   }
 
-  Future<AuthTokens?> _performRefresh() async {
-    final int sessionRevision = sessionCoordinator.captureRevision();
-    try {
-      final AuthTokens? currentTokens = await tokenStorage.readTokens();
-      final String? deviceId = await tokenStorage.readDeviceId();
-      if (!sessionCoordinator.refreshAllowed ||
-          !sessionCoordinator.isCurrent(sessionRevision)) {
-        return null;
-      }
-      if (currentTokens == null || deviceId == null || deviceId.isEmpty) {
-        await _expireSession();
-        return null;
-      }
-
-      final Response<Object?> response = await refreshDio.post<Object?>(
-        'auth/refresh',
-        data: <String, String>{
-          'refresh_token': currentTokens.refreshToken,
-          'device_id': deviceId,
-        },
-      );
-      final AuthTokens refreshedTokens = ApiResponse<AuthTokens>.fromJson(
-        response.data,
-        AuthTokens.fromJson,
-      ).data;
-      if (!sessionCoordinator.refreshAllowed ||
-          !sessionCoordinator.isCurrent(sessionRevision)) {
-        return null;
-      }
-      await tokenStorage.writeTokens(refreshedTokens);
-      return refreshedTokens;
-    } on DioException catch (error) {
-      final int? statusCode = error.response?.statusCode;
-      if (statusCode == 400 ||
-          statusCode == 401 ||
-          statusCode == 403 ||
-          statusCode == 422) {
-        if (sessionCoordinator.refreshAllowed &&
-            sessionCoordinator.isCurrent(sessionRevision)) {
-          await _expireSession();
-        }
-        return null;
-      }
-      rethrow;
-    }
-  }
-
   Future<void> _expireSession() async {
     sessionCoordinator.expireSession();
     try {
-      await tokenStorage.clearTokens();
+      await sessionRefreshProvider.expireSession();
     } on Object {
       return;
     }
   }
 
-  bool _requestUsedToken(RequestOptions request, String accessToken) {
+  String? _authorizationToken(RequestOptions request) {
     final Object? authorization = request.headers['Authorization'];
-    return authorization is String &&
-        authorization.split(' ').last == accessToken;
+    if (authorization is! String || authorization.isEmpty) {
+      return null;
+    }
+    final List<String> parts = authorization.split(' ');
+    return parts.isEmpty ? null : parts.last;
   }
 }

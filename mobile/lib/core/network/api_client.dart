@@ -4,6 +4,7 @@ import 'package:curitalk/core/network/api_response.dart';
 import 'package:curitalk/core/network/auth_session_coordinator.dart';
 import 'package:curitalk/core/network/auth_token_interceptor.dart';
 import 'package:curitalk/core/network/token_refresh_interceptor.dart';
+import 'package:curitalk/features/auth/data/supabase_auth_service.dart';
 import 'package:curitalk/core/storage/token_storage.dart';
 import 'package:dio/dio.dart';
 
@@ -11,27 +12,30 @@ class ApiClient {
   ApiClient(this.dio, [this._refreshDio]);
 
   factory ApiClient.create({
-    required TokenStorage tokenStorage,
+    AccessTokenProvider? tokenProvider,
+    SessionRefreshProvider? sessionRefreshProvider,
+    TokenStorage? tokenStorage,
     String baseUrl = AppConfig.apiBaseUrl,
     AuthSessionCoordinator? sessionCoordinator,
-    Dio? refreshDio,
   }) {
+    final AccessTokenProvider effectiveTokenProvider =
+        tokenProvider ?? _TokenStorageSessionProvider.required(tokenStorage);
+    final SessionRefreshProvider effectiveRefreshProvider =
+        sessionRefreshProvider ??
+        _TokenStorageSessionProvider.required(tokenStorage);
     final String normalizedBaseUrl = _normalizeBaseUrl(baseUrl);
     final Dio dio = Dio(_baseOptions(normalizedBaseUrl));
-    final Dio tokenRefreshDio =
-        refreshDio ?? Dio(_baseOptions(normalizedBaseUrl));
     final AuthSessionCoordinator authSessionCoordinator =
         sessionCoordinator ?? AuthSessionCoordinator();
-    dio.interceptors.add(AuthTokenInterceptor(tokenStorage));
+    dio.interceptors.add(AuthTokenInterceptor(effectiveTokenProvider));
     dio.interceptors.add(
       TokenRefreshInterceptor(
         requestDio: dio,
-        refreshDio: tokenRefreshDio,
-        tokenStorage: tokenStorage,
+        sessionRefreshProvider: effectiveRefreshProvider,
         sessionCoordinator: authSessionCoordinator,
       ),
     );
-    return ApiClient(dio, tokenRefreshDio);
+    return ApiClient(dio);
   }
 
   final Dio dio;
@@ -144,4 +148,34 @@ class ApiClient {
   static String _normalizePath(String value) {
     return value.startsWith('/') ? value.substring(1) : value;
   }
+}
+
+class _TokenStorageSessionProvider
+    implements AccessTokenProvider, SessionRefreshProvider {
+  _TokenStorageSessionProvider(this._tokenStorage);
+
+  factory _TokenStorageSessionProvider.required(TokenStorage? tokenStorage) {
+    if (tokenStorage == null) {
+      throw ArgumentError(
+        'ApiClient.create requires Supabase token providers or a test tokenStorage.',
+      );
+    }
+    return _TokenStorageSessionProvider(tokenStorage);
+  }
+
+  final TokenStorage _tokenStorage;
+
+  @override
+  Future<String?> readAccessToken() => _tokenStorage.readAccessToken();
+
+  @override
+  Future<String?> refreshAccessToken({
+    required String? previousAccessToken,
+  }) async {
+    final String? accessToken = await _tokenStorage.readAccessToken();
+    return accessToken != previousAccessToken ? accessToken : null;
+  }
+
+  @override
+  Future<void> expireSession() => _tokenStorage.clearTokens();
 }

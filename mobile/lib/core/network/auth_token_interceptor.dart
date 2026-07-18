@@ -1,12 +1,12 @@
-import 'package:curitalk/core/storage/token_storage.dart';
+import 'package:curitalk/features/auth/data/supabase_auth_service.dart';
 import 'package:dio/dio.dart';
 
 class AuthTokenInterceptor extends Interceptor {
-  AuthTokenInterceptor(this.tokenStorage);
+  AuthTokenInterceptor(this.tokenProvider);
 
   static const String requiresAuthKey = 'requiresAuth';
 
-  final TokenStorage tokenStorage;
+  final AccessTokenProvider tokenProvider;
 
   @override
   Future<void> onRequest(
@@ -22,7 +22,7 @@ class AuthTokenInterceptor extends Interceptor {
       return;
     }
 
-    final String? accessToken = await tokenStorage.readAccessToken();
+    final String? accessToken = await tokenProvider.readAccessToken();
     if (accessToken != null && accessToken.isNotEmpty) {
       options.headers['Authorization'] = 'Bearer $accessToken';
     }

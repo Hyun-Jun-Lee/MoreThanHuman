@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:curitalk/app/theme/app_theme.dart';
 import 'package:curitalk/core/storage/storage.dart';
 import 'package:curitalk/features/auth/auth.dart';
@@ -74,12 +76,16 @@ void main() {
     final _FakeAuthRepository authRepository = _FakeAuthRepository();
     final _FakeGoogleIdentityService googleIdentityService =
         _FakeGoogleIdentityService();
+    final _FakeSupabaseAuthService supabaseAuth = _FakeSupabaseAuthService(
+      hasSession: true,
+    );
 
     await tester.pumpWidget(
       _homeApp(
         tokenStorage: tokenStorage,
         authRepository: authRepository,
         googleIdentityService: googleIdentityService,
+        supabaseAuth: supabaseAuth,
       ),
     );
     await tester.pumpAndSettle();
@@ -89,8 +95,7 @@ void main() {
     await tester.tap(find.text('LOG OUT'));
     await tester.pumpAndSettle();
 
-    expect(tokenStorage.tokens, isNull);
-    expect(authRepository.logoutCount, 1);
+    expect(supabaseAuth.hasSession, isFalse);
     expect(googleIdentityService.signOutCount, 1);
   });
 
@@ -101,12 +106,14 @@ void main() {
       tokens: _tokens,
       deviceId: _deviceId,
     );
-    final _FakeAuthRepository authRepository = _FakeAuthRepository();
+    final _FakeSupabaseAuthService supabaseAuth = _FakeSupabaseAuthService(
+      hasSession: true,
+    );
 
     await tester.pumpWidget(
       _homeApp(
         tokenStorage: tokenStorage,
-        authRepository: authRepository,
+        supabaseAuth: supabaseAuth,
         googleIdentityService: _FakeGoogleIdentityService(throwOnSignOut: true),
       ),
     );
@@ -117,8 +124,7 @@ void main() {
     await tester.tap(find.text('LOG OUT'));
     await tester.pumpAndSettle();
 
-    expect(tokenStorage.tokens, isNull);
-    expect(authRepository.logoutCount, 1);
+    expect(supabaseAuth.hasSession, isFalse);
   });
 }
 
@@ -141,6 +147,7 @@ Widget _homeApp({
   _MemoryTokenStorage? tokenStorage,
   _FakeAuthRepository? authRepository,
   _FakeGoogleIdentityService? googleIdentityService,
+  _FakeSupabaseAuthService? supabaseAuth,
   ValueChanged<ConversationStartType>? onStartTypeSelected,
   VoidCallback? onHistorySelected,
 }) {
@@ -161,6 +168,9 @@ Widget _homeApp({
       googleIdentityServiceProvider.overrideWithValue(
         googleIdentityService ?? _FakeGoogleIdentityService(),
       ),
+      supabaseAuthServiceProvider.overrideWithValue(
+        supabaseAuth ?? _FakeSupabaseAuthService(hasSession: true),
+      ),
       homeRepositoryProvider.overrideWithValue(const _FakeHomeRepository()),
     ],
     child: MaterialApp(
@@ -180,7 +190,12 @@ class _FakeGoogleIdentityService implements GoogleIdentityService {
   int signOutCount = 0;
 
   @override
-  Future<String?> signIn() async => 'google-id-token';
+  Future<GoogleIdentityTokens?> signIn() async {
+    return const GoogleIdentityTokens(
+      idToken: 'google-id-token',
+      accessToken: 'google-access-token',
+    );
+  }
 
   @override
   Future<void> signOut() async {
@@ -192,25 +207,47 @@ class _FakeGoogleIdentityService implements GoogleIdentityService {
 }
 
 class _FakeAuthRepository implements AuthRepository {
-  int logoutCount = 0;
-
   @override
   Future<UserProfile> getCurrentUser() async => _user;
+}
+
+class _FakeSupabaseAuthService implements SupabaseAuthService {
+  _FakeSupabaseAuthService({this.hasSession = false});
+
+  bool hasSession;
 
   @override
-  Future<void> logout({
-    required String refreshToken,
-    required String deviceId,
+  Stream<SupabaseSessionChange> get authStateChanges =>
+      const Stream<SupabaseSessionChange>.empty();
+
+  @override
+  Future<void> expireSession() => signOut();
+
+  @override
+  Future<bool> hasCurrentSession() async => hasSession;
+
+  @override
+  Future<String?> readAccessToken() async =>
+      hasSession ? 'supabase-access-token' : null;
+
+  @override
+  Future<String?> refreshAccessToken({
+    required String? previousAccessToken,
   }) async {
-    logoutCount += 1;
+    return hasSession ? 'supabase-refreshed-token' : null;
   }
 
   @override
-  Future<AuthTokens> signInWithGoogleIdToken({
+  Future<void> signInWithGoogleTokens({
     required String idToken,
-    required String deviceId,
+    required String accessToken,
   }) async {
-    return _tokens;
+    hasSession = true;
+  }
+
+  @override
+  Future<void> signOut() async {
+    hasSession = false;
   }
 }
 

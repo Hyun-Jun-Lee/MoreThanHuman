@@ -3,31 +3,38 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:curitalk/core/network/network.dart';
-import 'package:curitalk/core/storage/storage.dart';
+import 'package:curitalk/features/auth/auth.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('core providers create the API client with overridden storage', () {
-    final ProviderContainer container = ProviderContainer(
-      overrides: [
-        tokenStorageProvider.overrideWithValue(_MemoryTokenStorage(null)),
-      ],
-    );
-    addTearDown(container.dispose);
+  test(
+    'core providers create the API client with Supabase session providers',
+    () {
+      final ProviderContainer container = ProviderContainer(
+        overrides: [
+          supabaseAuthServiceProvider.overrideWithValue(
+            _FakeSessionProvider(accessToken: null),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
 
-    final ApiClient client = container.read(apiClientProvider);
+      final ApiClient client = container.read(apiClientProvider);
 
-    expect(client.dio.options.baseUrl, 'http://localhost:8010/api/');
-    expect(client.dio.interceptors, contains(isA<AuthTokenInterceptor>()));
-    expect(client.dio.interceptors, contains(isA<TokenRefreshInterceptor>()));
-  });
+      expect(client.dio.options.baseUrl, 'http://localhost:8010/api/');
+      expect(client.dio.interceptors, contains(isA<AuthTokenInterceptor>()));
+      expect(client.dio.interceptors, contains(isA<TokenRefreshInterceptor>()));
+    },
+  );
 
-  test('ApiClient adds a Bearer token and parses data', () async {
-    final _MemoryTokenStorage storage = _MemoryTokenStorage('access-token');
+  test('ApiClient adds a Supabase Bearer token and parses data', () async {
     final ApiClient client = ApiClient.create(
-      tokenStorage: storage,
+      tokenProvider: _FakeSessionProvider(accessToken: 'supabase-access-token'),
+      sessionRefreshProvider: _FakeSessionProvider(
+        accessToken: 'supabase-access-token',
+      ),
       baseUrl: 'https://example.com/api',
     );
     final _FakeHttpClientAdapter adapter = _FakeHttpClientAdapter(
@@ -55,13 +62,16 @@ void main() {
     );
     expect(
       adapter.lastRequest?.headers['Authorization'],
-      'Bearer access-token',
+      'Bearer supabase-access-token',
     );
   });
 
   test('ApiClient can explicitly skip authentication', () async {
     final ApiClient client = ApiClient.create(
-      tokenStorage: _MemoryTokenStorage('access-token'),
+      tokenProvider: _FakeSessionProvider(accessToken: 'supabase-access-token'),
+      sessionRefreshProvider: _FakeSessionProvider(
+        accessToken: 'supabase-access-token',
+      ),
       baseUrl: 'https://example.com/api/',
     );
     final _FakeHttpClientAdapter adapter = _FakeHttpClientAdapter(
@@ -81,7 +91,8 @@ void main() {
 
   test('ApiClient maps FastAPI authentication errors', () async {
     final ApiClient client = ApiClient.create(
-      tokenStorage: _MemoryTokenStorage(null),
+      tokenProvider: _FakeSessionProvider(accessToken: null),
+      sessionRefreshProvider: _FakeSessionProvider(accessToken: null),
       baseUrl: 'https://example.com/api/',
     );
     client.dio.httpClientAdapter = _FakeHttpClientAdapter(
@@ -111,10 +122,12 @@ void main() {
 
   test('ApiClient maps connection failures', () async {
     final ApiClient client = ApiClient.create(
-      tokenStorage: _MemoryTokenStorage(null),
+      tokenProvider: _FakeSessionProvider(accessToken: null),
+      sessionRefreshProvider: _FakeSessionProvider(accessToken: null),
       baseUrl: 'https://example.com/api/',
     );
     client.dio.httpClientAdapter = _FakeHttpClientAdapter(
+      response: <String, dynamic>{},
       connectionFails: true,
     );
     addTearDown(client.close);
@@ -131,148 +144,99 @@ void main() {
     );
   });
 
-  test('ApiClient refreshes rotated tokens and retries a 401 once', () async {
-    final _MemoryTokenStorage storage = _MemoryTokenStorage.withTokens(
-      const AuthTokens(
+  test(
+    '401 refreshes Supabase session and retries once with the new token',
+    () async {
+      final _FakeSessionProvider sessionProvider = _FakeSessionProvider(
         accessToken: 'expired-access',
-        refreshToken: 'refresh-token',
-      ),
-      deviceId: 'installation-id',
-    );
-    final Dio refreshDio = Dio(
-      BaseOptions(baseUrl: 'https://example.com/api/'),
-    );
-    final _CallbackHttpClientAdapter refreshAdapter =
-        _CallbackHttpClientAdapter((RequestOptions request) {
+        refreshedAccessToken: 'new-access',
+      );
+      final ApiClient client = ApiClient.create(
+        tokenProvider: sessionProvider,
+        sessionRefreshProvider: sessionProvider,
+        baseUrl: 'https://example.com/api/',
+      );
+      final List<String?> authorizationHeaders = <String?>[];
+      client.dio.httpClientAdapter = _CallbackHttpClientAdapter((
+        RequestOptions request,
+      ) {
+        final String? authorization =
+            request.headers['Authorization'] as String?;
+        authorizationHeaders.add(authorization);
+        if (authorization == 'Bearer expired-access') {
           return _jsonResponse(<String, dynamic>{
-            'success': true,
-            'data': <String, dynamic>{
-              'access_token': 'new-access',
-              'refresh_token': 'rotated-refresh',
-              'token_type': 'bearer',
-            },
-          });
-        });
-    refreshDio.httpClientAdapter = refreshAdapter;
-    final ApiClient client = ApiClient.create(
-      tokenStorage: storage,
-      baseUrl: 'https://example.com/api/',
-      refreshDio: refreshDio,
-    );
-    final List<String?> authorizationHeaders = <String?>[];
-    client.dio.httpClientAdapter = _CallbackHttpClientAdapter((
-      RequestOptions request,
-    ) {
-      final String? authorization = request.headers['Authorization'] as String?;
-      authorizationHeaders.add(authorization);
-      if (authorization == 'Bearer expired-access') {
+            'detail': 'Expired token',
+          }, statusCode: 401);
+        }
         return _jsonResponse(<String, dynamic>{
-          'detail': 'Expired token',
-        }, statusCode: 401);
-      }
-      return _jsonResponse(<String, dynamic>{
-        'success': true,
-        'data': <String, dynamic>{'name': 'Curitalk'},
+          'success': true,
+          'data': <String, dynamic>{'name': 'Curitalk'},
+        });
       });
-    });
-    addTearDown(client.close);
+      addTearDown(client.close);
 
-    final ApiResponse<String> response = await client.get<String>(
-      'auth/me',
-      decodeData: (Object? json) {
-        return (json! as Map<String, dynamic>)['name']! as String;
-      },
-    );
+      final ApiResponse<String> response = await client.get<String>(
+        'auth/me',
+        decodeData: (Object? json) =>
+            (json! as Map<String, dynamic>)['name']! as String,
+      );
 
-    expect(response.data, 'Curitalk');
-    expect(refreshAdapter.requestCount, 1);
-    expect(refreshAdapter.lastRequest?.data, <String, String>{
-      'refresh_token': 'refresh-token',
-      'device_id': 'installation-id',
-    });
-    expect(authorizationHeaders, <String?>[
-      'Bearer expired-access',
-      'Bearer new-access',
-    ]);
-    expect((await storage.readTokens())?.refreshToken, 'rotated-refresh');
-  });
+      expect(response.data, 'Curitalk');
+      expect(sessionProvider.refreshCount, 1);
+      expect(authorizationHeaders, <String?>[
+        'Bearer expired-access',
+        'Bearer new-access',
+      ]);
+    },
+  );
 
-  test('concurrent 401 responses share one refresh request', () async {
-    final _MemoryTokenStorage storage = _MemoryTokenStorage.withTokens(
-      const AuthTokens(
+  test(
+    'concurrent 401 responses share one Supabase refresh operation',
+    () async {
+      final _FakeSessionProvider sessionProvider = _FakeSessionProvider(
         accessToken: 'expired-access',
-        refreshToken: 'refresh-token',
-      ),
-      deviceId: 'installation-id',
-    );
-    final Dio refreshDio = Dio(
-      BaseOptions(baseUrl: 'https://example.com/api/'),
-    );
-    final _CallbackHttpClientAdapter refreshAdapter =
-        _CallbackHttpClientAdapter((RequestOptions request) async {
-          await Future<void>.delayed(const Duration(milliseconds: 20));
+        refreshedAccessToken: 'new-access',
+        refreshDelay: const Duration(milliseconds: 20),
+      );
+      final ApiClient client = ApiClient.create(
+        tokenProvider: sessionProvider,
+        sessionRefreshProvider: sessionProvider,
+        baseUrl: 'https://example.com/api/',
+      );
+      client.dio.httpClientAdapter = _CallbackHttpClientAdapter((
+        RequestOptions request,
+      ) {
+        if (request.headers['Authorization'] == 'Bearer expired-access') {
           return _jsonResponse(<String, dynamic>{
-            'success': true,
-            'data': <String, dynamic>{
-              'access_token': 'new-access',
-              'refresh_token': 'rotated-refresh',
-            },
-          });
-        });
-    refreshDio.httpClientAdapter = refreshAdapter;
-    final ApiClient client = ApiClient.create(
-      tokenStorage: storage,
-      baseUrl: 'https://example.com/api/',
-      refreshDio: refreshDio,
-    );
-    client.dio.httpClientAdapter = _CallbackHttpClientAdapter((
-      RequestOptions request,
-    ) {
-      if (request.headers['Authorization'] == 'Bearer expired-access') {
-        return _jsonResponse(<String, dynamic>{
-          'detail': 'Expired token',
-        }, statusCode: 401);
-      }
-      return _jsonResponse(<String, dynamic>{'success': true, 'data': true});
-    });
-    addTearDown(client.close);
+            'detail': 'Expired token',
+          }, statusCode: 401);
+        }
+        return _jsonResponse(<String, dynamic>{'success': true, 'data': true});
+      });
+      addTearDown(client.close);
 
-    final List<ApiResponse<bool>> responses = await Future.wait(
-      <Future<ApiResponse<bool>>>[
+      final List<ApiResponse<bool>>
+      responses = await Future.wait(<Future<ApiResponse<bool>>>[
         client.get<bool>('conversations', decodeData: (json) => json! as bool),
         client.get<bool>('grammar/stats', decodeData: (json) => json! as bool),
-      ],
-    );
+      ]);
 
-    expect(responses.map((response) => response.data), everyElement(isTrue));
-    expect(refreshAdapter.requestCount, 1);
-  });
+      expect(responses.map((response) => response.data), everyElement(isTrue));
+      expect(sessionProvider.refreshCount, 1);
+    },
+  );
 
-  test('failed refresh clears tokens and expires the session', () async {
-    final _MemoryTokenStorage storage = _MemoryTokenStorage.withTokens(
-      const AuthTokens(
-        accessToken: 'expired-access',
-        refreshToken: 'invalid-refresh',
-      ),
-      deviceId: 'installation-id',
+  test('failed Supabase refresh expires the session', () async {
+    final _FakeSessionProvider sessionProvider = _FakeSessionProvider(
+      accessToken: 'expired-access',
     );
-    final Dio refreshDio = Dio(
-      BaseOptions(baseUrl: 'https://example.com/api/'),
-    );
-    final _CallbackHttpClientAdapter refreshAdapter =
-        _CallbackHttpClientAdapter((RequestOptions request) {
-          return _jsonResponse(<String, dynamic>{
-            'detail': 'Invalid refresh token',
-          }, statusCode: 401);
-        });
-    refreshDio.httpClientAdapter = refreshAdapter;
     int expirationCount = 0;
     final AuthSessionCoordinator sessionCoordinator = AuthSessionCoordinator()
       ..addExpirationListener(() => expirationCount += 1);
     final ApiClient client = ApiClient.create(
-      tokenStorage: storage,
+      tokenProvider: sessionProvider,
+      sessionRefreshProvider: sessionProvider,
       baseUrl: 'https://example.com/api/',
-      refreshDio: refreshDio,
       sessionCoordinator: sessionCoordinator,
     );
     client.dio.httpClientAdapter = _FakeHttpClientAdapter(
@@ -286,112 +250,8 @@ void main() {
       throwsA(isA<ApiException>()),
     );
 
-    expect(await storage.readTokens(), isNull);
-    expect(storage.clearCount, 1);
+    expect(sessionProvider.expireCount, 1);
     expect(expirationCount, 1);
-    expect(refreshAdapter.requestCount, 1);
-  });
-
-  test('temporary refresh failure preserves the local session', () async {
-    final _MemoryTokenStorage storage = _MemoryTokenStorage.withTokens(
-      const AuthTokens(
-        accessToken: 'expired-access',
-        refreshToken: 'refresh-token',
-      ),
-      deviceId: 'installation-id',
-    );
-    final Dio refreshDio = Dio(
-      BaseOptions(baseUrl: 'https://example.com/api/'),
-    );
-    refreshDio.httpClientAdapter = _CallbackHttpClientAdapter((
-      RequestOptions request,
-    ) {
-      throw DioException.connectionError(
-        requestOptions: request,
-        reason: 'offline',
-      );
-    });
-    int expirationCount = 0;
-    final AuthSessionCoordinator sessionCoordinator = AuthSessionCoordinator()
-      ..addExpirationListener(() => expirationCount += 1);
-    final ApiClient client = ApiClient.create(
-      tokenStorage: storage,
-      baseUrl: 'https://example.com/api/',
-      refreshDio: refreshDio,
-      sessionCoordinator: sessionCoordinator,
-    );
-    client.dio.httpClientAdapter = _FakeHttpClientAdapter(
-      statusCode: 401,
-      response: <String, dynamic>{'detail': 'Expired token'},
-    );
-    addTearDown(client.close);
-
-    await expectLater(
-      client.get<void>('auth/me', decodeData: (_) {}),
-      throwsA(
-        isA<ApiException>().having(
-          (ApiException error) => error.kind,
-          'kind',
-          ApiErrorKind.network,
-        ),
-      ),
-    );
-
-    expect(await storage.readTokens(), isNotNull);
-    expect(storage.clearCount, 0);
-    expect(expirationCount, 0);
-  });
-
-  test('stale refresh cannot restore tokens after logout', () async {
-    final _MemoryTokenStorage storage = _MemoryTokenStorage.withTokens(
-      const AuthTokens(
-        accessToken: 'expired-access',
-        refreshToken: 'refresh-token',
-      ),
-      deviceId: 'installation-id',
-    );
-    final AuthSessionCoordinator sessionCoordinator = AuthSessionCoordinator();
-    final Completer<void> refreshStarted = Completer<void>();
-    final Completer<void> finishRefresh = Completer<void>();
-    final Dio refreshDio = Dio(
-      BaseOptions(baseUrl: 'https://example.com/api/'),
-    );
-    refreshDio.httpClientAdapter = _CallbackHttpClientAdapter((
-      RequestOptions request,
-    ) async {
-      refreshStarted.complete();
-      await finishRefresh.future;
-      return _jsonResponse(<String, dynamic>{
-        'success': true,
-        'data': <String, dynamic>{
-          'access_token': 'stale-access',
-          'refresh_token': 'stale-refresh',
-        },
-      });
-    });
-    final ApiClient client = ApiClient.create(
-      tokenStorage: storage,
-      baseUrl: 'https://example.com/api/',
-      refreshDio: refreshDio,
-      sessionCoordinator: sessionCoordinator,
-    );
-    client.dio.httpClientAdapter = _FakeHttpClientAdapter(
-      statusCode: 401,
-      response: <String, dynamic>{'detail': 'Expired token'},
-    );
-    addTearDown(client.close);
-
-    final Future<ApiResponse<void>> request = client.get<void>(
-      'auth/me',
-      decodeData: (_) {},
-    );
-    await refreshStarted.future;
-    sessionCoordinator.deactivateSession();
-    await storage.clearTokens();
-    finishRefresh.complete();
-
-    await expectLater(request, throwsA(isA<ApiException>()));
-    expect(await storage.readTokens(), isNull);
   });
 }
 
@@ -412,7 +272,6 @@ class _CallbackHttpClientAdapter implements HttpClientAdapter {
   _CallbackHttpClientAdapter(this.handler);
 
   final _RequestHandler handler;
-  int requestCount = 0;
   RequestOptions? lastRequest;
 
   @override
@@ -421,7 +280,6 @@ class _CallbackHttpClientAdapter implements HttpClientAdapter {
     Stream<Uint8List>? requestStream,
     Future<void>? cancelFuture,
   ) async {
-    requestCount += 1;
     lastRequest = options;
     return handler(options);
   }
@@ -432,7 +290,7 @@ class _CallbackHttpClientAdapter implements HttpClientAdapter {
 
 class _FakeHttpClientAdapter implements HttpClientAdapter {
   _FakeHttpClientAdapter({
-    this.response = const <String, dynamic>{},
+    required this.response,
     this.statusCode = 200,
     this.connectionFails = false,
   });
@@ -455,53 +313,62 @@ class _FakeHttpClientAdapter implements HttpClientAdapter {
         reason: 'offline',
       );
     }
-    return ResponseBody.fromString(
-      jsonEncode(response),
-      statusCode,
-      headers: <String, List<String>>{
-        Headers.contentTypeHeader: <String>[Headers.jsonContentType],
-      },
-    );
+    return _jsonResponse(response, statusCode: statusCode);
   }
 
   @override
   void close({bool force = false}) {}
 }
 
-class _MemoryTokenStorage implements TokenStorage {
-  _MemoryTokenStorage(String? accessToken)
-    : tokens = accessToken == null
-          ? null
-          : AuthTokens(accessToken: accessToken, refreshToken: 'refresh-token');
+class _FakeSessionProvider implements SupabaseAuthService {
+  _FakeSessionProvider({
+    required this.accessToken,
+    this.refreshedAccessToken,
+    this.refreshDelay = Duration.zero,
+  });
 
-  _MemoryTokenStorage.withTokens(this.tokens, {this.deviceId});
-
-  AuthTokens? tokens;
-  String? deviceId;
-  int clearCount = 0;
+  String? accessToken;
+  final String? refreshedAccessToken;
+  final Duration refreshDelay;
+  int refreshCount = 0;
+  int expireCount = 0;
 
   @override
-  Future<void> clearTokens() async {
-    clearCount += 1;
-    tokens = null;
+  Stream<SupabaseSessionChange> get authStateChanges =>
+      const Stream<SupabaseSessionChange>.empty();
+
+  @override
+  Future<void> expireSession() async {
+    expireCount += 1;
+    accessToken = null;
   }
 
   @override
-  Future<String?> readAccessToken() async => tokens?.accessToken;
+  Future<bool> hasCurrentSession() async => accessToken != null;
 
   @override
-  Future<String?> readDeviceId() async => deviceId;
+  Future<String?> readAccessToken() async => accessToken;
 
   @override
-  Future<AuthTokens?> readTokens() async => tokens;
-
-  @override
-  Future<void> writeDeviceId(String deviceId) async {
-    this.deviceId = deviceId;
+  Future<String?> refreshAccessToken({
+    required String? previousAccessToken,
+  }) async {
+    refreshCount += 1;
+    if (refreshDelay > Duration.zero) {
+      await Future<void>.delayed(refreshDelay);
+    }
+    accessToken = refreshedAccessToken;
+    return accessToken;
   }
 
   @override
-  Future<void> writeTokens(AuthTokens tokens) async {
-    this.tokens = tokens;
+  Future<void> signInWithGoogleTokens({
+    required String idToken,
+    required String accessToken,
+  }) async {
+    this.accessToken = accessToken;
   }
+
+  @override
+  Future<void> signOut() => expireSession();
 }
