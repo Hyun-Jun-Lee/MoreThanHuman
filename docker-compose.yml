@@ -38,33 +38,6 @@ services:
       - ./deploy/nginx/conf.d:/etc/nginx/conf.d:ro
       - ./deploy/nginx/snippets:/etc/nginx/snippets:ro
       - ./deploy/nginx/auth:/etc/nginx/auth:ro
-      - ./deploy/certbot/www:/var/www/certbot:ro
-      - ./deploy/certbot/conf:/etc/letsencrypt:ro
+      - /var/www/certbot:/var/www/certbot:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
     restart: unless-stopped
-
-  certbot:
-    image: certbot/certbot:v2.11.0
-    profiles:
-      - certbot
-    entrypoint: /bin/sh
-    command: >
-      -c 'certbot certonly --webroot --webroot-path=/var/www/certbot
-      --email "$$CERTBOT_EMAIL" --agree-tos --no-eff-email
-      -d "$$CERTBOT_DOMAIN"'
-    environment:
-      CERTBOT_DOMAIN: ${CERTBOT_DOMAIN:-api.curitalk.app}
-      CERTBOT_EMAIL: ${CERTBOT_EMAIL:-}
-    volumes:
-      - ./deploy/certbot/www:/var/www/certbot
-      - ./deploy/certbot/conf:/etc/letsencrypt
-
-  certbot-renew:
-    image: certbot/certbot:v2.11.0
-    profiles:
-      - certbot
-    entrypoint: /bin/sh
-    command: >
-      -c 'certbot renew --webroot --webroot-path=/var/www/certbot'
-    volumes:
-      - ./deploy/certbot/www:/var/www/certbot
-      - ./deploy/certbot/conf:/etc/letsencrypt

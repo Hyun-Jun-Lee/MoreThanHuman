@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
 set -eu
 
-docker compose --profile certbot run --rm certbot-renew
+sudo certbot renew --webroot --webroot-path=/var/www/certbot
 docker compose exec nginx nginx -s reload
