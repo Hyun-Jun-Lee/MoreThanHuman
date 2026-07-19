@@ -56,6 +56,7 @@ uv.lock
 # Project specific
 web_example.html
 explan_diff_htmls/
+deploy/nginx/auth/docs.htpasswd
 
 # Seed artifacts
 .agent/_questions/open/*.draft.md
