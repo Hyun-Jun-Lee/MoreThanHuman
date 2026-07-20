@@ -4,6 +4,8 @@ import 'package:curitalk/app/theme/app_theme.dart';
 import 'package:curitalk/core/storage/storage.dart';
 import 'package:curitalk/features/auth/auth.dart';
 import 'package:curitalk/features/home/home.dart';
+import 'package:curitalk/features/language/language.dart';
+import 'package:curitalk/features/onboarding/onboarding.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -165,6 +167,10 @@ Widget _homeApp({
       authRepositoryProvider.overrideWithValue(
         authRepository ?? _FakeAuthRepository(),
       ),
+      onboardingStorageProvider.overrideWithValue(_FakeOnboardingStorage()),
+      languagePreferencesRepositoryProvider.overrideWithValue(
+        _FakeLanguagePreferencesRepository(),
+      ),
       googleIdentityServiceProvider.overrideWithValue(
         googleIdentityService ?? _FakeGoogleIdentityService(),
       ),
@@ -209,6 +215,48 @@ class _FakeGoogleIdentityService implements GoogleIdentityService {
 class _FakeAuthRepository implements AuthRepository {
   @override
   Future<UserProfile> getCurrentUser() async => _user;
+}
+
+class _FakeOnboardingStorage implements OnboardingStorage {
+  LearningLanguageContext? pendingLanguage;
+
+  @override
+  Future<void> clearPendingLanguageContext() async {
+    pendingLanguage = null;
+  }
+
+  @override
+  Future<bool> isCompleted() async => true;
+
+  @override
+  Future<void> markCompleted() async {}
+
+  @override
+  Future<LearningLanguageContext?> readPendingLanguageContext() async {
+    return pendingLanguage;
+  }
+
+  @override
+  Future<void> writePendingLanguageContext(
+    LearningLanguageContext context,
+  ) async {
+    pendingLanguage = context;
+  }
+}
+
+class _FakeLanguagePreferencesRepository
+    implements LanguagePreferencesRepository {
+  @override
+  Future<LearningLanguageContext> getLanguagePreferences() async {
+    return LearningLanguageContext.defaultContext;
+  }
+
+  @override
+  Future<LearningLanguageContext> updateLanguagePreferences(
+    LearningLanguageContext context,
+  ) async {
+    return context;
+  }
 }
 
 class _FakeSupabaseAuthService implements SupabaseAuthService {

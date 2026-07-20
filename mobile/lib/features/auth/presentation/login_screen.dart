@@ -71,7 +71,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             Text('CURITALK', style: AppTypography.headlineMd),
             const SizedBox(height: AppSpacing.xxl),
             Text(
-              'Practice English with your own topics.',
+              'Practice conversation with your own topics.',
               style: AppTypography.displayLg,
             ),
             const SizedBox(height: AppSpacing.lg),
