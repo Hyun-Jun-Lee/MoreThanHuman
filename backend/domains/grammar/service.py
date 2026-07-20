@@ -12,6 +12,7 @@ from domains.grammar.schemas import GrammarAnalysis, GrammarFeedback, GrammarSta
 from domains.llm.factory import LLMProviderFactory
 from domains.llm.schemas import LLMMessage, LLMRequest
 from shared.exceptions import ExternalAPIException, NotFoundException, RateLimitException
+from shared.language import LearningLanguageContext, ensure_language_context, language_name
 
 settings = get_settings()
 
@@ -34,7 +35,12 @@ class GrammarService:
         self.repository = repository
         self.message_ownership_repository = message_ownership_repository
 
-    async def check_grammar(self, text: str, previous_ai_message: str | None = None) -> GrammarFeedback:
+    async def check_grammar(
+        self,
+        text: str,
+        previous_ai_message: str | None = None,
+        language_context: LearningLanguageContext | None = None,
+    ) -> GrammarFeedback:
         """
         문법 체크
 
@@ -46,7 +52,8 @@ class GrammarService:
             문법 피드백
         """
         # LLM을 통한 문법 분석
-        analysis = await self.analyze_grammar(text, previous_ai_message)
+        language_context = ensure_language_context(language_context)
+        analysis = await self.analyze_grammar(text, previous_ai_message, language_context=language_context)
 
         return GrammarFeedback(
             id=str(uuid4()),
@@ -99,7 +106,12 @@ class GrammarService:
         feedback = self.repository.find_by_message_id(message_id)
         return GrammarFeedback.model_validate(feedback)
 
-    async def analyze_grammar(self, text: str, previous_ai_message: str | None = None) -> GrammarAnalysis:
+    async def analyze_grammar(
+        self,
+        text: str,
+        previous_ai_message: str | None = None,
+        language_context: LearningLanguageContext | None = None,
+    ) -> GrammarAnalysis:
         """
         LLM을 사용한 문법 분석
 
@@ -121,7 +133,8 @@ class GrammarService:
         provider = LLMProviderFactory.create_provider(grammar_provider)
 
         # Build prompt
-        prompt = self.build_grammar_prompt(text, previous_ai_message)
+        language_context = ensure_language_context(language_context)
+        prompt = self.build_grammar_prompt(text, previous_ai_message, language_context=language_context)
 
         # Create request with grammar-specific model (최적화: 토큰 절반, 온도 낮춤)
         request = LLMRequest(
@@ -135,7 +148,12 @@ class GrammarService:
         response = await provider.chat_completion(request)
         return self.parse_grammar_response(response.content)
 
-    def build_grammar_prompt(self, text: str, previous_ai_message: str | None = None) -> str:
+    def build_grammar_prompt(
+        self,
+        text: str,
+        previous_ai_message: str | None = None,
+        language_context: LearningLanguageContext | None = None,
+    ) -> str:
         """
         문법 체크용 프롬프트 생성
 
@@ -146,13 +164,51 @@ class GrammarService:
         Returns:
             프롬프트
         """
+        language_context = ensure_language_context(language_context)
+        target_name = language_name(language_context.target_language)
+        feedback_name = language_name(language_context.feedback_language)
         context_part = ""
         if previous_ai_message:
             context_part = f"""
 Context (previous AI message): "{previous_ai_message}"
 
 IMPORTANT: Consider the conversation context when analyzing.
+"""
 
+        if language_context.target_language.value == "ko":
+            return f"""Analyze the following Korean response for grammar and naturalness issues.
+{context_part}
+User's response: "{text}"
+
+CRITICAL CORRECTION RULES:
+1. The corrected sentence must stay in Korean and preserve the user's intent.
+2. Check Korean-specific issues:
+   - particles such as 은/는, 이/가, 을/를, 에/에서
+   - verb endings and tense/aspect markers
+   - spacing and spelling
+   - honorific and formality fit
+   - naturalness in the conversation context
+3. Do not apply English grammar rules such as subject-verb agreement to Korean.
+4. Explain issues in {feedback_name}.
+
+Respond in JSON format:
+{{
+  "has_errors": true/false,
+  "corrected_sentence": "fully corrected, natural Korean sentence",
+  "errors": [
+    {{
+      "original": "incorrect part",
+      "corrected": "correct part",
+      "explanation": "brief explanation in {feedback_name}"
+    }}
+  ]
+}}
+
+If there are no errors, return has_errors: false and an empty errors array.
+Keep explanations concise and helpful."""
+
+        return f"""Analyze the following {target_name} response for grammar errors.
+{context_part}
 NATURAL CONVERSATIONAL RESPONSES (Do NOT mark as errors):
 - Short responses like "Went to the park" are natural replies to questions like "What did you do?"
 - Elliptical answers that omit subjects/verbs when context is clear
@@ -178,10 +234,6 @@ MUST CHECK FOR THESE ERRORS:
 3. Examples of contextual errors:
    - AI: "What did you do yesterday?" → User: "I will go shopping" ❌ (should be "I went shopping")
    - AI: "Where did you go?" → User: "I enjoyed it" ❌ (doesn't answer the location question)
-"""
-
-        return f"""Analyze the following English response for grammar errors.
-{context_part}
 User's response: "{text}"
 
 CRITICAL CORRECTION RULES:
@@ -204,7 +256,7 @@ Respond in JSON format:
     {{
       "original": "incorrect part",
       "corrected": "correct part",
-      "explanation": "brief explanation"
+      "explanation": "brief explanation in {feedback_name}"
     }}
   ]
 }}

@@ -34,6 +34,7 @@ from domains.conversation.schemas import (
 from domains.conversation.service import ConversationService
 from domains.voice.schemas import VoiceAudioError, VoiceAudioResponse
 from domains.voice.service import VoiceService
+from shared.language import ensure_language_context
 from shared.exceptions import (
     AppException,
     ExternalAPIException,
@@ -313,6 +314,7 @@ async def start_free_chat_conversation(
                 else None
             ),
             selected_question=request.selected_question,
+            language_context=ensure_language_context(getattr(current_user, "language", None)),
         )
         audio, audio_error = await _synthesize_optional_audio(
             include_audio_response=include_audio_response,
@@ -357,6 +359,7 @@ async def start_roleplay_conversation(
             request.role_character,
             request.search_context,
             user_id=current_user.id,
+            language_context=ensure_language_context(getattr(current_user, "language", None)),
         )
         return SuccessResponse(data=response, message="롤플레이 대화가 시작되었습니다")
     except RateLimitException as e:

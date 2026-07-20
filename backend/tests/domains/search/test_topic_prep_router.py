@@ -13,12 +13,20 @@ from domains.search.schemas import (
     TopicPrepQuality,
     TopicPrepResult,
 )
+from shared.language import LearningLanguageContext
 
 
 def _app_with_overrides(service) -> FastAPI:
     app = FastAPI()
     app.include_router(router)
-    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id="user-1")
+    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(
+        id="user-1",
+        language=LearningLanguageContext(
+            native_language="zh",
+            target_language="ko",
+            feedback_language="zh",
+        ),
+    )
     app.dependency_overrides[get_search_service] = lambda: service
     return app
 
@@ -53,7 +61,8 @@ def _ready_result(topic: str) -> TopicPrepResult:
 
 def test_prepare_topic_endpoint_returns_card_for_authenticated_user():
     class FakeService:
-        async def prepare_topic(self, topic: str) -> TopicPrepResult:
+        async def prepare_topic(self, topic: str, language_context=None) -> TopicPrepResult:
+            assert language_context.target_language.value == "ko"
             return _ready_result(topic)
 
     client = TestClient(_app_with_overrides(FakeService()))
@@ -70,7 +79,7 @@ def test_prepare_topic_endpoint_returns_card_for_authenticated_user():
 
 def test_prepare_topic_endpoint_returns_retry_guidance_for_low_quality_topic():
     class FakeService:
-        async def prepare_topic(self, _topic: str) -> TopicPrepResult:
+        async def prepare_topic(self, _topic: str, language_context=None) -> TopicPrepResult:
             quality = TopicPrepQuality(
                 is_sufficient=False,
                 source_count=1,

@@ -84,3 +84,16 @@ def language_context_to_dict(context: LearningLanguageContext) -> dict[str, str]
         "target_language": context.target_language.value,
         "feedback_language": context.feedback_language.value,
     }
+
+
+def language_name(language: LanguageCode | str) -> str:
+    """프롬프트에 넣을 안정적인 영어 언어명"""
+    code = language if isinstance(language, LanguageCode) else LanguageCode(language)
+    return LANGUAGE_NAMES[code]
+
+
+def ensure_language_context(
+    context: LearningLanguageContext | None,
+) -> LearningLanguageContext:
+    """None을 기본 학습 컨텍스트로 보정"""
+    return context or DEFAULT_LANGUAGE_CONTEXT
