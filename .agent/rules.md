@@ -30,9 +30,9 @@
 
 ### Mobile Client
 
-- 향후 사용자 앱은 Flutter 기반 모바일 앱으로 별도 개발
-- 이 저장소의 문서 기준 범위는 FastAPI 백엔드 API
-- 새 클라이언트 문서는 모바일 앱 요구사항/API 계약 중심으로 작성
+- 사용자 앱은 `mobile/`의 Flutter 기반 iOS·Android 앱으로 개발
+- 모바일 코드는 feature-first 구조를 기본으로 사용
+- 클라이언트 문서는 모바일 앱 요구사항, UX flow, API 계약 중심으로 작성
 
 ### 공통
 

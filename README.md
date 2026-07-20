@@ -1,8 +1,8 @@
-# MoreThanHuman Backend API
+# MoreThanHuman
 
-AI 기반 영어 회화 학습 플랫폼 Convia의 FastAPI 백엔드예요.
+AI 기반 영어 회화 학습 플랫폼의 FastAPI 백엔드와 Curitalk Flutter 모바일 앱을 함께 관리해요.
 
-현재 저장소의 기준 범위는 백엔드 API예요. 사용자-facing 클라이언트는 향후 Flutter 기반 모바일 앱으로 별도 개발할 예정이에요.
+백엔드는 `backend/`, iOS·Android 모바일 앱은 `mobile/`에 있어요.
 
 ## 빠른 시작
 
@@ -19,9 +19,11 @@ cp .env.example .env
 | `LLM_PROVIDER` | `openrouter` 또는 `ollama` |
 | `OPENROUTER_API_KEY` | OpenRouter API 키 |
 | `OPENROUTER_MODEL` | OpenRouter 모델명 |
+| `OPENAI_API_KEY` | STT/TTS 음성 기능을 사용할 때 필요한 OpenAI API 키 |
 | `OLLAMA_BASE_URL` | Ollama 서버 URL |
 | `OLLAMA_MODEL` | Ollama 모델명 |
-| `JWT_SECRET_KEY` | JWT 서명 secret |
+| `SUPABASE_URL` | Supabase project URL |
+| `SUPABASE_PUBLISHABLE_KEY` | Supabase Auth 토큰 검증에 사용하는 publishable key |
 
 ### 2. 의존성 설치
 
@@ -54,6 +56,13 @@ DATABASE_URL=sqlite:///./english_learning.db
 DATABASE_URL=postgresql://user:password@localhost:5432/english_learning
 ```
 
+스키마 변경은 Alembic이 관리해요.
+
+```bash
+cd backend
+uv run alembic upgrade head
+```
+
 ### 4. 서버 실행
 
 ```bash
@@ -76,21 +85,33 @@ uv run uvicorn main:app --reload --port 8010
 | `http://localhost:8010/redoc` | ReDoc |
 | `http://localhost:8010/health` | 헬스 체크 |
 
+### 5. 모바일 앱 확인
+
+```bash
+cd mobile
+flutter pub get
+flutter analyze
+flutter test
+```
+
+실제 iOS·Android 실행에는 Xcode 또는 Android SDK 설정이 추가로 필요해요.
+
 ## 프로젝트 구조
 
 ```text
-backend/
-├── main.py                 # FastAPI 앱 초기화 및 라우터 등록
-├── config.py               # 환경 설정
-├── database.py             # SQLAlchemy DB 연결 및 세션 관리
-├── shared/                 # 공통 타입, 예외, 유틸리티
-└── domains/
-    ├── auth/               # 회원가입, 로그인, JWT, Google OAuth
-    ├── conversation/       # 대화 관리
-    ├── grammar/            # 문법 체크 및 통계
-    ├── llm/                # OpenRouter/Ollama 추상화
-    ├── search/             # DuckDuckGo 검색 + LLM 요약
-    └── web/                # 서버 렌더링 HTML 라우트
+MoreThanHuman/
+├── backend/
+│   ├── main.py             # FastAPI 앱 초기화 및 라우터 등록
+│   ├── config.py           # 환경 설정
+│   ├── database.py         # SQLAlchemy DB 연결 및 세션 관리
+│   ├── shared/             # 공통 타입, 예외, 유틸리티
+│   └── domains/            # auth, conversation, grammar, llm, search, web
+└── mobile/
+    ├── android/            # Android runner
+    ├── ios/                # iOS runner
+    ├── lib/                # Flutter 애플리케이션 코드
+    ├── test/               # Flutter 테스트
+    └── pubspec.yaml        # Dart/Flutter 의존성
 ```
 
 ## API 공통 규칙
@@ -125,122 +146,33 @@ Authorization: Bearer <access_token>
 
 ## Auth API
 
-### 토큰/세션 정책(모바일 기준)
+### 세션 정책(모바일 기준)
 
-- `access_token`: JWT (현재 24시간 TTL 유지)
-- `refresh_token`: opaque 랜덤 문자열(15일 TTL), **refresh 시 rotate**
-- `device_id`: “기기 ID”가 아니라 **설치(installation) ID**예요(Flutter에서 UUIDv4 생성 후 secure storage에 저장)
-- 기기당 세션: `(user_id, device_id)` 조합 기준으로 활성 refresh token은 **1개만 허용**해요
-- refresh 401 처리(권장): refresh 1회 재시도 후에도 실패하면 재로그인 유도
+- Supabase Auth가 Google 로그인, access token, refresh를 관리해요.
+- Flutter 앱은 Google Sign-In SDK로 `id_token`과 Google `access_token`을 받은 뒤 `supabase.auth.signInWithIdToken(provider: google)`로 Supabase 세션을 만들어요.
+- FastAPI는 `Authorization: Bearer <supabase_access_token>`만 검증하고 자체 access/refresh token pair를 발급하지 않아요.
+- `401`이 발생하면 Flutter의 Supabase SDK가 세션을 refresh하고 Dio가 원 요청을 한 번만 재시도해요.
+- 앱 소유 프로필 데이터는 `profiles.id = Supabase auth.users.id` 기준으로 저장해요.
 
-### `POST /api/auth/register`
+### Swagger 사용 순서
 
-이메일+비밀번호로 회원가입하고 JWT를 발급해요.
-
-```json
-{
-  "email": "user@example.com",
-  "password": "password",
-  "name": "User",
-  "device_id": "550e8400-e29b-41d4-a716-446655440000"
-}
-```
-
-### `POST /api/auth/login`
-
-이메일+비밀번호로 로그인해 JWT를 발급해요.
-
-```json
-{
-  "email": "user@example.com",
-  "password": "password",
-  "device_id": "550e8400-e29b-41d4-a716-446655440000"
-}
-```
-
-### `POST /api/auth/dev/token`
-
-Swagger/local 테스트용 JWT를 발급해요. `ENV=dev`일 때만 사용할 수 있고, 운영 환경에서는 `403`을 반환해요.
-
-요청 body는 모두 선택값이에요. 비워 보내면 Swagger 테스트용 기본 계정을 만들거나 재사용해요.
-
-```json
-{
-  "email": "swagger-test@example.com",
-  "name": "Swagger Test User",
-  "device_id": "swagger-local"
-}
-```
-
-Swagger 사용 순서:
-
-1. `POST /api/auth/dev/token` 실행
-2. 응답의 `data.access_token` 복사
-3. Swagger 우측 상단 `Authorize`에 토큰 입력
-4. `/api/search/`, `/api/search/topic-prep/` 같은 인증 API 호출
-
-### `POST /api/auth/refresh`
-
-refresh token으로 access token을 재발급해요. 성공 시 refresh token도 rotate돼요.
-
-```json
-{
-  "refresh_token": "opaque_refresh_token",
-  "device_id": "550e8400-e29b-41d4-a716-446655440000"
-}
-```
-
-### `POST /api/auth/logout`
-
-refresh token을 revoke(로그아웃)해요.
-
-```json
-{
-  "refresh_token": "opaque_refresh_token",
-  "device_id": "550e8400-e29b-41d4-a716-446655440000"
-}
-```
-
-### `POST /api/auth/google/mobile`
-
-Flutter Google Sign-In SDK에서 받은 `id_token`으로 로그인해 JWT를 발급해요. 서버는 `GOOGLE_CLIENT_ID`를 audience로 사용해 Google `id_token`을 검증해요.
-
-```json
-{
-  "id_token": "google_id_token_from_flutter_sdk",
-  "device_id": "550e8400-e29b-41d4-a716-446655440000"
-}
-```
-
-성공 시 `TokenResponse`를 반환해요. 같은 Google 계정으로 이미 생성된 사용자는 재사용하고, 같은 이메일의 비밀번호 계정이 이미 있으면 자동 연결하지 않고 `409`를 반환해요.
-
-### `GET /api/auth/google/login?device_id=...`
-
-Google OAuth2 로그인 URL을 반환해요. Swagger/웹 확인용 서버 callback OAuth 흐름이에요.
-
-### `GET /api/auth/google/callback?code=...&state=...`
-
-Google OAuth2 callback code로 JWT를 발급해요. Swagger/웹 확인용 서버 callback OAuth 흐름이에요.
-
-### 모바일 Google OAuth 방향
-
-Flutter 모바일 앱은 서버 callback JSON 응답보다 Google Sign-In SDK 기반 로그인을 우선해요. 앱이 Google SDK로 `id_token`을 받은 뒤, 서버의 모바일용 Google 로그인 API가 해당 토큰을 검증하고 자체 `access_token`/`refresh_token`을 발급하는 구조예요.
+1. 모바일 앱 또는 Supabase Auth tooling에서 로그인된 사용자의 Supabase `access_token`을 복사해요.
+2. Swagger 우측 상단 `Authorize`에 `Bearer <supabase_access_token>` 형식으로 입력해요.
+3. `/api/search/`, `/api/search/topic-prep/`, `/api/conversations/` 같은 인증 API를 호출해요.
+4. 만료되었거나 다른 Supabase project의 token이면 FastAPI가 `401`을 반환해요.
 
 ```text
 Flutter App
 → Google Sign-In SDK로 로그인
-→ Google id_token 획득
-→ POST /api/auth/google/mobile
-   { "id_token": "...", "device_id": "<installation UUID>" }
-→ 서버가 Google id_token 검증
-→ TokenResponse 반환
+→ Google id_token + access_token 획득
+→ Supabase signInWithIdToken
+→ Supabase access_token 획득
+→ FastAPI API 호출 시 Authorization 헤더 사용
 ```
-
-기존 `/api/auth/google/login`과 `/api/auth/google/callback` 흐름은 Swagger/웹 확인용으로 유지할 수 있지만, 모바일 앱의 기본 흐름은 SDK 기반 token verification 방식이에요.
 
 ### `GET /api/auth/me`
 
-현재 사용자 프로필을 반환해요. 인증이 필요해요.
+Supabase access token으로 검증된 현재 사용자 프로필을 반환해요. 프로필이 없으면 Supabase claim을 기준으로 `profiles` row를 생성하거나 갱신해요. 인증이 필요해요.
 
 ## Conversation API
 
@@ -248,7 +180,7 @@ Flutter App
 
 ### `POST /api/conversations/start/free-chat/`
 
-자유 대화를 시작해요.
+자유 대화를 시작해요. JSON 텍스트 요청과 multipart 음성 요청을 모두 지원해요.
 
 ```json
 {
@@ -258,6 +190,16 @@ Flutter App
   "conversation_direction": null,
   "selected_question": null
 }
+```
+
+음성으로 시작하는 경우:
+
+```http
+POST /api/conversations/start/free-chat/
+Content-Type: multipart/form-data
+
+audio_file=<recording.webm>
+include_audio_response=true
 ```
 
 주제 준비 카드에서 시작하는 경우:
@@ -282,11 +224,59 @@ Flutter App
 
 ### `POST /api/conversations/{conversation_id}/message/`
 
-진행 중인 대화에 메시지를 전송해요.
+진행 중인 대화에 텍스트 메시지를 전송해요. 기존 텍스트 전용 API이며, 새 채팅 composer는 아래 `/turn/` API를 사용하면 텍스트와 음성을 한 경로로 처리할 수 있어요.
 
 ```json
 {
   "message": "I want to order a latte."
+}
+```
+
+### `POST /api/conversations/{conversation_id}/turn/`
+
+진행 중인 대화에 텍스트 또는 음성 파일을 전송해요. `text`와 `audio_file` 중 정확히 하나만 보내야 해요.
+
+텍스트 이어 말하기:
+
+```http
+POST /api/conversations/{conversation_id}/turn/
+Content-Type: application/json
+
+{
+  "text": "I want to order a latte.",
+  "include_audio_response": true
+}
+```
+
+음성 이어 말하기:
+
+```http
+POST /api/conversations/{conversation_id}/turn/
+Content-Type: multipart/form-data
+
+audio_file=<recording.webm>
+include_audio_response=true
+```
+
+응답은 공통 envelope 안에 사용자 입력으로 확정된 `transcript`, AI 텍스트 `response`, 선택적 TTS `audio`, TTS 실패 시 `audio_error`를 포함해요.
+
+```json
+{
+  "success": true,
+  "data": {
+    "message_id": "550e8400-e29b-41d4-a716-446655440000",
+    "response": "Sure. What size would you like?",
+    "grammar_feedback": null,
+    "turn_count": 2,
+    "input_mode": "audio",
+    "transcript": "I want to order a latte.",
+    "audio": {
+      "content_type": "audio/mpeg",
+      "base64": "...",
+      "format": "mp3"
+    },
+    "audio_error": null
+  }
 }
 ```
 
@@ -586,6 +576,7 @@ Query:
 |------|------|--------|------|
 | `DATABASE_URL` | 아니오 | `sqlite:///./english_learning.db` | DB 연결 문자열 |
 | `OPENROUTER_API_KEY` | 예 | 없음 | OpenRouter API 키 |
+| `OPENAI_API_KEY` | 음성 기능 사용 시 | 없음 | OpenAI STT/TTS API 키. Flutter 앱에는 노출하지 않음 |
 | `LLM_PROVIDER` | 아니오 | `openrouter` | 기본 LLM provider. `ollama`는 로컬 Ollama 서버를 의도적으로 사용할 때만 설정 |
 | `OLLAMA_BASE_URL` | Ollama 사용 시 | 없음 | Ollama 서버 URL |
 | `OPENROUTER_MODEL` | OpenRouter 사용 시 | 없음 | 대화용 OpenRouter 모델 |
@@ -593,18 +584,27 @@ Query:
 | `GRAMMAR_MODEL_PROVIDER` | 아니오 | `LLM_PROVIDER` | 문법 체크 전용 provider. 기본 권장은 `openrouter` |
 | `GRAMMAR_OPENROUTER_MODEL` | 아니오 | `OPENROUTER_MODEL` | 문법 체크 전용 OpenRouter 모델 |
 | `GRAMMAR_OLLAMA_MODEL` | 아니오 | `OLLAMA_MODEL` | 문법 체크 전용 Ollama 모델 |
-| `JWT_SECRET_KEY` | 예 | 없음 | JWT 서명 secret |
-| `JWT_ALGORITHM` | 아니오 | `HS256` | JWT 알고리즘 |
-| `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` | 아니오 | `1440` | access token 만료 시간 |
-| `JWT_REFRESH_TOKEN_EXPIRE_DAYS` | 아니오 | `15` | refresh token 만료 기간(일) |
-| `GOOGLE_CLIENT_ID` | Google OAuth 사용 시 | 없음 | Google OAuth client ID. 모바일 SDK `id_token` 검증의 audience로도 사용 |
-| `GOOGLE_CLIENT_SECRET` | 서버 callback OAuth 사용 시 | 없음 | 서버 callback 기반 Google OAuth client secret |
-| `GOOGLE_REDIRECT_URI` | 서버 callback OAuth 사용 시 | `http://localhost:8010/api/auth/google/callback` | 서버 callback 기반 Google OAuth callback |
+| `SUPABASE_URL` | 예 | 없음 | Supabase project URL |
+| `SUPABASE_PUBLISHABLE_KEY` | 예 | 없음 | Supabase Auth `/user` 검증에 사용하는 publishable key |
+| `SUPABASE_AUTH_VERIFY_MODE` | 아니오 | `remote` | FastAPI bearer token 검증 방식. 현재는 Supabase `/auth/v1/user` 검증 |
+| `SUPABASE_AUTH_TIMEOUT_SECONDS` | 아니오 | `5` | Supabase Auth 검증 요청 timeout |
+| `AUTO_CREATE_TABLES` | 아니오 | `false` | Alembic 대신 SQLAlchemy `create_all`을 실행할지 여부. 로컬 임시 실행 외에는 `false` 권장 |
+| `JWT_SECRET_KEY` | 레거시 도구 사용 시 | 없음 | 기존 로컬 JWT tooling을 임시 유지할 때만 사용 |
 | `ENV` | 아니오 | `prod` | 실행 환경. `dev`/`development`/`local`이면 개발 전용 API 활성화 |
 | `DEBUG` | 아니오 | `false` | 디버그 모드 |
 | `CORS_ORIGINS` | 아니오 | `[]` | CORS 허용 origin 목록 |
 | `MAX_TOKENS` | 아니오 | `4000` | LLM 최대 토큰 |
 | `TEMPERATURE` | 아니오 | `0.7` | LLM temperature |
+| `STT_PROVIDER` | 아니오 | `openai` | STT provider |
+| `STT_MODEL` | 아니오 | `gpt-4o-mini-transcribe` | 음성 파일을 텍스트로 변환할 STT 모델 |
+| `TTS_PROVIDER` | 아니오 | `openai` | TTS provider |
+| `TTS_MODEL` | 아니오 | `gpt-4o-mini-tts` | AI 응답을 음성으로 변환할 TTS 모델 |
+| `TTS_VOICE` | 아니오 | `alloy` | TTS 음성 preset |
+| `TTS_RESPONSE_FORMAT` | 아니오 | `mp3` | TTS 응답 오디오 포맷 |
+| `TTS_MAX_INPUT_CHARS` | 아니오 | `4000` | TTS로 보낼 최대 텍스트 길이 |
+| `TTS_MAX_OUTPUT_MB` | 아니오 | `5` | base64 인코딩 전 TTS 응답 오디오 최대 크기 |
+| `VOICE_MAX_UPLOAD_MB` | 아니오 | `10` | STT 업로드 음성 파일 최대 크기 |
+| `VOICE_PROVIDER_TIMEOUT_SECONDS` | 아니오 | `60` | STT/TTS provider 요청 timeout |
 | `SEARCH_SUMMARY_MAX_TOKENS` | 아니오 | `600` | 검색 요약 최대 토큰 |
 | `SEARCH_QUERY_ANALYSIS_MAX_TOKENS` | 아니오 | `500` | 검색어 분석 LLM 최대 토큰 |
 | `SEARCH_QUALITY_JUDGE_MAX_TOKENS` | 아니오 | `500` | 검색 품질 판정 LLM 최대 토큰 |
@@ -638,9 +638,9 @@ API, 환경변수, 도메인 계약이 바뀌면 같은 작업 단위에서 아�
 
 ## 주요 기능
 
-- 이메일/비밀번호 회원가입 및 로그인
-- Google OAuth2 로그인
-- JWT 기반 인증
+- Supabase Auth 기반 Google 로그인
+- Supabase access token 기반 FastAPI 보호 API
+- `profiles` 기반 앱 사용자 프로필 관리
 - AI 기반 영어 회화 연습
 - 자유 대화와 롤플레이 대화
 - 사용자별 대화 히스토리 관리

@@ -3,126 +3,66 @@ Auth Repository Layer
 데이터 접근 및 CRUD 연산
 """
 from datetime import datetime
-from uuid import uuid4
 
 from sqlalchemy.orm import Session
 
-from domains.auth.models import RefreshTokenModel, UserModel
+from domains.auth.models import ProfileModel
 from shared.exceptions import NotFoundException
 
 
 class AuthRepository:
-    """사용자 저장소"""
+    """프로필 저장소"""
 
     def __init__(self, db: Session):
         self.db = db
 
-    def save(self, user: UserModel) -> UserModel:
-        """사용자 저장"""
-        self.db.add(user)
+    def save(self, profile: ProfileModel) -> ProfileModel:
+        """프로필 저장"""
+        self.db.add(profile)
         self.db.commit()
-        self.db.refresh(user)
-        return user
+        self.db.refresh(profile)
+        return profile
 
-    def find_by_id(self, user_id: str) -> UserModel:
-        """ID로 사용자 조회"""
-        user = self.db.query(UserModel).filter(UserModel.id == user_id).first()
-        if not user:
-            raise NotFoundException(f"User {user_id} not found")
-        return user
+    def find_by_id(self, profile_id: str) -> ProfileModel:
+        """ID로 프로필 조회"""
+        profile = self.db.query(ProfileModel).filter(ProfileModel.id == profile_id).first()
+        if not profile:
+            raise NotFoundException(f"Profile {profile_id} not found")
+        return profile
 
-    def find_by_email(self, email: str) -> UserModel | None:
-        """이메일로 사용자 조회 (없으면 None)"""
-        return self.db.query(UserModel).filter(UserModel.email == email).first()
+    def find_by_email(self, email: str) -> ProfileModel | None:
+        """이메일로 프로필 조회 (없으면 None)"""
+        return self.db.query(ProfileModel).filter(ProfileModel.email == email).first()
 
-    def find_by_oauth(self, provider: str, provider_id: str) -> UserModel | None:
-        """OAuth provider ID로 사용자 조회"""
-        return (
-            self.db.query(UserModel)
-            .filter(
-                UserModel.oauth_provider == provider,
-                UserModel.oauth_provider_id == provider_id,
-            )
-            .first()
-        )
-
-    # --- Refresh Token ---
-
-    def create_refresh_token(
+    def upsert_profile(
         self,
         *,
-        user_id: str,
-        device_id: str,
-        token_hash: str,
-        expires_at: datetime,
-    ) -> RefreshTokenModel:
-        token = RefreshTokenModel(
-            id=str(uuid4()),
-            user_id=user_id,
-            device_id=device_id,
-            token_hash=token_hash,
-            expires_at=expires_at,
-        )
-        self.db.add(token)
-        self.db.commit()
-        self.db.refresh(token)
-        return token
-
-    def find_active_refresh_token_by_hash(self, token_hash: str) -> RefreshTokenModel | None:
+        profile_id: str,
+        email: str,
+        name: str,
+        oauth_provider: str | None,
+        avatar_url: str | None = None,
+    ) -> ProfileModel:
+        """Supabase Auth claim 기준으로 프로필 생성 또는 갱신"""
+        profile = self.db.query(ProfileModel).filter(ProfileModel.id == profile_id).first()
         now = datetime.utcnow()
-        return (
-            self.db.query(RefreshTokenModel)
-            .filter(
-                RefreshTokenModel.token_hash == token_hash,
-                RefreshTokenModel.revoked_at.is_(None),
-                RefreshTokenModel.expires_at > now,
+        if profile is None:
+            profile = ProfileModel(
+                id=profile_id,
+                email=email,
+                name=name,
+                oauth_provider=oauth_provider,
+                avatar_url=avatar_url,
+                created_at=now,
+                updated_at=now,
             )
-            .first()
-        )
-
-    def revoke_refresh_token_if_active(self, refresh_token_id: str) -> bool:
-        now = datetime.utcnow()
-        updated = (
-            self.db.query(RefreshTokenModel)
-            .filter(
-                RefreshTokenModel.id == refresh_token_id,
-                RefreshTokenModel.revoked_at.is_(None),
-            )
-            .update(
-                {
-                    RefreshTokenModel.revoked_at: now,
-                    RefreshTokenModel.last_used_at: now,
-                },
-                synchronize_session=False,
-            )
-        )
+            self.db.add(profile)
+        else:
+            profile.email = email
+            profile.name = name
+            profile.oauth_provider = oauth_provider
+            profile.avatar_url = avatar_url
+            profile.updated_at = now
         self.db.commit()
-        return updated == 1
-
-    def revoke_active_refresh_tokens_for_user_device(self, *, user_id: str, device_id: str) -> int:
-        now = datetime.utcnow()
-        updated = (
-            self.db.query(RefreshTokenModel)
-            .filter(
-                RefreshTokenModel.user_id == user_id,
-                RefreshTokenModel.device_id == device_id,
-                RefreshTokenModel.revoked_at.is_(None),
-            )
-            .update(
-                {
-                    RefreshTokenModel.revoked_at: now,
-                    RefreshTokenModel.last_used_at: now,
-                },
-                synchronize_session=False,
-            )
-        )
-        self.db.commit()
-        return int(updated or 0)
-
-    def touch_refresh_token_last_used(self, refresh_token_id: str) -> None:
-        now = datetime.utcnow()
-        self.db.query(RefreshTokenModel).filter(RefreshTokenModel.id == refresh_token_id).update(
-            {RefreshTokenModel.last_used_at: now},
-            synchronize_session=False,
-        )
-        self.db.commit()
+        self.db.refresh(profile)
+        return profile

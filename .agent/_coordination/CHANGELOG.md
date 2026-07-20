@@ -1,5 +1,11 @@
 # CHANGELOG — 완료된 작업 기록
 
+## 2026-07-18
+
+- **Alembic env.py 연결**: Alembic migration이 기존 SQLAlchemy `Base.metadata`와 `DATABASE_URL`을 사용하도록 설정
+- **Supabase Auth 전환 계획 작성**: FastAPI JWT에서 Supabase Auth 세션으로 전환하는 모바일/백엔드/스키마 구현 계획 추가
+- **Supabase Auth 전환 구현**: 백엔드 Supabase access token 검증, profiles 스키마, Flutter Supabase Google 로그인·session refresh 흐름과 문서/테스트를 동기화
+
 ## 2026-05-20
 
 - **AI Native 마이그레이션**: EstreGenesis v1.6.0 기반 `.agent/` 스캐폴딩 + `AGENTS.md` SSoT 생성 (Migration A)
@@ -72,3 +78,45 @@
 - **Stitch 디자인 산출물 이름 정리**: 화면 폴더와 HTML/PNG 파일명을 계획 화면명 기준으로 변경하고 산출물 README를 추가
 - **Stitch 화면 산출물 누락 점검**: `start_conversation_sheet` 포함 모든 계획 화면의 PNG/HTML 산출물 존재를 확인하고 TODO를 최신화
 - **모바일 wireframe 문서 필요성 점검**: Stitch 산출물 이후에도 UX flow/API 연결 기준 문서로 유지 가치가 있음을 확인
+
+## 2026-06-22
+
+- **Curitalk Flutter 프로젝트 초기화**: `dev/mobile` 브랜치에서 `mobile/` iOS·Android 프로젝트와 application ID `com.morethanhuman.curitalk`을 생성하고 문서를 동기화
+- **Curitalk Flutter 기반 의존성 추가**: Riverpod, go_router, Dio, secure storage, Google Sign-In을 추가하고 Android minSdk 23 및 문서를 동기화
+- **Curitalk Flutter 최소 구조 생성**: ProviderScope 앱 진입점, go_router 앱 골격, theme/core 위치, 기본 widget test를 추가
+- **Curitalk 디자인 시스템 재정의**: Figma 편집형 원칙과 Stitch 화면을 대조해 monochrome core, pastel block, typography, 모바일 컴포넌트 및 Flutter 적용 기준을 정규화
+- **Curitalk Flutter 기본 토큰 구현**: palette, typography, spacing, radius, border, size token과 번들 font, 단위 테스트를 추가
+- **Curitalk Flutter 의미 토큰 구현**: Material 3 ColorScheme과 대화·문법·검색 상태 ThemeExtension을 정의하고 앱 light theme에 연결
+- **Curitalk Flutter 컴포넌트 토큰 구현**: 버튼·입력창·Chip·카드·Bottom sheet·Bottom navigation theme과 상태별 테스트를 추가
+
+## 2026-06-23
+
+- **Curitalk Flutter 1차 공통 컴포넌트 구현**: 페이지 골격, 핵심 CTA, 컬러 블록, 비동기 상태, modal sheet, page indicator, 주 내비게이션 공통 위젯과 테스트 추가
+- **Curitalk Flutter 2차 도메인 컴포넌트 구현**: 선택 UI, 최근 대화 카드, 역할별 chat bubble, 인라인 문법 피드백, Reduce Motion 대응 typing indicator와 테스트 추가
+- **Curitalk Flutter 3차 입력·상태 컴포넌트 구현**: 기본 입력창, 검색 출처·재시도 UI, 빈 메시지 차단 chat composer, 자연스러운 문장 badge와 테스트 추가
+- **Flutter API·secure storage 기반 구현**: Dio 공통 envelope parser와 오류 매핑, Bearer interceptor, token pair·installation ID 보안 저장, Riverpod provider와 테스트 추가
+- **Flutter 인증 상태·token refresh 구현**: Riverpod 세션 복원·Google token 로그인·로그아웃과 단일화 refresh, rotate 저장, stale session 경쟁 방지 및 테스트 추가
+- **Flutter 앱 시작 흐름 구현**: Stitch 기반 Splash·3장 Onboarding·Google Login·Home 화면과 go_router 인증 redirect, 최근 대화 API 상태 및 flow 테스트 추가
+- **Flutter Topic Prep 구현 계획 작성**: Home Free Chat에서 Topic Input·Topic Prep까지 연결하는 모바일 구현 범위, 2자 validation, source link defer, ready/low-quality 상태와 테스트 계획 정리
+- **Flutter Topic Prep 화면 구현**: Home Free Chat에서 Topic Input과 Topic Prep API 상태를 연결하고, 2자 validation, 준비 카드 ready/low-quality/error UI, 방향·첫 질문 선택과 테스트 추가
+- **Flutter Roleplay Setup 구현 계획 작성**: Home Roleplay에서 상황·난이도 선택 화면까지 연결하는 모바일 구현 범위와 테스트 계획 정리
+- **Flutter Roleplay Setup 화면 구현**: Home Roleplay route, preset/custom 상황 선택, 난이도 선택, role_character 합성 helper와 테스트 추가
+- **Flutter Conversation 구현 계획 작성**: Free Chat·Roleplay 시작, 메시지 화면, 전송, grammar polling, 최근 대화 진입 범위와 테스트 계획 정리
+- **Flutter Conversation 화면 구현**: Free Chat·Roleplay 시작 API, 최근 대화 route, 메시지 전송·refresh, grammar feedback polling, Conversation UI와 테스트 추가
+
+## 2026-07-11
+
+- **Flutter 수동 QA 피드백 반영**: Conversation 뒤로가기, AI 응답 표시 formatter, Roleplay 난이도 상단 한 줄 배치, custom roleplay 상대역 prompt 합성을 개선
+- **Flutter 문법 피드백 표시 개선**: GrammarFeedbackCard의 교정 문장과 설명에도 표시 formatter를 적용해 붙어 있는 문장을 읽기 좋게 보정
+- **Flutter 메인 네비게이션 구현 계획 작성**: 햄버거 제거, account sheet/logout, Chat/Profile/History 탭 동작, History 화면 구현 계획을 추가
+- **Flutter 메인 네비게이션 구현**: 햄버거 제거, account sheet/logout, Chat/Profile 탭 sheet 연결, History route/screen과 테스트를 추가
+
+## 2026-07-17
+
+- **Flutter UI 피드백 반영 계획 작성**: Pretendard+Newsreader 폰트 조합, 문단-aware 텍스트, 문법 피드백 접기/강조, 대화 타입 뱃지 제거 계획을 추가
+- **Flutter UI 피드백 반영 구현**: Pretendard+Newsreader 폰트 asset, 문단-aware 채팅 텍스트, 접기 가능한 문법 피드백, 대화 타입 뱃지 제거를 적용
+- **멀티모달 대화 API 구현**: free-chat 음성 시작과 conversation turn 텍스트/음성 입력, OpenAI STT/TTS provider, 문서/테스트를 추가
+- **Flutter 멀티모달 turn 연동 계획 작성**: 모바일 텍스트 `/turn/` migration, multipart audio turn, transcript reconciliation, optional TTS playback 계획을 추가
+- **Flutter 멀티모달 turn 연동 구현**: Conversation composer를 `/turn/` 텍스트·음성 입력으로 전환하고 녹음 업로드, transcript 표시, optional TTS 재생을 연결
+- **Flutter 음성 녹음·재생 UX 계획 작성**: 녹음 상태, 취소·권한 실패, 임시 파일 정리, assistant audio playback 상태 강화 계획을 추가
+- **Flutter 음성 녹음·재생 UX 구현**: 녹음 타이머·취소·권한/빈 녹음 오류, 임시 파일 정리, assistant audio playback 상태와 중복 재생 방지를 적용

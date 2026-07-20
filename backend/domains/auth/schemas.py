@@ -68,6 +68,7 @@ class UserProfile(BaseModel):
     name: str
     is_active: bool
     oauth_provider: str | None = None
+    avatar_url: str | None = None
     created_at: datetime
     updated_at: datetime
 

@@ -13,6 +13,7 @@ from domains.conversation.enums import (
     FreeChatConversationDirection,
     MessageRole,
 )
+from domains.voice.schemas import VoiceAudioError, VoiceAudioResponse, VoiceInputMode
 
 SchemaType = TypeVar("SchemaType")
 
@@ -94,6 +95,24 @@ class MessageResponse(BaseModel):
     response: str
     grammar_feedback: dict | None = None
     turn_count: int
+
+
+class MultimodalConversationResponse(ConversationResponse):
+    """멀티모달 대화 시작 응답"""
+
+    input_mode: VoiceInputMode = VoiceInputMode.TEXT
+    transcript: str | None = None
+    audio: VoiceAudioResponse | None = None
+    audio_error: VoiceAudioError | None = None
+
+
+class MultimodalMessageResponse(MessageResponse):
+    """멀티모달 메시지 응답"""
+
+    input_mode: VoiceInputMode = VoiceInputMode.TEXT
+    transcript: str | None = None
+    audio: VoiceAudioResponse | None = None
+    audio_error: VoiceAudioError | None = None
 
 
 class Pagination(BaseModel):

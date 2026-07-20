@@ -16,6 +16,8 @@ eggs/
 .eggs/
 lib/
 lib64/
+!mobile/lib/
+!mobile/lib/**
 parts/
 sdist/
 var/
@@ -27,6 +29,9 @@ wheels/
 # Environment
 .env
 .env.local
+.env.*
+!.env.example
+mobile/.env*
 
 # Database
 *.db
@@ -50,6 +55,8 @@ uv.lock
 
 # Project specific
 web_example.html
+explan_diff_htmls/
+deploy/nginx/auth/docs.htpasswd
 
 # Seed artifacts
 .agent/_questions/open/*.draft.md

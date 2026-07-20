@@ -1,8 +1,8 @@
 # MoreThanHuman Backend DSL
 
-> 최종 갱신: 2026-05-26 · 범위: FastAPI 백엔드 API
+> 최종 갱신: 2026-06-22 · 범위: FastAPI 백엔드 API + Flutter 모바일 연동
 
-향후 사용자 클라이언트는 Flutter 기반 모바일 앱으로 개발해요. 이 문서는 모바일 앱이 연동할 백엔드 도메인, 데이터 모델, API 계약을 정의해요.
+사용자 클라이언트는 `mobile/`의 Flutter 기반 모바일 앱으로 개발해요. 이 문서는 모바일 앱이 연동할 백엔드 도메인, 데이터 모델, API 계약을 정의해요.
 
 ## 1. 시스템
 
@@ -13,7 +13,7 @@ system MoreThanHuman {
   architecture: ModularMonolith
   database: SQLiteDevelopment | PostgreSQLProduction
   packageManager: uv
-  futureClient: FlutterMobileApp
+  client: FlutterMobileApp
 
   modules: [
     Auth,
@@ -29,32 +29,20 @@ system MoreThanHuman {
 
 ```dsl
 database Schema {
-  table users {
+  table profiles {
     id: UUID PRIMARY KEY
     email: STRING UNIQUE NOT NULL
-    hashed_password: STRING?
     name: STRING NOT NULL
     is_active: BOOLEAN
     oauth_provider: STRING?
-    oauth_provider_id: STRING?
+    avatar_url: STRING?
     created_at: DATETIME
     updated_at: DATETIME
   }
 
-  table refresh_tokens {
-    id: UUID PRIMARY KEY
-    user_id: UUID FOREIGN KEY -> users(id)
-    device_id: STRING NOT NULL
-    token_hash: STRING NOT NULL
-    expires_at: DATETIME
-    revoked_at: DATETIME?
-    created_at: DATETIME
-    last_used_at: DATETIME?
-  }
-
   table conversations {
     id: UUID PRIMARY KEY
-    user_id: UUID FOREIGN KEY -> users(id)
+    user_id: UUID FOREIGN KEY -> profiles(id)
     title: STRING?
     conversation_type: "FREE_CHAT" | "ROLE_PLAYING"
     role_character: STRING?
@@ -107,55 +95,7 @@ type ErrorResponse {
 ```dsl
 module Auth {
   router AuthRouter {
-    POST /api/auth/register              -> register
-    POST /api/auth/login                 -> login
-    POST /api/auth/dev/token             -> issueDevToken
-    POST /api/auth/refresh               -> refresh
-    POST /api/auth/logout                -> logout
-    POST /api/auth/google/mobile         -> loginWithGoogleIdToken
-    GET  /api/auth/google/login?device_id=...          -> googleLogin
-    GET  /api/auth/google/callback?code=...&state=...  -> googleCallback
     GET  /api/auth/me                    -> getCurrentUser
-  }
-
-  type RegisterRequest {
-    email: String
-    password: String
-    name: String
-    device_id: String
-  }
-
-  type LoginRequest {
-    email: String
-    password: String
-    device_id: String
-  }
-
-  type DevTokenRequest {
-    email?: String = "swagger-test@example.com"
-    name?: String = "Swagger Test User"
-    device_id?: String = "swagger-local"
-  }
-
-  type RefreshRequest {
-    refresh_token: String
-    device_id: String
-  }
-
-  type LogoutRequest {
-    refresh_token: String
-    device_id: String
-  }
-
-  type GoogleMobileLoginRequest {
-    id_token: String
-    device_id: String
-  }
-
-  type TokenResponse {
-    access_token: String
-    refresh_token: String
-    token_type: "bearer"
   }
 
   type UserProfile {
@@ -164,11 +104,12 @@ module Auth {
     name: String
     is_active: Boolean
     oauth_provider?: String
+    avatar_url?: String
   }
 }
 ```
 
-`POST /api/auth/google/mobile`은 Flutter 앱이 Google Sign-In SDK에서 받은 `id_token`과 설치 단위 `device_id`를 서버에 전달하는 모바일 기본 로그인 API예요. 서버는 `GOOGLE_CLIENT_ID`를 audience로 Google 토큰을 검증한 뒤 `TokenResponse`를 반환해요. 같은 Google 계정은 기존 사용자를 재사용하고, 같은 이메일의 비밀번호 계정이 있으면 자동 연결하지 않고 `409`를 반환해요. 기존 `/api/auth/google/login`과 `/api/auth/google/callback`은 서버 callback OAuth 흐름으로 유지해요.
+모바일 앱은 Supabase Auth로 Google 로그인을 완료한 뒤 Supabase `access_token`을 FastAPI 보호 API의 `Authorization: Bearer` 헤더에 전달해요. `GET /api/auth/me`는 Supabase token을 검증하고, `profiles` row를 생성 또는 갱신한 뒤 기존 envelope 형식으로 `UserProfile`을 반환해요.
 
 ## 5. Conversation 모듈
 
@@ -178,6 +119,7 @@ module Conversation {
     POST   /api/conversations/start/free-chat/       -> startFreeChat
     POST   /api/conversations/start/roleplay/        -> startRoleplay
     POST   /api/conversations/{id}/message/          -> sendMessage
+    POST   /api/conversations/{id}/turn/             -> sendMultimodalTurn
     GET    /api/conversations/                       -> listConversations
     GET    /api/conversations/{id}/                  -> getConversation
     GET    /api/conversations/{id}/messages/         -> listMessages
@@ -189,11 +131,12 @@ module Conversation {
   }
 
   type StartFreeChatRequest {
-    first_message: String
+    first_message: String | File(audio_file)
     search_context?: String
     topic?: String
     conversation_direction?: "CASUAL_CHAT" | "DEBATE" | "INTERVIEW_QA" | "EXPLANATION_PRACTICE"
     selected_question?: String
+    include_audio_response?: Boolean = false
   }
 
   type StartRoleplayRequest {
@@ -203,6 +146,11 @@ module Conversation {
 
   type SendMessageRequest {
     message: String
+  }
+
+  type SendTurnRequest {
+    text: String | File(audio_file)
+    include_audio_response?: Boolean = false
   }
 
   type Pagination {
@@ -258,8 +206,44 @@ module Conversation {
     grammar_feedback?: GrammarFeedback
     turn_count: Integer
   }
+
+  type VoiceAudioResponse {
+    content_type: String
+    base64: String
+    format: String
+  }
+
+  type VoiceAudioError {
+    message: String
+    provider?: String
+  }
+
+  type MultimodalConversationResponse extends ConversationResponse {
+    input_mode: "text" | "audio"
+    transcript?: String
+    audio?: VoiceAudioResponse
+    audio_error?: VoiceAudioError
+  }
+
+  type MultimodalMessageResponse extends MessageResponse {
+    input_mode: "text" | "audio"
+    transcript?: String
+    audio?: VoiceAudioResponse
+    audio_error?: VoiceAudioError
+  }
 }
 ```
+
+멀티모달 대화 API는 아래 네 가지 요청 형태를 기본 계약으로 사용해요.
+
+```dsl
+TextStart      = POST /api/conversations/start/free-chat/  { first_message }
+AudioStart     = POST /api/conversations/start/free-chat/  multipart { audio_file }
+TextContinue   = POST /api/conversations/{id}/turn/        { text }
+AudioContinue  = POST /api/conversations/{id}/turn/        multipart { audio_file }
+```
+
+`first_message`/`text`와 `audio_file`은 같은 요청에서 동시에 보낼 수 없어요. `audio_file` 요청은 백엔드가 STT로 `transcript`를 만든 뒤 기존 conversation flow에 전달해요. `include_audio_response=true`이면 AI 응답 텍스트를 TTS로 변환해 `audio`에 담고, 대화 저장 이후 TTS만 실패하면 `audio_error`를 반환해 중복 메시지 재시도를 방지해요.
 
 모바일 v1은 문법 피드백 수신에 SSE보다 polling을 우선해요. 앱은 `ConversationResponse.message_id` 또는 `MessageResponse.message_id`를 받은 뒤 `GET /api/grammar/message/{message_id}/`를 반복 호출하고, `404`를 pending 또는 접근 불가 상태로 처리해요. SSE 스트림은 실시간성이 더 중요해질 때 선택적으로 사용해요.
 
@@ -448,6 +432,7 @@ module LLM {
 env {
   DATABASE_URL?: String
   OPENROUTER_API_KEY: String
+  OPENAI_API_KEY?: String
   LLM_PROVIDER?: "openrouter" | "ollama" = "openrouter"
   OLLAMA_BASE_URL?: String
   OPENROUTER_MODEL?: String
@@ -457,13 +442,24 @@ env {
   GRAMMAR_OPENROUTER_MODEL?: String
   GRAMMAR_OLLAMA_MODEL?: String
 
-  JWT_SECRET_KEY: String
-  JWT_ALGORITHM?: String
-  JWT_ACCESS_TOKEN_EXPIRE_MINUTES?: Integer
+  STT_PROVIDER?: "openai" = "openai"
+  STT_MODEL?: String = "gpt-4o-mini-transcribe"
+  TTS_PROVIDER?: "openai" = "openai"
+  TTS_MODEL?: String = "gpt-4o-mini-tts"
+  TTS_VOICE?: String = "alloy"
+  TTS_RESPONSE_FORMAT?: "mp3" | "opus" | "aac" | "flac" | "wav" | "pcm" = "mp3"
+  TTS_MAX_INPUT_CHARS?: Integer = 4000
+  TTS_MAX_OUTPUT_MB?: Integer = 5
+  VOICE_MAX_UPLOAD_MB?: Integer = 10
+  VOICE_PROVIDER_TIMEOUT_SECONDS?: Float = 60
 
-  GOOGLE_CLIENT_ID?: String
-  GOOGLE_CLIENT_SECRET?: String
-  GOOGLE_REDIRECT_URI?: String
+  SUPABASE_URL: String
+  SUPABASE_PUBLISHABLE_KEY: String
+  SUPABASE_AUTH_VERIFY_MODE?: "remote" = "remote"
+  SUPABASE_AUTH_TIMEOUT_SECONDS?: Float = 5
+  AUTO_CREATE_TABLES?: Boolean = false
+
+  JWT_SECRET_KEY?: String
 
   DEBUG?: Boolean
   CORS_ORIGINS?: List<String>
@@ -486,7 +482,7 @@ env {
 
 - 모든 사용자 데이터 접근은 인증 사용자 기준으로 제한해요.
 - conversation/message 조회와 삭제는 `user_id` ownership을 검증해요.
-- API key, OAuth secret, JWT secret은 서버 환경변수로만 관리해요.
-- Flutter 앱은 백엔드 secret을 직접 보유하지 않아요.
-- Flutter 앱은 Google Sign-In SDK로 받은 `id_token`만 서버에 전달하고, 서버가 Google 토큰을 검증한 뒤 자체 token pair를 발급해요.
+- API key와 서버 전용 secret은 서버 환경변수로만 관리해요.
+- Flutter 앱은 OpenRouter/OpenAI secret이나 Supabase service role key를 직접 보유하지 않아요.
+- Flutter 앱은 Google Sign-In SDK로 받은 `id_token`과 Google `access_token`으로 Supabase 세션을 생성하고, FastAPI에는 Supabase `access_token`만 전달해요.
 - 외부 LLM/검색 실패는 `ExternalAPIException` 계열로 감싸 응답해요.
