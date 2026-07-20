@@ -6,7 +6,8 @@ from dataclasses import dataclass
 
 from domains.auth.models import ProfileModel
 from domains.auth.repository import AuthRepository
-from domains.auth.schemas import UserProfile
+from domains.auth.schemas import LanguagePreferencesRequest, LanguagePreferencesResponse, UserProfile
+from shared.language import language_context_to_dict
 from shared.exceptions import AuthenticationException
 
 
@@ -46,3 +47,22 @@ class AuthService:
         """사용자 프로필 조회"""
         profile = self.repository.find_by_id(profile_id)
         return UserProfile.model_validate(profile)
+
+    def get_language_preferences(self, profile_id: str) -> LanguagePreferencesResponse:
+        """현재 사용자 언어 선호 조회"""
+        profile = self.repository.find_by_id(profile_id)
+        return LanguagePreferencesResponse.model_validate(language_context_to_dict(profile.language))
+
+    def update_language_preferences(
+        self,
+        profile_id: str,
+        request: LanguagePreferencesRequest,
+    ) -> LanguagePreferencesResponse:
+        """현재 사용자 언어 선호 갱신"""
+        profile = self.repository.update_language_preferences(
+            profile_id=profile_id,
+            native_language=request.native_language.value,
+            target_language=request.target_language.value,
+            feedback_language=request.feedback_language.value,
+        )
+        return LanguagePreferencesResponse.model_validate(language_context_to_dict(profile.language))

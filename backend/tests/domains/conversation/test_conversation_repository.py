@@ -72,3 +72,21 @@ def test_find_by_id_hides_conversation_from_other_profile():
         return
 
     raise AssertionError("conversation should be hidden from non-owner")
+
+
+def test_conversation_model_has_default_language_snapshot():
+    repository = _repository()
+    owner_id = str(uuid4())
+    repository.db.add(ProfileModel(id=owner_id, email="owner@example.com", name="Owner"))
+    conversation = ConversationModel(
+        id=str(uuid4()),
+        user_id=owner_id,
+        title="Language snapshot",
+        conversation_type=ConversationType.FREE_CHAT,
+    )
+
+    saved = repository.save(conversation)
+
+    assert saved.native_language == "ko"
+    assert saved.target_language == "en"
+    assert saved.feedback_language == "ko"

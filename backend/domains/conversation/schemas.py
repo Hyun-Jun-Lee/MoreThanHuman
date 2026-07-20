@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Generic, TypeVar
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from domains.conversation.enums import (
     ConversationStatus,
@@ -14,6 +14,7 @@ from domains.conversation.enums import (
     MessageRole,
 )
 from domains.voice.schemas import VoiceAudioError, VoiceAudioResponse, VoiceInputMode
+from shared.language import LearningLanguageContext
 
 SchemaType = TypeVar("SchemaType")
 
@@ -54,6 +55,7 @@ class Conversation(BaseModel):
     title: str | None = None
     conversation_type: ConversationType
     role_character: str | None = None
+    language: LearningLanguageContext = Field(default_factory=LearningLanguageContext)
     message_count: int
     status: ConversationStatus
     created_at: datetime
@@ -84,6 +86,7 @@ class ConversationResponse(BaseModel):
     message_id: UUID  # 사용자 메시지 ID (SSE 연결용)
     conversation_type: ConversationType
     role_character: str | None = None
+    language: LearningLanguageContext = Field(default_factory=LearningLanguageContext)
     response: str
     grammar_feedback: dict | None = None
 

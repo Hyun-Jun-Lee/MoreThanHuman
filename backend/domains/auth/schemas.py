@@ -3,7 +3,9 @@ Auth 도메인 Pydantic 스키마
 """
 from datetime import datetime
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
+
+from shared.language import LearningLanguageContext
 
 
 class RegisterRequest(BaseModel):
@@ -69,8 +71,21 @@ class UserProfile(BaseModel):
     is_active: bool
     oauth_provider: str | None = None
     avatar_url: str | None = None
+    language: LearningLanguageContext = Field(default_factory=LearningLanguageContext)
     created_at: datetime
     updated_at: datetime
 
     class Config:
         from_attributes = True
+
+
+class LanguagePreferencesRequest(LearningLanguageContext):
+    """현재 사용자 언어 선호 수정 요청"""
+
+    model_config = ConfigDict(extra="forbid", use_enum_values=False)
+
+
+class LanguagePreferencesResponse(LearningLanguageContext):
+    """현재 사용자 언어 선호 응답"""
+
+    model_config = ConfigDict(from_attributes=True, use_enum_values=False)

@@ -66,3 +66,21 @@ class AuthRepository:
         self.db.commit()
         self.db.refresh(profile)
         return profile
+
+    def update_language_preferences(
+        self,
+        *,
+        profile_id: str,
+        native_language: str,
+        target_language: str,
+        feedback_language: str,
+    ) -> ProfileModel:
+        """현재 사용자 프로필의 언어 선호만 갱신"""
+        profile = self.find_by_id(profile_id)
+        profile.native_language = native_language
+        profile.target_language = target_language
+        profile.feedback_language = feedback_language
+        profile.updated_at = datetime.utcnow()
+        self.db.commit()
+        self.db.refresh(profile)
+        return profile
