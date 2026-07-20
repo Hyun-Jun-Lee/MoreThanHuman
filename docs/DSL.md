@@ -1,6 +1,6 @@
 # MoreThanHuman Backend DSL
 
-> 최종 갱신: 2026-06-22 · 범위: FastAPI 백엔드 API + Flutter 모바일 연동
+> 최종 갱신: 2026-07-20 · 범위: FastAPI 백엔드 API + Flutter 모바일 연동
 
 사용자 클라이언트는 `mobile/`의 Flutter 기반 모바일 앱으로 개발해요. 이 문서는 모바일 앱이 연동할 백엔드 도메인, 데이터 모델, API 계약을 정의해요.
 
@@ -8,7 +8,7 @@
 
 ```dsl
 system MoreThanHuman {
-  product: "AI 기반 영어 회화 학습 플랫폼"
+  product: "AI 기반 다국어 회화 학습 플랫폼"
   backend: FastAPI
   architecture: ModularMonolith
   database: SQLiteDevelopment | PostgreSQLProduction
@@ -36,6 +36,9 @@ database Schema {
     is_active: BOOLEAN
     oauth_provider: STRING?
     avatar_url: STRING?
+    native_language: "ko" | "en" | "zh" = "ko"
+    target_language: "ko" | "en" | "zh" = "en"
+    feedback_language: "ko" | "en" | "zh" = "ko"
     created_at: DATETIME
     updated_at: DATETIME
   }
@@ -46,6 +49,9 @@ database Schema {
     title: STRING?
     conversation_type: "FREE_CHAT" | "ROLE_PLAYING"
     role_character: STRING?
+    native_language: "ko" | "en" | "zh" = "ko"
+    target_language: "ko" | "en" | "zh" = "en"
+    feedback_language: "ko" | "en" | "zh" = "ko"
     message_count: INTEGER
     status: "ACTIVE" | "COMPLETED"
     created_at: DATETIME
@@ -86,6 +92,19 @@ type ErrorResponse {
   error: String
   details: Dict
 }
+
+type LearningLanguageContext {
+  native_language: "ko" | "en" | "zh"
+  target_language: "ko" | "en" | "zh"
+  feedback_language: "ko" | "en" | "zh"
+}
+
+supported LearningLanguagePairs = [
+  "ko->en",
+  "en->ko",
+  "zh->en",
+  "zh->ko"
+]
 ```
 
 인증이 필요한 API는 `Authorization: Bearer <access_token>` 헤더를 사용해요.
@@ -96,6 +115,10 @@ type ErrorResponse {
 module Auth {
   router AuthRouter {
     GET  /api/auth/me                    -> getCurrentUser
+    GET  /api/auth/me/language-preferences
+                                            -> getLanguagePreferences
+    PUT  /api/auth/me/language-preferences
+                                            -> updateLanguagePreferences
   }
 
   type UserProfile {
@@ -105,11 +128,16 @@ module Auth {
     is_active: Boolean
     oauth_provider?: String
     avatar_url?: String
+    language: LearningLanguageContext
   }
+
+  type LanguagePreferencesRequest extends LearningLanguageContext
+  type LanguagePreferencesResponse extends LearningLanguageContext
 }
 ```
 
 모바일 앱은 Supabase Auth로 Google 로그인을 완료한 뒤 Supabase `access_token`을 FastAPI 보호 API의 `Authorization: Bearer` 헤더에 전달해요. `GET /api/auth/me`는 Supabase token을 검증하고, `profiles` row를 생성 또는 갱신한 뒤 기존 envelope 형식으로 `UserProfile`을 반환해요.
+언어 선호는 프로필 기본값이며 새 대화 시작 시 `conversations` row에 snapshot으로 저장돼요. 기존 값이 없으면 `ko -> en`, feedback `ko`로 보정해요.
 
 ## 5. Conversation 모듈
 
@@ -176,6 +204,7 @@ module Conversation {
     title?: String
     conversation_type: "FREE_CHAT" | "ROLE_PLAYING"
     role_character?: String
+    language: LearningLanguageContext
     message_count: Integer
     status: "ACTIVE" | "COMPLETED"
     created_at: DateTime
@@ -196,6 +225,7 @@ module Conversation {
     message_id: UUID
     conversation_type: String
     role_character?: String
+    language: LearningLanguageContext
     response: String
     grammar_feedback?: GrammarFeedback
   }
@@ -314,6 +344,7 @@ module Search {
   type SearchResult {
     query: String
     enhanced_query: String
+    language: LearningLanguageContext
     ready: Boolean
     summary?: String
     sources: List<SearchResultItem>
@@ -358,6 +389,7 @@ module Search {
 
   type TopicPrepResult {
     ready: Boolean
+    language: LearningLanguageContext
     card?: TopicPrepCard
     quality: TopicPrepQuality
     retry_guidance?: String
@@ -366,6 +398,7 @@ module Search {
 
   type TopicPrepCard {
     topic: String
+    language: LearningLanguageContext
     summary: String
     directions: List<TopicPrepDirection>
     sources: List<SearchResultItem>

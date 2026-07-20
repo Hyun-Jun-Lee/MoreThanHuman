@@ -1,6 +1,6 @@
 # 시스템 아키텍처
 
-> 프로젝트: MoreThanHuman (Convia) · 버전: 0.1.0 · 최종 갱신: 2026-05-26
+> 프로젝트: MoreThanHuman (Convia) · 버전: 0.1.0 · 최종 갱신: 2026-07-20
 
 ---
 
@@ -55,7 +55,7 @@ backend/
 ├── main.py                  # FastAPI 앱 초기화, 라우터 등록
 ├── config.py                # Pydantic BaseSettings 환경 설정
 ├── database.py              # SQLAlchemy 엔진·세션 팩토리
-├── shared/                  # 공통 타입, 예외, 유틸리티
+├── shared/                  # 공통 타입, 언어 컨텍스트, 예외, 유틸리티
 └── domains/                 # 도메인별 수직 슬라이스
     ├── auth/                # Supabase token 검증, profiles 연결
     ├── conversation/        # 대화 관리
@@ -76,7 +76,8 @@ mobile/
 │       ├── auth/            # Riverpod 인증 상태, 모바일 auth API
 │       ├── conversation/    # 대화 API, 메시지 전송, grammar polling, UI
 │       ├── home/            # 최근 대화 API 상태와 Home UI
-│       ├── onboarding/      # 완료 상태 저장과 3장 onboarding UI
+│       ├── language/        # 언어쌍 모델, preference API, selector UI
+│       ├── onboarding/      # 완료 상태와 pending 언어쌍 저장, 4장 onboarding UI
 │       ├── roleplay_setup/  # 롤플레이 상황·난이도 선택 UI
 │       └── topic_prep/      # Topic Input, 검색 준비 카드 API 상태와 UI
 ├── test/                    # Flutter 테스트
@@ -85,7 +86,7 @@ mobile/
 
 Flutter API 요청은 `ApiClient → AuthTokenInterceptor → TokenRefreshInterceptor → Dio` 순서로 실행돼요. 응답은 공통 envelope parser를 거쳐 feature decoder로 전달해요. Supabase SDK가 access/refresh session을 관리하고, `AuthTokenInterceptor`는 현재 Supabase access token을 `Authorization: Bearer` 헤더로 주입해요. 여러 요청이 동시에 `401`을 받아도 Supabase refresh는 하나만 공유하며, 새 access token으로 각 요청을 한 번만 재시도해요.
 
-Flutter 앱 시작은 `Splash → Onboarding(최초 1회) → Google Login → Home` 순서예요. `go_router`가 onboarding 완료 상태와 Riverpod 인증 상태를 함께 관찰하며, 인증 복원 중에는 Splash를 유지하고 로그인 성공 또는 세션 만료 시 Home/Login으로 redirect해요. Home은 `/api/conversations/?limit=5&offset=0`에서 최근 대화를 불러와 loaded/empty/error 상태를 표시해요. Free Chat 선택 시 `Topic Input → Topic Prep`으로 이어져 `POST /api/search/topic-prep/`의 ready/low-quality/error 상태를 보여주고, 첫 답변 제출 후 `POST /api/conversations/start/free-chat/`로 Conversation 화면에 진입해요. Roleplay 선택 시 `Roleplay Setup`에서 preset/custom 상황과 난이도를 고르고 `POST /api/conversations/start/roleplay/`로 같은 Conversation 화면에 진입해요. Home 최근 대화 카드도 `/conversation/:conversationId`로 이동해 기존 메시지를 이어가요.
+Flutter 앱 시작은 `Splash → Onboarding(최초 1회) → Google Login → Home` 순서예요. `go_router`가 onboarding 완료 상태와 Riverpod 인증 상태를 함께 관찰하며, 인증 복원 중에는 Splash를 유지하고 로그인 성공 또는 세션 만료 시 Home/Login으로 redirect해요. Onboarding은 기기 locale로 `ko -> en`, `en -> ko`, `zh -> ko` 기본값을 고르고 사용자가 지원 언어쌍(`ko -> en`, `en -> ko`, `zh -> en`, `zh -> ko`) 중 하나를 확정하면 pending language context를 secure storage에 저장해요. 인증이 생기면 `authControllerProvider`가 `PUT /api/auth/me/language-preferences`로 pending 값을 서버에 동기화하고 `/api/auth/me`로 profile language를 hydration한 뒤 Home을 표시해요. Home은 활성 언어쌍과 `/api/conversations/?limit=5&offset=0` 최근 대화 loaded/empty/error 상태를 표시해요. Free Chat 선택 시 `Topic Input → Topic Prep`으로 이어져 `POST /api/search/topic-prep/`의 ready/low-quality/error 상태를 보여주고, 첫 답변 제출 후 `POST /api/conversations/start/free-chat/`로 Conversation 화면에 진입해요. Roleplay 선택 시 `Roleplay Setup`에서 preset/custom 상황과 난이도를 고르고 `POST /api/conversations/start/roleplay/`로 같은 Conversation 화면에 진입해요. Home 최근 대화 카드도 `/conversation/:conversationId`로 이동해 기존 메시지를 이어가요.
 
 도메인은 기본적으로 아래 계층을 따라요:
 
@@ -122,11 +123,12 @@ domains/{name}/
 
 [FastAPI] → Authorization: Bearer <supabase_access_token>
           → Supabase Auth /user 검증
-          → profiles upsert/select
+          → profiles upsert/select + language defaults
           → current_user.id를 ownership boundary로 사용
 ```
 
 인증이 필요한 API는 `Authorization: Bearer <supabase_access_token>` 헤더를 사용해요. 모바일 v1은 Supabase Auth의 Google native sign-in 흐름을 기본 로그인 경로로 사용해요.
+언어 선호는 profile 기본값(`native_language`, `target_language`, `feedback_language`)으로 저장하고, 기존 값이 없으면 `ko -> en`과 feedback `ko`로 보정해요.
 
 ### 대화
 
@@ -134,9 +136,10 @@ domains/{name}/
 [사용자] → POST /api/conversations/start/{free-chat|roleplay}/
          → ConversationRouter
          → ConversationService
+         → profile language defaults를 conversation language snapshot으로 저장
          ├── LLMProvider → OpenRouter / Ollama
-         ├── GrammarService 백그라운드 문법 체크
-         └── Response { conversation_id, response, message_id }
+         ├── GrammarService 백그라운드 문법 체크(snapshot language)
+         └── Response { conversation_id, response, message_id, language }
 
 [Flutter 앱] → Topic Prep 첫 답변 또는 Roleplay Setup CTA
              → start conversation API
@@ -152,7 +155,7 @@ domains/{name}/
              → POST /api/conversations/{conversation_id}/turn/
              → text 또는 audio_file 중 하나 전달
              → audio_file이면 VoiceService → STT provider → transcript 생성
-             → ConversationService.continue_conversation(transcript 또는 text)
+             → ConversationService.continue_conversation(transcript 또는 text, conversation language snapshot)
              → include_audio_response=true이면 VoiceService → TTS provider
              → Response { transcript, response, audio?, audio_error? }
 

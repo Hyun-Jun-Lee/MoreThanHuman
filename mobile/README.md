@@ -1,6 +1,6 @@
 # Curitalk Mobile
 
-관심사 기반 AI 영어 회화 앱 Curitalk의 Flutter iOS·Android 클라이언트예요.
+관심사 기반 AI 다국어 회화 앱 Curitalk의 Flutter iOS·Android 클라이언트예요.
 
 ## 확인
 
@@ -53,7 +53,8 @@ lib/
 │   └── widgets/             # 화면 공통 레이아웃과 상호작용 위젯
 └── features/
     ├── auth/                # 인증 API, 세션 모델, Riverpod controller
-    ├── onboarding/          # 완료 상태와 3장 onboarding 화면
+    ├── language/            # 언어쌍 모델, preference API, selector UI
+    ├── onboarding/          # 완료 상태, pending 언어쌍, 4장 onboarding 화면
     ├── conversation/
     │   ├── application/      # 메시지 목록·전송·grammar polling 상태
     │   ├── data/             # conversation, grammar API repository
@@ -143,7 +144,7 @@ assets/
 
 `SupabaseAuthService`는 `supabase_flutter`를 감싸 Google token sign-in, 현재 session 확인, access token 조회, session refresh, sign-out을 제공해요. `SecureTokenStorage`는 더 이상 FastAPI token pair의 source of truth가 아니며 installation ID와 온보딩 같은 로컬 상태 보관에 사용해요.
 
-`authControllerProvider`는 앱 시작 시 Supabase current session을 확인하고 `/auth/me`를 조회해 `authenticated` 또는 `unauthenticated` 상태를 제공해요. Google SDK에서 받은 `idToken`과 `accessToken`은 `signInWithGoogleTokens()`에 전달하고, 로그아웃은 Supabase sign-out과 Google sign-out을 best-effort로 처리해요.
+`authControllerProvider`는 앱 시작 시 Supabase current session을 확인하고 `/auth/me`를 조회해 `authenticated` 또는 `unauthenticated` 상태를 제공해요. Google SDK에서 받은 `idToken`과 `accessToken`은 `signInWithGoogleTokens()`에 전달하고, 로그아웃은 Supabase sign-out과 Google sign-out을 best-effort로 처리해요. 온보딩에서 선택했지만 아직 인증 전인 언어쌍은 secure storage에 pending 상태로 저장하고, 로그인 또는 세션 복원 직후 `PUT /auth/me/language-preferences`로 동기화한 뒤 `/auth/me`를 다시 hydration해요.
 
 인증 API가 `401`을 반환하면 `TokenRefreshInterceptor`가 Supabase SDK의 `refreshSession()` 결과를 사용해 원 요청을 한 번 재시도해요. 동시 `401`은 하나의 refresh 작업을 공유해요. refresh 후에도 세션이 없거나 재시도가 다시 `401`이면 Riverpod 상태를 `unauthenticated`로 전환해요.
 
@@ -156,11 +157,11 @@ Splash → Onboarding(최초 1회) → Google Login → Home
 ```
 
 - Splash: 저장된 세션과 onboarding 완료 여부 확인
-- Onboarding: 3장 소개 후 완료 상태를 secure storage에 저장
+- Onboarding: 기기 locale 기반 언어쌍 기본값을 보여주고 4장 소개 후 완료 상태와 pending 언어쌍을 secure storage에 저장
 - Login: Google Sign-In SDK의 `idToken`/`accessToken`으로 Supabase 세션 생성 후 `/auth/me` 조회
-- Home: 사용자 이름과 최근 대화 5개를 표시하고, 없으면 시작 제안을 표시
+- Home: 사용자 이름, 활성 언어쌍, 최근 대화 5개를 표시하고, 없으면 시작 제안을 표시
 - Home Navigation: `Chat`은 새 대화 시작 sheet, `History`는 대화 목록 화면, `Profile`은 account sheet를 열어요.
-- Account: 우상단 프로필 아바타 또는 `Profile` 탭에서 이름/email과 `LOG OUT`을 표시하고, 로그아웃 시 앱 token 삭제·서버 revoke·Google sign out을 best-effort로 처리해요.
+- Account: 우상단 프로필 아바타 또는 `Profile` 탭에서 이름/email, 활성 언어쌍 변경, `LOG OUT`을 표시하고, 로그아웃 시 앱 token 삭제·서버 revoke·Google sign out을 best-effort로 처리해요.
 - Free Chat: Home sheet에서 Topic Input → Topic Prep으로 이동한 뒤 첫 답변으로 대화를 시작
 - Roleplay: Home sheet에서 Roleplay Setup으로 이동한 뒤 상황과 난이도로 롤플레이 대화를 시작
 - History: 하단 `History` 탭에서 대화 목록을 보고 기존 대화로 다시 진입

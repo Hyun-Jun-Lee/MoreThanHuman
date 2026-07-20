@@ -26,6 +26,11 @@ Retry Guidance는 불완전한 출력을 성공 경험으로 포장하지 않고
 
 ## Conversation
 
+### Learning Language Context
+학습자의 `native_language`, `target_language`, `feedback_language`를 묶은 언어 계약이에요.
+
+프로필의 Learning Language Context는 새 conversation의 기본값이고, conversation에 저장된 Learning Language Context는 생성 시점 snapshot이에요. 사용자가 이후 프로필 언어쌍을 바꿔도 기존 conversation은 snapshot을 계속 사용해요.
+
 ### Multimodal Conversation Turn
 진행 중인 conversation에 사용자가 텍스트 또는 녹음 파일 중 하나를 입력으로 보내는 한 번의 대화 차례예요.
 
