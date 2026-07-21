@@ -25,6 +25,9 @@ Future<void> showAccountSheet({
 
       return StatefulBuilder(
         builder: (BuildContext context, StateSetter setSheetState) {
+          final String localeCode = Localizations.localeOf(
+            context,
+          ).languageCode;
           return SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -89,6 +92,13 @@ Future<void> showAccountSheet({
                 ),
                 const SizedBox(height: AppSpacing.xl),
                 const AppSectionLabel('Language Pair'),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  selectedLanguage.preferenceChangePolicyText(localeCode),
+                  style: AppTypography.bodySm.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
                 const SizedBox(height: AppSpacing.md),
                 LanguagePairSelector(
                   selected: selectedLanguage,
@@ -98,7 +108,7 @@ Future<void> showAccountSheet({
                       languageError = null;
                     });
                   },
-                  localeCode: Localizations.localeOf(context).languageCode,
+                  localeCode: localeCode,
                   enabled: !isSavingLanguage && !isLoggingOut,
                 ),
                 if (languageError != null) ...<Widget>[

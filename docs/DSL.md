@@ -138,6 +138,7 @@ module Auth {
 
 모바일 앱은 Supabase Auth로 Google 로그인을 완료한 뒤 Supabase `access_token`을 FastAPI 보호 API의 `Authorization: Bearer` 헤더에 전달해요. `GET /api/auth/me`는 Supabase token을 검증하고, `profiles` row를 생성 또는 갱신한 뒤 기존 envelope 형식으로 `UserProfile`을 반환해요.
 언어 선호는 프로필 기본값이며 새 대화 시작 시 `conversations` row에 snapshot으로 저장돼요. 기존 값이 없으면 `ko -> en`, feedback `ko`로 보정해요.
+`PUT /api/auth/me/language-preferences`는 profile default만 갱신해요. 모바일 Account UX는 변경값이 새 대화부터 적용되고 기존 conversation은 생성 시점 snapshot을 유지한다고 안내해야 해요.
 
 ## 5. Conversation 모듈
 
@@ -171,6 +172,10 @@ module Conversation {
     role_character: String
     search_context?: String
   }
+
+  `role_character`는 클라이언트가 선택한 preset/custom 상황과 난이도를 합성한 문자열이에요.
+  클라이언트 preset과 서버 roleplay prompt examples는 conversation snapshot의 `target_language`를 기준으로 연습 상황을 고르고, `feedback_language`는 도움말·설명 언어로만 사용해요.
+  Conversation prompt policy도 snapshot의 `target_language`를 따라요. 한국어 target은 조사, 어미, 높임/격식, 띄어쓰기, 자연스러운 어순과 구어 뉘앙스를 우선하고, 영어 target은 tense, articles, prepositions, question formation, sentence completeness, natural spoken phrasing을 우선해요.
 
   type SendMessageRequest {
     message: String
@@ -395,6 +400,10 @@ module Search {
     retry_guidance?: String
     example_topics: List<String>
   }
+
+  Topic Prep의 ready card 질문과 fallback direction은 `target_language` 연습에 맞춰 생성돼요.
+  Topic Prep prompt policy도 conversation과 같은 target-language practice priorities를 사용해요.
+  Low-quality 상태의 `retry_guidance`와 `example_topics`는 사용자가 이해할 수 있도록 `feedback_language`로 표시하되, 예시 유형은 target language 연습 목적을 반영해요.
 
   type TopicPrepCard {
     topic: String

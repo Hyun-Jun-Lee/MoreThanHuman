@@ -55,7 +55,7 @@ backend/
 ├── main.py                  # FastAPI 앱 초기화, 라우터 등록
 ├── config.py                # Pydantic BaseSettings 환경 설정
 ├── database.py              # SQLAlchemy 엔진·세션 팩토리
-├── shared/                  # 공통 타입, 언어 컨텍스트, 예외, 유틸리티
+├── shared/                  # 공통 타입, 언어 컨텍스트, prompt policy, 예외, 유틸리티
 └── domains/                 # 도메인별 수직 슬라이스
     ├── auth/                # Supabase token 검증, profiles 연결
     ├── conversation/        # 대화 관리
@@ -86,7 +86,7 @@ mobile/
 
 Flutter API 요청은 `ApiClient → AuthTokenInterceptor → TokenRefreshInterceptor → Dio` 순서로 실행돼요. 응답은 공통 envelope parser를 거쳐 feature decoder로 전달해요. Supabase SDK가 access/refresh session을 관리하고, `AuthTokenInterceptor`는 현재 Supabase access token을 `Authorization: Bearer` 헤더로 주입해요. 여러 요청이 동시에 `401`을 받아도 Supabase refresh는 하나만 공유하며, 새 access token으로 각 요청을 한 번만 재시도해요.
 
-Flutter 앱 시작은 `Splash → Onboarding(최초 1회) → Google Login → Home` 순서예요. `go_router`가 onboarding 완료 상태와 Riverpod 인증 상태를 함께 관찰하며, 인증 복원 중에는 Splash를 유지하고 로그인 성공 또는 세션 만료 시 Home/Login으로 redirect해요. Onboarding은 기기 locale로 `ko -> en`, `en -> ko`, `zh -> ko` 기본값을 고르고 사용자가 지원 언어쌍(`ko -> en`, `en -> ko`, `zh -> en`, `zh -> ko`) 중 하나를 확정하면 pending language context를 secure storage에 저장해요. 인증이 생기면 `authControllerProvider`가 `PUT /api/auth/me/language-preferences`로 pending 값을 서버에 동기화하고 `/api/auth/me`로 profile language를 hydration한 뒤 Home을 표시해요. Home은 활성 언어쌍과 `/api/conversations/?limit=5&offset=0` 최근 대화 loaded/empty/error 상태를 표시해요. Free Chat 선택 시 `Topic Input → Topic Prep`으로 이어져 `POST /api/search/topic-prep/`의 ready/low-quality/error 상태를 보여주고, 첫 답변 제출 후 `POST /api/conversations/start/free-chat/`로 Conversation 화면에 진입해요. Roleplay 선택 시 `Roleplay Setup`에서 preset/custom 상황과 난이도를 고르고 `POST /api/conversations/start/roleplay/`로 같은 Conversation 화면에 진입해요. Home 최근 대화 카드도 `/conversation/:conversationId`로 이동해 기존 메시지를 이어가요.
+Flutter 앱 시작은 `Splash → Onboarding(최초 1회) → Google Login → Home` 순서예요. `go_router`가 onboarding 완료 상태와 Riverpod 인증 상태를 함께 관찰하며, 인증 복원 중에는 Splash를 유지하고 로그인 성공 또는 세션 만료 시 Home/Login으로 redirect해요. Onboarding은 기기 locale로 `ko -> en`, `en -> ko`, `zh -> ko` 기본값을 고르고 사용자가 지원 언어쌍(`ko -> en`, `en -> ko`, `zh -> en`, `zh -> ko`) 중 하나를 확정하면 pending language context를 secure storage에 저장해요. 인증이 생기면 `authControllerProvider`가 `PUT /api/auth/me/language-preferences`로 pending 값을 서버에 동기화하고 `/api/auth/me`로 profile language를 hydration한 뒤 Home을 표시해요. Home은 활성 언어쌍과 `/api/conversations/?limit=5&offset=0` 최근 대화 loaded/empty/error 상태를 표시해요. Account sheet의 언어쌍 설정은 profile default만 갱신하며 새 대화부터 적용되고 기존 conversation은 snapshot을 유지한다고 안내해요. Free Chat 선택 시 `Topic Input → Topic Prep`으로 이어져 `POST /api/search/topic-prep/`의 ready/low-quality/error 상태를 보여주고, 첫 답변 제출 후 `POST /api/conversations/start/free-chat/`로 Conversation 화면에 진입해요. Roleplay 선택 시 `Roleplay Setup`에서 target language에 맞는 preset/custom 상황과 난이도를 고르고 `POST /api/conversations/start/roleplay/`로 같은 Conversation 화면에 진입해요. Topic Prep과 Roleplay 콘텐츠 선택은 target language를 따르고, retry guidance나 짧은 설명은 feedback language를 따르는 정책을 유지해요. Backend LLM prompt policy도 같은 원칙을 써서 target language가 conversation, roleplay, grammar, Topic Prep의 연습·교정 기준을 정하고 feedback language는 설명·retry 안내 언어만 정해요. 이 정책은 STT/TTS나 provider/model routing을 변경하지 않아요. Home 최근 대화 카드도 `/conversation/:conversationId`로 이동해 기존 메시지를 이어가요.
 
 도메인은 기본적으로 아래 계층을 따라요:
 

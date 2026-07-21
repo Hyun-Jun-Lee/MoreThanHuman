@@ -1,12 +1,11 @@
 import 'package:curitalk/features/roleplay_setup/roleplay_setup.dart';
+import 'package:curitalk/features/language/language.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('defines the seven planned preset scenarios', () {
     expect(
-      roleplayPresetScenarios.map(
-        (RoleplayScenario scenario) => scenario.title,
-      ),
+      enRoleplayScenarios.map((RoleplayScenario scenario) => scenario.title),
       <String>[
         'Cafe order',
         'Hotel check-in',
@@ -19,9 +18,23 @@ void main() {
     );
   });
 
+  test('defines Korean-practice preset scenarios for Korean target', () {
+    expect(
+      roleplayPresetScenariosFor(
+        LearningLanguageCode.ko,
+      ).map((RoleplayScenario scenario) => scenario.title),
+      containsAll(<String>[
+        'Polite cafe order',
+        'Self-introduction',
+        'Workplace greeting',
+        'Clinic visit',
+      ]),
+    );
+  });
+
   test('builds a backend-ready role character from a preset scenario', () {
     final RoleplaySetupPayload payload = RoleplaySetupPayload(
-      situation: PresetRoleplaySituation(roleplayPresetScenarios.first),
+      situation: PresetRoleplaySituation(enRoleplayScenarios.first),
       difficulty: RoleplayDifficulty.normal,
     );
 
@@ -30,27 +43,28 @@ void main() {
       payload.roleCharacter,
       contains('a friendly cafe barista taking an order'),
     );
-    expect(payload.roleCharacter, contains('natural and everyday'));
+    expect(payload.roleCharacter, contains('everyday pacing'));
+    expect(payload.roleCharacter, contains('useful follow-up questions'));
   });
 
   test('adds easy difficulty instructions to the role character', () {
     final RoleplaySetupPayload payload = RoleplaySetupPayload(
-      situation: PresetRoleplaySituation(roleplayPresetScenarios.first),
+      situation: PresetRoleplaySituation(enRoleplayScenarios.first),
       difficulty: RoleplayDifficulty.easy,
     );
 
-    expect(payload.roleCharacter, contains('short, simple questions'));
+    expect(payload.roleCharacter, contains('short prompts'));
     expect(payload.roleCharacter, contains('gentle'));
   });
 
   test('adds challenge difficulty instructions to the role character', () {
     final RoleplaySetupPayload payload = RoleplaySetupPayload(
-      situation: PresetRoleplaySituation(roleplayPresetScenarios.first),
+      situation: PresetRoleplaySituation(enRoleplayScenarios.first),
       difficulty: RoleplayDifficulty.challenge,
     );
 
     expect(payload.roleCharacter, contains('unexpected follow-up questions'));
-    expect(payload.roleCharacter, contains('longer answers'));
+    expect(payload.roleCharacter, contains('more precise answers'));
   });
 
   test('trims custom situations and validates minimum length', () {
@@ -68,11 +82,11 @@ void main() {
 
   test('custom roleplay treats learner role as the counterpart target', () {
     const RoleplaySetupPayload payload = RoleplaySetupPayload(
-      situation: CustomRoleplaySituation("i'm working on cafe as a barista"),
+      situation: CustomRoleplaySituation("I'm a hotel guest asking for help"),
       difficulty: RoleplayDifficulty.normal,
     );
 
-    expect(payload.roleCharacter, contains('play a customer'));
+    expect(payload.roleCharacter, contains('play the front desk staff member'));
     expect(payload.roleCharacter, isNot(contains('play the learner')));
   });
 }

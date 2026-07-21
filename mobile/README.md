@@ -161,7 +161,7 @@ Splash → Onboarding(최초 1회) → Google Login → Home
 - Login: Google Sign-In SDK의 `idToken`/`accessToken`으로 Supabase 세션 생성 후 `/auth/me` 조회
 - Home: 사용자 이름, 활성 언어쌍, 최근 대화 5개를 표시하고, 없으면 시작 제안을 표시
 - Home Navigation: `Chat`은 새 대화 시작 sheet, `History`는 대화 목록 화면, `Profile`은 account sheet를 열어요.
-- Account: 우상단 프로필 아바타 또는 `Profile` 탭에서 이름/email, 활성 언어쌍 변경, `LOG OUT`을 표시하고, 로그아웃 시 앱 token 삭제·서버 revoke·Google sign out을 best-effort로 처리해요.
+- Account: 우상단 프로필 아바타 또는 `Profile` 탭에서 이름/email, 활성 언어쌍 변경, `LOG OUT`을 표시해요. 언어쌍 변경은 새 대화부터 적용되고 기존 대화는 시작 시점 언어쌍을 유지한다고 안내하며, 저장 후 profile을 다시 hydration해 Home의 활성 언어쌍을 갱신해요. 로그아웃 시 앱 token 삭제·서버 revoke·Google sign out을 best-effort로 처리해요.
 - Free Chat: Home sheet에서 Topic Input → Topic Prep으로 이동한 뒤 첫 답변으로 대화를 시작
 - Roleplay: Home sheet에서 Roleplay Setup으로 이동한 뒤 상황과 난이도로 롤플레이 대화를 시작
 - History: 하단 `History` 탭에서 대화 목록을 보고 기존 대화로 다시 진입
@@ -199,7 +199,7 @@ Topic Prep 화면은 전달받은 topic으로 `POST /api/search/topic-prep/`를 
 
 ## Roleplay Setup 흐름
 
-Home의 `START CONVERSATION`에서 Roleplay를 선택하면 Roleplay Setup 화면으로 이동해요. 사용자는 상단에서 난이도를 먼저 고른 뒤 preset 상황 카드 7개 중 하나를 고르거나, custom 입력으로 원하는 상황을 직접 작성할 수 있어요.
+Home의 `START CONVERSATION`에서 Roleplay를 선택하면 Roleplay Setup 화면으로 이동해요. 사용자는 상단에서 난이도를 먼저 고른 뒤 preset 상황 카드 7개 중 하나를 고르거나, custom 입력으로 원하는 상황을 직접 작성할 수 있어요. Preset 상황은 활성 언어쌍의 target language를 기준으로 골라요. 한국어 연습은 존댓말, 자기소개, 직장 인사, 서비스 요청처럼 한국어 사용 맥락을 우선하고, 영어 연습은 기존 cafe/travel/interview/meeting 같은 broad conversation 상황을 유지해요.
 
 | 선택 | 동작 |
 |------|------|
@@ -207,7 +207,7 @@ Home의 `START CONVERSATION`에서 Roleplay를 선택하면 Roleplay Setup 화�
 | custom 상황 | 2자 이상 입력 시 Start Roleplay CTA 활성화 |
 | 난이도 | `Easy`, `Normal`, `Challenge`가 한 줄 selector로 표시되며 기본값은 `Normal` |
 
-Start Roleplay를 누르면 선택 결과를 백엔드 계약에 맞는 `role_character` 문자열로 합성하고 `POST /api/conversations/start/roleplay/`를 호출해 Conversation 화면으로 이동해요. Custom 입력은 사용자의 상황이나 사용자 역할을 설명하는 값으로 보고, AI는 그 상황의 상대역을 맡도록 prompt를 합성해요. Roleplay 시작 응답의 `message_id`는 AI 첫 인사 메시지 ID로 취급하므로 사용자 문법 피드백 polling 대상이 아니에요.
+Start Roleplay를 누르면 선택 결과를 백엔드 계약에 맞는 `role_character` 문자열로 합성하고 `POST /api/conversations/start/roleplay/`를 호출해 Conversation 화면으로 이동해요. Custom 입력은 사용자의 상황이나 사용자 역할을 설명하는 값으로 보고, AI는 그 상황의 상대역을 맡도록 prompt를 합성해요. 서버는 conversation snapshot의 target language로 roleplay scenario examples를 고르고, feedback language는 필요한 설명에만 사용해요. Roleplay 시작 응답의 `message_id`는 AI 첫 인사 메시지 ID로 취급하므로 사용자 문법 피드백 polling 대상이 아니에요.
 
 ## Conversation 흐름
 

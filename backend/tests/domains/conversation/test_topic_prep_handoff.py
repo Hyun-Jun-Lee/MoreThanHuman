@@ -63,6 +63,48 @@ def test_free_chat_prompt_can_target_korean_with_english_feedback():
     assert "Korean conversation learning assistant" in prompt
     assert "Always communicate in Korean" in prompt
     assert "Use English only for brief explanations" in prompt
+    assert "particles" in prompt
+    assert "honorific" in prompt
+
+
+def test_free_chat_prompt_includes_english_target_policy_by_default():
+    service = ConversationService(repository=None, grammar_repository=None)
+
+    prompt = service.build_free_chat_prompt(search_context=None)
+
+    assert "tense" in prompt
+    assert "articles" in prompt
+    assert "question formation" in prompt
+
+
+def test_roleplay_prompt_uses_korean_target_examples():
+    service = ConversationService(repository=None, grammar_repository=None)
+    context = LearningLanguageContext(
+        native_language="en",
+        target_language="ko",
+        feedback_language="en",
+    )
+
+    prompt = service.build_roleplay_prompt(
+        "a front desk staff member helping with check-in",
+        language_context=context,
+    )
+
+    assert "Korean Cafe Staff" in prompt
+    assert "honorific level" in prompt
+    assert "particles" in prompt
+    assert "English Teacher" not in prompt
+    assert "Always communicate in Korean" in prompt
+
+
+def test_roleplay_prompt_uses_english_target_examples_without_teacher_frame():
+    service = ConversationService(repository=None, grammar_repository=None)
+
+    prompt = service.build_roleplay_prompt("a hotel front desk staff member")
+
+    assert "Meeting Participant" in prompt
+    assert "English Teacher" not in prompt
+    assert "Always communicate in English" in prompt
 
 
 def test_start_free_chat_rejects_invalid_topic_prep_direction():

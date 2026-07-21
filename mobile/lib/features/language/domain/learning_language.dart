@@ -150,6 +150,15 @@ class LearningLanguageContext {
     };
   }
 
+  String preferenceChangePolicyText(String localeCode) {
+    return switch (localeCode) {
+      'ko' => '새 대화부터 적용돼요. 기존 대화는 시작할 때 선택한 언어쌍을 유지해요.',
+      'zh' => '适用于新对话。现有对话会保留开始时的语言组合。',
+      _ =>
+        'Applies to new conversations. Existing conversations keep the language pair they started with.',
+    };
+  }
+
   LearningLanguageContext copyWith({
     LearningLanguageCode? nativeLanguage,
     LearningLanguageCode? targetLanguage,

@@ -31,7 +31,16 @@ from domains.search.schemas import (
     TopicPrepResult,
 )
 from shared.exceptions import ExternalAPIException
-from shared.language import LearningLanguageContext, ensure_language_context, language_name
+from shared.language import (
+    LanguageCode,
+    LearningLanguageContext,
+    ensure_language_context,
+    language_name,
+)
+from shared.language_prompt_policy import (
+    format_topic_prep_priorities,
+    practice_priority_summary,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -134,14 +143,11 @@ class SearchService:
             language_context=language_context,
         )
         if not card.quality.is_sufficient:
-            return TopicPrepResult(
-                ready=False,
-                language=language_context,
-                card=None,
-                quality=card.quality,
-                retry_guidance=card.quality.retry_suggestion
-                or self._build_retry_guidance(topic, language_context=language_context),
-                example_topics=self._build_example_topics(topic, language_context=language_context),
+            return self._build_not_ready_topic_prep_result(
+                topic,
+                card.quality,
+                language_context=language_context,
+                use_quality_retry_suggestion=False,
             )
 
         return TopicPrepResult(
@@ -343,6 +349,7 @@ class SearchService:
         language_context = ensure_language_context(language_context)
         target_name = language_name(language_context.target_language)
         feedback_name = language_name(language_context.feedback_language)
+        practice_summary = practice_priority_summary(language_context.target_language)
         current_date, timezone = current_search_context()
         source_text = self._format_numbered_sources(sources)
         try:
@@ -355,6 +362,7 @@ class SearchService:
                         content=(
                             f"You are the primary source quality judge for a {target_name} conversation app. "
                             "Select only sources that are directly useful for discussing the user's topic. "
+                            f"Judge usefulness for target-language practice priorities: {practice_summary}. "
                             "Return only valid JSON with keys: is_sufficient, accepted_source_ids, "
                             "rejected_sources, relevance, freshness, specificity, reason, retry_suggestion. "
                             "Use 1-based source ids from the provided list. "
@@ -617,6 +625,7 @@ class SearchService:
         language_context = ensure_language_context(language_context)
         target_name = language_name(language_context.target_language)
         feedback_name = language_name(language_context.feedback_language)
+        practice_summary = practice_priority_summary(language_context.target_language)
 
         source_text = "\n".join(
             f"- {s.title}: {s.snippet}" for s in sources
@@ -634,6 +643,7 @@ class SearchService:
                             "Summarize the following search results into a concise paragraph. "
                             "Focus on key facts and information relevant to the query. "
                             f"Write in {target_name} for conversation practice. "
+                            f"Keep the summary useful for these practice priorities: {practice_summary}. "
                             f"Use {feedback_name} only for brief learning guidance if needed. "
                             "Keep it under 150 words."
                         ),
@@ -741,6 +751,7 @@ class SearchService:
         target_name = language_name(language_context.target_language)
         feedback_name = language_name(language_context.feedback_language)
         native_name = language_name(language_context.native_language)
+        topic_prep_priorities = format_topic_prep_priorities(language_context.target_language)
         directions = ", ".join(direction.value for direction in ConversationDirection)
         return f"""You create pre-conversation topic prep cards for {target_name} learners.
 
@@ -748,6 +759,9 @@ Learner language context:
 - Native language: {native_name}
 - Practice target language: {target_name}
 - Feedback/retry guidance language: {feedback_name}
+
+Target-language practice priorities:
+{topic_prep_priorities}
 
 Evaluate whether the search results are good enough to start a concrete {target_name} conversation.
 Judge quality using:
@@ -761,7 +775,8 @@ If sufficient, create a short {target_name} summary and exactly four conversatio
 Each direction must use one of these direction values: {directions}.
 Each direction must include exactly three first questions.
 Questions must be specific to the search summary and must not be generic questions like "Do you like baseball?"
-Write titles, descriptions, first questions, quality reason, and retry_suggestion in {target_name}, except retry guidance can use {feedback_name} when helping the learner recover.
+For sufficient cards, write titles, descriptions, and first questions in {target_name}.
+When is_sufficient is false, write quality reason and retry_suggestion in {feedback_name} so the learner can recover.
 
 Respond only in JSON:
 {{
@@ -921,7 +936,47 @@ Respond only in JSON:
         language_context: LearningLanguageContext | None = None,
     ) -> dict[ConversationDirection, dict]:
         """대화 방향 기본 메타데이터"""
-        target_name = language_name(ensure_language_context(language_context).target_language)
+        language_context = ensure_language_context(language_context)
+        if language_context.target_language == LanguageCode.KOREAN:
+            return {
+                ConversationDirection.CASUAL_CHAT: {
+                    "title": "가볍게 대화하기",
+                    "description": "주제에 대한 생각과 경험을 자연스럽게 말해요.",
+                    "fallback_questions": [
+                        f"{topic}에서 가장 먼저 눈에 들어온 점은 무엇인가요?",
+                        f"{topic}에 대한 생각을 어떻게 말해보고 싶나요?",
+                        f"{topic}에 대해 더 알고 싶은 점은 무엇인가요?",
+                    ],
+                },
+                ConversationDirection.DEBATE: {
+                    "title": "의견 말하기",
+                    "description": "입장을 정하고 이유를 차분하게 설명해요.",
+                    "fallback_questions": [
+                        f"{topic}에 대해 어떤 입장을 말해보고 싶나요?",
+                        f"그렇게 생각하는 가장 큰 이유는 무엇인가요?",
+                        f"반대 의견을 가진 사람은 어떤 말을 할 수 있을까요?",
+                    ],
+                },
+                ConversationDirection.INTERVIEW_QA: {
+                    "title": "인터뷰 / 질의응답",
+                    "description": "구체적인 질문에 답하며 설명을 이어가요.",
+                    "fallback_questions": [
+                        f"{topic}에서 사람들이 꼭 알아야 할 점은 무엇인가요?",
+                        f"{topic}이 지금 중요한 이유는 무엇인가요?",
+                        f"전문가에게 {topic}에 대해 어떤 질문을 하고 싶나요?",
+                    ],
+                },
+                ConversationDirection.EXPLANATION_PRACTICE: {
+                    "title": "설명 연습",
+                    "description": "주제를 이해하기 쉽게 정리해서 말해요.",
+                    "fallback_questions": [
+                        f"{topic}을 쉬운 한국어로 어떻게 요약할 수 있을까요?",
+                        f"{topic}을 이해하려면 어떤 배경을 알아야 하나요?",
+                        f"{topic}을 설명하기 좋은 예시는 무엇인가요?",
+                    ],
+                },
+            }
+        target_name = language_name(language_context.target_language)
         return {
             ConversationDirection.CASUAL_CHAT: {
                 "title": "Casual conversation",
@@ -979,31 +1034,64 @@ Respond only in JSON:
             freshness=False,
             specificity=False,
             reason=reason,
-            retry_suggestion=retry_suggestion
-            or self._build_retry_guidance(topic, language_context=language_context),
+            retry_suggestion=retry_suggestion,
+        )
+        return self._build_not_ready_topic_prep_result(
+            topic,
+            quality,
+            language_context=language_context,
+        )
+
+    def _build_not_ready_topic_prep_result(
+        self,
+        topic: str,
+        quality: TopicPrepQuality,
+        *,
+        language_context: LearningLanguageContext | None = None,
+        use_quality_retry_suggestion: bool = True,
+    ) -> TopicPrepResult:
+        """Topic Prep not-ready 응답의 retry/example 정합성을 맞춘다."""
+        language_context = ensure_language_context(language_context)
+        example_topics = self._build_example_topics(
+            topic,
+            language_context=language_context,
+        )
+        retry_guidance = (
+            quality.retry_suggestion if use_quality_retry_suggestion else None
+        ) or self._build_retry_guidance(
+            topic,
+            language_context=language_context,
+            example_topics=example_topics,
+        )
+        final_quality = quality.model_copy(
+            update={"retry_suggestion": retry_guidance},
         )
         return TopicPrepResult(
             ready=False,
             language=language_context,
-            quality=quality,
-            retry_guidance=quality.retry_suggestion,
-            example_topics=self._build_example_topics(topic, language_context=language_context),
+            quality=final_quality,
+            retry_guidance=retry_guidance,
+            example_topics=example_topics,
         )
 
     def _build_retry_guidance(
         self,
         topic: str,
         language_context: LearningLanguageContext | None = None,
+        example_topics: list[str] | None = None,
     ) -> str:
         """주제 재입력 안내 생성"""
         language_context = ensure_language_context(language_context)
-        examples = ", ".join(self._build_example_topics(topic, language_context=language_context))
-        if language_context.feedback_language.value == "en":
+        examples = ", ".join(
+            example_topics
+            or self._build_example_topics(topic, language_context=language_context)
+        )
+        if language_context.feedback_language == LanguageCode.ENGLISH:
             return (
                 "I could not find search results specific enough to prepare a conversation. "
                 f"Try again with a concrete event, date, team, person, or place. Examples: {examples}"
             )
-        if language_context.feedback_language.value == "zh":
+        if language_context.feedback_language == LanguageCode.CHINESE:
             return (
                 "没有找到足够具体的搜索结果来准备对话。"
                 f"请加入具体事件、日期、团队、人物或地点后再试。例：{examples}"
@@ -1022,16 +1110,23 @@ Respond only in JSON:
         language_context = ensure_language_context(language_context)
         trimmed_topic = topic.strip()
         if not trimmed_topic:
-            trimmed_topic = "최근 뉴스"
+            trimmed_topic = self._default_example_topic(language_context)
         current_date, _timezone = current_search_context()
         year, month, *_ = current_date.split("-")
-        if language_context.feedback_language.value == "en":
+        if language_context.target_language == LanguageCode.KOREAN:
+            return self._build_korean_practice_example_topics(
+                trimmed_topic,
+                year,
+                month,
+                language_context=language_context,
+            )
+        if language_context.feedback_language == LanguageCode.ENGLISH:
             return [
                 f"{trimmed_topic} latest issue in {year}-{month}",
                 f"specific event and outcome about {trimmed_topic}",
                 f"pros and cons debate about {trimmed_topic}",
             ]
-        if language_context.feedback_language.value == "zh":
+        if language_context.feedback_language == LanguageCode.CHINESE:
             return [
                 f"{year}年{int(month)}月 {trimmed_topic} 最新议题",
                 f"{trimmed_topic} 的具体事件和结果",
@@ -1043,12 +1138,47 @@ Respond only in JSON:
             f"{trimmed_topic}에 대한 찬반 쟁점",
         ]
 
+    def _default_example_topic(self, language_context: LearningLanguageContext) -> str:
+        """feedback 언어에 맞는 빈 주제 기본값"""
+        if language_context.feedback_language == LanguageCode.ENGLISH:
+            return "recent news"
+        if language_context.feedback_language == LanguageCode.CHINESE:
+            return "最近新闻"
+        return "최근 뉴스"
+
+    def _build_korean_practice_example_topics(
+        self,
+        topic: str,
+        year: str,
+        month: str,
+        *,
+        language_context: LearningLanguageContext,
+    ) -> list[str]:
+        """한국어 연습에 맞는 low-quality 재입력 예시"""
+        if language_context.feedback_language == LanguageCode.ENGLISH:
+            return [
+                f"{topic} polite Korean service situation in {year}-{month}",
+                f"specific Korean self-introduction or workplace greeting about {topic}",
+                f"Korean opinion conversation with concrete people or places about {topic}",
+            ]
+        if language_context.feedback_language == LanguageCode.CHINESE:
+            return [
+                f"{year}年{int(month)}月 {topic} 的韩语礼貌服务场景",
+                f"围绕 {topic} 的具体韩语自我介绍或职场问候",
+                f"关于 {topic} 的韩语观点对话，加入具体人物或地点",
+            ]
+        return [
+            f"{year}년 {int(month)}월 {topic} 관련 한국어 존댓말 상황",
+            f"{topic}에 대한 구체적인 자기소개나 직장 인사 상황",
+            f"{topic}을 두고 인물이나 장소가 분명한 한국어 의견 대화",
+        ]
+
     def _resolve_search_region(self, language_context: LearningLanguageContext) -> str:
         """언어 컨텍스트 기반 검색 region hint"""
-        if language_context.native_language.value == "zh":
+        if language_context.native_language == LanguageCode.CHINESE:
             return "cn-zh"
-        if language_context.target_language.value == "en":
+        if language_context.target_language == LanguageCode.ENGLISH:
             return "us-en"
-        if language_context.target_language.value == "ko":
+        if language_context.target_language == LanguageCode.KOREAN:
             return "kr-kr"
         return self.settings.search_region

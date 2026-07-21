@@ -201,6 +201,7 @@ Supabase access token으로 검증된 현재 사용자 프로필을 반환해요
 ### `PUT /api/auth/me/language-preferences`
 
 현재 사용자 프로필의 언어 선호를 변경해요. `native_language`, `target_language`, `feedback_language` 외 필드는 허용하지 않아요. 변경값은 이후 새 conversation에만 적용되고, 이미 생성된 conversation은 생성 시점의 snapshot을 계속 사용해요.
+모바일 Account sheet는 이 정책을 저장 전에 안내하고, 저장 후 `/api/auth/me`를 다시 불러와 Home의 활성 언어쌍 표시를 갱신해요.
 
 ```json
 {
@@ -214,6 +215,7 @@ Supabase access token으로 검증된 현재 사용자 프로필을 반환해요
 
 모든 conversation API는 인증이 필요해요.
 새 conversation을 시작하면 현재 프로필의 언어 선호가 conversation snapshot으로 저장되고, start/get/list conversation 응답의 `language`에 포함돼요. 이어 말하기와 문법 polling은 저장된 snapshot을 사용하므로 이후 프로필 선호를 바꿔도 기존 대화 언어는 바뀌지 않아요.
+LLM prompt policy도 같은 snapshot을 사용해요. `target_language`는 자유 대화, 롤플레이, 문법 피드백, Topic Prep의 연습·교정 기준을 정하고, `feedback_language`는 설명과 low-quality retry guidance 언어만 정해요. 이 정책은 provider/model routing이나 STT/TTS 언어 설정을 바꾸지 않아요.
 
 ### `POST /api/conversations/start/free-chat/`
 
@@ -680,6 +682,7 @@ API, 환경변수, 도메인 계약이 바뀌면 같은 작업 단위에서 아�
 - `profiles` 기반 앱 사용자 프로필 관리
 - AI 기반 다국어 회화 연습
 - `ko -> en`, `en -> ko`, `zh -> en`, `zh -> ko` 언어쌍 선호와 conversation snapshot
+- 목표 언어별 prompt policy 기반 대화·문법·Topic Prep 학습 기준
 - 자유 대화와 롤플레이 대화
 - 사용자별 대화 히스토리 관리
 - 문법 체크 및 polling/SSE 기반 비동기 피드백

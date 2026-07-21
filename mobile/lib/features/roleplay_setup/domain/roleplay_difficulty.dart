@@ -1,19 +1,21 @@
 enum RoleplayDifficulty {
   easy(
     label: 'Easy',
-    description: 'Short, simple questions with a slower pace.',
-    promptInstruction: 'uses short, simple questions and keeps the pace gentle',
+    description: 'Short prompts, clear context, and a gentle pace.',
+    promptInstruction: 'uses short prompts, clear context, and a gentle pace',
   ),
   normal(
     label: 'Normal',
-    description: 'Natural everyday conversation.',
-    promptInstruction: 'keeps the conversation natural and everyday',
+    description: 'Natural everyday pacing with useful follow-up questions.',
+    promptInstruction:
+        'keeps everyday pacing and asks useful follow-up questions',
   ),
   challenge(
     label: 'Challenge',
-    description: 'Unexpected questions that invite longer answers.',
+    description:
+        'Unexpected follow-ups that invite longer, more precise answers.',
     promptInstruction:
-        'asks unexpected follow-up questions and encourages longer answers',
+        'asks unexpected follow-up questions and encourages longer, more precise answers',
   );
 
   const RoleplayDifficulty({

@@ -24,7 +24,13 @@ from domains.grammar.repository import GrammarRepository
 from domains.grammar.service import GrammarService
 from domains.llm.factory import LLMProviderFactory
 from domains.llm.schemas import LLMMessage, LLMRequest
-from shared.language import LearningLanguageContext, ensure_language_context, language_name
+from shared.language import (
+    LanguageCode,
+    LearningLanguageContext,
+    ensure_language_context,
+    language_name,
+)
+from shared.language_prompt_policy import format_practice_priorities
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -538,12 +544,18 @@ class ConversationService:
         feedback_name = language_name(language_context.feedback_language)
         native_name = language_name(language_context.native_language)
 
+        scenario_examples = self._roleplay_scenario_examples(language_context)
+        practice_priorities = format_practice_priorities(language_context.target_language)
+
         base_prompt = f"""You are a {target_name} conversation practice partner playing the role of '{role_character}'.
 
         ## Learner Language Context:
         - Native language: {native_name}
         - Practice target language: {target_name}
         - Feedback/explanation language: {feedback_name}
+
+        ## Target Language Practice Priorities:
+{practice_priorities}
 
         ## Role Guidelines:
         1. Always speak naturally from the perspective of '{role_character}'
@@ -558,16 +570,29 @@ class ConversationService:
         - **IMPORTANT: Keep responses short - maximum 3 sentences**
 
         ## Scenario Examples:
-        - Cafe Barista: Greeting customers, explaining and recommending menu items, taking orders, chatting during drink preparation, payment and closing
-        - Interviewer: Welcoming candidates, requesting self-introduction, asking about experience and career, evaluating problem-solving skills in various situations, providing time for questions
-        - English Teacher: Practicing daily conversation, introducing new expressions, explaining grammar, correcting pronunciation, reviewing homework and providing feedback
-        - Hotel Front Desk: Check-in procedures, room information, introducing hotel facilities, handling requests, check-out and feedback
+{scenario_examples}
         """
 
         if search_context:
             base_prompt += f"\n\n## Reference Information:\n{search_context}"
 
         return base_prompt
+
+    def _roleplay_scenario_examples(self, language_context: LearningLanguageContext) -> str:
+        """목표 언어에 맞는 롤플레이 예시 목록"""
+        if language_context.target_language == LanguageCode.KOREAN:
+            return (
+                """        - Korean Cafe Staff: Taking polite orders, explaining menu options, checking preferences, handling payment, and closing with natural endings
+        - Front Desk Staff: Helping with check-in, directions, reservations, and polite requests using appropriate honorific level
+        - New Colleague: Exchanging greetings, self-introductions, workplace small talk, and simple follow-up questions
+        - Friend: Having casual conversation about plans, opinions, and daily life while keeping the tone natural"""
+            )
+        return (
+            """        - Cafe Barista: Greeting customers, explaining and recommending menu items, taking orders, chatting during drink preparation, payment and closing
+        - Interviewer: Welcoming candidates, requesting self-introduction, asking about experience and career, evaluating problem-solving skills in various situations, providing time for questions
+        - Hotel Front Desk: Check-in procedures, room information, introducing hotel facilities, handling requests, check-out and feedback
+        - Meeting Participant: Making small talk, asking for opinions, responding to ideas, and encouraging practical follow-up answers"""
+        )
 
     def build_free_chat_prompt(
         self,
@@ -582,6 +607,7 @@ class ConversationService:
         target_name = language_name(language_context.target_language)
         feedback_name = language_name(language_context.feedback_language)
         native_name = language_name(language_context.native_language)
+        practice_priorities = format_practice_priorities(language_context.target_language)
 
         base_prompt = f"""You are a friendly and helpful {target_name} conversation learning assistant.
 
@@ -594,6 +620,9 @@ class ConversationService:
         - Native language: {native_name}
         - Practice target language: {target_name}
         - Feedback/explanation language: {feedback_name}
+
+        ## Target Language Practice Priorities:
+{practice_priorities}
 
         ## Conversation Style:
         - Always communicate in {target_name}

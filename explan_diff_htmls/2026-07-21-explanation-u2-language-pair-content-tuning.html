@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>U2 언어쌍 콘텐츠 튜닝 설명</title>
+  <style>
+    :root {
+      --paper: #fbfaf7;
+      --ink: #202428;
+      --muted: #65717c;
+      --line: #dde1dc;
+      --accent: #7a4f1f;
+      --accent-soft: #f4e6ce;
+      --blue: #dce9f6;
+      --rose: #f1dddd;
+      --gold: #f6e4b6;
+      --green: #e2eddc;
+      --code: #152026;
+      --code-ink: #e9f3f1;
+      --shadow: 0 18px 42px rgba(32, 36, 40, 0.08);
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+      line-height: 1.7;
+    }
+    .page { max-width: 1120px; margin: 0 auto; padding: 34px 22px 80px; }
+    .hero { display: grid; grid-template-columns: minmax(0, 1.12fr) minmax(280px, 0.88fr); gap: 24px; padding: 36px; border: 1px solid var(--line); border-radius: 20px; background: #fffdf8; box-shadow: var(--shadow); }
+    .eyebrow { margin: 0 0 8px; color: var(--accent); font-size: 13px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
+    h1 { margin: 0; font-size: clamp(34px, 5vw, 60px); line-height: 1.05; letter-spacing: 0; }
+    h2 { margin: 0 0 14px; font-size: clamp(27px, 4vw, 42px); line-height: 1.16; letter-spacing: 0; }
+    h3 { margin: 30px 0 10px; font-size: 22px; line-height: 1.25; }
+    p { margin: 12px 0; }
+    a { color: var(--accent); text-decoration: none; }
+    .subtitle { margin: 20px 0 0; max-width: 740px; color: var(--muted); font-size: 18px; }
+    .hero-card { padding: 20px; border-radius: 18px; border: 1px solid rgba(122, 79, 31, 0.2); background: linear-gradient(180deg, #fff5e2, #eef6f2); }
+    .scenario-list { display: grid; gap: 10px; margin-top: 12px; }
+    .scenario { padding: 12px; border-radius: 12px; background: rgba(255, 255, 255, 0.82); border: 1px solid var(--line); }
+    .scenario strong { display: block; }
+    .scenario span { color: var(--muted); font-size: 14px; }
+    .toc { margin: 26px 0 0; padding: 18px; border: 1px solid var(--line); border-radius: 16px; background: rgba(255, 255, 255, 0.68); }
+    .toc strong { display: block; margin-bottom: 10px; }
+    .toc nav { display: flex; flex-wrap: wrap; gap: 10px; }
+    .toc a { padding: 8px 12px; border-radius: 999px; background: #fff; border: 1px solid var(--line); font-size: 14px; font-weight: 700; }
+    section { margin-top: 54px; }
+    .lead { font-size: 18px; color: #3d464d; }
+    .callout { margin: 22px 0; padding: 17px 19px; border-left: 5px solid var(--accent); border-radius: 14px; background: var(--accent-soft); }
+    .callout strong { display: block; margin-bottom: 4px; }
+    .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin: 22px 0; }
+    .card { padding: 17px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255, 255, 255, 0.74); }
+    .card h4 { margin: 0 0 8px; font-size: 17px; }
+    .card p { margin: 0; color: var(--muted); font-size: 15px; }
+    .flow { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; align-items: stretch; margin: 24px 0; }
+    .flow .node { padding: 16px; border-radius: 14px; border: 1px solid var(--line); background: #fff; min-height: 112px; }
+    .flow .arrow { display: grid; place-items: center; color: var(--accent); font-size: 26px; font-weight: 900; }
+    .node .label { color: var(--accent); font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.06em; }
+    .node .value { margin-top: 8px; font-weight: 800; }
+    .before-after { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 22px 0; }
+    .before { background: var(--rose); }
+    .after { background: var(--green); }
+    pre { margin: 16px 0; padding: 18px; overflow-x: auto; white-space: pre-wrap; border-radius: 14px; background: var(--code); color: var(--code-ink); font-size: 14px; line-height: 1.58; }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+    .quiz-card { margin: 18px 0; padding: 18px; border: 1px solid var(--line); border-radius: 16px; background: #fff; }
+    .quiz-card p { font-weight: 800; }
+    .quiz-card button { display: block; width: 100%; margin: 8px 0; padding: 11px 12px; border: 1px solid var(--line); border-radius: 10px; background: #fbfaf7; color: var(--ink); text-align: left; font: inherit; cursor: pointer; }
+    .quiz-card button.correct { border-color: #23865f; background: #e4f4eb; }
+    .quiz-card button.incorrect { border-color: #b65454; background: #f7e2e2; }
+    .feedback { margin-top: 8px; color: var(--muted); font-size: 15px; }
+    @media (max-width: 820px) {
+      .hero, .before-after { grid-template-columns: 1fr; }
+      .flow { grid-template-columns: 1fr; }
+      .flow .arrow { transform: rotate(90deg); min-height: 28px; }
+      .grid { grid-template-columns: 1fr; }
+      .page { padding: 20px 14px 60px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">U2 · Content Tuning</p>
+        <h1>언어쌍이 실제 연습 콘텐츠를 고르게 만든 작업</h1>
+        <p class="subtitle">U1이 화면 문장의 영어 전용 흔적을 지웠다면, U2는 사용자가 고르는 roleplay 상황과 Topic Prep 재시도 예시가 target language의 학습 과제에 맞게 나오도록 조정한 단계예요.</p>
+      </div>
+      <aside class="hero-card" aria-label="Korean practice roleplay examples">
+        <strong>Korean target preset 예시</strong>
+        <div class="scenario-list">
+          <div class="scenario"><strong>Polite cafe order</strong><span>주문, 옵션 질문, 자연스러운 마무리</span></div>
+          <div class="scenario"><strong>Self-introduction</strong><span>격식 수준에 맞는 자기소개</span></div>
+          <div class="scenario"><strong>Polite request</strong><span>부탁, 거절 완화, 존댓말</span></div>
+        </div>
+      </aside>
+    </header>
+
+    <div class="toc">
+      <strong>목차</strong>
+      <nav>
+        <a href="#background">Background</a>
+        <a href="#intuition">Intuition</a>
+        <a href="#code">Code</a>
+        <a href="#quiz">Quiz</a>
+      </nav>
+    </div>
+
+    <main>
+      <section id="background">
+        <h2>Background</h2>
+        <p class="lead">언어 학습 앱에서 “무슨 상황을 연습할 것인가”는 단순한 copy가 아닙니다. 그것은 학습자가 어떤 언어적 문제를 만나게 될지를 결정하는 커리큘럼의 작은 입구예요.</p>
+        <p>기존 roleplay preset은 영어회화 앱에서 흔히 볼 수 있는 cafe, hotel, immigration, interview 중심이었습니다. 영어 target에는 여전히 좋은 출발점이지만, 한국어 target에서는 존댓말, 조사, 어미, 자기소개, 서비스 상황처럼 한국어다운 과제가 더 앞에 나와야 합니다.</p>
+        <div class="callout">
+          <strong>U2의 기준</strong>
+          콘텐츠 선택은 target language가 결정합니다. 반면 low-quality retry 안내의 문장 언어는 feedback language가 결정합니다.
+        </div>
+        <div class="grid">
+          <div class="card"><h4>Roleplay preset</h4><p>모바일에서 target language별 상황 목록을 보여줍니다.</p></div>
+          <div class="card"><h4>Role character</h4><p>preset/custom 선택을 하나의 `role_character` 문자열로 합성합니다.</p></div>
+          <div class="card"><h4>Topic Prep examples</h4><p>재시도 예시는 읽기 언어와 연습 방향을 동시에 만족해야 합니다.</p></div>
+        </div>
+      </section>
+
+      <section id="intuition">
+        <h2>Intuition</h2>
+        <p>같은 “카페 주문”도 언어마다 학습의 중심이 다릅니다. 영어에서는 주문 표현과 옵션 질문이 중요하고, 한국어에서는 “주시겠어요”, “으로 할게요”, “괜찮습니다” 같은 어미와 공손함의 선택이 더 두드러질 수 있어요.</p>
+        <div class="flow" aria-label="U2 content routing">
+          <div class="node"><div class="label">Profile</div><div class="value">target_language</div></div>
+          <div class="arrow">→</div>
+          <div class="node"><div class="label">Mobile</div><div class="value">preset 목록과 custom hint</div></div>
+          <div class="arrow">→</div>
+          <div class="node"><div class="label">Backend</div><div class="value">scenario examples와 retry examples</div></div>
+        </div>
+        <div class="before-after">
+          <div class="card before"><h4>이전</h4><p>하나의 preset 목록이 모든 학습자에게 보이고, backend prompt에는 `English Teacher` 같은 고정 영어 학습 예시가 남아 있었습니다.</p></div>
+          <div class="card after"><h4>이후</h4><p>Korean target은 한국어다운 상황을 우선하고, English target은 기존 일상/여행/업무 영어 흐름을 유지합니다.</p></div>
+        </div>
+      </section>
+
+      <section id="code">
+        <h2>Code</h2>
+        <h3>1. 모바일 preset을 target language로 라우팅한다</h3>
+        <p>`roleplayPresetScenarios` 하나를 모든 사용자에게 쓰는 대신, Korean target용 목록과 English target용 목록을 나누고 accessor로 감쌌습니다.</p>
+        <pre><code>List&lt;RoleplayScenario&gt; roleplayPresetScenariosFor(
+  LearningLanguageCode targetLanguage,
+) {
+  return switch (targetLanguage) {
+    LearningLanguageCode.ko =&gt; koRoleplayScenarios,
+    LearningLanguageCode.en =&gt; enRoleplayScenarios,
+    LearningLanguageCode.zh =&gt; enRoleplayScenarios,
+  };
+}</code></pre>
+        <h3>2. Roleplay Setup 화면은 auth profile의 target을 본다</h3>
+        <p>새 API를 만들지 않고, 이미 hydration된 `authControllerProvider`에서 target language만 select합니다. UI state는 그대로 두고 콘텐츠 목록만 바뀌는 구조예요.</p>
+        <pre><code>final roleplayTargetLanguageProvider = Provider&lt;LearningLanguageCode&gt;((Ref ref) {
+  return ref.watch(
+    authControllerProvider.select(
+      (AsyncValue&lt;AuthSession&gt; auth) =&gt;
+          auth.value?.user?.language.targetLanguage ??
+          LearningLanguageContext.defaultContext.targetLanguage,
+    ),
+  );
+});</code></pre>
+        <h3>3. Custom roleplay는 영어 예시에 묶이지 않는다</h3>
+        <p>custom prompt의 예시는 cafe barista에 고정되어 있었지만, 이제 “사용자가 자신의 역할을 쓰면 반대 역할을 맡는다”는 규칙이 더 잘 드러납니다.</p>
+        <pre><code>return 'a realistic counterpart in a learner-defined roleplay where the learner described their situation or role as "$normalizedInput"; '
+    'if the learner describes their own role, play the opposite role in that situation; '
+    'for example, if the learner is a hotel guest asking for help, play the front desk staff member';</code></pre>
+        <h3>4. Backend roleplay examples도 target-aware가 된다</h3>
+        <p>모바일에서 Korean preset을 보여줘도 backend prompt가 영어 교사 예시를 들면 모델 행동은 다시 흔들릴 수 있어요. 그래서 scenario examples를 target language helper로 분리했습니다.</p>
+        <pre><code>def _roleplay_scenario_examples(self, language_context: LearningLanguageContext) -&gt; str:
+    if language_context.target_language == LanguageCode.KOREAN:
+        return (
+            """        - Korean Cafe Staff: Taking polite orders...
+        - Front Desk Staff: Helping with check-in...
+        - New Colleague: Exchanging greetings...
+        - Friend: Having casual conversation..."""
+        )
+    return (
+        """        - Cafe Barista: Greeting customers...
+        - Interviewer: Welcoming candidates...
+        - Hotel Front Desk: Check-in procedures...
+        - Meeting Participant: Making small talk..."""
+    )</code></pre>
+        <h3>5. Topic Prep 재시도 예시는 두 축을 동시에 본다</h3>
+        <p>예시 주제는 feedback language로 읽혀야 하지만, Korean target이면 한국어 연습에 좋은 상황으로 기울어야 합니다.</p>
+        <pre><code>if language_context.target_language == LanguageCode.KOREAN:
+    return self._build_korean_practice_example_topics(
+        trimmed_topic,
+        year,
+        month,
+        language_context=language_context,
+    )</code></pre>
+      </section>
+
+      <section id="quiz">
+        <h2>Quiz</h2>
+        <div class="quiz-card">
+          <p>1. U2에서 roleplay preset을 고르는 기준은 무엇인가요?</p>
+          <button data-correct="true">target language</button>
+          <button data-correct="false">feedback language</button>
+          <button data-correct="false">device locale only</button>
+          <div class="feedback"></div>
+        </div>
+        <div class="quiz-card">
+          <p>2. Korean target preset에 특히 포함되어야 하는 학습 과제는 무엇인가요?</p>
+          <button data-correct="false">영어 관사와 조동사</button>
+          <button data-correct="true">존댓말, 어미, 서비스 상황, 자기소개</button>
+          <button data-correct="false">모델 provider 선택</button>
+          <div class="feedback"></div>
+        </div>
+        <div class="quiz-card">
+          <p>3. Custom roleplay payload에서 유지한 API shape는 무엇인가요?</p>
+          <button data-correct="false">언어별 preset JSON 전체를 backend로 보냅니다.</button>
+          <button data-correct="true">여전히 하나의 `role_character` 문자열을 보냅니다.</button>
+          <button data-correct="false">conversation마다 언어쌍을 다시 선택하게 합니다.</button>
+          <div class="feedback"></div>
+        </div>
+        <div class="quiz-card">
+          <p>4. Topic Prep low-quality example에서 feedback language의 역할은 무엇인가요?</p>
+          <button data-correct="true">사용자가 읽을 수 있는 안내 문장 언어를 결정합니다.</button>
+          <button data-correct="false">대화에서 연습할 언어를 결정합니다.</button>
+          <button data-correct="false">검색 region만 결정합니다.</button>
+          <div class="feedback"></div>
+        </div>
+        <div class="quiz-card">
+          <p>5. Backend roleplay examples에서 제거한 영어 편향의 대표 사례는 무엇인가요?</p>
+          <button data-correct="false">Hotel Front Desk</button>
+          <button data-correct="true">English Teacher</button>
+          <button data-correct="false">Meeting Participant</button>
+          <div class="feedback"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script>
+    document.querySelectorAll(".quiz-card").forEach((card) => {
+      const feedback = card.querySelector(".feedback");
+      card.querySelectorAll("button").forEach((button) => {
+        button.addEventListener("click", () => {
+          card.querySelectorAll("button").forEach((item) => item.classList.remove("correct", "incorrect"));
+          const correct = button.dataset.correct === "true";
+          button.classList.add(correct ? "correct" : "incorrect");
+          feedback.textContent = correct
+            ? "정답이에요. U2의 핵심은 target language로 콘텐츠를 고르는 것입니다."
+            : "다시 살펴보세요. U2는 표시 언어와 연습 콘텐츠의 기준을 분리합니다.";
+        });
+      });
+    });
+  </script>
+</body>
+</html>

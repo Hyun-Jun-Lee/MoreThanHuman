@@ -43,4 +43,31 @@ void main() {
       LearningLanguageCode.en,
     );
   });
+
+  test('describes preference changes as new-conversations-only by locale', () {
+    expect(
+      LearningLanguageContext.defaultContext.preferenceChangePolicyText('en'),
+      contains('new conversations'),
+    );
+    expect(
+      LearningLanguageContext.defaultContext.preferenceChangePolicyText('en'),
+      contains('Existing conversations'),
+    );
+    expect(
+      LearningLanguageContext.defaultContext.preferenceChangePolicyText('ko'),
+      contains('새 대화'),
+    );
+    expect(
+      LearningLanguageContext.defaultContext.preferenceChangePolicyText('ko'),
+      contains('기존 대화'),
+    );
+    expect(
+      LearningLanguageContext.defaultContext.preferenceChangePolicyText('zh'),
+      contains('新对话'),
+    );
+    expect(
+      LearningLanguageContext.defaultContext.preferenceChangePolicyText('zh'),
+      contains('现有对话'),
+    );
+  });
 }

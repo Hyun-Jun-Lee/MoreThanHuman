@@ -12,7 +12,13 @@ from domains.grammar.schemas import GrammarAnalysis, GrammarFeedback, GrammarSta
 from domains.llm.factory import LLMProviderFactory
 from domains.llm.schemas import LLMMessage, LLMRequest
 from shared.exceptions import ExternalAPIException, NotFoundException, RateLimitException
-from shared.language import LearningLanguageContext, ensure_language_context, language_name
+from shared.language import (
+    LanguageCode,
+    LearningLanguageContext,
+    ensure_language_context,
+    language_name,
+)
+from shared.language_prompt_policy import format_correction_priorities
 
 settings = get_settings()
 
@@ -167,6 +173,7 @@ class GrammarService:
         language_context = ensure_language_context(language_context)
         target_name = language_name(language_context.target_language)
         feedback_name = language_name(language_context.feedback_language)
+        correction_priorities = format_correction_priorities(language_context.target_language)
         context_part = ""
         if previous_ai_message:
             context_part = f"""
@@ -175,7 +182,7 @@ Context (previous AI message): "{previous_ai_message}"
 IMPORTANT: Consider the conversation context when analyzing.
 """
 
-        if language_context.target_language.value == "ko":
+        if language_context.target_language == LanguageCode.KOREAN:
             return f"""Analyze the following Korean response for grammar and naturalness issues.
 {context_part}
 User's response: "{text}"
@@ -183,11 +190,7 @@ User's response: "{text}"
 CRITICAL CORRECTION RULES:
 1. The corrected sentence must stay in Korean and preserve the user's intent.
 2. Check Korean-specific issues:
-   - particles such as 은/는, 이/가, 을/를, 에/에서
-   - verb endings and tense/aspect markers
-   - spacing and spelling
-   - honorific and formality fit
-   - naturalness in the conversation context
+{correction_priorities}
 3. Do not apply English grammar rules such as subject-verb agreement to Korean.
 4. Explain issues in {feedback_name}.
 
@@ -207,7 +210,8 @@ Respond in JSON format:
 If there are no errors, return has_errors: false and an empty errors array.
 Keep explanations concise and helpful."""
 
-        return f"""Analyze the following {target_name} response for grammar errors.
+        if language_context.target_language == LanguageCode.ENGLISH:
+            return f"""Analyze the following English response for grammar errors.
 {context_part}
 NATURAL CONVERSATIONAL RESPONSES (Do NOT mark as errors):
 - Short responses like "Went to the park" are natural replies to questions like "What did you do?"
@@ -215,16 +219,7 @@ NATURAL CONVERSATIONAL RESPONSES (Do NOT mark as errors):
 - Casual expressions like "gonna", "wanna", "yeah", "nope" in informal conversation
 
 MUST CHECK FOR THESE ERRORS:
-1. Basic Grammar Errors:
-   - Subject-verb agreement (e.g., "I likes" → "I like")
-   - Question formation: Must have proper word order
-     * Questions need: Wh-word (if any) + Auxiliary (do/does/did/can/will) + Subject + Main verb
-     * Examples: "what you think?" → "What do you think?"
-     * Examples: "other groups you know?" → "What other groups do you know?" or "Do you know other groups?"
-   - Spelling mistakes
-   - Punctuation errors
-   - Word order problems
-   - Missing words (articles, auxiliary verbs, prepositions, question words)
+{correction_priorities}
 
 2. Contextual Appropriateness:
    - Tense consistency: If AI asks about past, user should use past tense, not future/present
@@ -252,6 +247,32 @@ Respond in JSON format:
 {{
   "has_errors": true/false,
   "corrected_sentence": "fully corrected, meaningful sentence",
+  "errors": [
+    {{
+      "original": "incorrect part",
+      "corrected": "correct part",
+      "explanation": "brief explanation in {feedback_name}"
+    }}
+  ]
+}}
+
+If there are no errors, return has_errors: false and an empty errors array.
+Keep explanations concise and helpful."""
+
+        return f"""Analyze the following {target_name} response for grammar and naturalness issues.
+{context_part}
+User's response: "{text}"
+
+CRITICAL CORRECTION RULES:
+1. The corrected sentence must stay in {target_name} and preserve the user's intent.
+2. Check target-language issues:
+{correction_priorities}
+3. Explain issues in {feedback_name}.
+
+Respond in JSON format:
+{{
+  "has_errors": true/false,
+  "corrected_sentence": "fully corrected, natural {target_name} sentence",
   "errors": [
     {{
       "original": "incorrect part",
