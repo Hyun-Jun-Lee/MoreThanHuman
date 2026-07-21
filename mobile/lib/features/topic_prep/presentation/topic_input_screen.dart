@@ -15,10 +15,10 @@ class TopicInputScreen extends StatefulWidget {
 
 class _TopicInputScreenState extends State<TopicInputScreen> {
   static const List<String> _examples = <String>[
-    '최근 롯데 자이언츠 경기',
-    '최근 애플 WWDC 발표',
-    '오사카 여행 맛집',
-    'AI 뉴스',
+    'AI news this week',
+    'Osaka food trip',
+    'World Cup qualifier',
+    'Apple WWDC update',
   ];
 
   late final TextEditingController _controller;
@@ -59,7 +59,7 @@ class _TopicInputScreenState extends State<TopicInputScreen> {
           const SizedBox(height: AppSpacing.xl),
           AppTextField(
             controller: _controller,
-            hintText: '최근 롯데 자이언츠 경기',
+            hintText: 'AI news this week',
             errorText: _errorText,
             autofocus: true,
             textInputAction: TextInputAction.done,

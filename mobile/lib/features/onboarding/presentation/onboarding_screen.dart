@@ -174,7 +174,7 @@ class _InterestPage extends StatelessWidget {
     return _OnboardingPageLayout(
       title: 'Talk about what\nyou actually care about.',
       description:
-          'Practice English with news, hobbies, sports, travel, or anything on your mind.',
+          'Practice conversation with news, hobbies, sports, travel, or anything on your mind.',
       illustration: AppColorBlockCard(
         color: AppPalette.blockLilacSoft,
         child: Column(

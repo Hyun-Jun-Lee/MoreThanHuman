@@ -201,7 +201,7 @@ flowchart TB
 - **Goal:** Prepare a durable design note for pair/task-specific model routing so DeepSeek/Qwen/Gemini choices can be evaluated later.
 - **Requirements:** R8, AE5
 - **Dependencies:** U3
-- **Files:** `docs/plans/2026-07-21-002-design-language-pair-model-routing-plan.md`, `README.md`, `.agent/architecture.md`, `.env.example`
+- **Files:** `docs/plans/2026-07-21-003-design-language-pair-model-routing-plan.md`, `README.md`, `.agent/architecture.md`, `.env.example`
 - **Approach:** Write a follow-up design or plan that names routing dimensions: native language, target language, task type, latency, cost, JSON reliability, Korean correction quality, Chinese explanation quality, and fallback. State that current runtime remains on existing `OPENROUTER_MODEL` and `GRAMMAR_OPENROUTER_MODEL` settings until benchmark evidence justifies adding provider-specific env vars.
 - **Non-test verification:** Documentation review should answer three questions: which pairs might benefit from Qwen/DeepSeek, what metrics decide the switch, and what fallback keeps the current behavior stable.
 - **Out of scope:** Adding new provider clients, changing default model env vars, running paid benchmarks, exposing model settings in the app.

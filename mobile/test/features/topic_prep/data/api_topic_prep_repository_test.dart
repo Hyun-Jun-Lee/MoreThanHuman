@@ -49,6 +49,11 @@ class _TopicPrepHttpClientAdapter implements HttpClientAdapter {
         'success': true,
         'data': <String, dynamic>{
           'ready': true,
+          'language': <String, String>{
+            'native_language': 'ko',
+            'target_language': 'en',
+            'feedback_language': 'ko',
+          },
           'card': <String, dynamic>{
             'topic': '최근 롯데 자이언츠 경기',
             'summary': 'Lotte won 8-3 after ending a losing streak.',

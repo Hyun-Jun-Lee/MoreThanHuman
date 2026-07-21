@@ -184,7 +184,7 @@ History 화면은 v1에서 기존 대화 목록 API를 재사용해 목록, load
 
 Home의 `START CONVERSATION`에서 Free Chat을 선택하면 Topic Input 화면으로 이동해요. Topic Input은 2자 미만 입력을 클라이언트에서 막고, 예시 topic chip으로 빠르게 주제를 채울 수 있게 해요.
 
-Topic Prep 화면은 전달받은 topic으로 `POST /api/search/topic-prep/`를 호출해 loading, ready, low-quality, error 상태를 표시해요.
+Topic Prep 화면은 전달받은 topic으로 `POST /api/search/topic-prep/`를 호출해 loading, ready, low-quality, error 상태를 표시해요. 응답의 `language`는 첫 답변 입력 안내처럼 사용자가 직접 작성해야 하는 copy에 사용하고, 서버가 내려준 retry guidance가 있으면 그 문구를 우선 표시해요.
 
 | 상태 | 표시 |
 |------|------|
@@ -193,7 +193,7 @@ Topic Prep 화면은 전달받은 topic으로 `POST /api/search/topic-prep/`를 
 | `ready=false` | retry guidance, example topic chip, edit topic 복귀 |
 | `error` | 재시도 가능한 오류 상태 |
 
-기본 선택은 `CASUAL_CHAT`과 첫 번째 질문이에요. 사용자는 선택한 첫 질문에 대한 답변을 입력하고, 앱은 `POST /api/conversations/start/free-chat/`에 `first_message`, `search_context`, `topic`, `conversation_direction`, `selected_question`을 보내 Conversation 화면으로 이동해요. 첫 답변은 2자 미만이면 클라이언트에서 막아요.
+기본 선택은 `CASUAL_CHAT`과 첫 번째 질문이에요. 사용자는 선택한 첫 질문에 대한 답변을 활성 target language로 입력하고, 앱은 `POST /api/conversations/start/free-chat/`에 `first_message`, `search_context`, `topic`, `conversation_direction`, `selected_question`을 보내 Conversation 화면으로 이동해요. 첫 답변은 2자 미만이면 클라이언트에서 막아요.
 
 출처 링크는 현재 화면에 표시만 하고, 외부 브라우저 열기는 `url_launcher`를 도입하는 후속 작업에서 연결해요.
 

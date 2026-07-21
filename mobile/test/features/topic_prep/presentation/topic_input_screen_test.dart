@@ -24,18 +24,18 @@ void main() {
   ) async {
     await tester.pumpWidget(_routerApp());
 
-    await tester.tap(find.text('오사카 여행 맛집'));
+    await tester.tap(find.text('Osaka food trip'));
     await tester.pumpAndSettle();
     expect(
       tester.widget<TextField>(find.byType(TextField)).controller?.text,
-      '오사카 여행 맛집',
+      'Osaka food trip',
     );
 
     await tester.tap(find.text('PREPARE'));
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Prepared'), findsOneWidget);
-    expect(find.textContaining('오사카 여행 맛집'), findsOneWidget);
+    expect(find.textContaining('Osaka food trip'), findsOneWidget);
   });
 }
 

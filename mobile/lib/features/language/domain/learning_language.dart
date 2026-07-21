@@ -123,10 +123,30 @@ class LearningLanguageContext {
   }
 
   String helperText(String localeCode) {
+    final String target = targetLanguage.displayName(localeCode);
+    final String feedback = feedbackLanguage.displayName(localeCode);
     return switch (localeCode) {
-      'ko' => '${feedbackLanguage.displayName(localeCode)}로 피드백을 받아요.',
-      'zh' => '用${feedbackLanguage.displayName(localeCode)}接收反馈。',
-      _ => 'Feedback in ${feedbackLanguage.displayName(localeCode)}.',
+      'ko' => '대화: $target · 피드백: $feedback',
+      'zh' => '对话：$target · 反馈：$feedback',
+      _ => 'Conversation: $target · Feedback: $feedback',
+    };
+  }
+
+  String firstAnswerHint(String localeCode) {
+    final String target = targetLanguage.displayName(localeCode);
+    return switch (localeCode) {
+      'ko' => '$target로 첫 답변을 입력하세요...',
+      'zh' => '请用$target输入你的第一句回答...',
+      _ => 'Type your first answer in $target...',
+    };
+  }
+
+  String firstAnswerSemanticLabel(String localeCode) {
+    final String target = targetLanguage.displayName(localeCode);
+    return switch (localeCode) {
+      'ko' => '$target 첫 답변',
+      'zh' => '$target第一句回答',
+      _ => 'First answer in $target',
     };
   }
 

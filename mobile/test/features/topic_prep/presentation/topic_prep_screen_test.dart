@@ -1,6 +1,7 @@
 import 'package:curitalk/app/router/app_router.dart';
 import 'package:curitalk/app/theme/app_theme.dart';
 import 'package:curitalk/features/conversation/conversation.dart';
+import 'package:curitalk/features/language/language.dart';
 import 'package:curitalk/features/topic_prep/topic_prep.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -92,22 +93,19 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.scrollUntilVisible(
-      find.bySemanticsLabel('First answer'),
+      find.bySemanticsLabel('First answer in Korean'),
       300,
       scrollable: find.byType(Scrollable).first,
     );
     await tester.enterText(
-      find.bySemanticsLabel('First answer'),
-      'I liked the bullpen today.',
+      find.bySemanticsLabel('First answer in Korean'),
+      '오늘 불펜이 좋았어요.',
     );
     await tester.tap(find.text('START ANSWERING'));
     await tester.pumpAndSettle();
 
     expect(find.text('Conversation conversation-id'), findsOneWidget);
-    expect(
-      conversationRepository.lastFirstMessage,
-      'I liked the bullpen today.',
-    );
+    expect(conversationRepository.lastFirstMessage, '오늘 불펜이 좋았어요.');
     expect(conversationRepository.lastDirection, 'CASUAL_CHAT');
     expect(
       conversationRepository.lastSelectedQuestion,
@@ -178,6 +176,7 @@ class _FakeTopicPrepRepository implements TopicPrepRepository {
         ready: false,
         card: null,
         quality: _quality(isSufficient: false),
+        language: _koreanPracticeLanguage,
         retryGuidance: 'Try a more specific topic.',
         exampleTopics: const <String>['최근 롯데 자이언츠 경기'],
       );
@@ -224,10 +223,17 @@ class _FakeTopicPrepRepository implements TopicPrepRepository {
         timestamp: DateTime.utc(2026, 7, 2),
       ),
       quality: _quality(),
+      language: _koreanPracticeLanguage,
       exampleTopics: const <String>[],
     );
   }
 }
+
+const LearningLanguageContext _koreanPracticeLanguage = LearningLanguageContext(
+  nativeLanguage: LearningLanguageCode.en,
+  targetLanguage: LearningLanguageCode.ko,
+  feedbackLanguage: LearningLanguageCode.en,
+);
 
 TopicPrepDirection _direction(
   TopicPrepDirectionType type,

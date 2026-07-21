@@ -2,6 +2,8 @@
 
 ## 2026-07-21
 
+- **U1 모바일 언어쌍 copy 구현**: 언어쌍 helper copy, Topic Prep language 파싱, target-language 첫 답변 힌트, localized fallback, 온보딩/Topic Input 문구와 모바일 문서를 정리
+- **U1 모바일 언어쌍 copy 계획 작성**: 상위 후속 계획의 U1을 온보딩, Topic Prep, Home/start sheet, selector, 모바일 문서 중심의 구현 단위로 분리
 - **언어쌍 후속 경험 개선 계획 작성**: STT/TTS와 테스트 확대를 제외하고 UX copy, 콘텐츠 프리셋, 프롬프트 품질, 설정 변경 정책, 모델 라우팅 설계 후속 작업을 계획으로 정리
 
 ## 2026-07-20
