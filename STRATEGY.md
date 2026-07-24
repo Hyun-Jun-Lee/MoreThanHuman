@@ -1,6 +1,6 @@
 ---
 name: Convia
-last_updated: 2026-05-27
+last_updated: 2026-07-23
 ---
 
 # Convia Strategy
@@ -22,6 +22,26 @@ Convia는 정해진 role이나 상황을 제공하는 대신, 사용자가 원�
 - **주제 기반 대화 시작률** - 전체 대화 중 사용자가 직접 입력한 주제나 검색 컨텍스트로 시작한 대화 비율; conversation/search 데이터에서 측정한다.
 - **대화 지속 턴 수** - 대화당 사용자 메시지 수 또는 5턴 이상 이어진 대화 비율; conversation/message 데이터에서 측정한다.
 - **7일 재방문 연습률** - 첫 사용 후 7일 안에 다시 대화를 시작한 사용자 비율; 사용자 활동 로그 또는 conversation 생성 기록에서 측정한다.
+
+## Business model
+
+Convia는 freemium 기반 premium subscription을 기본 BM으로 둔다. 무료 사용자는 제품의 핵심 가치인 관심사 기반 주제 준비, 실제 대화, 문법 피드백, 음성 입출력을 모두 짧게 체험할 수 있어야 한다. Premium은 이 경험을 끊김 없이 이어가기 위한 구독으로 포지셔닝한다.
+
+무료 체험 기본 한도:
+
+- **Topic Prep 2회** - 사용자가 서로 다른 관심 주제로 준비 카드의 가치를 확인할 수 있게 한다.
+- **대화 5 user turns** - 사용자가 메시지나 음성을 보내고 AI가 답하는 1회를 user turn으로 센다. Roleplay의 AI 첫 인사는 차감하지 않는다.
+- **STT/TTS 제공** - 무료 체험 중에는 음성 입력과 AI 음성 응답을 모두 제공해 premium 경험의 핵심 차이를 체감하게 한다.
+- **Low-quality Topic Prep 재시도 미차감** - 검색 품질 부족으로 ready card가 생성되지 않은 시도는 무료 체험 한도에서 차감하지 않는다.
+
+Premium 구독 가치는 아래 축으로 구성한다:
+
+- 더 높은 또는 무제한 대화 한도
+- 더 높은 Topic Prep 한도
+- 지속적인 음성 대화 사용
+- 고급 문법 피드백과 학습 통계
+
+구현 시점에는 전략 문서의 BM 원칙을 기준으로 별도 usage ledger와 subscription entitlement를 설계한다. API 계약, 결제 provider, quota 응답 필드는 구현 계획과 `docs/DSL.md`에서 별도로 확정한다.
 
 ## Tracks
 
