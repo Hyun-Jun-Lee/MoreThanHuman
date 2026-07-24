@@ -1,11 +1,25 @@
 import 'package:curitalk/app/router/app_router.dart';
 import 'package:curitalk/app/theme/tokens/tokens.dart';
 import 'package:curitalk/core/widgets/widgets.dart';
+import 'package:curitalk/features/auth/auth.dart';
 import 'package:curitalk/features/conversation/conversation.dart';
+import 'package:curitalk/features/language/language.dart';
 import 'package:curitalk/features/roleplay_setup/roleplay_setup.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
+final roleplayTargetLanguageProvider = Provider<LearningLanguageCode>((
+  Ref ref,
+) {
+  return ref.watch(
+    authControllerProvider.select(
+      (AsyncValue<AuthSession> auth) =>
+          auth.value?.user?.language.targetLanguage ??
+          LearningLanguageContext.defaultContext.targetLanguage,
+    ),
+  );
+});
 
 class RoleplaySetupScreen extends ConsumerStatefulWidget {
   const RoleplaySetupScreen({super.key});
@@ -33,6 +47,12 @@ class _RoleplaySetupScreenState extends ConsumerState<RoleplaySetupScreen> {
   @override
   Widget build(BuildContext context) {
     final RoleplaySetupState state = ref.watch(roleplaySetupControllerProvider);
+    final LearningLanguageCode targetLanguage = ref.watch(
+      roleplayTargetLanguageProvider,
+    );
+    final List<RoleplayScenario> scenarios = roleplayPresetScenariosFor(
+      targetLanguage,
+    );
     final StartConversationState startState = ref.watch(
       startConversationControllerProvider,
     );
@@ -99,7 +119,7 @@ class _RoleplaySetupScreenState extends ConsumerState<RoleplaySetupScreen> {
             ),
           ],
           const SizedBox(height: AppSpacing.xl),
-          for (final RoleplayScenario scenario in roleplayPresetScenarios) ...[
+          for (final RoleplayScenario scenario in scenarios) ...[
             RoleplayScenarioCard(
               scenario: scenario,
               selected: state.selectedScenario?.id == scenario.id,
@@ -124,7 +144,7 @@ class _RoleplaySetupScreenState extends ConsumerState<RoleplaySetupScreen> {
             const SizedBox(height: AppSpacing.md),
             AppTextField(
               controller: _customController,
-              hintText: 'I am working at a cafe as a barista.',
+              hintText: roleplayCustomSituationHintFor(targetLanguage),
               errorText: state.customErrorText,
               autofocus: state.customInput.isEmpty,
               maxLines: 3,

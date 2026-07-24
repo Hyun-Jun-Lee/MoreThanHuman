@@ -1,6 +1,6 @@
 # MoreThanHuman
 
-AI 기반 영어 회화 학습 플랫폼의 FastAPI 백엔드와 Curitalk Flutter 모바일 앱을 함께 관리해요.
+AI 기반 다국어 회화 학습 플랫폼의 FastAPI 백엔드와 Curitalk Flutter 모바일 앱을 함께 관리해요.
 
 백엔드는 `backend/`, iOS·Android 모바일 앱은 `mobile/`에 있어요.
 
@@ -174,9 +174,48 @@ Flutter App
 
 Supabase access token으로 검증된 현재 사용자 프로필을 반환해요. 프로필이 없으면 Supabase claim을 기준으로 `profiles` row를 생성하거나 갱신해요. 인증이 필요해요.
 
+응답의 `language`는 새 대화에 사용할 기본 언어쌍이에요. 현재 지원하는 쌍은 `ko -> en`, `en -> ko`, `zh -> en`, `zh -> ko`이며, 기존 값이 없으면 `ko -> en`과 feedback `ko`로 보정해요.
+
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "email": "learner@example.com",
+  "name": "Learner",
+  "is_active": true,
+  "oauth_provider": "google",
+  "avatar_url": null,
+  "language": {
+    "native_language": "ko",
+    "target_language": "en",
+    "feedback_language": "ko"
+  },
+  "created_at": "2026-07-20T00:00:00Z",
+  "updated_at": "2026-07-20T00:00:00Z"
+}
+```
+
+### `GET /api/auth/me/language-preferences`
+
+현재 사용자 프로필의 언어 선호를 반환해요. 인증이 필요해요.
+
+### `PUT /api/auth/me/language-preferences`
+
+현재 사용자 프로필의 언어 선호를 변경해요. `native_language`, `target_language`, `feedback_language` 외 필드는 허용하지 않아요. 변경값은 이후 새 conversation에만 적용되고, 이미 생성된 conversation은 생성 시점의 snapshot을 계속 사용해요.
+모바일 Account sheet는 이 정책을 저장 전에 안내하고, 저장 후 `/api/auth/me`를 다시 불러와 Home의 활성 언어쌍 표시를 갱신해요.
+
+```json
+{
+  "native_language": "en",
+  "target_language": "ko",
+  "feedback_language": "en"
+}
+```
+
 ## Conversation API
 
 모든 conversation API는 인증이 필요해요.
+새 conversation을 시작하면 현재 프로필의 언어 선호가 conversation snapshot으로 저장되고, start/get/list conversation 응답의 `language`에 포함돼요. 이어 말하기와 문법 polling은 저장된 snapshot을 사용하므로 이후 프로필 선호를 바꿔도 기존 대화 언어는 바뀌지 않아요.
+LLM prompt policy도 같은 snapshot을 사용해요. `target_language`는 자유 대화, 롤플레이, 문법 피드백, Topic Prep의 연습·교정 기준을 정하고, `feedback_language`는 설명과 low-quality retry guidance 언어만 정해요. 이 정책은 provider/model routing이나 STT/TTS 언어 설정을 바꾸지 않아요.
 
 ### `POST /api/conversations/start/free-chat/`
 
@@ -184,7 +223,7 @@ Supabase access token으로 검증된 현재 사용자 프로필을 반환해요
 
 ```json
 {
-  "first_message": "Hello, I want to practice English.",
+  "first_message": "Hello, I want to talk about travel.",
   "search_context": null,
   "topic": null,
   "conversation_direction": null,
@@ -641,7 +680,9 @@ API, 환경변수, 도메인 계약이 바뀌면 같은 작업 단위에서 아�
 - Supabase Auth 기반 Google 로그인
 - Supabase access token 기반 FastAPI 보호 API
 - `profiles` 기반 앱 사용자 프로필 관리
-- AI 기반 영어 회화 연습
+- AI 기반 다국어 회화 연습
+- `ko -> en`, `en -> ko`, `zh -> en`, `zh -> ko` 언어쌍 선호와 conversation snapshot
+- 목표 언어별 prompt policy 기반 대화·문법·Topic Prep 학습 기준
 - 자유 대화와 롤플레이 대화
 - 사용자별 대화 히스토리 관리
 - 문법 체크 및 polling/SSE 기반 비동기 피드백

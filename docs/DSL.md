@@ -1,6 +1,6 @@
 # MoreThanHuman Backend DSL
 
-> 최종 갱신: 2026-06-22 · 범위: FastAPI 백엔드 API + Flutter 모바일 연동
+> 최종 갱신: 2026-07-20 · 범위: FastAPI 백엔드 API + Flutter 모바일 연동
 
 사용자 클라이언트는 `mobile/`의 Flutter 기반 모바일 앱으로 개발해요. 이 문서는 모바일 앱이 연동할 백엔드 도메인, 데이터 모델, API 계약을 정의해요.
 
@@ -8,7 +8,7 @@
 
 ```dsl
 system MoreThanHuman {
-  product: "AI 기반 영어 회화 학습 플랫폼"
+  product: "AI 기반 다국어 회화 학습 플랫폼"
   backend: FastAPI
   architecture: ModularMonolith
   database: SQLiteDevelopment | PostgreSQLProduction
@@ -36,6 +36,9 @@ database Schema {
     is_active: BOOLEAN
     oauth_provider: STRING?
     avatar_url: STRING?
+    native_language: "ko" | "en" | "zh" = "ko"
+    target_language: "ko" | "en" | "zh" = "en"
+    feedback_language: "ko" | "en" | "zh" = "ko"
     created_at: DATETIME
     updated_at: DATETIME
   }
@@ -46,6 +49,9 @@ database Schema {
     title: STRING?
     conversation_type: "FREE_CHAT" | "ROLE_PLAYING"
     role_character: STRING?
+    native_language: "ko" | "en" | "zh" = "ko"
+    target_language: "ko" | "en" | "zh" = "en"
+    feedback_language: "ko" | "en" | "zh" = "ko"
     message_count: INTEGER
     status: "ACTIVE" | "COMPLETED"
     created_at: DATETIME
@@ -86,6 +92,19 @@ type ErrorResponse {
   error: String
   details: Dict
 }
+
+type LearningLanguageContext {
+  native_language: "ko" | "en" | "zh"
+  target_language: "ko" | "en" | "zh"
+  feedback_language: "ko" | "en" | "zh"
+}
+
+supported LearningLanguagePairs = [
+  "ko->en",
+  "en->ko",
+  "zh->en",
+  "zh->ko"
+]
 ```
 
 인증이 필요한 API는 `Authorization: Bearer <access_token>` 헤더를 사용해요.
@@ -96,6 +115,10 @@ type ErrorResponse {
 module Auth {
   router AuthRouter {
     GET  /api/auth/me                    -> getCurrentUser
+    GET  /api/auth/me/language-preferences
+                                            -> getLanguagePreferences
+    PUT  /api/auth/me/language-preferences
+                                            -> updateLanguagePreferences
   }
 
   type UserProfile {
@@ -105,11 +128,17 @@ module Auth {
     is_active: Boolean
     oauth_provider?: String
     avatar_url?: String
+    language: LearningLanguageContext
   }
+
+  type LanguagePreferencesRequest extends LearningLanguageContext
+  type LanguagePreferencesResponse extends LearningLanguageContext
 }
 ```
 
 모바일 앱은 Supabase Auth로 Google 로그인을 완료한 뒤 Supabase `access_token`을 FastAPI 보호 API의 `Authorization: Bearer` 헤더에 전달해요. `GET /api/auth/me`는 Supabase token을 검증하고, `profiles` row를 생성 또는 갱신한 뒤 기존 envelope 형식으로 `UserProfile`을 반환해요.
+언어 선호는 프로필 기본값이며 새 대화 시작 시 `conversations` row에 snapshot으로 저장돼요. 기존 값이 없으면 `ko -> en`, feedback `ko`로 보정해요.
+`PUT /api/auth/me/language-preferences`는 profile default만 갱신해요. 모바일 Account UX는 변경값이 새 대화부터 적용되고 기존 conversation은 생성 시점 snapshot을 유지한다고 안내해야 해요.
 
 ## 5. Conversation 모듈
 
@@ -144,6 +173,10 @@ module Conversation {
     search_context?: String
   }
 
+  `role_character`는 클라이언트가 선택한 preset/custom 상황과 난이도를 합성한 문자열이에요.
+  클라이언트 preset과 서버 roleplay prompt examples는 conversation snapshot의 `target_language`를 기준으로 연습 상황을 고르고, `feedback_language`는 도움말·설명 언어로만 사용해요.
+  Conversation prompt policy도 snapshot의 `target_language`를 따라요. 한국어 target은 조사, 어미, 높임/격식, 띄어쓰기, 자연스러운 어순과 구어 뉘앙스를 우선하고, 영어 target은 tense, articles, prepositions, question formation, sentence completeness, natural spoken phrasing을 우선해요.
+
   type SendMessageRequest {
     message: String
   }
@@ -176,6 +209,7 @@ module Conversation {
     title?: String
     conversation_type: "FREE_CHAT" | "ROLE_PLAYING"
     role_character?: String
+    language: LearningLanguageContext
     message_count: Integer
     status: "ACTIVE" | "COMPLETED"
     created_at: DateTime
@@ -196,6 +230,7 @@ module Conversation {
     message_id: UUID
     conversation_type: String
     role_character?: String
+    language: LearningLanguageContext
     response: String
     grammar_feedback?: GrammarFeedback
   }
@@ -314,6 +349,7 @@ module Search {
   type SearchResult {
     query: String
     enhanced_query: String
+    language: LearningLanguageContext
     ready: Boolean
     summary?: String
     sources: List<SearchResultItem>
@@ -358,14 +394,20 @@ module Search {
 
   type TopicPrepResult {
     ready: Boolean
+    language: LearningLanguageContext
     card?: TopicPrepCard
     quality: TopicPrepQuality
     retry_guidance?: String
     example_topics: List<String>
   }
 
+  Topic Prep의 ready card 질문과 fallback direction은 `target_language` 연습에 맞춰 생성돼요.
+  Topic Prep prompt policy도 conversation과 같은 target-language practice priorities를 사용해요.
+  Low-quality 상태의 `retry_guidance`와 `example_topics`는 사용자가 이해할 수 있도록 `feedback_language`로 표시하되, 예시 유형은 target language 연습 목적을 반영해요.
+
   type TopicPrepCard {
     topic: String
+    language: LearningLanguageContext
     summary: String
     directions: List<TopicPrepDirection>
     sources: List<SearchResultItem>

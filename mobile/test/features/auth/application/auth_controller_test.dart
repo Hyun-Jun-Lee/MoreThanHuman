@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:curitalk/core/network/network.dart';
 import 'package:curitalk/features/auth/auth.dart';
+import 'package:curitalk/features/language/language.dart';
+import 'package:curitalk/features/onboarding/onboarding.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -74,6 +76,50 @@ void main() {
       expect(supabaseAuth.lastIdToken, 'google-id-token');
       expect(supabaseAuth.lastAccessToken, 'google-access-token');
       expect(repository.profileRequestCount, 1);
+    },
+  );
+
+  test(
+    'syncs pending onboarding language before publishing the user',
+    () async {
+      final _FakeSupabaseAuthService supabaseAuth = _FakeSupabaseAuthService();
+      final _FakeAuthRepository repository = _FakeAuthRepository(user: _user);
+      final _FakeOnboardingStorage onboardingStorage = _FakeOnboardingStorage(
+        pendingLanguage: const LearningLanguageContext(
+          nativeLanguage: LearningLanguageCode.zh,
+          targetLanguage: LearningLanguageCode.ko,
+          feedbackLanguage: LearningLanguageCode.zh,
+        ),
+      );
+      final _FakeLanguagePreferencesRepository languageRepository =
+          _FakeLanguagePreferencesRepository();
+      final ProviderContainer container = _createContainer(
+        supabaseAuth,
+        repository,
+        onboardingStorage: onboardingStorage,
+        languageRepository: languageRepository,
+      );
+      addTearDown(container.dispose);
+      await container.read(authControllerProvider.future);
+
+      await container
+          .read(authControllerProvider.notifier)
+          .signInWithGoogleTokens(
+            const GoogleIdentityTokens(
+              idToken: 'google-id-token',
+              accessToken: 'google-access-token',
+            ),
+          );
+
+      expect(
+        languageRepository.updated.single.targetLanguage,
+        LearningLanguageCode.ko,
+      );
+      expect(onboardingStorage.pendingLanguage, isNull);
+      expect(
+        container.read(authControllerProvider).requireValue.isAuthenticated,
+        isTrue,
+      );
     },
   );
 
@@ -211,6 +257,8 @@ ProviderContainer _createContainer(
   _FakeAuthRepository repository, {
   AuthSessionCoordinator? sessionCoordinator,
   _FakeGoogleIdentityService? googleIdentityService,
+  _FakeOnboardingStorage? onboardingStorage,
+  _FakeLanguagePreferencesRepository? languageRepository,
 }) {
   final AuthSessionCoordinator coordinator =
       sessionCoordinator ?? AuthSessionCoordinator();
@@ -218,12 +266,68 @@ ProviderContainer _createContainer(
     overrides: [
       authSessionCoordinatorProvider.overrideWithValue(coordinator),
       authRepositoryProvider.overrideWithValue(repository),
+      onboardingStorageProvider.overrideWithValue(
+        onboardingStorage ?? _FakeOnboardingStorage(),
+      ),
+      languagePreferencesRepositoryProvider.overrideWithValue(
+        languageRepository ?? _FakeLanguagePreferencesRepository(),
+      ),
       supabaseAuthServiceProvider.overrideWithValue(supabaseAuth),
       googleIdentityServiceProvider.overrideWithValue(
         googleIdentityService ?? _FakeGoogleIdentityService(),
       ),
     ],
   );
+}
+
+class _FakeOnboardingStorage implements OnboardingStorage {
+  _FakeOnboardingStorage({this.pendingLanguage});
+
+  LearningLanguageContext? pendingLanguage;
+
+  @override
+  Future<void> clearPendingLanguageContext() async {
+    pendingLanguage = null;
+  }
+
+  @override
+  Future<bool> isCompleted() async => true;
+
+  @override
+  Future<void> markCompleted() async {}
+
+  @override
+  Future<LearningLanguageContext?> readPendingLanguageContext() async {
+    return pendingLanguage;
+  }
+
+  @override
+  Future<void> writePendingLanguageContext(
+    LearningLanguageContext context,
+  ) async {
+    pendingLanguage = context;
+  }
+}
+
+class _FakeLanguagePreferencesRepository
+    implements LanguagePreferencesRepository {
+  final List<LearningLanguageContext> updated = <LearningLanguageContext>[];
+
+  @override
+  Future<LearningLanguageContext> getLanguagePreferences() async {
+    if (updated.isEmpty) {
+      return LearningLanguageContext.defaultContext;
+    }
+    return updated.last;
+  }
+
+  @override
+  Future<LearningLanguageContext> updateLanguagePreferences(
+    LearningLanguageContext context,
+  ) async {
+    updated.add(context);
+    return context;
+  }
 }
 
 class _FakeAuthRepository implements AuthRepository {

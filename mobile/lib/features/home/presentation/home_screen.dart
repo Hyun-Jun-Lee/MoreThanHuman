@@ -7,6 +7,7 @@ import 'package:curitalk/features/home/domain/conversation_start_type.dart';
 import 'package:curitalk/features/home/presentation/account_sheet.dart';
 import 'package:curitalk/features/home/presentation/conversation_start_sheet.dart';
 import 'package:curitalk/features/home/presentation/widgets/recent_conversation_card.dart';
+import 'package:curitalk/features/language/language.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -153,6 +154,8 @@ class _HomeHeader extends StatelessWidget {
           const Expanded(
             child: Text('CURITALK', style: AppTypography.headlineMd),
           ),
+          _LanguagePairBadge(language: user?.language),
+          const SizedBox(width: AppSpacing.sm),
           Semantics(
             button: true,
             label: 'Profile for ${user?.name ?? 'user'}',
@@ -169,6 +172,38 @@ class _HomeHeader extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _LanguagePairBadge extends StatelessWidget {
+  const _LanguagePairBadge({required this.language});
+
+  final LearningLanguageContext? language;
+
+  @override
+  Widget build(BuildContext context) {
+    final LearningLanguageContext contextLanguage =
+        language ?? LearningLanguageContext.defaultContext;
+    final String localeCode = Localizations.localeOf(context).languageCode;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: const BorderRadius.all(Radius.circular(AppRadius.full)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.sm,
+          vertical: AppSpacing.xs,
+        ),
+        child: Text(
+          contextLanguage.pairLabel(localeCode),
+          style: AppTypography.captionMono.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+          overflow: TextOverflow.ellipsis,
+        ),
       ),
     );
   }

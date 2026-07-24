@@ -7,6 +7,8 @@ import 'package:curitalk/features/auth/data/supabase_auth_service.dart';
 import 'package:curitalk/features/auth/domain/auth_repository.dart';
 import 'package:curitalk/features/auth/domain/auth_session.dart';
 import 'package:curitalk/features/auth/domain/user_profile.dart';
+import 'package:curitalk/features/language/language.dart';
+import 'package:curitalk/features/onboarding/data/onboarding_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -14,6 +16,8 @@ class AuthController extends AsyncNotifier<AuthSession> {
   late AuthRepository _repository;
   late SupabaseAuthService _supabaseAuthService;
   late GoogleIdentityService _googleIdentityService;
+  late LanguagePreferencesRepository _languagePreferencesRepository;
+  late OnboardingStorage _onboardingStorage;
   late AuthSessionCoordinator _sessionCoordinator;
   StreamSubscription<SupabaseSessionChange>? _authSubscription;
 
@@ -22,6 +26,10 @@ class AuthController extends AsyncNotifier<AuthSession> {
     _repository = ref.watch(authRepositoryProvider);
     _supabaseAuthService = ref.watch(supabaseAuthServiceProvider);
     _googleIdentityService = ref.watch(googleIdentityServiceProvider);
+    _languagePreferencesRepository = ref.watch(
+      languagePreferencesRepositoryProvider,
+    );
+    _onboardingStorage = ref.watch(onboardingStorageProvider);
     final AuthSessionCoordinator sessionCoordinator = ref.watch(
       authSessionCoordinatorProvider,
     );
@@ -60,6 +68,7 @@ class AuthController extends AsyncNotifier<AuthSession> {
       debugPrint('CuritalkAuth controller: Supabase sign-in completed');
       _sessionCoordinator.activateSession();
       debugPrint('CuritalkAuth controller: requesting /auth/me');
+      await _syncPendingLanguageContext();
       final UserProfile user = await _repository.getCurrentUser();
       debugPrint('CuritalkAuth controller: /auth/me success userId=${user.id}');
       state = AsyncData<AuthSession>(AuthSession.authenticated(user));
@@ -93,6 +102,7 @@ class AuthController extends AsyncNotifier<AuthSession> {
     }
 
     try {
+      await _syncPendingLanguageContext();
       final UserProfile user = await _repository.getCurrentUser();
       _sessionCoordinator.activateSession();
       return AuthSession.authenticated(user);
@@ -128,6 +138,16 @@ class AuthController extends AsyncNotifier<AuthSession> {
     } on Object {
       // Google SDK 로그아웃 실패는 다음 로그인에서 복구 가능해요.
     }
+  }
+
+  Future<void> _syncPendingLanguageContext() async {
+    final LearningLanguageContext? pending = await _onboardingStorage
+        .readPendingLanguageContext();
+    if (pending == null) {
+      return;
+    }
+    await _languagePreferencesRepository.updateLanguagePreferences(pending);
+    await _onboardingStorage.clearPendingLanguageContext();
   }
 }
 

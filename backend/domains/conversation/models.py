@@ -10,6 +10,7 @@ from database import Base
 from domains.auth.models import ProfileModel  # noqa: F401 - SQLAlchemy relationship registration
 from domains.conversation.enums import ConversationStatus, ConversationType, MessageRole
 from domains.grammar.models import GrammarFeedbackModel  # noqa: F401 - SQLAlchemy relationship registration
+from shared.language import DEFAULT_LANGUAGE_CONTEXT, LearningLanguageContext, language_context_from_values
 
 
 class ConversationModel(Base):
@@ -22,6 +23,9 @@ class ConversationModel(Base):
     title = Column(String(200), nullable=True)  # 대화 제목 (첫 질문)
     conversation_type = Column(SQLEnum(ConversationType), default=ConversationType.FREE_CHAT, nullable=False)  # 대화 타입
     role_character = Column(String(100), nullable=True)  # 롤플레이 캐릭터 (예: "카페 바리스타", "영어 선생님")
+    native_language = Column(String(8), default=DEFAULT_LANGUAGE_CONTEXT.native_language.value, nullable=False)
+    target_language = Column(String(8), default=DEFAULT_LANGUAGE_CONTEXT.target_language.value, nullable=False)
+    feedback_language = Column(String(8), default=DEFAULT_LANGUAGE_CONTEXT.feedback_language.value, nullable=False)
     message_count = Column(Integer, default=0, nullable=False)
     status = Column(SQLEnum(ConversationStatus), default=ConversationStatus.ACTIVE, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
@@ -30,6 +34,15 @@ class ConversationModel(Base):
     # Relationships
     user = relationship("ProfileModel", back_populates="conversations")
     messages = relationship("MessageModel", back_populates="conversation", cascade="all, delete-orphan")
+
+    @property
+    def language(self) -> LearningLanguageContext:
+        """대화 시작 시점의 언어 스냅샷"""
+        return language_context_from_values(
+            native_language=self.native_language,
+            target_language=self.target_language,
+            feedback_language=self.feedback_language,
+        )
 
 
 class MessageModel(Base):

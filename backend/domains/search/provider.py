@@ -23,11 +23,11 @@ class DuckDuckGoSearchProvider:
     def __init__(self, settings: Any):
         self.settings = settings
 
-    def text(self, query: str, *, use_recency_timelimit: bool) -> list[dict]:
+    def text(self, query: str, *, use_recency_timelimit: bool, region: str | None = None) -> list[dict]:
         """ddgs text 검색 결과를 서비스 내부 shape로 정규화"""
         ddgs_class = _load_ddgs_class()
         options: dict[str, Any] = {
-            "region": self.settings.search_region,
+            "region": region or self.settings.search_region,
             "safesearch": self.settings.search_safesearch,
             "backend": self.settings.search_backend,
             "max_results": self.settings.search_max_results,

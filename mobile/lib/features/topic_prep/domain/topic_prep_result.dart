@@ -1,3 +1,5 @@
+import 'package:curitalk/features/language/language.dart';
+
 enum TopicPrepDirectionType {
   casualChat('CASUAL_CHAT'),
   debate('DEBATE'),
@@ -210,6 +212,7 @@ class TopicPrepResult {
     required this.ready,
     required this.quality,
     required this.exampleTopics,
+    this.language = LearningLanguageContext.defaultContext,
     this.card,
     this.retryGuidance,
   });
@@ -237,12 +240,14 @@ class TopicPrepResult {
       ready: ready,
       card: card,
       quality: TopicPrepQuality.fromJson(json['quality']),
+      language: LearningLanguageContext.fromJson(json['language']),
       retryGuidance: retryGuidance as String?,
       exampleTopics: exampleTopics.cast<String>().toList(growable: false),
     );
   }
 
   final bool ready;
+  final LearningLanguageContext language;
   final TopicPrepCard? card;
   final TopicPrepQuality quality;
   final String? retryGuidance;

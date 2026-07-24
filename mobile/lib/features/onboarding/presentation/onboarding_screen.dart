@@ -1,5 +1,6 @@
 import 'package:curitalk/app/theme/tokens/tokens.dart';
 import 'package:curitalk/core/widgets/widgets.dart';
+import 'package:curitalk/features/language/language.dart';
 import 'package:curitalk/features/onboarding/application/onboarding_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,11 +13,26 @@ class OnboardingScreen extends ConsumerStatefulWidget {
 }
 
 class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
-  static const int _pageCount = 3;
+  static const int _pageCount = 4;
 
   final PageController _pageController = PageController();
   int _currentIndex = 0;
   bool _isCompleting = false;
+  bool _initializedLanguage = false;
+  LearningLanguageContext _selectedLanguage =
+      LearningLanguageContext.defaultContext;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_initializedLanguage) {
+      return;
+    }
+    _selectedLanguage = defaultLanguageContextForLocale(
+      Localizations.localeOf(context).languageCode,
+    );
+    _initializedLanguage = true;
+  }
 
   @override
   void dispose() {
@@ -30,7 +46,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     }
     setState(() => _isCompleting = true);
     try {
-      await ref.read(onboardingControllerProvider.notifier).complete();
+      await ref
+          .read(onboardingControllerProvider.notifier)
+          .complete(_selectedLanguage);
     } finally {
       if (mounted) {
         setState(() => _isCompleting = false);
@@ -92,10 +110,16 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                   onPageChanged: (int index) {
                     setState(() => _currentIndex = index);
                   },
-                  children: const <Widget>[
-                    _InterestPage(),
-                    _TopicPrepPage(),
-                    _FeedbackPage(),
+                  children: <Widget>[
+                    _LanguagePairPage(
+                      selected: _selectedLanguage,
+                      onChanged: (LearningLanguageContext next) {
+                        setState(() => _selectedLanguage = next);
+                      },
+                    ),
+                    const _InterestPage(),
+                    const _TopicPrepPage(),
+                    const _FeedbackPage(),
                   ],
                 ),
               ),
@@ -120,6 +144,28 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   }
 }
 
+class _LanguagePairPage extends StatelessWidget {
+  const _LanguagePairPage({required this.selected, required this.onChanged});
+
+  final LearningLanguageContext selected;
+  final ValueChanged<LearningLanguageContext> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final String localeCode = Localizations.localeOf(context).languageCode;
+    final _LanguagePairCopy copy = _LanguagePairCopy.forLocale(localeCode);
+    return _OnboardingPageLayout(
+      title: copy.title,
+      description: copy.description,
+      illustration: LanguagePairSelector(
+        selected: selected,
+        onChanged: onChanged,
+        localeCode: localeCode,
+      ),
+    );
+  }
+}
+
 class _InterestPage extends StatelessWidget {
   const _InterestPage();
 
@@ -128,7 +174,7 @@ class _InterestPage extends StatelessWidget {
     return _OnboardingPageLayout(
       title: 'Talk about what\nyou actually care about.',
       description:
-          'Practice English with news, hobbies, sports, travel, or anything on your mind.',
+          'Practice conversation with news, hobbies, sports, travel, or anything on your mind.',
       illustration: AppColorBlockCard(
         color: AppPalette.blockLilacSoft,
         child: Column(
@@ -161,6 +207,30 @@ class _InterestPage extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _LanguagePairCopy {
+  const _LanguagePairCopy({required this.title, required this.description});
+
+  final String title;
+  final String description;
+
+  static _LanguagePairCopy forLocale(String localeCode) {
+    return switch (localeCode) {
+      'ko' => const _LanguagePairCopy(
+        title: '무엇을 연습할까요?',
+        description: '대화 언어와 피드백 언어를 먼저 선택하세요.',
+      ),
+      'zh' => const _LanguagePairCopy(
+        title: '你想练习什么？',
+        description: '先选择对话语言和反馈语言。',
+      ),
+      _ => const _LanguagePairCopy(
+        title: 'What do you want\nto practice?',
+        description: 'Choose your conversation language and feedback language.',
+      ),
+    };
   }
 }
 

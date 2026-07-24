@@ -26,12 +26,12 @@ void main() {
 
     controller.enableCustomMode();
     controller.updateCustomInput('오사카 식당 예약 확인');
-    controller.selectScenario(roleplayPresetScenarios.first);
+    controller.selectScenario(enRoleplayScenarios.first);
     final RoleplaySetupState state = container.read(
       roleplaySetupControllerProvider,
     );
 
-    expect(state.selectedScenario, roleplayPresetScenarios.first);
+    expect(state.selectedScenario, enRoleplayScenarios.first);
     expect(state.isCustomMode, isFalse);
     expect(state.canStart, isTrue);
   });
@@ -43,7 +43,7 @@ void main() {
       roleplaySetupControllerProvider.notifier,
     );
 
-    controller.selectScenario(roleplayPresetScenarios.first);
+    controller.selectScenario(enRoleplayScenarios.first);
     controller.enableCustomMode();
     controller.updateCustomInput('A');
     RoleplaySetupState state = container.read(roleplaySetupControllerProvider);
@@ -68,7 +68,7 @@ void main() {
       roleplaySetupControllerProvider.notifier,
     );
 
-    controller.selectScenario(roleplayPresetScenarios.first);
+    controller.selectScenario(enRoleplayScenarios.first);
     controller.selectDifficulty(RoleplayDifficulty.challenge);
     final RoleplaySetupState state = container.read(
       roleplaySetupControllerProvider,
@@ -76,5 +76,6 @@ void main() {
 
     expect(state.difficulty, RoleplayDifficulty.challenge);
     expect(state.payload?.roleCharacter, contains('unexpected'));
+    expect(state.payload?.roleCharacter, contains('more precise answers'));
   });
 }

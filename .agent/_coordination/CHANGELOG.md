@@ -1,5 +1,25 @@
 # CHANGELOG — 완료된 작업 기록
 
+## 2026-07-21
+
+- **U1-U4 diff HTML 설명서 작성**: 모바일 copy, 콘텐츠 튜닝, prompt policy, 언어쌍 변경 정책 UX를 각각 self-contained HTML로 설명
+- **U5 모델 라우팅 설계 계획 작성**: Gemini/Qwen/DeepSeek 후보 평가, task별 routing 기준, fallback 정책을 문서화하는 implementation-ready 계획 추가
+- **U4 언어쌍 변경 정책 UX 구현**: Account sheet에 새 대화 적용·기존 대화 snapshot 유지 안내를 추가하고 profile refresh/문서/테스트를 정렬
+- **U4 언어쌍 변경 정책 UX 계획 작성**: 계정 설정의 언어쌍 변경이 새 대화에만 적용되고 기존 대화는 snapshot을 유지한다는 UX·문서 구현 계획 추가
+- **U3 언어쌍 prompt policy 구현**: target-language prompt policy helper를 추가하고 conversation/roleplay/grammar/Topic Prep prompt에 언어별 연습·교정 기준을 적용
+- **U3 언어쌍 prompt policy 계획 작성**: conversation, roleplay, grammar, Topic Prep prompt의 target-language 학습 정책을 정렬하는 backend 구현 계획 추가
+- **U2 언어쌍 콘텐츠 튜닝 구현**: target language 기반 roleplay preset/custom/difficulty copy, backend roleplay examples, Topic Prep retry/example fallback과 문서/테스트를 정렬
+- **U2 언어쌍 콘텐츠 튜닝 계획 작성**: roleplay preset/difficulty/custom prompt, backend roleplay scenario examples, Topic Prep low-quality examples를 target language 기준으로 조정하는 구현 계획 추가
+- **U1 모바일 언어쌍 copy 구현**: 언어쌍 helper copy, Topic Prep language 파싱, target-language 첫 답변 힌트, localized fallback, 온보딩/Topic Input 문구와 모바일 문서를 정리
+- **U1 모바일 언어쌍 copy 계획 작성**: 상위 후속 계획의 U1을 온보딩, Topic Prep, Home/start sheet, selector, 모바일 문서 중심의 구현 단위로 분리
+- **언어쌍 후속 경험 개선 계획 작성**: STT/TTS와 테스트 확대를 제외하고 UX copy, 콘텐츠 프리셋, 프롬프트 품질, 설정 변경 정책, 모델 라우팅 설계 후속 작업을 계획으로 정리
+
+## 2026-07-20
+
+- **언어쌍 일급 도메인 리팩터 계획 작성**: 프로필 기본값, 대화 스냅샷, 프롬프트, 문법 피드백, Topic Prep, 모바일 온보딩과 검증 범위를 구현 계획으로 정리
+- **언어쌍 리팩터 사용자 결정 반영**: 4개 초기 언어쌍 고정, 중국어 UX 최소범위 채택, 모델 라우팅 후속화, 기존 DB 데이터 보존 제외 결정을 계획에 반영
+- **언어쌍 일급 도메인 리팩터 구현**: 프로필 언어 선호, conversation snapshot, 언어-aware prompt/grammar/search, 모바일 온보딩·설정 UX와 문서/테스트를 동기화
+
 ## 2026-07-18
 
 - **Alembic env.py 연결**: Alembic migration이 기존 SQLAlchemy `Base.metadata`와 `DATABASE_URL`을 사용하도록 설정

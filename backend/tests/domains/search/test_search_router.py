@@ -7,12 +7,20 @@ from fastapi.testclient import TestClient
 from domains.auth.dependencies import get_current_user
 from domains.search.router import get_search_service, router
 from domains.search.schemas import SearchQuality, SearchResult, SearchResultItem
+from shared.language import LearningLanguageContext
 
 
 def _app_with_overrides(service) -> FastAPI:
     app = FastAPI()
     app.include_router(router)
-    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id="user-1")
+    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(
+        id="user-1",
+        language=LearningLanguageContext(
+            native_language="zh",
+            target_language="en",
+            feedback_language="zh",
+        ),
+    )
     app.dependency_overrides[get_search_service] = lambda: service
     return app
 
@@ -33,7 +41,8 @@ def _quality(is_sufficient: bool) -> SearchQuality:
 
 def test_search_endpoint_returns_llm_accepted_sources_for_authenticated_user():
     class FakeService:
-        async def search(self, query: str) -> SearchResult:
+        async def search(self, query: str, language_context=None) -> SearchResult:
+            assert language_context.native_language.value == "zh"
             return SearchResult(
                 query=query,
                 enhanced_query="Osaka restaurants Dotonbori",
@@ -64,7 +73,7 @@ def test_search_endpoint_returns_llm_accepted_sources_for_authenticated_user():
 
 def test_search_endpoint_returns_low_quality_state_without_summary():
     class FakeService:
-        async def search(self, query: str) -> SearchResult:
+        async def search(self, query: str, language_context=None) -> SearchResult:
             return SearchResult(
                 query=query,
                 enhanced_query="요즘 최신 뉴스",

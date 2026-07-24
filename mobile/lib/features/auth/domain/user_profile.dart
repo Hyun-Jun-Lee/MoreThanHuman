@@ -1,3 +1,5 @@
+import 'package:curitalk/features/language/language.dart';
+
 class UserProfile {
   const UserProfile({
     required this.id,
@@ -6,6 +8,7 @@ class UserProfile {
     required this.isActive,
     required this.createdAt,
     required this.updatedAt,
+    this.language = LearningLanguageContext.defaultContext,
     this.oauthProvider,
   });
 
@@ -46,6 +49,7 @@ class UserProfile {
       name: name,
       isActive: isActive,
       oauthProvider: oauthProvider as String?,
+      language: LearningLanguageContext.fromJson(json['language']),
       createdAt: createdAt,
       updatedAt: updatedAt,
     );
@@ -56,6 +60,7 @@ class UserProfile {
   final String name;
   final bool isActive;
   final String? oauthProvider;
+  final LearningLanguageContext language;
   final DateTime createdAt;
   final DateTime updatedAt;
 }

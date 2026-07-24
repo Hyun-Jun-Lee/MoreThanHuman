@@ -18,6 +18,11 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
+CONSTRAINT_NAMING_CONVENTION = {
+    "fk": "%(table_name)s_%(column_0_name)s_fkey",
+}
+
+
 def upgrade() -> None:
     """Upgrade schema."""
     bind = op.get_bind()
@@ -43,14 +48,17 @@ def upgrade() -> None:
     )
     op.create_index(op.f("ix_profiles_email"), "profiles", ["email"], unique=True)
 
-    op.drop_constraint("conversations_user_id_fkey", "conversations", type_="foreignkey")
-    op.create_foreign_key(
-        "conversations_user_id_fkey",
+    with op.batch_alter_table(
         "conversations",
-        "profiles",
-        ["user_id"],
-        ["id"],
-    )
+        naming_convention=CONSTRAINT_NAMING_CONVENTION,
+    ) as batch_op:
+        batch_op.drop_constraint("conversations_user_id_fkey", type_="foreignkey")
+        batch_op.create_foreign_key(
+            "conversations_user_id_fkey",
+            "profiles",
+            ["user_id"],
+            ["id"],
+        )
 
     op.drop_index("ix_refresh_tokens_user_device", table_name="refresh_tokens")
     op.drop_index(op.f("ix_refresh_tokens_token_hash"), table_name="refresh_tokens")
@@ -92,14 +100,17 @@ def downgrade() -> None:
     op.create_index(op.f("ix_refresh_tokens_token_hash"), "refresh_tokens", ["token_hash"], unique=True)
     op.create_index("ix_refresh_tokens_user_device", "refresh_tokens", ["user_id", "device_id"], unique=False)
 
-    op.drop_constraint("conversations_user_id_fkey", "conversations", type_="foreignkey")
-    op.create_foreign_key(
-        "conversations_user_id_fkey",
+    with op.batch_alter_table(
         "conversations",
-        "users",
-        ["user_id"],
-        ["id"],
-    )
+        naming_convention=CONSTRAINT_NAMING_CONVENTION,
+    ) as batch_op:
+        batch_op.drop_constraint("conversations_user_id_fkey", type_="foreignkey")
+        batch_op.create_foreign_key(
+            "conversations_user_id_fkey",
+            "users",
+            ["user_id"],
+            ["id"],
+        )
 
     op.drop_index(op.f("ix_profiles_email"), table_name="profiles")
     op.drop_table("profiles")

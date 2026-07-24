@@ -2,6 +2,7 @@ import 'package:curitalk/app/router/app_router.dart';
 import 'package:curitalk/app/theme/tokens/tokens.dart';
 import 'package:curitalk/core/widgets/widgets.dart';
 import 'package:curitalk/features/conversation/conversation.dart';
+import 'package:curitalk/features/language/language.dart';
 import 'package:curitalk/features/topic_prep/topic_prep.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -68,6 +69,7 @@ class _TopicPrepScreenState extends ConsumerState<TopicPrepScreen> {
           }
           return _ReadyTopicPrepView(
             card: result.card!,
+            language: result.language,
             answerController: _answerController,
             selectedDirection: _selectedDirection,
             selectedQuestionIndex: _selectedQuestionIndex,
@@ -152,6 +154,7 @@ class _TopicPrepScreenState extends ConsumerState<TopicPrepScreen> {
 class _ReadyTopicPrepView extends StatelessWidget {
   const _ReadyTopicPrepView({
     required this.card,
+    required this.language,
     required this.answerController,
     required this.selectedQuestionIndex,
     required this.onDirectionSelected,
@@ -165,6 +168,7 @@ class _ReadyTopicPrepView extends StatelessWidget {
   });
 
   final TopicPrepCard card;
+  final LearningLanguageContext language;
   final TextEditingController answerController;
   final TopicPrepDirectionType? selectedDirection;
   final int selectedQuestionIndex;
@@ -180,6 +184,7 @@ class _ReadyTopicPrepView extends StatelessWidget {
   Widget build(BuildContext context) {
     final TopicPrepDirection direction = _selectedDirection;
     final List<String> questions = direction.firstQuestions;
+    final String localeCode = Localizations.localeOf(context).languageCode;
 
     return ListView(
       children: <Widget>[
@@ -237,12 +242,12 @@ class _ReadyTopicPrepView extends StatelessWidget {
         const SizedBox(height: AppSpacing.md),
         AppTextField(
           controller: answerController,
-          hintText: 'Type your first answer in English...',
+          hintText: language.firstAnswerHint(localeCode),
           errorText: answerErrorText,
           enabled: !isStarting,
           maxLines: 4,
           textInputAction: TextInputAction.newline,
-          semanticLabel: 'First answer',
+          semanticLabel: language.firstAnswerSemanticLabel(localeCode),
           onChanged: onAnswerChanged,
         ),
         if (startErrorText != null) ...<Widget>[
@@ -291,13 +296,21 @@ class _LowQualityTopicPrepView extends StatelessWidget {
     final String message =
         result.retryGuidance ??
         result.quality.retrySuggestion ??
-        'Try a more specific topic with a person, place, event, or date.';
+        _TopicPrepFallbackCopy.forLanguage(
+          result.language.feedbackLanguage,
+        ).message;
+    final _TopicPrepFallbackCopy copy = _TopicPrepFallbackCopy.forLanguage(
+      result.language.feedbackLanguage,
+    );
 
     return ListView(
       children: <Widget>[
         const SizedBox(height: AppSpacing.xl),
         TopicRetryCard(
+          title: copy.title,
           message: message,
+          editTopicLabel: copy.editTopicLabel,
+          tryAnotherIdeaLabel: copy.tryAnotherIdeaLabel,
           onEditTopic: onEditTopic,
           onTryAnotherIdea: result.exampleTopics.isEmpty
               ? onEditTopic
@@ -321,5 +334,45 @@ class _LowQualityTopicPrepView extends StatelessWidget {
         ],
       ],
     );
+  }
+}
+
+class _TopicPrepFallbackCopy {
+  const _TopicPrepFallbackCopy({
+    required this.title,
+    required this.message,
+    required this.editTopicLabel,
+    required this.tryAnotherIdeaLabel,
+  });
+
+  final String title;
+  final String message;
+  final String editTopicLabel;
+  final String tryAnotherIdeaLabel;
+
+  static _TopicPrepFallbackCopy forLanguage(
+    LearningLanguageCode feedbackLanguage,
+  ) {
+    return switch (feedbackLanguage) {
+      LearningLanguageCode.ko => const _TopicPrepFallbackCopy(
+        title: '주제를 조금 더 구체화해요',
+        message: '사람, 장소, 사건, 날짜 중 하나를 넣어 다시 시도해보세요.',
+        editTopicLabel: '주제 수정',
+        tryAnotherIdeaLabel: '다른 예시로 시도',
+      ),
+      LearningLanguageCode.zh => const _TopicPrepFallbackCopy(
+        title: '请把话题再具体一点',
+        message: '加入人物、地点、事件或日期后再试。',
+        editTopicLabel: '修改话题',
+        tryAnotherIdeaLabel: '试试其他示例',
+      ),
+      LearningLanguageCode.en => const _TopicPrepFallbackCopy(
+        title: 'We need a clearer topic',
+        message:
+            'Try a more specific topic with a person, place, event, or date.',
+        editTopicLabel: 'Edit topic',
+        tryAnotherIdeaLabel: 'Try another idea',
+      ),
+    };
   }
 }

@@ -9,6 +9,7 @@ from domains.auth.models import ProfileModel
 from domains.search.schemas import SearchResult, TopicPrepRequest, TopicPrepResult
 from domains.search.service import SearchService
 from shared.exceptions import AppException
+from shared.language import ensure_language_context
 from shared.types import SuccessResponse
 
 router = APIRouter(prefix="/api/search", tags=["search"])
@@ -36,7 +37,10 @@ async def search(
 ):
     """검색 실행"""
     try:
-        result = await service.search(request.query)
+        result = await service.search(
+            request.query,
+            language_context=ensure_language_context(getattr(current_user, "language", None)),
+        )
         return SuccessResponse(data=result)
     except AppException as e:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=e.message)
@@ -50,7 +54,10 @@ async def prepare_topic(
 ):
     """대화 전 주제 준비 카드 생성"""
     try:
-        result = await service.prepare_topic(request.topic)
+        result = await service.prepare_topic(
+            request.topic,
+            language_context=ensure_language_context(getattr(current_user, "language", None)),
+        )
         return SuccessResponse(data=result)
     except AppException as e:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=e.message)

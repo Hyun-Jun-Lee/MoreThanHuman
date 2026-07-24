@@ -24,6 +24,13 @@ from domains.grammar.repository import GrammarRepository
 from domains.grammar.service import GrammarService
 from domains.llm.factory import LLMProviderFactory
 from domains.llm.schemas import LLMMessage, LLMRequest
+from shared.language import (
+    LanguageCode,
+    LearningLanguageContext,
+    ensure_language_context,
+    language_name,
+)
+from shared.language_prompt_policy import format_practice_priorities
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -37,7 +44,11 @@ class ConversationService:
         self.grammar_service = GrammarService(grammar_repository)
 
     async def process_grammar_feedback_background(
-        self, user_message_id: str, user_message: str, previous_ai_message: str | None = None
+        self,
+        user_message_id: str,
+        user_message: str,
+        previous_ai_message: str | None = None,
+        language_context: LearningLanguageContext | None = None,
     ) -> None:
         """
         백그라운드에서 문법 체크 실행 및 저장
@@ -49,7 +60,11 @@ class ConversationService:
         """
         try:
             # 문법 체크 실행
-            feedback = await self.grammar_service.check_grammar(user_message, previous_ai_message)
+            feedback = await self.grammar_service.check_grammar(
+                user_message,
+                previous_ai_message,
+                language_context=ensure_language_context(language_context),
+            )
 
             # DB에 저장
             await self.grammar_service.save_feedback(user_message_id, feedback)
@@ -67,6 +82,7 @@ class ConversationService:
         topic: str | None = None,
         conversation_direction: str | None = None,
         selected_question: str | None = None,
+        language_context: LearningLanguageContext | None = None,
     ) -> ConversationResponse:
         """
         자유 대화 시작
@@ -84,6 +100,7 @@ class ConversationService:
         """
         try:
             # 1. Conversation 생성
+            language_context = ensure_language_context(language_context)
             title = first_message[:50] if len(first_message) <= 50 else first_message[:47] + "..."
 
             conversation = ConversationModel(
@@ -92,6 +109,9 @@ class ConversationService:
                 title=title,
                 conversation_type=ConversationType.FREE_CHAT,
                 role_character=None,
+                native_language=language_context.native_language.value,
+                target_language=language_context.target_language.value,
+                feedback_language=language_context.feedback_language.value,
                 message_count=0,
                 status=ConversationStatus.ACTIVE,
             )
@@ -105,6 +125,7 @@ class ConversationService:
                 topic=topic,
                 conversation_direction=conversation_direction,
                 selected_question=selected_question,
+                language_context=language_context,
             )
 
             # 3. 사용자 메시지 저장
@@ -133,7 +154,12 @@ class ConversationService:
 
             # 7. 백그라운드에서 문법 체크 실행 (첫 메시지이므로 이전 AI 메시지 없음)
             asyncio.create_task(
-                self.process_grammar_feedback_background(user_message.id, first_message, previous_ai_message=None)
+                self.process_grammar_feedback_background(
+                    user_message.id,
+                    first_message,
+                    previous_ai_message=None,
+                    language_context=language_context,
+                )
             )
 
             # 8. AI 응답 즉시 반환 (grammar_feedback=None)
@@ -142,6 +168,7 @@ class ConversationService:
                 message_id=user_message.id,
                 conversation_type=ConversationType.FREE_CHAT,
                 role_character=None,
+                language=language_context,
                 response=ai_response,
                 grammar_feedback=None,  # 백그라운드에서 처리 중
             )
@@ -154,6 +181,7 @@ class ConversationService:
         role_character: str,
         search_context: str | None = None,
         user_id: str = "",
+        language_context: LearningLanguageContext | None = None,
     ) -> ConversationResponse:
         """
         롤플레이 대화 시작 (AI가 먼저 인사)
@@ -168,6 +196,7 @@ class ConversationService:
         """
         try:
             # 1. Conversation 생성
+            language_context = ensure_language_context(language_context)
             title = f"Role: {role_character}"
 
             conversation = ConversationModel(
@@ -176,16 +205,29 @@ class ConversationService:
                 title=title,
                 conversation_type=ConversationType.ROLE_PLAYING,
                 role_character=role_character,
+                native_language=language_context.native_language.value,
+                target_language=language_context.target_language.value,
+                feedback_language=language_context.feedback_language.value,
                 message_count=0,
                 status=ConversationStatus.ACTIVE,
             )
             self.repository.save(conversation)
 
             # 2. 시스템 프롬프트 생성
-            system_prompt = self.build_system_prompt(search_context, ConversationType.ROLE_PLAYING, role_character)
+            system_prompt = self.build_system_prompt(
+                search_context,
+                ConversationType.ROLE_PLAYING,
+                role_character,
+                language_context=language_context,
+            )
 
             # 3. AI의 첫 인사 생성
-            greeting_prompt = f"You are starting a role-play as '{role_character}'. Greet the user naturally and start the conversation as this character would. Keep it short (1-2 sentences)."
+            target_name = language_name(language_context.target_language)
+            greeting_prompt = (
+                f"You are starting a role-play as '{role_character}'. "
+                f"Greet the user naturally in {target_name} and start the conversation "
+                "as this character would. Keep it short (1-2 sentences)."
+            )
             ai_response = await self.generate_response(system_prompt, [], greeting_prompt)
 
             # 4. AI 메시지만 저장 (사용자 메시지 없음)
@@ -206,6 +248,7 @@ class ConversationService:
                 message_id=assistant_message.id,
                 conversation_type=ConversationType.ROLE_PLAYING,
                 role_character=role_character,
+                language=language_context,
                 response=ai_response,
                 grammar_feedback=None,
             )
@@ -228,6 +271,7 @@ class ConversationService:
         try:
             # 1. 대화 조회
             conversation = self.repository.find_by_id(conversation_id, user_id)
+            language_context = conversation.language
 
             # 2. 사용자 메시지 저장
             user_msg = MessageModel(
@@ -248,7 +292,8 @@ class ConversationService:
             system_prompt = self.build_system_prompt(
                 None,  # search_context는 첫 대화에만 사용
                 conversation.conversation_type,
-                conversation.role_character
+                conversation.role_character,
+                language_context=language_context,
             )
 
             # 6. 바로 전 AI 메시지 찾기 (문법 체크 맥락용)
@@ -277,7 +322,12 @@ class ConversationService:
 
             # 10. 백그라운드에서 문법 체크 실행 (응답 반환에 영향 없음)
             asyncio.create_task(
-                self.process_grammar_feedback_background(user_msg.id, user_message, previous_ai_message)
+                self.process_grammar_feedback_background(
+                    user_msg.id,
+                    user_message,
+                    previous_ai_message,
+                    language_context=language_context,
+                )
             )
 
             # 11. AI 응답 즉시 반환 (grammar_feedback=None)
@@ -454,6 +504,7 @@ class ConversationService:
         topic: str | None = None,
         conversation_direction: str | None = None,
         selected_question: str | None = None,
+        language_context: LearningLanguageContext | None = None,
     ) -> str:
         """
         대화 타입에 따라 다른 시스템 프롬프트 생성
@@ -469,20 +520,42 @@ class ConversationService:
         Returns:
             시스템 프롬프트
         """
+        language_context = ensure_language_context(language_context)
         if conversation_type == ConversationType.ROLE_PLAYING:
-            return self.build_roleplay_prompt(role_character, search_context)
+            return self.build_roleplay_prompt(role_character, search_context, language_context=language_context)
         else:
             return self.build_free_chat_prompt(
                 search_context,
                 topic=topic,
                 conversation_direction=conversation_direction,
                 selected_question=selected_question,
+                language_context=language_context,
             )
 
-    def build_roleplay_prompt(self, role_character: str, search_context: str | None = None) -> str:
+    def build_roleplay_prompt(
+        self,
+        role_character: str,
+        search_context: str | None = None,
+        language_context: LearningLanguageContext | None = None,
+    ) -> str:
         """롤플레이용 시스템 프롬프트"""
+        language_context = ensure_language_context(language_context)
+        target_name = language_name(language_context.target_language)
+        feedback_name = language_name(language_context.feedback_language)
+        native_name = language_name(language_context.native_language)
 
-        base_prompt = f"""You are an English conversation practice partner playing the role of '{role_character}'.
+        scenario_examples = self._roleplay_scenario_examples(language_context)
+        practice_priorities = format_practice_priorities(language_context.target_language)
+
+        base_prompt = f"""You are a {target_name} conversation practice partner playing the role of '{role_character}'.
+
+        ## Learner Language Context:
+        - Native language: {native_name}
+        - Practice target language: {target_name}
+        - Feedback/explanation language: {feedback_name}
+
+        ## Target Language Practice Priorities:
+{practice_priorities}
 
         ## Role Guidelines:
         1. Always speak naturally from the perspective of '{role_character}'
@@ -490,15 +563,14 @@ class ConversationService:
         3. Lead the conversation immersively as if in a real situation
 
         ## Conversation Rules:
+        - Always communicate in {target_name}
+        - Use {feedback_name} only for brief explanations when the learner needs help
         - Continue the conversation with natural questions appropriate to the situation
         - Create realistic scenarios that fit the role
         - **IMPORTANT: Keep responses short - maximum 3 sentences**
 
         ## Scenario Examples:
-        - Cafe Barista: Greeting customers, explaining and recommending menu items, taking orders, chatting during drink preparation, payment and closing
-        - Interviewer: Welcoming candidates, requesting self-introduction, asking about experience and career, evaluating problem-solving skills in various situations, providing time for questions
-        - English Teacher: Practicing daily conversation, introducing new expressions, explaining grammar, correcting pronunciation, reviewing homework and providing feedback
-        - Hotel Front Desk: Check-in procedures, room information, introducing hotel facilities, handling requests, check-out and feedback
+{scenario_examples}
         """
 
         if search_context:
@@ -506,26 +578,57 @@ class ConversationService:
 
         return base_prompt
 
+    def _roleplay_scenario_examples(self, language_context: LearningLanguageContext) -> str:
+        """목표 언어에 맞는 롤플레이 예시 목록"""
+        if language_context.target_language == LanguageCode.KOREAN:
+            return (
+                """        - Korean Cafe Staff: Taking polite orders, explaining menu options, checking preferences, handling payment, and closing with natural endings
+        - Front Desk Staff: Helping with check-in, directions, reservations, and polite requests using appropriate honorific level
+        - New Colleague: Exchanging greetings, self-introductions, workplace small talk, and simple follow-up questions
+        - Friend: Having casual conversation about plans, opinions, and daily life while keeping the tone natural"""
+            )
+        return (
+            """        - Cafe Barista: Greeting customers, explaining and recommending menu items, taking orders, chatting during drink preparation, payment and closing
+        - Interviewer: Welcoming candidates, requesting self-introduction, asking about experience and career, evaluating problem-solving skills in various situations, providing time for questions
+        - Hotel Front Desk: Check-in procedures, room information, introducing hotel facilities, handling requests, check-out and feedback
+        - Meeting Participant: Making small talk, asking for opinions, responding to ideas, and encouraging practical follow-up answers"""
+        )
+
     def build_free_chat_prompt(
         self,
         search_context: str | None = None,
         topic: str | None = None,
         conversation_direction: str | None = None,
         selected_question: str | None = None,
+        language_context: LearningLanguageContext | None = None,
     ) -> str:
         """자유 대화용 시스템 프롬프트"""
+        language_context = ensure_language_context(language_context)
+        target_name = language_name(language_context.target_language)
+        feedback_name = language_name(language_context.feedback_language)
+        native_name = language_name(language_context.native_language)
+        practice_priorities = format_practice_priorities(language_context.target_language)
 
-        base_prompt = """You are a friendly and helpful English conversation learning assistant.
+        base_prompt = f"""You are a friendly and helpful {target_name} conversation learning assistant.
 
         ## Role:
-        - Help users learn by having natural English conversations
+        - Help users learn by having natural {target_name} conversations
         - Answer questions about grammar and expressions
-        - Teach practical English expressions
+        - Teach practical {target_name} expressions
+
+        ## Learner Language Context:
+        - Native language: {native_name}
+        - Practice target language: {target_name}
+        - Feedback/explanation language: {feedback_name}
+
+        ## Target Language Practice Priorities:
+{practice_priorities}
 
         ## Conversation Style:
-        - Always communicate in English only
+        - Always communicate in {target_name}
+        - Use {feedback_name} only for brief explanations when the learner needs help
         - Actively utilize reference information when available
-        - Use natural and fluent English expressions
+        - Use natural and fluent {target_name} expressions
         - Proceed like a real conversation
         - **IMPORTANT: Keep responses very short - maximum 3 sentences**
         """
@@ -533,7 +636,12 @@ class ConversationService:
         if search_context:
             base_prompt += f"\n\n## Reference Information:\n{search_context}"
 
-        topic_prep_prompt = self.build_topic_prep_prompt(topic, conversation_direction, selected_question)
+        topic_prep_prompt = self.build_topic_prep_prompt(
+            topic,
+            conversation_direction,
+            selected_question,
+            language_context=language_context,
+        )
         if topic_prep_prompt:
             base_prompt += topic_prep_prompt
 
@@ -544,12 +652,17 @@ class ConversationService:
         topic: str | None = None,
         conversation_direction: str | None = None,
         selected_question: str | None = None,
+        language_context: LearningLanguageContext | None = None,
     ) -> str:
         """주제 준비 카드 handoff 프롬프트"""
         if not any([topic, conversation_direction, selected_question]):
             return ""
 
-        direction_guidance = self._conversation_direction_guidance(conversation_direction)
+        language_context = ensure_language_context(language_context)
+        direction_guidance = self._conversation_direction_guidance(
+            conversation_direction,
+            language_context=language_context,
+        )
         prompt = "\n\n## Topic Prep Handoff:"
         if topic:
             prompt += f"\n- Topic: {topic}"
@@ -560,20 +673,26 @@ class ConversationService:
         if direction_guidance:
             prompt += f"\n- Direction guidance: {direction_guidance}"
 
-        prompt += """
+        target_name = language_name(language_context.target_language)
+        prompt += f"""
 
 Use the user's first message as an answer to the selected first question.
-Continue naturally in the selected direction while keeping the conversation short and interactive.
+Continue naturally in {target_name} in the selected direction while keeping the conversation short and interactive.
 Do not re-ask the selected first question unless the user's answer is unclear."""
         return prompt
 
-    def _conversation_direction_guidance(self, conversation_direction: str | None = None) -> str:
+    def _conversation_direction_guidance(
+        self,
+        conversation_direction: str | None = None,
+        language_context: LearningLanguageContext | None = None,
+    ) -> str:
         """대화 방향별 프롬프트 가이드"""
+        target_name = language_name(ensure_language_context(language_context).target_language)
         guidance = {
-            "CASUAL_CHAT": "Have a relaxed conversation about opinions, reactions, and personal experiences.",
-            "DEBATE": "Encourage the user to take a position, give reasons, and consider counterarguments.",
-            "INTERVIEW_QA": "Ask focused follow-up questions as if interviewing the user about the topic.",
-            "EXPLANATION_PRACTICE": "Help the user explain the topic clearly in simple, organized English.",
+            "CASUAL_CHAT": f"Have a relaxed {target_name} conversation about opinions, reactions, and personal experiences.",
+            "DEBATE": f"Encourage the user to take a position in {target_name}, give reasons, and consider counterarguments.",
+            "INTERVIEW_QA": f"Ask focused follow-up questions in {target_name} as if interviewing the user about the topic.",
+            "EXPLANATION_PRACTICE": f"Help the user explain the topic clearly in simple, organized {target_name}.",
         }
         if not conversation_direction:
             return ""

@@ -1,3 +1,4 @@
+import 'package:curitalk/features/language/language.dart';
 import 'package:curitalk/features/topic_prep/topic_prep.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -14,6 +15,8 @@ void main() {
       TopicPrepDirectionType.casualChat,
     );
     expect(result.card?.directions.first.firstQuestions, hasLength(3));
+    expect(result.language.nativeLanguage, LearningLanguageCode.zh);
+    expect(result.language.targetLanguage, LearningLanguageCode.ko);
   });
 
   test('parses a low-quality topic prep result', () {
@@ -60,6 +63,11 @@ void main() {
 Map<String, dynamic> _readyResult() {
   return <String, dynamic>{
     'ready': true,
+    'language': <String, String>{
+      'native_language': 'zh',
+      'target_language': 'ko',
+      'feedback_language': 'zh',
+    },
     'card': <String, dynamic>{
       'topic': '최근 롯데 자이언츠 경기',
       'summary': 'Lotte won 8-3 after ending a losing streak.',

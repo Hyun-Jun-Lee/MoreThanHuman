@@ -15,6 +15,7 @@ from domains.conversation.router import (
 )
 from domains.conversation.schemas import ConversationResponse, MessageResponse
 from domains.voice.schemas import VoiceAudioResponse, VoiceInputMode
+from shared.language import LearningLanguageContext
 from shared.exceptions import ExternalAPIException, ValidationException
 
 
@@ -31,6 +32,7 @@ class FakeConversationService:
         topic=None,
         conversation_direction=None,
         selected_question=None,
+        language_context=None,
     ):
         self.started.append(
             {
@@ -40,6 +42,7 @@ class FakeConversationService:
                 "topic": topic,
                 "conversation_direction": conversation_direction,
                 "selected_question": selected_question,
+                "language_context": language_context,
             }
         )
         return ConversationResponse(
@@ -107,7 +110,14 @@ class FakeVoiceService:
 def _conversation_app_with_overrides(conversation_service, voice_service) -> FastAPI:
     app = FastAPI()
     app.include_router(router)
-    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id="user-1")
+    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(
+        id="user-1",
+        language=LearningLanguageContext(
+            native_language="en",
+            target_language="ko",
+            feedback_language="en",
+        ),
+    )
     app.dependency_overrides[get_conversation_service] = lambda: conversation_service
     app.dependency_overrides[get_voice_service] = lambda: voice_service
     return app
@@ -255,6 +265,7 @@ def test_free_chat_start_accepts_audio_input_with_topic_prep_fields():
     assert conversation_service.started[0]["topic"] == "travel plans"
     assert conversation_service.started[0]["conversation_direction"] == "DEBATE"
     assert conversation_service.started[0]["selected_question"] == "Is slow travel better?"
+    assert conversation_service.started[0]["language_context"].target_language.value == "ko"
 
 
 def test_free_chat_start_keeps_existing_json_text_contract():

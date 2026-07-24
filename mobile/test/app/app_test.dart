@@ -4,6 +4,7 @@ import 'package:curitalk/app/app.dart';
 import 'package:curitalk/core/storage/storage.dart';
 import 'package:curitalk/features/auth/auth.dart';
 import 'package:curitalk/features/home/home.dart';
+import 'package:curitalk/features/language/language.dart';
 import 'package:curitalk/features/onboarding/onboarding.dart';
 import 'package:curitalk/features/topic_prep/topic_prep.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -29,16 +30,13 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(
-        find.text('Talk about what\nyou actually care about.'),
-        findsOneWidget,
-      );
+      expect(find.text('What do you want\nto practice?'), findsOneWidget);
 
       await tester.tap(find.text('SKIP'));
       await tester.pumpAndSettle();
 
       expect(
-        find.text('Practice English with your own topics.'),
+        find.text('Practice conversation with your own topics.'),
         findsOneWidget,
       );
 
@@ -82,7 +80,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Hi, Learner'), findsOneWidget);
-    expect(find.text('Practice English with your own topics.'), findsNothing);
+    expect(
+      find.text('Practice conversation with your own topics.'),
+      findsNothing,
+    );
   });
 
   testWidgets('authenticated user can open Roleplay Setup from Home', (
@@ -163,7 +164,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(supabaseAuth.hasSession, isFalse);
-    expect(find.text('Practice English with your own topics.'), findsOneWidget);
+    expect(
+      find.text('Practice conversation with your own topics.'),
+      findsOneWidget,
+    );
   });
 }
 
@@ -199,6 +203,9 @@ ProviderScope _appScope({
         const _FakeGoogleIdentityService(),
       ),
       authRepositoryProvider.overrideWithValue(authRepository),
+      languagePreferencesRepositoryProvider.overrideWithValue(
+        _FakeLanguagePreferencesRepository(),
+      ),
       supabaseAuthServiceProvider.overrideWithValue(
         supabaseAuth ?? _FakeSupabaseAuthService(),
       ),
@@ -297,6 +304,12 @@ class _MemoryOnboardingStorage implements OnboardingStorage {
   _MemoryOnboardingStorage(this.completed);
 
   bool completed;
+  LearningLanguageContext? pendingLanguage;
+
+  @override
+  Future<void> clearPendingLanguageContext() async {
+    pendingLanguage = null;
+  }
 
   @override
   Future<bool> isCompleted() async => completed;
@@ -304,6 +317,33 @@ class _MemoryOnboardingStorage implements OnboardingStorage {
   @override
   Future<void> markCompleted() async {
     completed = true;
+  }
+
+  @override
+  Future<LearningLanguageContext?> readPendingLanguageContext() async {
+    return pendingLanguage;
+  }
+
+  @override
+  Future<void> writePendingLanguageContext(
+    LearningLanguageContext context,
+  ) async {
+    pendingLanguage = context;
+  }
+}
+
+class _FakeLanguagePreferencesRepository
+    implements LanguagePreferencesRepository {
+  @override
+  Future<LearningLanguageContext> getLanguagePreferences() async {
+    return LearningLanguageContext.defaultContext;
+  }
+
+  @override
+  Future<LearningLanguageContext> updateLanguagePreferences(
+    LearningLanguageContext context,
+  ) async {
+    return context;
   }
 }
 

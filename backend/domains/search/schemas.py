@@ -6,6 +6,8 @@ from enum import Enum
 
 from pydantic import BaseModel, Field
 
+from shared.language import LearningLanguageContext
+
 
 class SearchResultItem(BaseModel):
     """검색 결과 항목"""
@@ -54,6 +56,7 @@ class SearchResult(BaseModel):
 
     query: str
     enhanced_query: str
+    language: LearningLanguageContext = Field(default_factory=LearningLanguageContext)
     ready: bool
     summary: str | None = None
     sources: list[SearchResultItem]
@@ -104,6 +107,7 @@ class TopicPrepCard(BaseModel):
     """대화 전 주제 준비 카드"""
 
     topic: str
+    language: LearningLanguageContext = Field(default_factory=LearningLanguageContext)
     summary: str
     directions: list[TopicPrepDirection] = Field(..., min_length=4, max_length=4)
     sources: list[SearchResultItem]
@@ -115,6 +119,7 @@ class TopicPrepResult(BaseModel):
     """주제 준비 카드 생성 결과"""
 
     ready: bool
+    language: LearningLanguageContext = Field(default_factory=LearningLanguageContext)
     card: TopicPrepCard | None = None
     quality: TopicPrepQuality
     retry_guidance: str | None = None

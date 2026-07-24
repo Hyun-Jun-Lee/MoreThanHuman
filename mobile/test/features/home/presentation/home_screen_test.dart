@@ -4,6 +4,8 @@ import 'package:curitalk/app/theme/app_theme.dart';
 import 'package:curitalk/core/storage/storage.dart';
 import 'package:curitalk/features/auth/auth.dart';
 import 'package:curitalk/features/home/home.dart';
+import 'package:curitalk/features/language/language.dart';
+import 'package:curitalk/features/onboarding/onboarding.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -24,6 +26,81 @@ void main() {
     expect(find.text('Learner Kim'), findsOneWidget);
     expect(find.text('learner@example.com'), findsOneWidget);
     expect(find.text('LOG OUT'), findsOneWidget);
+    expect(
+      find.text(
+        'Applies to new conversations. Existing conversations keep the language pair they started with.',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('language pair save refreshes Home active pair', (
+    WidgetTester tester,
+  ) async {
+    final _FakeLanguagePreferencesRepository languageRepository =
+        _FakeLanguagePreferencesRepository();
+    final _FakeAuthRepository authRepository = _FakeAuthRepository(
+      languageProvider: () => languageRepository.currentLanguage,
+    );
+
+    await tester.pumpWidget(
+      _homeApp(
+        authRepository: authRepository,
+        languagePreferencesRepository: languageRepository,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Korean -> English'), findsOneWidget);
+
+    await tester.tap(find.text('L'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('English -> Korean'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('English -> Korean'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('SAVE LANGUAGE PAIR'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('SAVE LANGUAGE PAIR'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('English -> Korean'), findsOneWidget);
+    expect(
+      languageRepository.currentLanguage.targetLanguage,
+      LearningLanguageCode.ko,
+    );
+  });
+
+  testWidgets('language pair save failure keeps policy note visible', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      _homeApp(
+        languagePreferencesRepository: _FakeLanguagePreferencesRepository(
+          throwOnUpdate: true,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('L'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('English -> Korean'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('English -> Korean'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('SAVE LANGUAGE PAIR'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('SAVE LANGUAGE PAIR'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Language pair could not be saved.'), findsOneWidget);
+    expect(
+      find.text(
+        'Applies to new conversations. Existing conversations keep the language pair they started with.',
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('Chat tab opens start conversation sheet', (
@@ -146,6 +223,7 @@ final UserProfile _user = UserProfile(
 Widget _homeApp({
   _MemoryTokenStorage? tokenStorage,
   _FakeAuthRepository? authRepository,
+  _FakeLanguagePreferencesRepository? languagePreferencesRepository,
   _FakeGoogleIdentityService? googleIdentityService,
   _FakeSupabaseAuthService? supabaseAuth,
   ValueChanged<ConversationStartType>? onStartTypeSelected,
@@ -164,6 +242,10 @@ Widget _homeApp({
       ),
       authRepositoryProvider.overrideWithValue(
         authRepository ?? _FakeAuthRepository(),
+      ),
+      onboardingStorageProvider.overrideWithValue(_FakeOnboardingStorage()),
+      languagePreferencesRepositoryProvider.overrideWithValue(
+        languagePreferencesRepository ?? _FakeLanguagePreferencesRepository(),
       ),
       googleIdentityServiceProvider.overrideWithValue(
         googleIdentityService ?? _FakeGoogleIdentityService(),
@@ -207,8 +289,81 @@ class _FakeGoogleIdentityService implements GoogleIdentityService {
 }
 
 class _FakeAuthRepository implements AuthRepository {
+  _FakeAuthRepository({this.languageProvider});
+
+  final LearningLanguageContext Function()? languageProvider;
+
   @override
-  Future<UserProfile> getCurrentUser() async => _user;
+  Future<UserProfile> getCurrentUser() async {
+    return _userWithLanguage(
+      languageProvider?.call() ?? LearningLanguageContext.defaultContext,
+    );
+  }
+}
+
+class _FakeOnboardingStorage implements OnboardingStorage {
+  LearningLanguageContext? pendingLanguage;
+
+  @override
+  Future<void> clearPendingLanguageContext() async {
+    pendingLanguage = null;
+  }
+
+  @override
+  Future<bool> isCompleted() async => true;
+
+  @override
+  Future<void> markCompleted() async {}
+
+  @override
+  Future<LearningLanguageContext?> readPendingLanguageContext() async {
+    return pendingLanguage;
+  }
+
+  @override
+  Future<void> writePendingLanguageContext(
+    LearningLanguageContext context,
+  ) async {
+    pendingLanguage = context;
+  }
+}
+
+class _FakeLanguagePreferencesRepository
+    implements LanguagePreferencesRepository {
+  _FakeLanguagePreferencesRepository({this.throwOnUpdate = false});
+
+  final bool throwOnUpdate;
+  LearningLanguageContext currentLanguage =
+      LearningLanguageContext.defaultContext;
+
+  @override
+  Future<LearningLanguageContext> getLanguagePreferences() async {
+    return currentLanguage;
+  }
+
+  @override
+  Future<LearningLanguageContext> updateLanguagePreferences(
+    LearningLanguageContext context,
+  ) async {
+    if (throwOnUpdate) {
+      throw StateError('language unavailable');
+    }
+    currentLanguage = context;
+    return context;
+  }
+}
+
+UserProfile _userWithLanguage(LearningLanguageContext language) {
+  return UserProfile(
+    id: _user.id,
+    email: _user.email,
+    name: _user.name,
+    isActive: _user.isActive,
+    oauthProvider: _user.oauthProvider,
+    language: language,
+    createdAt: _user.createdAt,
+    updatedAt: _user.updatedAt,
+  );
 }
 
 class _FakeSupabaseAuthService implements SupabaseAuthService {
