@@ -1,5 +1,9 @@
 # CHANGELOG — 완료된 작업 기록
 
+## 2026-07-23
+
+- **프리미엄 구독 BM 전략 문서화**: `STRATEGY.md`에 무료 Topic Prep 2회, 대화 5 user turns, 무료 체험 중 STT/TTS 제공, Premium 구독 가치 축을 추가
+
 ## 2026-07-21
 
 - **U1-U4 diff HTML 설명서 작성**: 모바일 copy, 콘텐츠 튜닝, prompt policy, 언어쌍 변경 정책 UX를 각각 self-contained HTML로 설명
