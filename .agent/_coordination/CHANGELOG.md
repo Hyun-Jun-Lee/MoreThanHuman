@@ -1,5 +1,9 @@
 # CHANGELOG — 완료된 작업 기록
 
+## 2026-08-06
+
+- **OpenRouter 음성 provider 전환**: STT/TTS 기본 provider를 OpenRouter로 전환하고 Microsoft MAI-Voice-2-Flash TTS, OpenRouter STT/TTS 테스트와 문서를 동기화
+
 ## 2026-07-23
 
 - **프리미엄 구독 BM 전략 문서화**: `STRATEGY.md`에 무료 Topic Prep 2회, 대화 5 user turns, 무료 체험 중 STT/TTS 제공, Premium 구독 가치 축을 추가

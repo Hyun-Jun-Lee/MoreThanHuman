@@ -19,7 +19,7 @@ cp .env.example .env
 | `LLM_PROVIDER` | `openrouter` 또는 `ollama` |
 | `OPENROUTER_API_KEY` | OpenRouter API 키 |
 | `OPENROUTER_MODEL` | OpenRouter 모델명 |
-| `OPENAI_API_KEY` | STT/TTS 음성 기능을 사용할 때 필요한 OpenAI API 키 |
+| `OPENAI_API_KEY` | OpenAI direct STT/TTS를 사용할 때 필요한 API 키 |
 | `OLLAMA_BASE_URL` | Ollama 서버 URL |
 | `OLLAMA_MODEL` | Ollama 모델명 |
 | `SUPABASE_URL` | Supabase project URL |
@@ -615,7 +615,7 @@ Query:
 |------|------|--------|------|
 | `DATABASE_URL` | 아니오 | `sqlite:///./english_learning.db` | DB 연결 문자열 |
 | `OPENROUTER_API_KEY` | 예 | 없음 | OpenRouter API 키 |
-| `OPENAI_API_KEY` | 음성 기능 사용 시 | 없음 | OpenAI STT/TTS API 키. Flutter 앱에는 노출하지 않음 |
+| `OPENAI_API_KEY` | OpenAI direct 음성 기능 사용 시 | 없음 | OpenAI STT/TTS API 키. Flutter 앱에는 노출하지 않음 |
 | `LLM_PROVIDER` | 아니오 | `openrouter` | 기본 LLM provider. `ollama`는 로컬 Ollama 서버를 의도적으로 사용할 때만 설정 |
 | `OLLAMA_BASE_URL` | Ollama 사용 시 | 없음 | Ollama 서버 URL |
 | `OPENROUTER_MODEL` | OpenRouter 사용 시 | 없음 | 대화용 OpenRouter 모델 |
@@ -634,12 +634,12 @@ Query:
 | `CORS_ORIGINS` | 아니오 | `[]` | CORS 허용 origin 목록 |
 | `MAX_TOKENS` | 아니오 | `4000` | LLM 최대 토큰 |
 | `TEMPERATURE` | 아니오 | `0.7` | LLM temperature |
-| `STT_PROVIDER` | 아니오 | `openai` | STT provider |
-| `STT_MODEL` | 아니오 | `gpt-4o-mini-transcribe` | 음성 파일을 텍스트로 변환할 STT 모델 |
-| `TTS_PROVIDER` | 아니오 | `openai` | TTS provider |
-| `TTS_MODEL` | 아니오 | `gpt-4o-mini-tts` | AI 응답을 음성으로 변환할 TTS 모델 |
-| `TTS_VOICE` | 아니오 | `alloy` | TTS 음성 preset |
-| `TTS_RESPONSE_FORMAT` | 아니오 | `mp3` | TTS 응답 오디오 포맷 |
+| `STT_PROVIDER` | 아니오 | `openrouter` | STT provider. `openrouter` 또는 `openai` |
+| `STT_MODEL` | 아니오 | `openai/gpt-4o-mini-transcribe` | 음성 파일을 텍스트로 변환할 STT 모델. OpenAI direct 사용 시 `gpt-4o-mini-transcribe`처럼 provider prefix 없이 설정 |
+| `TTS_PROVIDER` | 아니오 | `openrouter` | TTS provider. `openrouter` 또는 `openai` |
+| `TTS_MODEL` | 아니오 | `microsoft/mai-voice-2-flash` | AI 응답을 음성으로 변환할 TTS 모델. OpenAI direct 사용 시 `gpt-4o-mini-tts`처럼 provider prefix 없이 설정 |
+| `TTS_VOICE` | 아니오 | `en-US-Harper:MAI-Voice-2-Flash` | TTS 음성 preset. provider/model별 지원 voice가 다름 |
+| `TTS_RESPONSE_FORMAT` | 아니오 | `mp3` | TTS 응답 오디오 포맷. OpenRouter 기본 권장은 `mp3` 또는 `pcm` |
 | `TTS_MAX_INPUT_CHARS` | 아니오 | `4000` | TTS로 보낼 최대 텍스트 길이 |
 | `TTS_MAX_OUTPUT_MB` | 아니오 | `5` | base64 인코딩 전 TTS 응답 오디오 최대 크기 |
 | `VOICE_MAX_UPLOAD_MB` | 아니오 | `10` | STT 업로드 음성 파일 최대 크기 |

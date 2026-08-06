@@ -2,8 +2,10 @@ import pytest
 
 from domains.voice.schemas import VoiceSynthesisResult, VoiceTranscriptionResult
 from domains.voice import service as voice_service_module
+from domains.voice.openai_provider import OpenAIVoiceProvider
+from domains.voice.openrouter_provider import OpenRouterVoiceProvider
 from domains.voice.service import VoiceService
-from shared.exceptions import ValidationException
+from shared.exceptions import AppException, ValidationException
 
 WEBM_BYTES = b"\x1A\x45\xDF\xA3fake webm audio"
 
@@ -67,6 +69,32 @@ async def test_text_input_does_not_require_voice_provider_configuration(monkeypa
 
     assert input_mode == "text"
     assert text == "Hello"
+
+
+def test_create_provider_supports_openrouter(monkeypatch):
+    monkeypatch.setattr(voice_service_module.settings, "stt_provider", "openrouter")
+    monkeypatch.setattr(voice_service_module.settings, "tts_provider", "openrouter")
+
+    provider = VoiceService().provider
+
+    assert isinstance(provider, OpenRouterVoiceProvider)
+
+
+def test_create_provider_still_supports_openai(monkeypatch):
+    monkeypatch.setattr(voice_service_module.settings, "stt_provider", "openai")
+    monkeypatch.setattr(voice_service_module.settings, "tts_provider", "openai")
+
+    provider = VoiceService().provider
+
+    assert isinstance(provider, OpenAIVoiceProvider)
+
+
+def test_create_provider_rejects_mixed_voice_providers(monkeypatch):
+    monkeypatch.setattr(voice_service_module.settings, "stt_provider", "openrouter")
+    monkeypatch.setattr(voice_service_module.settings, "tts_provider", "openai")
+
+    with pytest.raises(AppException, match="same provider"):
+        _ = VoiceService().provider
 
 
 @pytest.mark.asyncio

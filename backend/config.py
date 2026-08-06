@@ -76,11 +76,11 @@ class Settings(BaseSettings):
     max_history_turns: int = 10
 
     # Voice Settings
-    stt_provider: str = "openai"
-    stt_model: str = "gpt-4o-mini-transcribe"
-    tts_provider: str = "openai"
-    tts_model: str = "gpt-4o-mini-tts"
-    tts_voice: str = "alloy"
+    stt_provider: str = "openrouter"
+    stt_model: str = "openai/gpt-4o-mini-transcribe"
+    tts_provider: str = "openrouter"
+    tts_model: str = "microsoft/mai-voice-2-flash"
+    tts_voice: str = "en-US-Harper:MAI-Voice-2-Flash"
     tts_response_format: str = "mp3"
     tts_max_input_chars: int = 4000
     tts_max_output_mb: int = 5

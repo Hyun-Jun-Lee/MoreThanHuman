@@ -484,11 +484,11 @@ env {
   GRAMMAR_OPENROUTER_MODEL?: String
   GRAMMAR_OLLAMA_MODEL?: String
 
-  STT_PROVIDER?: "openai" = "openai"
-  STT_MODEL?: String = "gpt-4o-mini-transcribe"
-  TTS_PROVIDER?: "openai" = "openai"
-  TTS_MODEL?: String = "gpt-4o-mini-tts"
-  TTS_VOICE?: String = "alloy"
+  STT_PROVIDER?: "openrouter" | "openai" = "openrouter"
+  STT_MODEL?: String = "openai/gpt-4o-mini-transcribe"
+  TTS_PROVIDER?: "openrouter" | "openai" = "openrouter"
+  TTS_MODEL?: String = "microsoft/mai-voice-2-flash"
+  TTS_VOICE?: String = "en-US-Harper:MAI-Voice-2-Flash"
   TTS_RESPONSE_FORMAT?: "mp3" | "opus" | "aac" | "flac" | "wav" | "pcm" = "mp3"
   TTS_MAX_INPUT_CHARS?: Integer = 4000
   TTS_MAX_OUTPUT_MB?: Integer = 5

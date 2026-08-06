@@ -9,6 +9,7 @@ from fastapi import UploadFile
 
 from config import get_settings
 from domains.voice.openai_provider import OpenAIVoiceProvider
+from domains.voice.openrouter_provider import OpenRouterVoiceProvider
 from domains.voice.provider import VoiceProvider
 from domains.voice.schemas import (
     VoiceAudioResponse,
@@ -59,11 +60,17 @@ class VoiceService:
         return self._provider
 
     def _create_provider(self) -> VoiceProvider:
-        if settings.stt_provider != "openai" or settings.tts_provider != "openai":
+        if settings.stt_provider != settings.tts_provider:
+            raise AppException("STT_PROVIDER and TTS_PROVIDER must use the same provider.")
+        if settings.stt_provider == "openai":
+            return OpenAIVoiceProvider()
+        if settings.stt_provider == "openrouter":
+            return OpenRouterVoiceProvider()
+        if settings.tts_provider not in {"openai", "openrouter"}:
             raise AppException(
-                "Only openai is supported for STT_PROVIDER and TTS_PROVIDER in this version."
+                "Only openai and openrouter are supported for STT_PROVIDER and TTS_PROVIDER."
             )
-        return OpenAIVoiceProvider()
+        raise AppException("Unsupported voice provider configuration.")
 
     @staticmethod
     def normalize_text(value: str | None) -> str | None:

@@ -62,7 +62,7 @@ backend/
     ├── grammar/             # 문법 체크 및 통계
     ├── llm/                 # LLM 프로바이더 추상화
     ├── search/              # ddgs 검색 + query analysis + LLM source judge + LLM 요약
-    ├── voice/               # STT/TTS provider 추상화와 OpenAI Audio 연동
+    ├── voice/               # STT/TTS provider 추상화와 OpenRouter/OpenAI Audio 연동
     └── web/                 # 서버 렌더링 HTML 라우트
 
 mobile/
@@ -154,9 +154,9 @@ domains/{name}/
 [Flutter 앱] → Conversation composer 텍스트/음성 전송
              → POST /api/conversations/{conversation_id}/turn/
              → text 또는 audio_file 중 하나 전달
-             → audio_file이면 VoiceService → STT provider → transcript 생성
+             → audio_file이면 VoiceService → OpenRouter/OpenAI STT provider → transcript 생성
              → ConversationService.continue_conversation(transcript 또는 text, conversation language snapshot)
-             → include_audio_response=true이면 VoiceService → TTS provider
+             → include_audio_response=true이면 VoiceService → OpenRouter/OpenAI TTS provider
              → Response { transcript, response, audio?, audio_error? }
 
 [Flutter 앱] → Free Chat 음성 시작
@@ -204,7 +204,8 @@ domains/{name}/
 |--------|------|---------|
 | OpenRouter API | LLM 대화 생성 | 502 계열 외부 API 오류 |
 | Ollama | 로컬 LLM 대안 | 502 계열 외부 API 오류 |
-| OpenAI Audio API | STT/TTS 음성 대화 입출력 | STT 실패 시 대화 저장 전 오류, TTS 실패 시 `audio_error` |
+| OpenRouter Audio API | 기본 STT/TTS 음성 대화 입출력 | STT 실패 시 대화 저장 전 오류, TTS 실패 시 `audio_error` |
+| OpenAI Audio API | OpenAI direct STT/TTS fallback | STT 실패 시 대화 저장 전 오류, TTS 실패 시 `audio_error` |
 | DuckDuckGo(ddgs) | 검색 자료 수집 | 검색 실패 오류 |
 | Supabase Auth | Google 로그인, 세션 refresh, token 검증 | 인증 오류 |
 | Google Sign-In | 모바일 native Google 계정 선택 | 인증 오류 |
