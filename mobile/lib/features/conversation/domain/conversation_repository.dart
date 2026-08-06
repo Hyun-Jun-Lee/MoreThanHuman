@@ -21,6 +21,15 @@ abstract interface class ConversationRepository {
     String? selectedQuestion,
   });
 
+  Future<MultimodalConversationResponse> startFreeChatWithAudio({
+    required ConversationAudioFile audioFile,
+    String? searchContext,
+    String? topic,
+    String? conversationDirection,
+    String? selectedQuestion,
+    bool includeAudioResponse = false,
+  });
+
   Future<ConversationResponse> startRoleplay({
     required String roleCharacter,
     String? searchContext,

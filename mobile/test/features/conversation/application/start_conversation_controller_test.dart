@@ -31,6 +31,39 @@ void main() {
     });
   });
 
+  test('starts free chat with an audio first answer', () async {
+    final _FakeConversationRepository repository =
+        _FakeConversationRepository();
+    final ProviderContainer container = ProviderContainer(
+      overrides: [conversationRepositoryProvider.overrideWithValue(repository)],
+    );
+    addTearDown(container.dispose);
+
+    final ConversationResponse? response = await container
+        .read(startConversationControllerProvider.notifier)
+        .startFreeChatWithAudio(
+          audioFile: const ConversationAudioFile(
+            bytes: <int>[1, 2, 3],
+            filename: 'answer.m4a',
+            contentType: 'audio/m4a',
+          ),
+          searchContext: 'Lotte won 8-3.',
+          topic: '롯데 자이언츠 최근 경기',
+          conversationDirection: 'CASUAL_CHAT',
+          selectedQuestion: 'What stood out?',
+        );
+
+    expect(response?.conversationId, 'conversation-id');
+    expect(repository.lastAudioFilename, 'answer.m4a');
+    expect(repository.lastFreeChatBody, <String, String?>{
+      'first_message': null,
+      'search_context': 'Lotte won 8-3.',
+      'topic': '롯데 자이언츠 최근 경기',
+      'conversation_direction': 'CASUAL_CHAT',
+      'selected_question': 'What stood out?',
+    });
+  });
+
   test('starts roleplay with role character', () async {
     final _FakeConversationRepository repository =
         _FakeConversationRepository();
@@ -50,6 +83,7 @@ void main() {
 class _FakeConversationRepository implements ConversationRepository {
   Map<String, String?>? lastFreeChatBody;
   String? lastRoleCharacter;
+  String? lastAudioFilename;
 
   @override
   Future<ConversationResponse> startFreeChat({
@@ -67,6 +101,33 @@ class _FakeConversationRepository implements ConversationRepository {
       'selected_question': selectedQuestion,
     };
     return _response(ConversationType.freeChat);
+  }
+
+  @override
+  Future<MultimodalConversationResponse> startFreeChatWithAudio({
+    required ConversationAudioFile audioFile,
+    String? searchContext,
+    String? topic,
+    String? conversationDirection,
+    String? selectedQuestion,
+    bool includeAudioResponse = false,
+  }) async {
+    lastAudioFilename = audioFile.filename;
+    lastFreeChatBody = <String, String?>{
+      'first_message': null,
+      'search_context': searchContext,
+      'topic': topic,
+      'conversation_direction': conversationDirection,
+      'selected_question': selectedQuestion,
+    };
+    return MultimodalConversationResponse(
+      conversationId: 'conversation-id',
+      messageId: 'message-id',
+      conversationType: ConversationType.freeChat,
+      response: 'Hello!',
+      inputMode: ConversationInputMode.audio,
+      transcript: 'I liked the game.',
+    );
   }
 
   @override

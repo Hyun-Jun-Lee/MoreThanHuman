@@ -128,6 +128,15 @@ void main() {
     expect(selectedType, ConversationStartType.freeChat);
   });
 
+  testWidgets('Home empty state shows a single start conversation CTA', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(_homeApp());
+    await tester.pumpAndSettle();
+
+    expect(find.text('START CONVERSATION'), findsOneWidget);
+  });
+
   testWidgets('History tab calls navigation callback', (
     WidgetTester tester,
   ) async {

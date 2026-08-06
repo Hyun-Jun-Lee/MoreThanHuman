@@ -91,6 +91,52 @@ void main() {
     expect(formData.files.single.value.filename, 'recording.webm');
     expect(formData.files.single.value.contentType.toString(), 'audio/webm');
   });
+
+  test('starts free-chat with audio as multipart form data', () async {
+    final _ConversationHttpClientAdapter adapter =
+        _ConversationHttpClientAdapter();
+    final ApiConversationRepository repository = _repository(adapter);
+
+    final MultimodalConversationResponse response = await repository
+        .startFreeChatWithAudio(
+          audioFile: const ConversationAudioFile(
+            bytes: <int>[1, 2, 3],
+            filename: 'answer.m4a',
+            contentType: 'audio/m4a',
+          ),
+          searchContext: 'Lotte won 8-3.',
+          topic: '롯데 자이언츠 최근 경기',
+          conversationDirection: 'CASUAL_CHAT',
+          selectedQuestion: 'What stood out?',
+        );
+
+    final RequestOptions request = adapter.lastRequest!;
+    final FormData formData = request.data as FormData;
+    expect(response.inputMode, ConversationInputMode.audio);
+    expect(response.transcript, 'I want to talk about the game.');
+    expect(request.uri.path, '/api/conversations/start/free-chat/');
+    expect(
+      request.contentType,
+      startsWith(Headers.multipartFormDataContentType),
+    );
+    expect(_fieldValue(formData, 'search_context'), 'Lotte won 8-3.');
+    expect(_fieldValue(formData, 'topic'), '롯데 자이언츠 최근 경기');
+    expect(_fieldValue(formData, 'conversation_direction'), 'CASUAL_CHAT');
+    expect(_fieldValue(formData, 'selected_question'), 'What stood out?');
+    expect(_fieldValue(formData, 'include_audio_response'), 'false');
+    expect(formData.files.single.key, 'audio_file');
+    expect(formData.files.single.value.filename, 'answer.m4a');
+    expect(formData.files.single.value.contentType.toString(), 'audio/m4a');
+  });
+}
+
+String? _fieldValue(FormData formData, String key) {
+  for (final MapEntry<String, String> field in formData.fields) {
+    if (field.key == key) {
+      return field.value;
+    }
+  }
+  return null;
 }
 
 ApiConversationRepository _repository(_ConversationHttpClientAdapter adapter) {
@@ -160,6 +206,12 @@ class _ConversationHttpClientAdapter implements HttpClientAdapter {
         'role_character': null,
         'response': 'Hello!',
         'grammar_feedback': null,
+        'input_mode': options.data is FormData ? 'audio' : 'text',
+        'transcript': options.data is FormData
+            ? 'I want to talk about the game.'
+            : 'I liked the game.',
+        'audio': null,
+        'audio_error': null,
       },
     };
     return ResponseBody.fromString(

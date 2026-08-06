@@ -357,6 +357,18 @@ class _FakeConversationRepository implements ConversationRepository {
   }
 
   @override
+  Future<MultimodalConversationResponse> startFreeChatWithAudio({
+    required ConversationAudioFile audioFile,
+    String? searchContext,
+    String? topic,
+    String? conversationDirection,
+    String? selectedQuestion,
+    bool includeAudioResponse = false,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<ConversationResponse> startRoleplay({
     required String roleCharacter,
     String? searchContext,

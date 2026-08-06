@@ -97,15 +97,54 @@ void main() {
       300,
       scrollable: find.byType(Scrollable).first,
     );
-    await tester.enterText(
-      find.bySemanticsLabel('First answer in Korean'),
-      '오늘 불펜이 좋았어요.',
-    );
-    await tester.tap(find.text('START ANSWERING'));
+    await tester.enterText(find.byType(TextField).last, '오늘 불펜이 좋았어요.');
+    await tester.pump();
+    await tester.tap(find.byTooltip('Send message'));
     await tester.pumpAndSettle();
 
     expect(find.text('Conversation conversation-id'), findsOneWidget);
     expect(conversationRepository.lastFirstMessage, '오늘 불펜이 좋았어요.');
+    expect(conversationRepository.lastDirection, 'CASUAL_CHAT');
+    expect(
+      conversationRepository.lastSelectedQuestion,
+      'What stood out in the game?',
+    );
+  });
+
+  testWidgets('voice first answer starts free-chat conversation', (
+    WidgetTester tester,
+  ) async {
+    final _FakeConversationRepository conversationRepository =
+        _FakeConversationRepository();
+    final _FakeConversationAudioRecorder recorder =
+        _FakeConversationAudioRecorder();
+    await tester.pumpWidget(
+      _app(
+        repository: _FakeTopicPrepRepository(),
+        conversationRepository: conversationRepository,
+        recorder: recorder,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.byTooltip('Voice input'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.ensureVisible(find.byTooltip('Voice input'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Voice input'));
+    await tester.pump();
+    await tester.ensureVisible(find.byTooltip('Stop recording'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Stop recording'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Conversation conversation-id'), findsOneWidget);
+    expect(recorder.startCount, 1);
+    expect(recorder.stopCount, 1);
+    expect(conversationRepository.lastAudioFilename, 'answer.m4a');
     expect(conversationRepository.lastDirection, 'CASUAL_CHAT');
     expect(
       conversationRepository.lastSelectedQuestion,
@@ -117,6 +156,7 @@ void main() {
 Widget _app({
   required TopicPrepRepository repository,
   ConversationRepository? conversationRepository,
+  ConversationAudioRecorder? recorder,
   String initialLocation = '${AppRoute.topicPrep}?topic=recent%20lotte',
 }) {
   final GoRouter router = GoRouter(
@@ -153,6 +193,8 @@ Widget _app({
         conversationRepositoryProvider.overrideWithValue(
           conversationRepository,
         ),
+      if (recorder != null)
+        conversationAudioRecorderProvider.overrideWithValue(recorder),
     ],
     child: MaterialApp.router(theme: AppTheme.light, routerConfig: router),
   );
@@ -252,6 +294,7 @@ class _FakeConversationRepository implements ConversationRepository {
   String? lastFirstMessage;
   String? lastDirection;
   String? lastSelectedQuestion;
+  String? lastAudioFilename;
 
   @override
   Future<ConversationResponse> startFreeChat({
@@ -269,6 +312,28 @@ class _FakeConversationRepository implements ConversationRepository {
       messageId: 'message-id',
       conversationType: ConversationType.freeChat,
       response: 'Great. Tell me more.',
+    );
+  }
+
+  @override
+  Future<MultimodalConversationResponse> startFreeChatWithAudio({
+    required ConversationAudioFile audioFile,
+    String? searchContext,
+    String? topic,
+    String? conversationDirection,
+    String? selectedQuestion,
+    bool includeAudioResponse = false,
+  }) async {
+    lastAudioFilename = audioFile.filename;
+    lastDirection = conversationDirection;
+    lastSelectedQuestion = selectedQuestion;
+    return const MultimodalConversationResponse(
+      conversationId: 'conversation-id',
+      messageId: 'message-id',
+      conversationType: ConversationType.freeChat,
+      response: 'Great. Tell me more.',
+      inputMode: ConversationInputMode.audio,
+      transcript: '오늘 불펜이 좋았어요.',
     );
   }
 
@@ -314,6 +379,35 @@ class _FakeConversationRepository implements ConversationRepository {
   }) {
     throw UnimplementedError();
   }
+}
+
+class _FakeConversationAudioRecorder implements ConversationAudioRecorder {
+  int startCount = 0;
+  int stopCount = 0;
+  int cancelCount = 0;
+
+  @override
+  Future<void> start() async {
+    startCount++;
+  }
+
+  @override
+  Future<ConversationAudioFile> stop() async {
+    stopCount++;
+    return const ConversationAudioFile(
+      bytes: <int>[1, 2, 3],
+      filename: 'answer.m4a',
+      contentType: 'audio/m4a',
+    );
+  }
+
+  @override
+  Future<void> cancel() async {
+    cancelCount++;
+  }
+
+  @override
+  Future<void> dispose() async {}
 }
 
 TopicPrepQuality _quality({bool isSufficient = true}) {

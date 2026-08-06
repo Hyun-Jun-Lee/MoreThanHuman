@@ -1,5 +1,6 @@
 import 'package:curitalk/features/conversation/data/api_conversation_repository.dart';
 import 'package:curitalk/features/conversation/domain/conversation_models.dart';
+import 'package:curitalk/features/conversation/domain/conversation_repository.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class StartConversationState {
@@ -35,6 +36,34 @@ class StartConversationController extends Notifier<StartConversationState> {
           .read(conversationRepositoryProvider)
           .startFreeChat(
             firstMessage: firstMessage,
+            searchContext: searchContext,
+            topic: topic,
+            conversationDirection: conversationDirection,
+            selectedQuestion: selectedQuestion,
+          );
+      state = const StartConversationState();
+      return response;
+    } on Object catch (_) {
+      state = const StartConversationState(
+        errorMessage: 'Could not start the conversation. Please try again.',
+      );
+      return null;
+    }
+  }
+
+  Future<ConversationResponse?> startFreeChatWithAudio({
+    required ConversationAudioFile audioFile,
+    String? searchContext,
+    String? topic,
+    String? conversationDirection,
+    String? selectedQuestion,
+  }) async {
+    state = const StartConversationState(isStarting: true);
+    try {
+      final ConversationResponse response = await ref
+          .read(conversationRepositoryProvider)
+          .startFreeChatWithAudio(
+            audioFile: audioFile,
             searchContext: searchContext,
             topic: topic,
             conversationDirection: conversationDirection,

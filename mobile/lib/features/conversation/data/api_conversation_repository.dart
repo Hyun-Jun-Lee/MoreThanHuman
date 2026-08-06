@@ -33,6 +33,37 @@ class ApiConversationRepository implements ConversationRepository {
   }
 
   @override
+  Future<MultimodalConversationResponse> startFreeChatWithAudio({
+    required ConversationAudioFile audioFile,
+    String? searchContext,
+    String? topic,
+    String? conversationDirection,
+    String? selectedQuestion,
+    bool includeAudioResponse = false,
+  }) async {
+    final FormData formData = FormData.fromMap(<String, Object?>{
+      'audio_file': MultipartFile.fromBytes(
+        audioFile.bytes,
+        filename: audioFile.filename,
+        contentType: DioMediaType.parse(audioFile.contentType),
+      ),
+      'search_context': searchContext,
+      'topic': topic,
+      'conversation_direction': conversationDirection,
+      'selected_question': selectedQuestion,
+      'include_audio_response': includeAudioResponse.toString(),
+    });
+    final ApiResponse<MultimodalConversationResponse> response = await apiClient
+        .post<MultimodalConversationResponse>(
+          'conversations/start/free-chat/',
+          data: formData,
+          contentType: Headers.multipartFormDataContentType,
+          decodeData: MultimodalConversationResponse.fromJson,
+        );
+    return response.data;
+  }
+
+  @override
   Future<ConversationResponse> startRoleplay({
     required String roleCharacter,
     String? searchContext,

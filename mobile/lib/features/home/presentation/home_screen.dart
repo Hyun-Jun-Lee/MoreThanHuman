@@ -58,13 +58,6 @@ class HomeScreen extends ConsumerWidget {
             sliver: SliverList(
               delegate: SliverChildListDelegate(<Widget>[
                 Text('Hi, $firstName', style: AppTypography.displayLg),
-                const SizedBox(height: AppSpacing.lg),
-                AppPrimaryButton(
-                  label: 'START CONVERSATION',
-                  expand: false,
-                  leading: const Icon(Icons.add_rounded),
-                  onPressed: () => _showStartSheet(context),
-                ),
                 const SizedBox(height: AppSpacing.xxl),
                 recent.when(
                   loading: () => const AppAsyncStateView.loading(
@@ -152,7 +145,13 @@ class _HomeHeader extends StatelessWidget {
       child: Row(
         children: <Widget>[
           const Expanded(
-            child: Text('CURITALK', style: AppTypography.headlineMd),
+            child: Text(
+              'CURITALK',
+              style: AppTypography.headlineMd,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              softWrap: false,
+            ),
           ),
           _LanguagePairBadge(language: user?.language),
           const SizedBox(width: AppSpacing.sm),

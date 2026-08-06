@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:curitalk/app/router/app_router.dart';
 import 'package:curitalk/app/theme/tokens/tokens.dart';
 import 'package:curitalk/core/widgets/widgets.dart';
@@ -20,19 +22,27 @@ class TopicPrepScreen extends ConsumerStatefulWidget {
 class _TopicPrepScreenState extends ConsumerState<TopicPrepScreen> {
   late String _topic;
   late final TextEditingController _answerController;
+  late final ConversationAudioRecorder _recorder;
+  Timer? _recordingTimer;
   TopicPrepDirectionType? _selectedDirection;
   int _selectedQuestionIndex = 0;
   String? _answerErrorText;
+  _PrepVoiceInputState _voiceInput = const _PrepVoiceInputState.idle();
 
   @override
   void initState() {
     super.initState();
     _topic = widget.initialTopic.trim();
     _answerController = TextEditingController();
+    _recorder = ref.read(conversationAudioRecorderProvider);
   }
 
   @override
   void dispose() {
+    _recordingTimer?.cancel();
+    if (_voiceInput.isRecordingActive) {
+      unawaited(_recorder.cancel());
+    }
     _answerController.dispose();
     super.dispose();
   }
@@ -76,6 +86,14 @@ class _TopicPrepScreenState extends ConsumerState<TopicPrepScreen> {
             answerErrorText: _answerErrorText,
             startErrorText: startState.errorMessage,
             isStarting: startState.isStarting,
+            isRecording: _voiceInput.phase == _PrepVoiceInputPhase.recording,
+            isVoiceBusy: _voiceInput.isBusy,
+            recordingElapsedText:
+                _voiceInput.phase == _PrepVoiceInputPhase.recording
+                ? _formatElapsed(_voiceInput.elapsed)
+                : null,
+            voiceStatusLabel: _voiceInput.statusLabel,
+            voiceErrorText: _voiceInput.errorMessage,
             onDirectionSelected: (TopicPrepDirectionType direction) {
               setState(() {
                 _selectedDirection = direction;
@@ -90,7 +108,12 @@ class _TopicPrepScreenState extends ConsumerState<TopicPrepScreen> {
                 setState(() => _answerErrorText = null);
               }
             },
-            onStart: () => _startFreeChat(result.card!),
+            onStart: (String firstMessage) =>
+                _startFreeChat(result.card!, firstMessage: firstMessage),
+            onVoiceInput: () => _toggleVoiceInput(result.card!),
+            onCancelVoiceInput: _voiceInput.isRecordingActive
+                ? _cancelVoiceInput
+                : null,
           );
         },
       ),
@@ -104,6 +127,7 @@ class _TopicPrepScreenState extends ConsumerState<TopicPrepScreen> {
       _selectedQuestionIndex = 0;
       _answerController.clear();
       _answerErrorText = null;
+      _voiceInput = const _PrepVoiceInputState.idle();
     });
   }
 
@@ -113,8 +137,10 @@ class _TopicPrepScreenState extends ConsumerState<TopicPrepScreen> {
     );
   }
 
-  Future<void> _startFreeChat(TopicPrepCard card) async {
-    final String firstMessage = _answerController.text.trim();
+  Future<void> _startFreeChat(
+    TopicPrepCard card, {
+    required String firstMessage,
+  }) async {
     if (firstMessage.length < 2) {
       setState(() => _answerErrorText = 'Enter at least 2 characters.');
       return;
@@ -141,6 +167,135 @@ class _TopicPrepScreenState extends ConsumerState<TopicPrepScreen> {
     context.go(AppRoute.conversationPath(response.conversationId));
   }
 
+  Future<void> _startFreeChatWithAudio(
+    TopicPrepCard card,
+    ConversationAudioFile audioFile,
+  ) async {
+    final TopicPrepDirection direction = _resolveSelectedDirection(card);
+    final String? selectedQuestion =
+        direction.firstQuestions.isEmpty ||
+            _selectedQuestionIndex >= direction.firstQuestions.length
+        ? null
+        : direction.firstQuestions[_selectedQuestionIndex];
+    final ConversationResponse? response = await ref
+        .read(startConversationControllerProvider.notifier)
+        .startFreeChatWithAudio(
+          audioFile: audioFile,
+          searchContext: card.summary,
+          topic: card.topic,
+          conversationDirection: direction.direction.value,
+          selectedQuestion: selectedQuestion,
+        );
+    if (!mounted || response == null) {
+      return;
+    }
+    context.go(AppRoute.conversationPath(response.conversationId));
+  }
+
+  Future<void> _toggleVoiceInput(TopicPrepCard card) async {
+    if (_voiceInput.phase == _PrepVoiceInputPhase.idle ||
+        _voiceInput.phase == _PrepVoiceInputPhase.failed ||
+        _voiceInput.phase == _PrepVoiceInputPhase.permissionDenied) {
+      try {
+        setState(() {
+          _answerErrorText = null;
+          _voiceInput = const _PrepVoiceInputState.starting();
+        });
+        await _recorder.start();
+        if (!mounted) {
+          return;
+        }
+        _startRecordingTimer();
+        setState(() => _voiceInput = const _PrepVoiceInputState.recording());
+      } on ConversationAudioException catch (error) {
+        if (mounted) {
+          _stopRecordingTimer();
+          setState(
+            () => _voiceInput =
+                error.reason ==
+                    ConversationAudioExceptionReason.permissionDenied
+                ? _PrepVoiceInputState.permissionDenied(error.message)
+                : _PrepVoiceInputState.failed(error.message),
+          );
+        }
+      }
+      return;
+    }
+
+    if (_voiceInput.phase != _PrepVoiceInputPhase.recording) {
+      return;
+    }
+
+    try {
+      _stopRecordingTimer();
+      setState(() => _voiceInput = const _PrepVoiceInputState.stopping());
+      final ConversationAudioFile audioFile = await _recorder.stop();
+      if (!mounted) {
+        return;
+      }
+      if (audioFile.bytes.isEmpty) {
+        throw const ConversationAudioException(
+          'Recording did not produce audio.',
+          reason: ConversationAudioExceptionReason.emptyRecording,
+        );
+      }
+      setState(() => _voiceInput = const _PrepVoiceInputState.sending());
+      await _startFreeChatWithAudio(card, audioFile);
+      if (mounted) {
+        setState(() => _voiceInput = const _PrepVoiceInputState.idle());
+      }
+    } on ConversationAudioException catch (error) {
+      if (mounted) {
+        _stopRecordingTimer();
+        setState(
+          () => _voiceInput = _PrepVoiceInputState.failed(error.message),
+        );
+      }
+    }
+  }
+
+  Future<void> _cancelVoiceInput() async {
+    if (!_voiceInput.isRecordingActive) {
+      return;
+    }
+    _stopRecordingTimer();
+    try {
+      await _recorder.cancel();
+    } on Object {
+      if (!mounted) {
+        return;
+      }
+    }
+    if (mounted) {
+      setState(() => _voiceInput = const _PrepVoiceInputState.idle());
+    }
+  }
+
+  void _startRecordingTimer() {
+    _recordingTimer?.cancel();
+    _recordingTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _voiceInput = _voiceInput.copyWith(
+          elapsed: _voiceInput.elapsed + const Duration(seconds: 1),
+        );
+      });
+    });
+  }
+
+  void _stopRecordingTimer() {
+    _recordingTimer?.cancel();
+    _recordingTimer = null;
+  }
+
+  String _formatElapsed(Duration elapsed) {
+    final int minutes = elapsed.inMinutes;
+    final int seconds = elapsed.inSeconds.remainder(60);
+    return '$minutes:${seconds.toString().padLeft(2, '0')}';
+  }
+
   TopicPrepDirection _resolveSelectedDirection(TopicPrepCard card) {
     final TopicPrepDirectionType preferred =
         _selectedDirection ?? TopicPrepDirectionType.casualChat;
@@ -161,10 +316,17 @@ class _ReadyTopicPrepView extends StatelessWidget {
     required this.onQuestionSelected,
     required this.onAnswerChanged,
     required this.onStart,
+    required this.onVoiceInput,
     this.selectedDirection,
     this.answerErrorText,
     this.startErrorText,
+    this.voiceErrorText,
+    this.recordingElapsedText,
+    this.voiceStatusLabel,
+    this.onCancelVoiceInput,
     this.isStarting = false,
+    this.isRecording = false,
+    this.isVoiceBusy = false,
   });
 
   final TopicPrepCard card;
@@ -174,11 +336,18 @@ class _ReadyTopicPrepView extends StatelessWidget {
   final int selectedQuestionIndex;
   final String? answerErrorText;
   final String? startErrorText;
+  final String? voiceErrorText;
+  final String? recordingElapsedText;
+  final String? voiceStatusLabel;
   final bool isStarting;
+  final bool isRecording;
+  final bool isVoiceBusy;
   final ValueChanged<TopicPrepDirectionType> onDirectionSelected;
   final ValueChanged<int> onQuestionSelected;
   final ValueChanged<String> onAnswerChanged;
-  final VoidCallback onStart;
+  final ValueChanged<String> onStart;
+  final VoidCallback onVoiceInput;
+  final VoidCallback? onCancelVoiceInput;
 
   @override
   Widget build(BuildContext context) {
@@ -240,31 +409,32 @@ class _ReadyTopicPrepView extends StatelessWidget {
         const SizedBox(height: AppSpacing.xl),
         const AppSectionLabel('Answer to begin'),
         const SizedBox(height: AppSpacing.md),
-        AppTextField(
+        ChatComposer(
           controller: answerController,
           hintText: language.firstAnswerHint(localeCode),
-          errorText: answerErrorText,
           enabled: !isStarting,
-          maxLines: 4,
-          textInputAction: TextInputAction.newline,
+          isSending: isStarting,
+          isRecording: isRecording,
+          isVoiceBusy: isVoiceBusy,
+          recordingElapsedText: recordingElapsedText,
+          voiceStatusLabel: voiceStatusLabel,
+          onSend: onStart,
+          onVoiceInput: onVoiceInput,
+          onCancelVoiceInput: onCancelVoiceInput,
           semanticLabel: language.firstAnswerSemanticLabel(localeCode),
           onChanged: onAnswerChanged,
         ),
-        if (startErrorText != null) ...<Widget>[
+        if (answerErrorText != null ||
+            startErrorText != null ||
+            voiceErrorText != null) ...<Widget>[
           const SizedBox(height: AppSpacing.sm),
           Text(
-            startErrorText!,
+            answerErrorText ?? startErrorText ?? voiceErrorText!,
             style: AppTypography.bodySm.copyWith(
               color: Theme.of(context).colorScheme.error,
             ),
           ),
         ],
-        const SizedBox(height: AppSpacing.md),
-        AppPrimaryButton(
-          label: 'START ANSWERING',
-          isLoading: isStarting,
-          onPressed: isStarting ? null : onStart,
-        ),
         const SizedBox(height: AppSpacing.xl),
       ],
     );
@@ -276,6 +446,76 @@ class _ReadyTopicPrepView extends StatelessWidget {
     return card.directions.firstWhere(
       (TopicPrepDirection direction) => direction.direction == preferred,
       orElse: () => card.directions.first,
+    );
+  }
+}
+
+enum _PrepVoiceInputPhase {
+  idle,
+  starting,
+  recording,
+  stopping,
+  sending,
+  failed,
+  permissionDenied,
+}
+
+class _PrepVoiceInputState {
+  const _PrepVoiceInputState._({
+    required this.phase,
+    this.elapsed = Duration.zero,
+    this.errorMessage,
+  });
+
+  const _PrepVoiceInputState.idle() : this._(phase: _PrepVoiceInputPhase.idle);
+
+  const _PrepVoiceInputState.starting()
+    : this._(phase: _PrepVoiceInputPhase.starting);
+
+  const _PrepVoiceInputState.recording({Duration elapsed = Duration.zero})
+    : this._(phase: _PrepVoiceInputPhase.recording, elapsed: elapsed);
+
+  const _PrepVoiceInputState.stopping()
+    : this._(phase: _PrepVoiceInputPhase.stopping);
+
+  const _PrepVoiceInputState.sending()
+    : this._(phase: _PrepVoiceInputPhase.sending);
+
+  const _PrepVoiceInputState.failed(String message)
+    : this._(phase: _PrepVoiceInputPhase.failed, errorMessage: message);
+
+  const _PrepVoiceInputState.permissionDenied(String message)
+    : this._(
+        phase: _PrepVoiceInputPhase.permissionDenied,
+        errorMessage: message,
+      );
+
+  final _PrepVoiceInputPhase phase;
+  final Duration elapsed;
+  final String? errorMessage;
+
+  bool get isBusy =>
+      phase == _PrepVoiceInputPhase.starting ||
+      phase == _PrepVoiceInputPhase.stopping ||
+      phase == _PrepVoiceInputPhase.sending;
+
+  bool get isRecordingActive =>
+      phase == _PrepVoiceInputPhase.recording ||
+      phase == _PrepVoiceInputPhase.starting ||
+      phase == _PrepVoiceInputPhase.stopping;
+
+  String? get statusLabel => switch (phase) {
+    _PrepVoiceInputPhase.starting => 'Starting recording...',
+    _PrepVoiceInputPhase.stopping => 'Finishing recording...',
+    _PrepVoiceInputPhase.sending => 'Starting with your voice...',
+    _ => null,
+  };
+
+  _PrepVoiceInputState copyWith({Duration? elapsed}) {
+    return _PrepVoiceInputState._(
+      phase: phase,
+      elapsed: elapsed ?? this.elapsed,
+      errorMessage: errorMessage,
     );
   }
 }

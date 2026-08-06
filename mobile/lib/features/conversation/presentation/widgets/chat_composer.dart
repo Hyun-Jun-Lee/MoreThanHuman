@@ -15,6 +15,8 @@ class ChatComposer extends StatefulWidget {
     this.recordingElapsedText,
     this.voiceStatusLabel,
     this.onCancelVoiceInput,
+    this.semanticLabel,
+    this.onChanged,
     super.key,
   });
 
@@ -29,6 +31,8 @@ class ChatComposer extends StatefulWidget {
   final String? recordingElapsedText;
   final String? voiceStatusLabel;
   final VoidCallback? onCancelVoiceInput;
+  final String? semanticLabel;
+  final ValueChanged<String>? onChanged;
 
   @override
   State<ChatComposer> createState() => _ChatComposerState();
@@ -71,6 +75,7 @@ class _ChatComposerState extends State<ChatComposer> {
 
   void _handleTextChanged() {
     final bool hasText = _containsMessage(widget.controller.text);
+    widget.onChanged?.call(widget.controller.text);
     if (hasText == _hasText) {
       return;
     }
@@ -153,27 +158,31 @@ class _ChatComposerState extends State<ChatComposer> {
                         ),
                       ),
                     )
-                  : TextField(
-                      controller: widget.controller,
-                      enabled:
-                          widget.enabled &&
-                          !widget.isSending &&
-                          !widget.isRecording &&
-                          !widget.isVoiceBusy,
-                      minLines: 1,
-                      maxLines: 4,
-                      textInputAction: TextInputAction.send,
-                      onSubmitted: (_) => _send(),
-                      decoration: InputDecoration(
-                        hintText: widget.hintText,
-                        filled: false,
-                        border: InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        focusedBorder: InputBorder.none,
-                        disabledBorder: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.xs,
-                          vertical: AppSpacing.sm,
+                  : Semantics(
+                      label: widget.semanticLabel,
+                      textField: true,
+                      child: TextField(
+                        controller: widget.controller,
+                        enabled:
+                            widget.enabled &&
+                            !widget.isSending &&
+                            !widget.isRecording &&
+                            !widget.isVoiceBusy,
+                        minLines: 1,
+                        maxLines: 4,
+                        textInputAction: TextInputAction.send,
+                        onSubmitted: (_) => _send(),
+                        decoration: InputDecoration(
+                          hintText: widget.hintText,
+                          filled: false,
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          disabledBorder: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.xs,
+                            vertical: AppSpacing.sm,
+                          ),
                         ),
                       ),
                     ),
