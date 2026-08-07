@@ -32,7 +32,7 @@ from domains.conversation.schemas import (
     UpdateTitleRequest,
 )
 from domains.conversation.service import ConversationService
-from domains.voice.schemas import VoiceAudioError, VoiceAudioResponse
+from domains.voice.schemas import VoiceAudioError, VoiceAudioResponse, VoiceInputMode
 from domains.voice.service import VoiceService
 from shared.language import ensure_language_context
 from shared.exceptions import (
@@ -347,11 +347,15 @@ async def start_free_chat_conversation(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
-@router.post("/start/roleplay/", response_model=SuccessResponse[ConversationResponse])
+@router.post(
+    "/start/roleplay/",
+    response_model=SuccessResponse[MultimodalConversationResponse],
+)
 async def start_roleplay_conversation(
     request: StartRoleplayRequest,
     current_user: ProfileModel = Depends(get_current_user),
     service: ConversationService = Depends(get_conversation_service),
+    voice_service: VoiceService = Depends(get_voice_service),
 ):
     """롤플레이 대화 시작 (AI가 먼저 인사)"""
     try:
@@ -361,10 +365,25 @@ async def start_roleplay_conversation(
             user_id=current_user.id,
             language_context=ensure_language_context(getattr(current_user, "language", None)),
         )
-        return SuccessResponse(data=response, message="롤플레이 대화가 시작되었습니다")
+        audio, audio_error = await _synthesize_optional_audio(
+            include_audio_response=request.include_audio_response,
+            response_text=response.response,
+            voice_service=voice_service,
+        )
+        data = MultimodalConversationResponse(
+            **response.model_dump(),
+            input_mode=VoiceInputMode.TEXT,
+            transcript=None,
+            audio=audio,
+            audio_error=audio_error,
+        )
+        return SuccessResponse(data=data, message="롤플레이 대화가 시작되었습니다")
     except RateLimitException as e:
         logger.warning(f"RateLimitException in start_roleplay_conversation: {e.message}")
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=e.message)
+    except ExternalAPIException as e:
+        logger.error(f"ExternalAPIException in start_roleplay_conversation: {e.message}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=e.message)
     except AppException as e:
         logger.error(f"AppException in start_roleplay_conversation: {e.message}", exc_info=True)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)

@@ -34,6 +34,7 @@ class StartRoleplayRequest(BaseModel):
 
     role_character: str
     search_context: str | None = None
+    include_audio_response: bool = False
 
 
 class SendMessageRequest(BaseModel):

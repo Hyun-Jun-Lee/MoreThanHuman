@@ -3,6 +3,31 @@ import 'package:curitalk/features/conversation/domain/conversation_models.dart';
 import 'package:curitalk/features/conversation/domain/conversation_repository.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+class InitialAssistantAudio {
+  const InitialAssistantAudio({
+    required this.responseText,
+    this.audio,
+    this.audioError,
+  });
+
+  final String responseText;
+  final VoiceAudioResponse? audio;
+  final VoiceAudioError? audioError;
+}
+
+class InitialAssistantAudioController extends Notifier<InitialAssistantAudio?> {
+  InitialAssistantAudioController(this.conversationId);
+
+  final String conversationId;
+
+  @override
+  InitialAssistantAudio? build() => null;
+
+  void setAudio(InitialAssistantAudio audio) {
+    state = audio;
+  }
+}
+
 class StartConversationState {
   const StartConversationState({this.isStarting = false, this.errorMessage});
 
@@ -40,7 +65,9 @@ class StartConversationController extends Notifier<StartConversationState> {
             topic: topic,
             conversationDirection: conversationDirection,
             selectedQuestion: selectedQuestion,
+            includeAudioResponse: true,
           );
+      _storeInitialAssistantAudio(response);
       state = const StartConversationState();
       return response;
     } on Object catch (_) {
@@ -68,7 +95,9 @@ class StartConversationController extends Notifier<StartConversationState> {
             topic: topic,
             conversationDirection: conversationDirection,
             selectedQuestion: selectedQuestion,
+            includeAudioResponse: true,
           );
+      _storeInitialAssistantAudio(response);
       state = const StartConversationState();
       return response;
     } on Object catch (_) {
@@ -90,7 +119,9 @@ class StartConversationController extends Notifier<StartConversationState> {
           .startRoleplay(
             roleCharacter: roleCharacter,
             searchContext: searchContext,
+            includeAudioResponse: true,
           );
+      _storeInitialAssistantAudio(response);
       state = const StartConversationState();
       return response;
     } on Object catch (_) {
@@ -100,7 +131,32 @@ class StartConversationController extends Notifier<StartConversationState> {
       return null;
     }
   }
+
+  void _storeInitialAssistantAudio(ConversationResponse response) {
+    if (response is! MultimodalConversationResponse) {
+      return;
+    }
+    if (response.audio == null && response.audioError == null) {
+      return;
+    }
+    ref
+        .read(initialAssistantAudioProvider(response.conversationId).notifier)
+        .setAudio(
+          InitialAssistantAudio(
+            responseText: response.response,
+            audio: response.audio,
+            audioError: response.audioError,
+          ),
+        );
+  }
 }
+
+final initialAssistantAudioProvider =
+    NotifierProvider.family<
+      InitialAssistantAudioController,
+      InitialAssistantAudio?,
+      String
+    >(InitialAssistantAudioController.new);
 
 final startConversationControllerProvider =
     NotifierProvider<StartConversationController, StartConversationState>(

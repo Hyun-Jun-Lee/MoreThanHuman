@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('loads messages and refreshes after send', () async {
+  test('loads messages and keeps assistant audio after send', () async {
     final _FakeConversationRepository repository =
         _FakeConversationRepository();
     final ProviderContainer container = ProviderContainer(
@@ -24,9 +24,11 @@ void main() {
         .value!;
 
     expect(repository.sentTextTurns, <String>['I was surprise.']);
-    expect(repository.listCallCount, 2);
+    expect(repository.sentTextIncludeAudio, <bool>[true]);
+    expect(repository.listCallCount, 1);
     expect(state.isSending, isFalse);
-    expect(state.messages.last.content, 'Canonical response');
+    expect(state.messages.last.content, 'AI response');
+    expect(state.messages.last.audio?.format, 'mp3');
   });
 
   test('keeps retry target when send fails', () async {
@@ -81,12 +83,14 @@ void main() {
           .value!;
 
       expect(repository.sentAudioFilenames, <String>['recording.webm']);
+      expect(repository.sentAudioIncludeAudio, <bool>[true]);
       expect(state.isSending, isFalse);
       expect(
         state.messages[state.messages.length - 2].content,
         'Audio transcript',
       );
       expect(state.messages.last.content, 'AI response');
+      expect(state.messages.last.audio?.format, 'mp3');
     },
   );
 
@@ -119,6 +123,33 @@ void main() {
     expect(state.failedMessage, isNull);
     expect(state.errorMessage, 'Voice message could not be sent.');
   });
+
+  test('attaches initial assistant audio from start handoff', () async {
+    final _FakeConversationRepository repository =
+        _FakeConversationRepository();
+    final ProviderContainer container = ProviderContainer(
+      overrides: [conversationRepositoryProvider.overrideWithValue(repository)],
+    );
+    addTearDown(container.dispose);
+    container
+        .read(initialAssistantAudioProvider('conversation-id').notifier)
+        .setAudio(
+          const InitialAssistantAudio(
+            responseText: 'Hello!',
+            audio: VoiceAudioResponse(
+              contentType: 'audio/mpeg',
+              base64: 'AAA=',
+              format: 'mp3',
+            ),
+          ),
+        );
+
+    final ConversationState state = await container.read(
+      conversationControllerProvider('conversation-id').future,
+    );
+
+    expect(state.messages.single.audio?.format, 'mp3');
+  });
 }
 
 class _FakeConversationRepository implements ConversationRepository {
@@ -132,6 +163,8 @@ class _FakeConversationRepository implements ConversationRepository {
   final List<String> sentTextTurns = <String>[];
   final List<String> sentMessages = <String>[];
   final List<String> sentAudioFilenames = <String>[];
+  final List<bool> sentTextIncludeAudio = <bool>[];
+  final List<bool> sentAudioIncludeAudio = <bool>[];
   int listCallCount = 0;
 
   @override
@@ -193,18 +226,24 @@ class _FakeConversationRepository implements ConversationRepository {
   Future<MultimodalMessageResponse> sendTextTurn({
     required String conversationId,
     required String text,
-    bool includeAudioResponse = false,
+    bool includeAudioResponse = true,
   }) async {
     sentTextTurns.add(text);
+    sentTextIncludeAudio.add(includeAudioResponse);
     if (failSend) {
       throw StateError('Network failure');
     }
-    return MultimodalMessageResponse(
+    return const MultimodalMessageResponse(
       messageId: 'user-1',
       response: 'AI response',
       turnCount: 2,
       inputMode: ConversationInputMode.text,
-      transcript: text,
+      transcript: 'I was surprise.',
+      audio: VoiceAudioResponse(
+        contentType: 'audio/mpeg',
+        base64: 'AAA=',
+        format: 'mp3',
+      ),
     );
   }
 
@@ -212,9 +251,10 @@ class _FakeConversationRepository implements ConversationRepository {
   Future<MultimodalMessageResponse> sendAudioTurn({
     required String conversationId,
     required ConversationAudioFile audioFile,
-    bool includeAudioResponse = false,
+    bool includeAudioResponse = true,
   }) async {
     sentAudioFilenames.add(audioFile.filename);
+    sentAudioIncludeAudio.add(includeAudioResponse);
     if (failAudioSend) {
       throw StateError('Network failure');
     }
@@ -224,16 +264,22 @@ class _FakeConversationRepository implements ConversationRepository {
       turnCount: 2,
       inputMode: ConversationInputMode.audio,
       transcript: 'Audio transcript',
+      audio: VoiceAudioResponse(
+        contentType: 'audio/mpeg',
+        base64: 'AAA=',
+        format: 'mp3',
+      ),
     );
   }
 
   @override
-  Future<ConversationResponse> startFreeChat({
+  Future<MultimodalConversationResponse> startFreeChat({
     required String firstMessage,
     String? searchContext,
     String? topic,
     String? conversationDirection,
     String? selectedQuestion,
+    bool includeAudioResponse = true,
   }) {
     throw UnimplementedError();
   }
@@ -245,15 +291,16 @@ class _FakeConversationRepository implements ConversationRepository {
     String? topic,
     String? conversationDirection,
     String? selectedQuestion,
-    bool includeAudioResponse = false,
+    bool includeAudioResponse = true,
   }) {
     throw UnimplementedError();
   }
 
   @override
-  Future<ConversationResponse> startRoleplay({
+  Future<MultimodalConversationResponse> startRoleplay({
     required String roleCharacter,
     String? searchContext,
+    bool includeAudioResponse = true,
   }) {
     throw UnimplementedError();
   }

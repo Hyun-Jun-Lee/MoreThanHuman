@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:curitalk/app/theme/tokens/tokens.dart';
 import 'package:curitalk/features/conversation/application/conversation_audio_services.dart';
 import 'package:curitalk/features/conversation/application/grammar_feedback_polling_controller.dart';
@@ -10,9 +12,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class ConversationMessageTile extends ConsumerWidget {
-  const ConversationMessageTile({required this.message, super.key});
+  const ConversationMessageTile({
+    required this.message,
+    this.autoPlayAudio = false,
+    super.key,
+  });
 
   final ConversationMessage message;
+  final bool autoPlayAudio;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -45,7 +52,7 @@ class ConversationMessageTile extends ConsumerWidget {
         if (!isUser &&
             (message.audio != null || message.audioError != null)) ...<Widget>[
           const SizedBox(height: AppSpacing.xs),
-          _AssistantAudioSlot(message: message),
+          _AssistantAudioSlot(message: message, autoPlayAudio: autoPlayAudio),
         ],
       ],
     );
@@ -53,9 +60,13 @@ class ConversationMessageTile extends ConsumerWidget {
 }
 
 class _AssistantAudioSlot extends ConsumerStatefulWidget {
-  const _AssistantAudioSlot({required this.message});
+  const _AssistantAudioSlot({
+    required this.message,
+    required this.autoPlayAudio,
+  });
 
   final ConversationMessage message;
+  final bool autoPlayAudio;
 
   @override
   ConsumerState<_AssistantAudioSlot> createState() =>
@@ -65,6 +76,14 @@ class _AssistantAudioSlot extends ConsumerStatefulWidget {
 class _AssistantAudioSlotState extends ConsumerState<_AssistantAudioSlot> {
   _AssistantAudioPhase _phase = _AssistantAudioPhase.idle;
   String? _playbackError;
+  bool _autoPlayStarted = false;
+  bool _hasPlayed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleAutoPlayIfNeeded();
+  }
 
   @override
   void didUpdateWidget(covariant _AssistantAudioSlot oldWidget) {
@@ -72,7 +91,10 @@ class _AssistantAudioSlotState extends ConsumerState<_AssistantAudioSlot> {
     if (_audioIdentity(oldWidget.message) != _audioIdentity(widget.message)) {
       _phase = _AssistantAudioPhase.idle;
       _playbackError = null;
+      _autoPlayStarted = false;
+      _hasPlayed = false;
     }
+    _scheduleAutoPlayIfNeeded();
   }
 
   @override
@@ -113,7 +135,7 @@ class _AssistantAudioSlotState extends ConsumerState<_AssistantAudioSlot> {
             label: Text(switch (_phase) {
               _AssistantAudioPhase.loading => 'Loading audio',
               _AssistantAudioPhase.playing => 'Playing response',
-              _ => 'Play response',
+              _ => _hasPlayed ? 'Replay response' : 'Play response',
             }),
           ),
         ),
@@ -125,7 +147,27 @@ class _AssistantAudioSlotState extends ConsumerState<_AssistantAudioSlot> {
     );
   }
 
+  void _scheduleAutoPlayIfNeeded() {
+    if (!widget.autoPlayAudio || _autoPlayStarted) {
+      return;
+    }
+    final VoiceAudioResponse? audio = widget.message.audio;
+    if (audio == null) {
+      return;
+    }
+    _autoPlayStarted = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        unawaited(_play(audio));
+      }
+    });
+  }
+
   Future<void> _play(VoiceAudioResponse audio) async {
+    if (_phase == _AssistantAudioPhase.loading ||
+        _phase == _AssistantAudioPhase.playing) {
+      return;
+    }
     setState(() {
       _phase = _AssistantAudioPhase.loading;
       _playbackError = null;
@@ -140,7 +182,10 @@ class _AssistantAudioSlotState extends ConsumerState<_AssistantAudioSlot> {
       setState(() => _phase = _AssistantAudioPhase.playing);
       await playFuture;
       if (mounted) {
-        setState(() => _phase = _AssistantAudioPhase.idle);
+        setState(() {
+          _phase = _AssistantAudioPhase.idle;
+          _hasPlayed = true;
+        });
       }
     } on ConversationAudioException catch (error) {
       if (mounted) {

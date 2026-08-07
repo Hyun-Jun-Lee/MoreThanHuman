@@ -227,7 +227,8 @@ LLM prompt policy도 같은 snapshot을 사용해요. `target_language`는 자�
   "search_context": null,
   "topic": null,
   "conversation_direction": null,
-  "selected_question": null
+  "selected_question": null,
+  "include_audio_response": true
 }
 ```
 
@@ -257,9 +258,12 @@ include_audio_response=true
 ```json
 {
   "role_character": "a barista at a coffee shop",
-  "search_context": null
+  "search_context": null,
+  "include_audio_response": true
 }
 ```
+
+`include_audio_response=true`이면 시작 직후 AI 첫 응답도 `audio` 또는 `audio_error`를 포함한 멀티모달 응답으로 반환돼요. 모바일 v1은 AI 응답 자동 재생을 위해 free chat 시작, roleplay 시작, `/turn/` 이어가기 요청에 이 값을 항상 포함해요.
 
 ### `POST /api/conversations/{conversation_id}/message/`
 

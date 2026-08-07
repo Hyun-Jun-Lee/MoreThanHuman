@@ -53,6 +53,30 @@ class FakeConversationService:
             grammar_feedback=None,
         )
 
+    async def start_roleplay_conversation(
+        self,
+        role_character,
+        search_context=None,
+        user_id="",
+        language_context=None,
+    ):
+        self.started.append(
+            {
+                "role_character": role_character,
+                "search_context": search_context,
+                "user_id": user_id,
+                "language_context": language_context,
+            }
+        )
+        return ConversationResponse(
+            conversation_id=uuid4(),
+            message_id=uuid4(),
+            conversation_type=ConversationType.ROLE_PLAYING,
+            role_character=role_character,
+            response="Welcome in. What would you like to practice?",
+            grammar_feedback=None,
+        )
+
     async def continue_conversation(self, conversation_id, user_message, user_id=""):
         self.continued.append(
             {
@@ -283,6 +307,29 @@ def test_free_chat_start_keeps_existing_json_text_contract():
     assert data["input_mode"] == "text"
     assert data["transcript"] == "Let's talk about food."
     assert conversation_service.started[0]["first_message"] == "Let's talk about food."
+
+
+def test_roleplay_start_returns_tts_audio_when_requested():
+    conversation_service = FakeConversationService()
+    voice_service = FakeVoiceService()
+    client = TestClient(_conversation_app_with_overrides(conversation_service, voice_service))
+
+    response = client.post(
+        "/api/conversations/start/roleplay/",
+        json={
+            "role_character": "A cafe customer who asks follow-ups.",
+            "include_audio_response": True,
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["conversation_type"] == "ROLE_PLAYING"
+    assert data["input_mode"] == "text"
+    assert data["audio"]["base64"] == "YXVkaW8="
+    assert data["audio_error"] is None
+    assert conversation_service.started[0]["role_character"] == "A cafe customer who asks follow-ups."
+    assert voice_service.synthesized == ["Welcome in. What would you like to practice?"]
 
 
 def test_multimodal_routes_publish_request_body_contracts():

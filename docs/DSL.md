@@ -171,6 +171,7 @@ module Conversation {
   type StartRoleplayRequest {
     role_character: String
     search_context?: String
+    include_audio_response?: Boolean = false
   }
 
   `role_character`는 클라이언트가 선택한 preset/custom 상황과 난이도를 합성한 문자열이에요.
@@ -269,16 +270,17 @@ module Conversation {
 }
 ```
 
-멀티모달 대화 API는 아래 네 가지 요청 형태를 기본 계약으로 사용해요.
+멀티모달 대화 API는 아래 다섯 가지 요청 형태를 기본 계약으로 사용해요.
 
 ```dsl
-TextStart      = POST /api/conversations/start/free-chat/  { first_message }
-AudioStart     = POST /api/conversations/start/free-chat/  multipart { audio_file }
-TextContinue   = POST /api/conversations/{id}/turn/        { text }
-AudioContinue  = POST /api/conversations/{id}/turn/        multipart { audio_file }
+TextStart      = POST /api/conversations/start/free-chat/  { first_message, include_audio_response }
+AudioStart     = POST /api/conversations/start/free-chat/  multipart { audio_file, include_audio_response }
+RoleplayStart  = POST /api/conversations/start/roleplay/   { role_character, include_audio_response }
+TextContinue   = POST /api/conversations/{id}/turn/        { text, include_audio_response }
+AudioContinue  = POST /api/conversations/{id}/turn/        multipart { audio_file, include_audio_response }
 ```
 
-`first_message`/`text`와 `audio_file`은 같은 요청에서 동시에 보낼 수 없어요. `audio_file` 요청은 백엔드가 STT로 `transcript`를 만든 뒤 기존 conversation flow에 전달해요. `include_audio_response=true`이면 AI 응답 텍스트를 TTS로 변환해 `audio`에 담고, 대화 저장 이후 TTS만 실패하면 `audio_error`를 반환해 중복 메시지 재시도를 방지해요.
+`first_message`/`text`와 `audio_file`은 같은 요청에서 동시에 보낼 수 없어요. `audio_file` 요청은 백엔드가 STT로 `transcript`를 만든 뒤 기존 conversation flow에 전달해요. `include_audio_response=true`이면 free chat 시작, roleplay 시작, 대화 이어가기 응답의 AI 텍스트를 TTS로 변환해 `audio`에 담고, 대화 저장 이후 TTS만 실패하면 `audio_error`를 반환해 중복 메시지 재시도를 방지해요. 모바일 v1은 AI 응답을 항상 음성으로 들려주기 위해 시작/이어가기 요청 모두에서 `include_audio_response=true`를 전송해요.
 
 모바일 v1은 문법 피드백 수신에 SSE보다 polling을 우선해요. 앱은 `ConversationResponse.message_id` 또는 `MessageResponse.message_id`를 받은 뒤 `GET /api/grammar/message/{message_id}/`를 반복 호출하고, `404`를 pending 또는 접근 불가 상태로 처리해요. SSE 스트림은 실시간성이 더 중요해질 때 선택적으로 사용해요.
 

@@ -51,6 +51,8 @@ void main() {
         _FakeConversationRepository();
     final _FakeConversationAudioRecorder recorder =
         _FakeConversationAudioRecorder();
+    final _FakeConversationAudioPlayer audioPlayer =
+        _FakeConversationAudioPlayer();
     final GoRouter router = _router();
 
     await tester.pumpWidget(
@@ -58,6 +60,7 @@ void main() {
         overrides: [
           conversationRepositoryProvider.overrideWithValue(repository),
           conversationAudioRecorderProvider.overrideWithValue(recorder),
+          conversationAudioPlayerProvider.overrideWithValue(audioPlayer),
         ],
         child: MaterialApp.router(theme: AppTheme.light, routerConfig: router),
       ),
@@ -78,7 +81,10 @@ void main() {
 
     expect(recorder.stopCount, 1);
     expect(repository.sentAudioFilenames, <String>['recording.m4a']);
+    expect(repository.sentAudioIncludeAudio, <bool>[true]);
     expect(find.text('Audio transcript'), findsOneWidget);
+    expect(audioPlayer.playCount, 1);
+    expect(find.text('Replay response'), findsOneWidget);
   });
 
   testWidgets('voice input can cancel recording without upload', (
@@ -230,11 +236,14 @@ void main() {
   ) async {
     final _FakeConversationRepository repository =
         _FakeConversationRepository();
+    final _FakeConversationAudioPlayer audioPlayer =
+        _FakeConversationAudioPlayer();
 
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
           conversationRepositoryProvider.overrideWithValue(repository),
+          conversationAudioPlayerProvider.overrideWithValue(audioPlayer),
         ],
         child: MaterialApp.router(
           theme: AppTheme.light,
@@ -250,6 +259,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(repository.sentTextTurns, <String>['I need coffee.']);
+    expect(repository.sentTextIncludeAudio, <bool>[true]);
+    expect(audioPlayer.playCount, 1);
+    expect(find.text('Replay response'), findsOneWidget);
   });
 }
 
@@ -276,6 +288,8 @@ class _FakeConversationRepository implements ConversationRepository {
   final bool failAudioSend;
   final List<String> sentAudioFilenames = <String>[];
   final List<String> sentTextTurns = <String>[];
+  final List<bool> sentAudioIncludeAudio = <bool>[];
+  final List<bool> sentTextIncludeAudio = <bool>[];
 
   @override
   Future<PaginatedMessages> listMessages(
@@ -314,15 +328,21 @@ class _FakeConversationRepository implements ConversationRepository {
   Future<MultimodalMessageResponse> sendTextTurn({
     required String conversationId,
     required String text,
-    bool includeAudioResponse = false,
+    bool includeAudioResponse = true,
   }) async {
     sentTextTurns.add(text);
+    sentTextIncludeAudio.add(includeAudioResponse);
     return MultimodalMessageResponse(
       messageId: 'user-text-id',
       response: 'AI response',
       turnCount: 2,
       inputMode: ConversationInputMode.text,
       transcript: text,
+      audio: const VoiceAudioResponse(
+        contentType: 'audio/mpeg',
+        base64: 'AAA=',
+        format: 'mp3',
+      ),
     );
   }
 
@@ -330,9 +350,10 @@ class _FakeConversationRepository implements ConversationRepository {
   Future<MultimodalMessageResponse> sendAudioTurn({
     required String conversationId,
     required ConversationAudioFile audioFile,
-    bool includeAudioResponse = false,
+    bool includeAudioResponse = true,
   }) async {
     sentAudioFilenames.add(audioFile.filename);
+    sentAudioIncludeAudio.add(includeAudioResponse);
     if (failAudioSend) {
       throw StateError('Network failure');
     }
@@ -342,16 +363,22 @@ class _FakeConversationRepository implements ConversationRepository {
       turnCount: 2,
       inputMode: ConversationInputMode.audio,
       transcript: 'Audio transcript',
+      audio: VoiceAudioResponse(
+        contentType: 'audio/mpeg',
+        base64: 'AAA=',
+        format: 'mp3',
+      ),
     );
   }
 
   @override
-  Future<ConversationResponse> startFreeChat({
+  Future<MultimodalConversationResponse> startFreeChat({
     required String firstMessage,
     String? searchContext,
     String? topic,
     String? conversationDirection,
     String? selectedQuestion,
+    bool includeAudioResponse = true,
   }) {
     throw UnimplementedError();
   }
@@ -363,15 +390,16 @@ class _FakeConversationRepository implements ConversationRepository {
     String? topic,
     String? conversationDirection,
     String? selectedQuestion,
-    bool includeAudioResponse = false,
+    bool includeAudioResponse = true,
   }) {
     throw UnimplementedError();
   }
 
   @override
-  Future<ConversationResponse> startRoleplay({
+  Future<MultimodalConversationResponse> startRoleplay({
     required String roleCharacter,
     String? searchContext,
+    bool includeAudioResponse = true,
   }) {
     throw UnimplementedError();
   }
@@ -409,6 +437,18 @@ class _FakeConversationAudioRecorder implements ConversationAudioRecorder {
   @override
   Future<void> cancel() async {
     cancelCount++;
+  }
+
+  @override
+  Future<void> dispose() async {}
+}
+
+class _FakeConversationAudioPlayer implements ConversationAudioPlayer {
+  int playCount = 0;
+
+  @override
+  Future<void> play(VoiceAudioResponse audio) async {
+    playCount++;
   }
 
   @override

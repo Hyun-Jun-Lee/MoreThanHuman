@@ -1,3 +1,4 @@
+import 'package:curitalk/features/conversation/application/start_conversation_controller.dart';
 import 'package:curitalk/features/conversation/data/api_conversation_repository.dart';
 import 'package:curitalk/features/conversation/domain/conversation_models.dart';
 import 'package:curitalk/features/conversation/domain/conversation_repository.dart';
@@ -66,7 +67,57 @@ class ConversationController extends AsyncNotifier<ConversationState> {
     final PaginatedMessages page = await ref
         .watch(conversationRepositoryProvider)
         .listMessages(conversationId);
-    return ConversationState(messages: page.results);
+    return ConversationState(
+      messages: _attachInitialAssistantAudio(page.results),
+    );
+  }
+
+  List<ConversationMessage> _attachInitialAssistantAudio(
+    List<ConversationMessage> messages,
+  ) {
+    final InitialAssistantAudio? initialAudio = ref.read(
+      initialAssistantAudioProvider(conversationId),
+    );
+    if (initialAudio == null) {
+      return messages;
+    }
+
+    final int assistantIndex = _findInitialAssistantIndex(
+      messages,
+      initialAudio.responseText,
+    );
+    if (assistantIndex < 0) {
+      return messages;
+    }
+
+    return <ConversationMessage>[
+      for (int index = 0; index < messages.length; index++)
+        index == assistantIndex
+            ? messages[index].copyWith(
+                audio: initialAudio.audio,
+                audioError: initialAudio.audioError,
+              )
+            : messages[index],
+    ];
+  }
+
+  int _findInitialAssistantIndex(
+    List<ConversationMessage> messages,
+    String responseText,
+  ) {
+    for (int index = messages.length - 1; index >= 0; index--) {
+      final ConversationMessage message = messages[index];
+      if (message.role != ConversationMessageRole.assistant) {
+        continue;
+      }
+      if (message.content.trim() == responseText.trim()) {
+        return index;
+      }
+    }
+    return messages.lastIndexWhere(
+      (ConversationMessage message) =>
+          message.role == ConversationMessageRole.assistant,
+    );
   }
 
   Future<void> reload() async {
@@ -116,7 +167,11 @@ class ConversationController extends AsyncNotifier<ConversationState> {
     try {
       final MultimodalMessageResponse response = await ref
           .read(conversationRepositoryProvider)
-          .sendTextTurn(conversationId: conversationId, text: normalized);
+          .sendTextTurn(
+            conversationId: conversationId,
+            text: normalized,
+            includeAudioResponse: true,
+          );
       final ConversationMessage confirmedUserMessage = pendingMessage.copyWith(
         id: response.messageId,
         grammarFeedback: response.grammarFeedback,
@@ -145,7 +200,6 @@ class ConversationController extends AsyncNotifier<ConversationState> {
           audioErrorMessage: response.audioError?.message,
         ),
       );
-      await reload();
     } on Object catch (_) {
       state = AsyncData<ConversationState>(
         previous.copyWith(
@@ -179,7 +233,11 @@ class ConversationController extends AsyncNotifier<ConversationState> {
     try {
       final MultimodalMessageResponse response = await ref
           .read(conversationRepositoryProvider)
-          .sendAudioTurn(conversationId: conversationId, audioFile: audioFile);
+          .sendAudioTurn(
+            conversationId: conversationId,
+            audioFile: audioFile,
+            includeAudioResponse: true,
+          );
       final String transcript = response.transcript?.trim() ?? '';
       final ConversationMessage userMessage = ConversationMessage(
         id: response.messageId,

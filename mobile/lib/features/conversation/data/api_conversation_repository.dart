@@ -10,15 +10,16 @@ class ApiConversationRepository implements ConversationRepository {
   final ApiClient apiClient;
 
   @override
-  Future<ConversationResponse> startFreeChat({
+  Future<MultimodalConversationResponse> startFreeChat({
     required String firstMessage,
     String? searchContext,
     String? topic,
     String? conversationDirection,
     String? selectedQuestion,
+    bool includeAudioResponse = true,
   }) async {
-    final ApiResponse<ConversationResponse> response = await apiClient
-        .post<ConversationResponse>(
+    final ApiResponse<MultimodalConversationResponse> response = await apiClient
+        .post<MultimodalConversationResponse>(
           'conversations/start/free-chat/',
           data: <String, Object?>{
             'first_message': firstMessage,
@@ -26,8 +27,9 @@ class ApiConversationRepository implements ConversationRepository {
             'topic': topic,
             'conversation_direction': conversationDirection,
             'selected_question': selectedQuestion,
+            'include_audio_response': includeAudioResponse,
           },
-          decodeData: ConversationResponse.fromJson,
+          decodeData: MultimodalConversationResponse.fromJson,
         );
     return response.data;
   }
@@ -39,7 +41,7 @@ class ApiConversationRepository implements ConversationRepository {
     String? topic,
     String? conversationDirection,
     String? selectedQuestion,
-    bool includeAudioResponse = false,
+    bool includeAudioResponse = true,
   }) async {
     final FormData formData = FormData.fromMap(<String, Object?>{
       'audio_file': MultipartFile.fromBytes(
@@ -64,18 +66,20 @@ class ApiConversationRepository implements ConversationRepository {
   }
 
   @override
-  Future<ConversationResponse> startRoleplay({
+  Future<MultimodalConversationResponse> startRoleplay({
     required String roleCharacter,
     String? searchContext,
+    bool includeAudioResponse = true,
   }) async {
-    final ApiResponse<ConversationResponse> response = await apiClient
-        .post<ConversationResponse>(
+    final ApiResponse<MultimodalConversationResponse> response = await apiClient
+        .post<MultimodalConversationResponse>(
           'conversations/start/roleplay/',
           data: <String, Object?>{
             'role_character': roleCharacter,
             'search_context': searchContext,
+            'include_audio_response': includeAudioResponse,
           },
-          decodeData: ConversationResponse.fromJson,
+          decodeData: MultimodalConversationResponse.fromJson,
         );
     return response.data;
   }
@@ -113,7 +117,7 @@ class ApiConversationRepository implements ConversationRepository {
   Future<MultimodalMessageResponse> sendTextTurn({
     required String conversationId,
     required String text,
-    bool includeAudioResponse = false,
+    bool includeAudioResponse = true,
   }) async {
     final ApiResponse<MultimodalMessageResponse> response = await apiClient
         .post<MultimodalMessageResponse>(
@@ -131,7 +135,7 @@ class ApiConversationRepository implements ConversationRepository {
   Future<MultimodalMessageResponse> sendAudioTurn({
     required String conversationId,
     required ConversationAudioFile audioFile,
-    bool includeAudioResponse = false,
+    bool includeAudioResponse = true,
   }) async {
     final FormData formData = FormData.fromMap(<String, Object?>{
       'audio_file': MultipartFile.fromBytes(

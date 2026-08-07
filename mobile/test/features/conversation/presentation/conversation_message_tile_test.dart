@@ -76,6 +76,39 @@ void main() {
     expect(player.playedAudio?.format, 'mp3');
   });
 
+  testWidgets('auto plays assistant audio once when requested', (
+    WidgetTester tester,
+  ) async {
+    final _FakeConversationAudioPlayer player = _FakeConversationAudioPlayer();
+    await tester.pumpWidget(
+      _app(
+        ConversationMessage(
+          id: 'assistant-message-id',
+          conversationId: 'conversation-id',
+          role: ConversationMessageRole.assistant,
+          content: 'Sure. What size would you like?',
+          createdAt: DateTime.utc(2026, 7, 2),
+          audio: const VoiceAudioResponse(
+            contentType: 'audio/mpeg',
+            base64: 'AAA=',
+            format: 'mp3',
+          ),
+        ),
+        audioPlayer: player,
+        autoPlayAudio: true,
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump();
+
+    expect(player.playCount, 1);
+    expect(find.text('Replay response'), findsOneWidget);
+
+    await tester.pump();
+    expect(player.playCount, 1);
+  });
+
   testWidgets('prevents duplicate assistant audio playback taps', (
     WidgetTester tester,
   ) async {
@@ -110,9 +143,9 @@ void main() {
 
     playCompleter.complete();
     await tester.pump();
-    expect(find.text('Play response'), findsOneWidget);
+    expect(find.text('Replay response'), findsOneWidget);
 
-    await tester.tap(find.text('Play response'));
+    await tester.tap(find.text('Replay response'));
     await tester.pump();
     expect(player.playCount, 2);
   });
@@ -173,6 +206,7 @@ void main() {
 Widget _app(
   ConversationMessage message, {
   ConversationAudioPlayer? audioPlayer,
+  bool autoPlayAudio = false,
 }) {
   return ProviderScope(
     overrides: [
@@ -181,7 +215,12 @@ Widget _app(
     ],
     child: MaterialApp(
       theme: AppTheme.light,
-      home: Scaffold(body: ConversationMessageTile(message: message)),
+      home: Scaffold(
+        body: ConversationMessageTile(
+          message: message,
+          autoPlayAudio: autoPlayAudio,
+        ),
+      ),
     ),
   );
 }

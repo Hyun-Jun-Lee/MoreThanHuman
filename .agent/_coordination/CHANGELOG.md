@@ -2,6 +2,7 @@
 
 ## 2026-08-06
 
+- **AI 응답 음성 자동재생 구현**: 모바일 Conversation 화면에서 AI TTS 응답을 자동 재생하고 replay 버튼을 제공하며, free chat/roleplay 시작 응답까지 `include_audio_response=true`로 연결
 - **OpenRouter 음성 provider 전환**: STT/TTS 기본 provider를 OpenRouter로 전환하고 Microsoft MAI-Voice-2-Flash TTS, OpenRouter STT/TTS 테스트와 문서를 동기화
 
 ## 2026-07-23

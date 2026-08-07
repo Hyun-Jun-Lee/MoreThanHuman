@@ -297,21 +297,23 @@ class _FakeConversationRepository implements ConversationRepository {
   String? lastAudioFilename;
 
   @override
-  Future<ConversationResponse> startFreeChat({
+  Future<MultimodalConversationResponse> startFreeChat({
     required String firstMessage,
     String? searchContext,
     String? topic,
     String? conversationDirection,
     String? selectedQuestion,
+    bool includeAudioResponse = true,
   }) async {
     lastFirstMessage = firstMessage;
     lastDirection = conversationDirection;
     lastSelectedQuestion = selectedQuestion;
-    return const ConversationResponse(
+    return const MultimodalConversationResponse(
       conversationId: 'conversation-id',
       messageId: 'message-id',
       conversationType: ConversationType.freeChat,
       response: 'Great. Tell me more.',
+      inputMode: ConversationInputMode.text,
     );
   }
 
@@ -322,7 +324,7 @@ class _FakeConversationRepository implements ConversationRepository {
     String? topic,
     String? conversationDirection,
     String? selectedQuestion,
-    bool includeAudioResponse = false,
+    bool includeAudioResponse = true,
   }) async {
     lastAudioFilename = audioFile.filename;
     lastDirection = conversationDirection;
@@ -338,9 +340,10 @@ class _FakeConversationRepository implements ConversationRepository {
   }
 
   @override
-  Future<ConversationResponse> startRoleplay({
+  Future<MultimodalConversationResponse> startRoleplay({
     required String roleCharacter,
     String? searchContext,
+    bool includeAudioResponse = true,
   }) {
     throw UnimplementedError();
   }
@@ -366,7 +369,7 @@ class _FakeConversationRepository implements ConversationRepository {
   Future<MultimodalMessageResponse> sendTextTurn({
     required String conversationId,
     required String text,
-    bool includeAudioResponse = false,
+    bool includeAudioResponse = true,
   }) {
     throw UnimplementedError();
   }
@@ -375,7 +378,7 @@ class _FakeConversationRepository implements ConversationRepository {
   Future<MultimodalMessageResponse> sendAudioTurn({
     required String conversationId,
     required ConversationAudioFile audioFile,
-    bool includeAudioResponse = false,
+    bool includeAudioResponse = true,
   }) {
     throw UnimplementedError();
   }

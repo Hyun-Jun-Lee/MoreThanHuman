@@ -13,12 +13,13 @@ class ConversationAudioFile {
 }
 
 abstract interface class ConversationRepository {
-  Future<ConversationResponse> startFreeChat({
+  Future<MultimodalConversationResponse> startFreeChat({
     required String firstMessage,
     String? searchContext,
     String? topic,
     String? conversationDirection,
     String? selectedQuestion,
+    bool includeAudioResponse = true,
   });
 
   Future<MultimodalConversationResponse> startFreeChatWithAudio({
@@ -27,12 +28,13 @@ abstract interface class ConversationRepository {
     String? topic,
     String? conversationDirection,
     String? selectedQuestion,
-    bool includeAudioResponse = false,
+    bool includeAudioResponse = true,
   });
 
-  Future<ConversationResponse> startRoleplay({
+  Future<MultimodalConversationResponse> startRoleplay({
     required String roleCharacter,
     String? searchContext,
+    bool includeAudioResponse = true,
   });
 
   Future<PaginatedMessages> listMessages(
@@ -49,12 +51,12 @@ abstract interface class ConversationRepository {
   Future<MultimodalMessageResponse> sendTextTurn({
     required String conversationId,
     required String text,
-    bool includeAudioResponse = false,
+    bool includeAudioResponse = true,
   });
 
   Future<MultimodalMessageResponse> sendAudioTurn({
     required String conversationId,
     required ConversationAudioFile audioFile,
-    bool includeAudioResponse = false,
+    bool includeAudioResponse = true,
   });
 }

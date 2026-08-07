@@ -316,7 +316,11 @@ class _ConversationMessageList extends ConsumerWidget {
     final List<Widget> children = <Widget>[
       const SizedBox(height: AppSpacing.lg),
       for (final ConversationMessage message in state.messages) ...<Widget>[
-        ConversationMessageTile(key: ValueKey(message.id), message: message),
+        ConversationMessageTile(
+          key: ValueKey(message.id),
+          message: message,
+          autoPlayAudio: _shouldAutoPlayAudio(message),
+        ),
         const SizedBox(height: AppSpacing.md),
       ],
       if (state.isSending) ...<Widget>[
@@ -355,6 +359,11 @@ class _ConversationMessageList extends ConsumerWidget {
     ];
 
     return ListView(children: children);
+  }
+
+  bool _shouldAutoPlayAudio(ConversationMessage message) {
+    return message.role == ConversationMessageRole.assistant &&
+        message.audio != null;
   }
 }
 

@@ -22,6 +22,14 @@ void main() {
         );
 
     expect(response?.conversationId, 'conversation-id');
+    expect(repository.lastFreeChatIncludeAudio, isTrue);
+    expect(
+      container
+          .read(initialAssistantAudioProvider('conversation-id'))
+          ?.audio
+          ?.format,
+      'mp3',
+    );
     expect(repository.lastFreeChatBody, <String, String?>{
       'first_message': 'I liked the game.',
       'search_context': 'Lotte won 8-3.',
@@ -55,6 +63,7 @@ void main() {
 
     expect(response?.conversationId, 'conversation-id');
     expect(repository.lastAudioFilename, 'answer.m4a');
+    expect(repository.lastFreeChatAudioIncludeAudio, isTrue);
     expect(repository.lastFreeChatBody, <String, String?>{
       'first_message': null,
       'search_context': 'Lotte won 8-3.',
@@ -77,6 +86,7 @@ void main() {
         .startRoleplay(roleCharacter: 'A cafe barista who asks follow-ups.');
 
     expect(repository.lastRoleCharacter, 'A cafe barista who asks follow-ups.');
+    expect(repository.lastRoleplayIncludeAudio, isTrue);
   });
 }
 
@@ -84,15 +94,20 @@ class _FakeConversationRepository implements ConversationRepository {
   Map<String, String?>? lastFreeChatBody;
   String? lastRoleCharacter;
   String? lastAudioFilename;
+  bool? lastFreeChatIncludeAudio;
+  bool? lastFreeChatAudioIncludeAudio;
+  bool? lastRoleplayIncludeAudio;
 
   @override
-  Future<ConversationResponse> startFreeChat({
+  Future<MultimodalConversationResponse> startFreeChat({
     required String firstMessage,
     String? searchContext,
     String? topic,
     String? conversationDirection,
     String? selectedQuestion,
+    bool includeAudioResponse = true,
   }) async {
+    lastFreeChatIncludeAudio = includeAudioResponse;
     lastFreeChatBody = <String, String?>{
       'first_message': firstMessage,
       'search_context': searchContext,
@@ -110,9 +125,10 @@ class _FakeConversationRepository implements ConversationRepository {
     String? topic,
     String? conversationDirection,
     String? selectedQuestion,
-    bool includeAudioResponse = false,
+    bool includeAudioResponse = true,
   }) async {
     lastAudioFilename = audioFile.filename;
+    lastFreeChatAudioIncludeAudio = includeAudioResponse;
     lastFreeChatBody = <String, String?>{
       'first_message': null,
       'search_context': searchContext,
@@ -127,15 +143,22 @@ class _FakeConversationRepository implements ConversationRepository {
       response: 'Hello!',
       inputMode: ConversationInputMode.audio,
       transcript: 'I liked the game.',
+      audio: VoiceAudioResponse(
+        contentType: 'audio/mpeg',
+        base64: 'AAA=',
+        format: 'mp3',
+      ),
     );
   }
 
   @override
-  Future<ConversationResponse> startRoleplay({
+  Future<MultimodalConversationResponse> startRoleplay({
     required String roleCharacter,
     String? searchContext,
+    bool includeAudioResponse = true,
   }) async {
     lastRoleCharacter = roleCharacter;
+    lastRoleplayIncludeAudio = includeAudioResponse;
     return _response(ConversationType.rolePlaying);
   }
 
@@ -160,7 +183,7 @@ class _FakeConversationRepository implements ConversationRepository {
   Future<MultimodalMessageResponse> sendTextTurn({
     required String conversationId,
     required String text,
-    bool includeAudioResponse = false,
+    bool includeAudioResponse = true,
   }) {
     throw UnimplementedError();
   }
@@ -169,17 +192,23 @@ class _FakeConversationRepository implements ConversationRepository {
   Future<MultimodalMessageResponse> sendAudioTurn({
     required String conversationId,
     required ConversationAudioFile audioFile,
-    bool includeAudioResponse = false,
+    bool includeAudioResponse = true,
   }) {
     throw UnimplementedError();
   }
 }
 
-ConversationResponse _response(ConversationType type) {
-  return ConversationResponse(
+MultimodalConversationResponse _response(ConversationType type) {
+  return MultimodalConversationResponse(
     conversationId: 'conversation-id',
     messageId: 'message-id',
     conversationType: type,
     response: 'Hello!',
+    inputMode: ConversationInputMode.text,
+    audio: VoiceAudioResponse(
+      contentType: 'audio/mpeg',
+      base64: 'AAA=',
+      format: 'mp3',
+    ),
   );
 }

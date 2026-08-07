@@ -32,6 +32,7 @@ void main() {
       'topic': '롯데 자이언츠 최근 경기',
       'conversation_direction': 'CASUAL_CHAT',
       'selected_question': 'What stood out?',
+      'include_audio_response': true,
     });
   });
 
@@ -58,7 +59,7 @@ void main() {
     );
     expect(adapter.requests.last.data, <String, Object?>{
       'text': 'Hello again',
-      'include_audio_response': false,
+      'include_audio_response': true,
     });
   });
 
@@ -86,7 +87,7 @@ void main() {
       startsWith(Headers.multipartFormDataContentType),
     );
     expect(formData.fields.single.key, 'include_audio_response');
-    expect(formData.fields.single.value, 'false');
+    expect(formData.fields.single.value, 'true');
     expect(formData.files.single.key, 'audio_file');
     expect(formData.files.single.value.filename, 'recording.webm');
     expect(formData.files.single.value.contentType.toString(), 'audio/webm');
@@ -123,7 +124,7 @@ void main() {
     expect(_fieldValue(formData, 'topic'), '롯데 자이언츠 최근 경기');
     expect(_fieldValue(formData, 'conversation_direction'), 'CASUAL_CHAT');
     expect(_fieldValue(formData, 'selected_question'), 'What stood out?');
-    expect(_fieldValue(formData, 'include_audio_response'), 'false');
+    expect(_fieldValue(formData, 'include_audio_response'), 'true');
     expect(formData.files.single.key, 'audio_file');
     expect(formData.files.single.value.filename, 'answer.m4a');
     expect(formData.files.single.value.contentType.toString(), 'audio/m4a');
