@@ -51,7 +51,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Korean -> English'), findsOneWidget);
+    expect(find.text('KR -> EN'), findsOneWidget);
 
     await tester.tap(find.text('L'));
     await tester.pumpAndSettle();
@@ -64,7 +64,7 @@ void main() {
     await tester.tap(find.text('SAVE LANGUAGE PAIR'));
     await tester.pumpAndSettle();
 
-    expect(find.text('English -> Korean'), findsOneWidget);
+    expect(find.text('EN -> KR'), findsOneWidget);
     expect(
       languageRepository.currentLanguage.targetLanguage,
       LearningLanguageCode.ko,
@@ -118,6 +118,31 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Chat'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Start a conversation'), findsOneWidget);
+
+    await tester.tap(find.text('Free Chat'));
+    await tester.pumpAndSettle();
+
+    expect(selectedType, ConversationStartType.freeChat);
+  });
+
+  testWidgets('Home add button opens start conversation sheet', (
+    WidgetTester tester,
+  ) async {
+    ConversationStartType? selectedType;
+
+    await tester.pumpWidget(
+      _homeApp(
+        onStartTypeSelected: (ConversationStartType type) {
+          selectedType = type;
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Start conversation'));
     await tester.pumpAndSettle();
 
     expect(find.text('Start a conversation'), findsOneWidget);

@@ -29,6 +29,18 @@ void main() {
     expect(context.toStorageValue(), 'zh|ko|zh');
   });
 
+  test('formats a compact language pair label from language codes', () {
+    expect(LearningLanguageContext.defaultContext.shortPairLabel(), 'KR -> EN');
+    expect(
+      const LearningLanguageContext(
+        nativeLanguage: LearningLanguageCode.zh,
+        targetLanguage: LearningLanguageCode.ko,
+        feedbackLanguage: LearningLanguageCode.zh,
+      ).shortPairLabel(),
+      'ZH -> KR',
+    );
+  });
+
   test('infers a first-run default from the app locale', () {
     expect(
       defaultLanguageContextForLocale('en').targetLanguage,

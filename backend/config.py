@@ -64,7 +64,7 @@ class Settings(BaseSettings):
     # Search Settings
     search_summary_max_tokens: int = 600
     search_query_analysis_max_tokens: int = 500
-    search_quality_judge_max_tokens: int = 500
+    search_quality_judge_max_tokens: int = 1000
     search_region: str = "kr-kr"
     search_safesearch: str = "moderate"
     search_recent_timelimit: str = "m"

@@ -183,12 +183,46 @@ void main() {
 
     await tester.tap(find.byTooltip('Voice input'));
     await tester.pump();
+    await tester.pump(minimumVoiceRecordingDuration);
     await tester.tap(find.byTooltip('Stop recording'));
     await tester.pumpAndSettle();
 
     expect(find.text('Recording did not produce audio.'), findsOneWidget);
     expect(repository.sentAudioFilenames, isEmpty);
   });
+
+  testWidgets(
+    'short voice recording shows recognition guidance without upload',
+    (WidgetTester tester) async {
+      final _FakeConversationRepository repository =
+          _FakeConversationRepository();
+      final _FakeConversationAudioRecorder recorder =
+          _FakeConversationAudioRecorder();
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            conversationRepositoryProvider.overrideWithValue(repository),
+            conversationAudioRecorderProvider.overrideWithValue(recorder),
+          ],
+          child: MaterialApp.router(
+            theme: AppTheme.light,
+            routerConfig: _router(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Voice input'));
+      await tester.pump();
+      await tester.tap(find.byTooltip('Stop recording'));
+      await tester.pumpAndSettle();
+
+      expect(recorder.stopCount, 1);
+      expect(find.text(voiceNotRecognizedMessage), findsOneWidget);
+      expect(repository.sentAudioFilenames, isEmpty);
+    },
+  );
 
   testWidgets('voice upload failure shows retry card without recorder error', (
     WidgetTester tester,
@@ -215,6 +249,7 @@ void main() {
 
     await tester.tap(find.byTooltip('Voice input'));
     await tester.pump();
+    await tester.pump(minimumVoiceRecordingDuration);
     await tester.tap(find.byTooltip('Stop recording'));
     await tester.pumpAndSettle();
 

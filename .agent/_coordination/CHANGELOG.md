@@ -1,5 +1,11 @@
 # CHANGELOG — 완료된 작업 기록
 
+## 2026-08-14
+
+- **Home 대화 추가 CTA와 언어쌍 약식 표기**: 모바일 Home 화면에 시작 시트로 연결되는 + 버튼을 추가하고 상단 언어쌍 badge를 `KR -> EN` 형식으로 축약
+- **Search quality judge JSON 안정화**: 품질 판정 LLM 출력 schema에서 source별 reject 사유 요구를 제거하고 기본 token budget을 1000으로 상향
+- **짧은 음성 녹음 차단과 STT 진단 로그**: 모바일 음성 녹음이 700ms 미만이면 업로드하지 않고 안내를 표시하며 STT 업로드/빈 transcript 로그를 추가
+
 ## 2026-08-06
 
 - **AI 응답 음성 자동재생 구현**: 모바일 Conversation 화면에서 AI TTS 응답을 자동 재생하고 replay 버튼을 제공하며, free chat/roleplay 시작 응답까지 `include_audio_response=true`로 연결

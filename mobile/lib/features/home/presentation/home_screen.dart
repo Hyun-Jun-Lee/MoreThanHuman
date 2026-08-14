@@ -34,6 +34,11 @@ class HomeScreen extends ConsumerWidget {
     return AppScaffold(
       padding: EdgeInsets.zero,
       safeAreaBottom: false,
+      floatingActionButton: FloatingActionButton(
+        tooltip: 'Start conversation',
+        onPressed: () => _showStartSheet(context),
+        child: const Icon(Icons.add_rounded),
+      ),
       bottomNavigationBar: MainNavigationBar(
         destination: MainNavigationDestination.home,
         onDestinationSelected: (MainNavigationDestination destination) =>
@@ -185,7 +190,6 @@ class _LanguagePairBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final LearningLanguageContext contextLanguage =
         language ?? LearningLanguageContext.defaultContext;
-    final String localeCode = Localizations.localeOf(context).languageCode;
     return DecoratedBox(
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
@@ -197,7 +201,7 @@ class _LanguagePairBadge extends StatelessWidget {
           vertical: AppSpacing.xs,
         ),
         child: Text(
-          contextLanguage.pairLabel(localeCode),
+          contextLanguage.shortPairLabel(),
           style: AppTypography.captionMono.copyWith(
             color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),

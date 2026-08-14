@@ -31,6 +31,14 @@ enum LearningLanguageCode {
       _ => englishName,
     };
   }
+
+  String get shortCode {
+    return switch (this) {
+      LearningLanguageCode.ko => 'KR',
+      LearningLanguageCode.en => 'EN',
+      LearningLanguageCode.zh => 'ZH',
+    };
+  }
 }
 
 class LearningLanguageContext {
@@ -120,6 +128,10 @@ class LearningLanguageContext {
 
   String pairLabel(String localeCode) {
     return '${nativeLanguage.displayName(localeCode)} -> ${targetLanguage.displayName(localeCode)}';
+  }
+
+  String shortPairLabel() {
+    return '${nativeLanguage.shortCode} -> ${targetLanguage.shortCode}';
   }
 
   String helperText(String localeCode) {

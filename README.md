@@ -650,7 +650,7 @@ Query:
 | `VOICE_PROVIDER_TIMEOUT_SECONDS` | 아니오 | `60` | STT/TTS provider 요청 timeout |
 | `SEARCH_SUMMARY_MAX_TOKENS` | 아니오 | `600` | 검색 요약 최대 토큰 |
 | `SEARCH_QUERY_ANALYSIS_MAX_TOKENS` | 아니오 | `500` | 검색어 분석 LLM 최대 토큰 |
-| `SEARCH_QUALITY_JUDGE_MAX_TOKENS` | 아니오 | `500` | 검색 품질 판정 LLM 최대 토큰 |
+| `SEARCH_QUALITY_JUDGE_MAX_TOKENS` | 아니오 | `1000` | 검색 품질 판정 LLM 최대 토큰 |
 | `SEARCH_REGION` | 아니오 | `kr-kr` | ddgs 검색 지역 |
 | `SEARCH_SAFESEARCH` | 아니오 | `moderate` | ddgs safe search 옵션 |
 | `SEARCH_RECENT_TIMELIMIT` | 아니오 | `m` | 최신성 의도 쿼리에 적용할 ddgs 기간 옵션 |

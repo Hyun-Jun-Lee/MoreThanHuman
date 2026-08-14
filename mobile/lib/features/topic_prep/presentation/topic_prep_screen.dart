@@ -227,11 +227,18 @@ class _TopicPrepScreenState extends ConsumerState<TopicPrepScreen> {
     }
 
     try {
+      final Duration recordingElapsed = _voiceInput.elapsed;
       _stopRecordingTimer();
       setState(() => _voiceInput = const _PrepVoiceInputState.stopping());
       final ConversationAudioFile audioFile = await _recorder.stop();
       if (!mounted) {
         return;
+      }
+      if (recordingElapsed < minimumVoiceRecordingDuration) {
+        throw const ConversationAudioException(
+          voiceNotRecognizedMessage,
+          reason: ConversationAudioExceptionReason.emptyRecording,
+        );
       }
       if (audioFile.bytes.isEmpty) {
         throw const ConversationAudioException(
@@ -273,13 +280,13 @@ class _TopicPrepScreenState extends ConsumerState<TopicPrepScreen> {
 
   void _startRecordingTimer() {
     _recordingTimer?.cancel();
-    _recordingTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+    _recordingTimer = Timer.periodic(voiceRecordingTimerTick, (_) {
       if (!mounted) {
         return;
       }
       setState(() {
         _voiceInput = _voiceInput.copyWith(
-          elapsed: _voiceInput.elapsed + const Duration(seconds: 1),
+          elapsed: _voiceInput.elapsed + voiceRecordingTimerTick,
         );
       });
     });

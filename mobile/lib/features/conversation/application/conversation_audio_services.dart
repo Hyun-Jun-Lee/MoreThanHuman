@@ -10,6 +10,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 
+const Duration minimumVoiceRecordingDuration = Duration(milliseconds: 700);
+const Duration voiceRecordingTimerTick = Duration(milliseconds: 100);
+const String voiceNotRecognizedMessage = '음성이 인식되지 않았어요. 조금 더 크게/길게 말해주세요.';
+
 enum ConversationAudioExceptionReason {
   unknown,
   permissionDenied,

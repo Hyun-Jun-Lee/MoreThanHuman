@@ -1,3 +1,5 @@
+import logging
+
 import pytest
 
 from domains.voice.schemas import VoiceSynthesisResult, VoiceTranscriptionResult
@@ -98,22 +100,31 @@ def test_create_provider_rejects_mixed_voice_providers(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_transcribe_upload_returns_non_empty_transcript():
+async def test_transcribe_upload_returns_non_empty_transcript(caplog):
     provider = FakeVoiceProvider(transcript="  Let's talk about travel. ")
     service = VoiceService(provider=provider)
 
-    result = await service.transcribe_upload(FakeUpload(WEBM_BYTES))
+    with caplog.at_level(logging.INFO, logger="domains.voice.service"):
+        result = await service.transcribe_upload(FakeUpload(WEBM_BYTES))
 
     assert result.text == "Let's talk about travel."
     assert provider.transcribe_calls[0]["filename"] == "speech.webm"
+    assert "Voice STT stage=upload status=validated provider=fake" in caplog.text
+    assert f"byte_length={len(WEBM_BYTES)}" in caplog.text
+    assert f"transcript_chars={len(result.text)}" in caplog.text
+    assert "Let's talk about travel" not in caplog.text
 
 
 @pytest.mark.asyncio
-async def test_transcribe_upload_rejects_empty_transcript():
+async def test_transcribe_upload_rejects_empty_transcript(caplog):
     service = VoiceService(provider=FakeVoiceProvider(transcript="   "))
 
-    with pytest.raises(ValidationException, match="empty transcript"):
-        await service.transcribe_upload(FakeUpload(WEBM_BYTES))
+    with caplog.at_level(logging.INFO, logger="domains.voice.service"):
+        with pytest.raises(ValidationException, match="empty transcript"):
+            await service.transcribe_upload(FakeUpload(WEBM_BYTES))
+
+    assert "Voice STT stage=transcription status=empty provider=fake" in caplog.text
+    assert f"byte_length={len(WEBM_BYTES)}" in caplog.text
 
 
 @pytest.mark.asyncio

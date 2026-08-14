@@ -25,20 +25,20 @@ def _quality(is_sufficient: bool) -> SearchQuality:
 async def test_search_pipeline_summarizes_only_llm_accepted_sources(monkeypatch):
     service = SearchService()
 
-    async def fake_analyze(_query: str):
+    async def fake_analyze(_query: str, **_kwargs):
         return build_rule_query_analysis("최근 롯데 자이언츠 경기", current_date="2026-06-04")
 
-    async def fake_judge(_query, sources, _analysis):
+    async def fake_judge(_query, sources, _analysis, **_kwargs):
         return [sources[1], sources[2]], _quality(True)
 
-    async def fake_summarize(_query, sources, _analysis):
+    async def fake_summarize(_query, sources, _analysis, **_kwargs):
         assert [source.title for source in sources] == [
             "롯데 자이언츠, 최근 KBO 경기 결과",
             "롯데 자이언츠 경기 하이라이트",
         ]
         return "Lotte Giants won a recent KBO game."
 
-    async def fake_search(_query, _analysis=None):
+    async def fake_search(_query, _analysis=None, **_kwargs):
         return [
             {"title": "NAVER", "href": "https://www.naver.com/", "body": "네이버 포털"},
             {
@@ -69,16 +69,16 @@ async def test_search_pipeline_summarizes_only_llm_accepted_sources(monkeypatch)
 async def test_search_low_quality_does_not_summarize(monkeypatch):
     service = SearchService()
 
-    async def fake_analyze(_query: str):
+    async def fake_analyze(_query: str, **_kwargs):
         return build_rule_query_analysis("요즘 이슈", current_date="2026-06-04")
 
-    async def fake_judge(_query, _sources, _analysis):
+    async def fake_judge(_query, _sources, _analysis, **_kwargs):
         return [], _quality(False)
 
-    async def fail_summarize(_query, _sources, _analysis):
+    async def fail_summarize(_query, _sources, _analysis, **_kwargs):
         raise AssertionError("summary LLM should not run for low-quality search")
 
-    async def fake_search(_query, _analysis=None):
+    async def fake_search(_query, _analysis=None, **_kwargs):
         return [
             {"title": "Google 뉴스", "href": "https://news.google.com/?hl=ko", "body": "뉴스 모음"},
         ]
@@ -99,13 +99,13 @@ async def test_search_low_quality_does_not_summarize(monkeypatch):
 async def test_search_empty_results_does_not_call_quality_judge(monkeypatch):
     service = SearchService()
 
-    async def fake_analyze(_query: str):
+    async def fake_analyze(_query: str, **_kwargs):
         return build_rule_query_analysis("검색 결과 없는 주제", current_date="2026-06-04")
 
-    async def fake_search(_query, _analysis=None):
+    async def fake_search(_query, _analysis=None, **_kwargs):
         return []
 
-    async def fail_judge(_query, _sources, _analysis):
+    async def fail_judge(_query, _sources, _analysis, **_kwargs):
         raise AssertionError("quality judge should not run when search returns no sources")
 
     monkeypatch.setattr(service, "_analyze_query", fake_analyze)
@@ -126,7 +126,7 @@ async def test_quality_judge_prompt_includes_current_date_and_timezone(monkeypat
     analysis = build_rule_query_analysis("최근 애플 발표", current_date="2026-06-04")
 
     class FakeResponse:
-        content = '{"is_sufficient":true,"accepted_source_ids":[1,2],"rejected_sources":[],"relevance":true,"freshness":true,"specificity":true,"reason":null,"retry_suggestion":null}'
+        content = '{"is_sufficient":true,"accepted_source_ids":[1,2],"relevance":true,"freshness":true,"specificity":true,"reason":null,"retry_suggestion":null}'
 
     class FakeProvider:
         async def chat_completion(self, request):
@@ -146,7 +146,11 @@ async def test_quality_judge_prompt_includes_current_date_and_timezone(monkeypat
 
     assert quality.is_sufficient is True
     assert len(accepted_sources) == 2
+    system_prompt = captured["request"].messages[0].content
     user_prompt = captured["request"].messages[1].content
+    assert "rejected_sources" not in system_prompt
+    assert "one short sentence" in system_prompt
+    assert captured["request"].max_tokens == 1000
     assert "Current date:" in user_prompt
     assert "Timezone: Asia/Seoul" in user_prompt
     assert "Recency intent:" in user_prompt

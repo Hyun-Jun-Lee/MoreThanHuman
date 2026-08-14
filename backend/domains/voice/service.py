@@ -2,6 +2,7 @@
 Voice Service Layer
 """
 import base64
+import logging
 from pathlib import Path
 from typing import Protocol
 
@@ -19,6 +20,7 @@ from domains.voice.schemas import (
 from shared.exceptions import AppException, ValidationException
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
 
 
 class UploadedAudio(Protocol):
@@ -114,14 +116,37 @@ class VoiceService:
         self._validate_audio_size(audio_bytes)
         self._validate_audio_signature(filename, audio_bytes)
 
-        result = await self.provider.transcribe_audio(
+        provider = self.provider
+        provider_name = self._provider_name(provider)
+        logger.info(
+            "Voice STT stage=upload status=validated provider=%s filename=%r content_type=%s byte_length=%s",
+            provider_name,
+            filename,
+            content_type,
+            len(audio_bytes),
+        )
+        result = await provider.transcribe_audio(
             filename=filename,
             content_type=content_type,
             audio_bytes=audio_bytes,
         )
         transcript = self.normalize_text(result.text)
         if not transcript:
+            logger.warning(
+                "Voice STT stage=transcription status=empty provider=%s filename=%r content_type=%s byte_length=%s",
+                provider_name,
+                filename,
+                content_type,
+                len(audio_bytes),
+            )
             raise ValidationException("STT returned an empty transcript.")
+        logger.info(
+            "Voice STT stage=transcription status=success provider=%s filename=%r byte_length=%s transcript_chars=%s",
+            provider_name,
+            filename,
+            len(audio_bytes),
+            len(transcript),
+        )
         return VoiceTranscriptionResult(text=transcript)
 
     async def synthesize_response(self, text: str) -> VoiceAudioResponse:
@@ -223,3 +248,9 @@ class VoiceService:
                 "Invalid audio file signature.",
                 details={"extension": extension},
             )
+
+    def _provider_name(self, provider: VoiceProvider) -> str:
+        get_provider_name = getattr(provider, "get_provider_name", None)
+        if callable(get_provider_name):
+            return str(get_provider_name())
+        return provider.__class__.__name__

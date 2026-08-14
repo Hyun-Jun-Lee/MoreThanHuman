@@ -138,6 +138,7 @@ void main() {
     await tester.pump();
     await tester.ensureVisible(find.byTooltip('Stop recording'));
     await tester.pumpAndSettle();
+    await tester.pump(minimumVoiceRecordingDuration);
     await tester.tap(find.byTooltip('Stop recording'));
     await tester.pumpAndSettle();
 
