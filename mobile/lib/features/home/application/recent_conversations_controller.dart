@@ -10,19 +10,52 @@ class RecentConversationsController
   Future<List<ConversationSummary>> build() async {
     final AuthSession? session = ref.watch(authControllerProvider).value;
     if (session == null || !session.isAuthenticated) {
+      _setRefreshing(false);
       return const <ConversationSummary>[];
     }
     final HomeRepository repository = ref.watch(homeRepositoryProvider);
-    return repository.listRecentConversations();
+    try {
+      return await repository.listRecentConversations();
+    } finally {
+      if (ref.mounted) {
+        _setRefreshing(false);
+      }
+    }
   }
 
   Future<void> reload() async {
+    _setRefreshing(true);
     state = const AsyncLoading<List<ConversationSummary>>();
-    state = await AsyncValue.guard(
-      ref.read(homeRepositoryProvider).listRecentConversations,
-    );
+    try {
+      state = await AsyncValue.guard(
+        ref.read(homeRepositoryProvider).listRecentConversations,
+      );
+    } finally {
+      _setRefreshing(false);
+    }
+  }
+
+  void _setRefreshing(bool isRefreshing) {
+    ref
+        .read(recentConversationsRefreshingProvider.notifier)
+        .setRefreshing(isRefreshing);
   }
 }
+
+class RecentConversationsRefreshingController extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  void setRefreshing(bool isRefreshing) {
+    state = isRefreshing;
+  }
+}
+
+final NotifierProvider<RecentConversationsRefreshingController, bool>
+recentConversationsRefreshingProvider =
+    NotifierProvider<RecentConversationsRefreshingController, bool>(
+      RecentConversationsRefreshingController.new,
+    );
 
 final AsyncNotifierProvider<
   RecentConversationsController,

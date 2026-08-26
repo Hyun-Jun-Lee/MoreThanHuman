@@ -83,13 +83,6 @@ Future<void> showAccountSheet({
                           }
                         },
                 ),
-                const SizedBox(height: AppSpacing.sm),
-                TextButton(
-                  onPressed: isLoggingOut
-                      ? null
-                      : () => Navigator.pop(sheetContext),
-                  child: const Text('CANCEL'),
-                ),
                 const SizedBox(height: AppSpacing.xl),
                 const AppSectionLabel('Language Pair'),
                 const SizedBox(height: AppSpacing.xs),

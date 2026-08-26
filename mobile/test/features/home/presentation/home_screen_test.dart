@@ -23,6 +23,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('ACCOUNT'), findsOneWidget);
+    expect(find.text('CANCEL'), findsNothing);
     expect(find.text('Learner Kim'), findsOneWidget);
     expect(find.text('learner@example.com'), findsOneWidget);
     expect(find.text('LOG OUT'), findsOneWidget);
@@ -142,7 +143,13 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('Start conversation'));
+    final Finder addButton = find.byTooltip('Start conversation');
+    final Offset addButtonCenter = tester.getCenter(addButton);
+    final double screenCenter =
+        tester.getSize(find.byType(MaterialApp)).width / 2;
+    expect(addButtonCenter.dx, closeTo(screenCenter, 1));
+
+    await tester.tap(addButton);
     await tester.pumpAndSettle();
 
     expect(find.text('Start a conversation'), findsOneWidget);
@@ -160,6 +167,72 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('START CONVERSATION'), findsOneWidget);
+  });
+
+  testWidgets('Recent conversations collapse to four and toggle open', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      _homeApp(conversations: _recentConversations(count: 6)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Conversation 1'), findsOneWidget);
+    expect(find.text('Conversation 4'), findsOneWidget);
+    expect(find.text('Conversation 5'), findsNothing);
+    expect(find.text('SHOW ALL'), findsOneWidget);
+
+    await tester.ensureVisible(find.text('SHOW ALL'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('SHOW ALL'));
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('Conversation 5'));
+    await tester.pumpAndSettle();
+    expect(find.text('Conversation 5'), findsOneWidget);
+    expect(find.text('Conversation 6'), findsOneWidget);
+    expect(find.text('SHOW LESS'), findsOneWidget);
+
+    await tester.ensureVisible(find.text('SHOW LESS'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('SHOW LESS'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Conversation 5'), findsNothing);
+    expect(find.text('SHOW ALL'), findsOneWidget);
+  });
+
+  testWidgets('Recent conversations show updating indicator while refreshing', (
+    WidgetTester tester,
+  ) async {
+    final _RefreshableHomeRepository homeRepository =
+        _RefreshableHomeRepository();
+
+    await tester.pumpWidget(_homeApp(homeRepository: homeRepository));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Conversation 1'), findsOneWidget);
+    expect(_refreshIndicator, findsNothing);
+
+    final ProviderContainer container = ProviderScope.containerOf(
+      tester.element(find.byType(HomeScreen)),
+      listen: false,
+    );
+    container
+        .read(recentConversationsRefreshingProvider.notifier)
+        .setRefreshing(true);
+    container.invalidate(recentConversationsControllerProvider);
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('Conversation 1'), findsOneWidget);
+    expect(_refreshIndicator, findsOneWidget);
+
+    homeRepository.completeRefresh();
+    await tester.pumpAndSettle();
+
+    expect(find.text('Updated conversation'), findsOneWidget);
+    expect(_refreshIndicator, findsNothing);
   });
 
   testWidgets('History tab calls navigation callback', (
@@ -253,6 +326,9 @@ final UserProfile _user = UserProfile(
   createdAt: DateTime.utc(2026, 6, 24),
   updatedAt: DateTime.utc(2026, 6, 24),
 );
+final Finder _refreshIndicator = find.byKey(
+  const ValueKey<String>('recent-conversations-refresh-indicator'),
+);
 
 Widget _homeApp({
   _MemoryTokenStorage? tokenStorage,
@@ -261,7 +337,10 @@ Widget _homeApp({
   _FakeGoogleIdentityService? googleIdentityService,
   _FakeSupabaseAuthService? supabaseAuth,
   ValueChanged<ConversationStartType>? onStartTypeSelected,
+  ValueChanged<String>? onConversationSelected,
   VoidCallback? onHistorySelected,
+  List<ConversationSummary> conversations = const <ConversationSummary>[],
+  HomeRepository? homeRepository,
 }) {
   final _MemoryTokenStorage effectiveTokenStorage =
       tokenStorage ?? _MemoryTokenStorage(tokens: _tokens, deviceId: _deviceId);
@@ -287,11 +366,14 @@ Widget _homeApp({
       supabaseAuthServiceProvider.overrideWithValue(
         supabaseAuth ?? _FakeSupabaseAuthService(hasSession: true),
       ),
-      homeRepositoryProvider.overrideWithValue(const _FakeHomeRepository()),
+      homeRepositoryProvider.overrideWithValue(
+        homeRepository ?? _FakeHomeRepository(conversations: conversations),
+      ),
     ],
     child: MaterialApp(
       theme: AppTheme.light,
       home: HomeScreen(
+        onConversationSelected: onConversationSelected,
         onStartTypeSelected: onStartTypeSelected,
         onHistorySelected: onHistorySelected,
       ),
@@ -441,14 +523,63 @@ class _FakeSupabaseAuthService implements SupabaseAuthService {
 }
 
 class _FakeHomeRepository implements HomeRepository {
-  const _FakeHomeRepository();
+  const _FakeHomeRepository({
+    this.conversations = const <ConversationSummary>[],
+  });
+
+  final List<ConversationSummary> conversations;
 
   @override
   Future<List<ConversationSummary>> listRecentConversations({
     int limit = 5,
   }) async {
-    return const <ConversationSummary>[];
+    return conversations;
   }
+}
+
+class _RefreshableHomeRepository implements HomeRepository {
+  Completer<List<ConversationSummary>>? _refreshCompleter;
+  int _callCount = 0;
+
+  @override
+  Future<List<ConversationSummary>> listRecentConversations({int limit = 5}) {
+    _callCount += 1;
+    if (_callCount == 1) {
+      return Future<List<ConversationSummary>>.value(
+        _recentConversations(count: 1),
+      );
+    }
+
+    _refreshCompleter ??= Completer<List<ConversationSummary>>();
+    return _refreshCompleter!.future;
+  }
+
+  void completeRefresh() {
+    _refreshCompleter?.complete(<ConversationSummary>[
+      ConversationSummary(
+        id: 'updated-conversation',
+        title: 'Updated conversation',
+        kind: ConversationKind.roleplay,
+        messageCount: 1,
+        isActive: true,
+        updatedAt: DateTime.utc(2026, 8, 14),
+      ),
+    ]);
+  }
+}
+
+List<ConversationSummary> _recentConversations({required int count}) {
+  return List<ConversationSummary>.generate(count, (int index) {
+    final int number = index + 1;
+    return ConversationSummary(
+      id: 'conversation-$number',
+      title: 'Conversation $number',
+      kind: ConversationKind.freeChat,
+      messageCount: number,
+      isActive: true,
+      updatedAt: DateTime.utc(2026, 8, number),
+    );
+  });
 }
 
 class _MemoryTokenStorage implements TokenStorage {

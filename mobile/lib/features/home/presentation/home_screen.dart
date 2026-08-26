@@ -29,6 +29,9 @@ class HomeScreen extends ConsumerWidget {
     final AsyncValue<List<ConversationSummary>> recent = ref.watch(
       recentConversationsControllerProvider,
     );
+    final bool isRecentRefreshing = ref.watch(
+      recentConversationsRefreshingProvider,
+    );
     final String firstName = _firstName(user?.name);
 
     return AppScaffold(
@@ -39,6 +42,7 @@ class HomeScreen extends ConsumerWidget {
         onPressed: () => _showStartSheet(context),
         child: const Icon(Icons.add_rounded),
       ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       bottomNavigationBar: MainNavigationBar(
         destination: MainNavigationDestination.home,
         onDestinationSelected: (MainNavigationDestination destination) =>
@@ -58,7 +62,9 @@ class HomeScreen extends ConsumerWidget {
               AppSpacing.screenPadding,
               AppSpacing.xl,
               AppSpacing.screenPadding,
-              AppSpacing.sectionGap,
+              AppSpacing.sectionGap +
+                  AppSize.bottomNavigationHeight +
+                  AppSize.iconButton,
             ),
             sliver: SliverList(
               delegate: SliverChildListDelegate(<Widget>[
@@ -75,13 +81,23 @@ class HomeScreen extends ConsumerWidget {
                         .reload(),
                   ),
                   data: (List<ConversationSummary> conversations) {
+                    final bool isRefreshing =
+                        recent.isRefreshing ||
+                        recent.isReloading ||
+                        isRecentRefreshing;
                     if (conversations.isEmpty) {
+                      if (isRefreshing) {
+                        return const AppAsyncStateView.loading(
+                          message: 'Updating conversations...',
+                        );
+                      }
                       return _EmptyHome(
                         onStart: () => _showStartSheet(context),
                       );
                     }
                     return _RecentConversations(
                       conversations: conversations,
+                      isRefreshing: isRefreshing,
                       onSelected: onConversationSelected,
                     );
                   },
@@ -212,9 +228,10 @@ class _LanguagePairBadge extends StatelessWidget {
   }
 }
 
-class _RecentConversations extends StatelessWidget {
+class _RecentConversations extends StatefulWidget {
   const _RecentConversations({
     required this.conversations,
+    required this.isRefreshing,
     required this.onSelected,
   });
 
@@ -227,27 +244,85 @@ class _RecentConversations extends StatelessWidget {
   ];
 
   final List<ConversationSummary> conversations;
+  final bool isRefreshing;
   final ValueChanged<String>? onSelected;
 
   @override
+  State<_RecentConversations> createState() => _RecentConversationsState();
+}
+
+class _RecentConversationsState extends State<_RecentConversations> {
+  static const int _collapsedCount = 4;
+
+  bool _isExpanded = false;
+
+  @override
   Widget build(BuildContext context) {
+    final bool canToggle = widget.conversations.length > _collapsedCount;
+    final List<ConversationSummary> visibleConversations =
+        canToggle && !_isExpanded
+        ? widget.conversations.take(_collapsedCount).toList(growable: false)
+        : widget.conversations;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        const AppSectionLabel('Recent'),
+        Row(
+          children: <Widget>[
+            const AppSectionLabel('Recent'),
+            if (widget.isRefreshing) ...<Widget>[
+              const SizedBox(width: AppSpacing.sm),
+              Semantics(
+                label: 'Updating conversations',
+                liveRegion: true,
+                child: const SizedBox.square(
+                  key: ValueKey<String>(
+                    'recent-conversations-refresh-indicator',
+                  ),
+                  dimension: 14,
+                  child: CircularProgressIndicator(
+                    strokeWidth: AppBorderWidth.hairline,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
         const SizedBox(height: AppSpacing.lg),
-        for (int index = 0; index < conversations.length; index++) ...<Widget>[
+        for (
+          int index = 0;
+          index < visibleConversations.length;
+          index++
+        ) ...<Widget>[
           RecentConversationCard(
-            category: conversations[index].category,
-            title: conversations[index].title,
-            preview: conversations[index].preview,
-            color: _colors[index % _colors.length],
-            onTap: onSelected == null
+            category: visibleConversations[index].category,
+            title: visibleConversations[index].title,
+            preview: visibleConversations[index].preview,
+            color: _RecentConversations
+                ._colors[index % _RecentConversations._colors.length],
+            onTap: widget.onSelected == null
                 ? null
-                : () => onSelected!(conversations[index].id),
+                : () => widget.onSelected!(visibleConversations[index].id),
           ),
-          if (index != conversations.length - 1)
+          if (index != visibleConversations.length - 1)
             const SizedBox(height: AppSpacing.md),
+        ],
+        if (canToggle) ...<Widget>[
+          const SizedBox(height: AppSpacing.md),
+          Align(
+            alignment: Alignment.center,
+            child: TextButton.icon(
+              onPressed: () {
+                setState(() => _isExpanded = !_isExpanded);
+              },
+              icon: Icon(
+                _isExpanded
+                    ? Icons.keyboard_arrow_up_rounded
+                    : Icons.keyboard_arrow_down_rounded,
+              ),
+              label: Text(_isExpanded ? 'SHOW LESS' : 'SHOW ALL'),
+            ),
+          ),
         ],
       ],
     );
