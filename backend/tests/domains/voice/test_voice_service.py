@@ -10,6 +10,7 @@ from domains.voice.service import VoiceService
 from shared.exceptions import AppException, ValidationException
 
 WEBM_BYTES = b"\x1A\x45\xDF\xA3fake webm audio"
+M4A_BYTES = b"\x00\x00\x00\x18ftypM4A fake m4a audio"
 
 
 class FakeUpload:
@@ -113,6 +114,19 @@ async def test_transcribe_upload_returns_non_empty_transcript(caplog):
     assert f"byte_length={len(WEBM_BYTES)}" in caplog.text
     assert f"transcript_chars={len(result.text)}" in caplog.text
     assert "Let's talk about travel" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_transcribe_upload_accepts_x_m4a_content_type():
+    provider = FakeVoiceProvider(transcript="This is from the emulator.")
+    service = VoiceService(provider=provider)
+
+    result = await service.transcribe_upload(
+        FakeUpload(M4A_BYTES, filename="emulator.m4a", content_type="audio/x-m4a")
+    )
+
+    assert result.text == "This is from the emulator."
+    assert provider.transcribe_calls[0]["content_type"] == "audio/x-m4a"
 
 
 @pytest.mark.asyncio

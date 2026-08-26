@@ -46,6 +46,7 @@ class VoiceService:
         "audio/ogg",
         "audio/wav",
         "audio/webm",
+        "audio/x-m4a",
         "video/mp4",
     }
     supported_extensions = {".flac", ".mp3", ".mp4", ".mpeg", ".mpga", ".m4a", ".ogg", ".wav", ".webm"}
