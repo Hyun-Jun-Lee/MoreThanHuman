@@ -69,6 +69,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final String localeCode = _onboardingLocaleCode(context);
+    final _OnboardingCopy copy = _OnboardingCopy.forLocale(localeCode);
+
     return Scaffold(
       body: SafeArea(
         child: Padding(
@@ -92,13 +95,13 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                           curve: Curves.easeOut,
                         ),
                         icon: const Icon(Icons.arrow_back_rounded),
-                        label: const Text('BACK'),
+                        label: Text(copy.backLabel),
                       )
                     else
                       const SizedBox.shrink(),
                     TextButton(
                       onPressed: _isCompleting ? null : _complete,
-                      child: const Text('SKIP'),
+                      child: Text(copy.skipLabel),
                     ),
                   ],
                 ),
@@ -112,14 +115,16 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                   },
                   children: <Widget>[
                     _LanguagePairPage(
+                      copy: copy.languagePair,
+                      localeCode: localeCode,
                       selected: _selectedLanguage,
                       onChanged: (LearningLanguageContext next) {
                         setState(() => _selectedLanguage = next);
                       },
                     ),
-                    const _InterestPage(),
-                    const _TopicPrepPage(),
-                    const _FeedbackPage(),
+                    _InterestPage(copy: copy.interest),
+                    _TopicPrepPage(copy: copy.topicPrep),
+                    _FeedbackPage(copy: copy.feedback),
                   ],
                 ),
               ),
@@ -128,8 +133,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               const SizedBox(height: AppSpacing.lg),
               AppPrimaryButton(
                 label: _currentIndex == _pageCount - 1
-                    ? 'GET STARTED'
-                    : 'CONTINUE',
+                    ? copy.getStartedLabel
+                    : copy.continueLabel,
                 isLoading: _isCompleting,
                 trailing: _currentIndex == _pageCount - 1
                     ? null
@@ -145,15 +150,20 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 }
 
 class _LanguagePairPage extends StatelessWidget {
-  const _LanguagePairPage({required this.selected, required this.onChanged});
+  const _LanguagePairPage({
+    required this.copy,
+    required this.localeCode,
+    required this.selected,
+    required this.onChanged,
+  });
 
+  final _OnboardingPageCopy copy;
+  final String localeCode;
   final LearningLanguageContext selected;
   final ValueChanged<LearningLanguageContext> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    final String localeCode = Localizations.localeOf(context).languageCode;
-    final _LanguagePairCopy copy = _LanguagePairCopy.forLocale(localeCode);
     return _OnboardingPageLayout(
       title: copy.title,
       description: copy.description,
@@ -167,40 +177,39 @@ class _LanguagePairPage extends StatelessWidget {
 }
 
 class _InterestPage extends StatelessWidget {
-  const _InterestPage();
+  const _InterestPage({required this.copy});
+
+  final _InterestPageCopy copy;
 
   @override
   Widget build(BuildContext context) {
     return _OnboardingPageLayout(
-      title: 'Talk about what\nyou actually care about.',
-      description:
-          'Practice conversation with news, hobbies, sports, travel, or anything on your mind.',
+      title: copy.title,
+      description: copy.description,
       illustration: AppColorBlockCard(
         color: AppPalette.blockLilacSoft,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
             _ChatLine(
-              text: "Where are you heading?",
+              text: copy.leftMessage,
               alignment: Alignment.centerLeft,
               color: Theme.of(context).colorScheme.surface,
             ),
             const SizedBox(height: AppSpacing.md),
-            const _ChatLine(
-              text: "I'm going to Osaka next week!",
+            _ChatLine(
+              text: copy.rightMessage,
               alignment: Alignment.centerRight,
               color: AppPalette.primary,
               textColor: AppPalette.onPrimary,
             ),
             const SizedBox(height: AppSpacing.lg),
-            const Wrap(
+            Wrap(
               alignment: WrapAlignment.center,
               spacing: AppSpacing.xs,
               runSpacing: AppSpacing.xs,
               children: <Widget>[
-                Chip(label: Text('OSAKA FOOD')),
-                Chip(label: Text('BASEBALL')),
-                Chip(label: Text('AI NEWS')),
+                for (final String chip in copy.chips) Chip(label: Text(chip)),
               ],
             ),
           ],
@@ -210,55 +219,168 @@ class _InterestPage extends StatelessWidget {
   }
 }
 
-class _LanguagePairCopy {
-  const _LanguagePairCopy({required this.title, required this.description});
+class _OnboardingCopy {
+  const _OnboardingCopy({
+    required this.backLabel,
+    required this.skipLabel,
+    required this.continueLabel,
+    required this.getStartedLabel,
+    required this.languagePair,
+    required this.interest,
+    required this.topicPrep,
+    required this.feedback,
+  });
 
-  final String title;
-  final String description;
+  final String backLabel;
+  final String skipLabel;
+  final String continueLabel;
+  final String getStartedLabel;
+  final _OnboardingPageCopy languagePair;
+  final _InterestPageCopy interest;
+  final _TopicPrepPageCopy topicPrep;
+  final _FeedbackPageCopy feedback;
 
-  static _LanguagePairCopy forLocale(String localeCode) {
+  static _OnboardingCopy forLocale(String localeCode) {
     return switch (localeCode) {
-      'ko' => const _LanguagePairCopy(
-        title: '무엇을 연습할까요?',
-        description: '대화 언어와 피드백 언어를 먼저 선택하세요.',
+      'ko' => const _OnboardingCopy(
+        backLabel: '뒤로',
+        skipLabel: '건너뛰기',
+        continueLabel: '계속',
+        getStartedLabel: '시작하기',
+        languagePair: _OnboardingPageCopy(
+          title: '무엇을 연습할까요?',
+          description: '대화 언어와 피드백 언어를 먼저 선택하세요.',
+        ),
+        interest: _InterestPageCopy(
+          title: '진짜 관심사를\n이야기해요.',
+          description: '뉴스, 취미, 스포츠, 여행처럼 마음에 있는 주제로 회화를 연습해요.',
+          leftMessage: '어디로 가세요?',
+          rightMessage: '다음 주에 오사카에 가요!',
+          chips: <String>['오사카 맛집', '야구', 'AI 뉴스'],
+        ),
+        topicPrep: _TopicPrepPageCopy(
+          title: '말하기 전에\n가볍게 준비해요.',
+          description: 'Curitalk이 배경 정보를 모으고 시작 질문을 준비해 처음 말하기가 쉬워져요.',
+          sectionLabel: '주제 요약',
+          topicTitle: '커리어 전환\n준비하기',
+          helperText: '대화를 위한 질문 3개가 준비됐어요.',
+        ),
+        feedback: _FeedbackPageCopy(
+          title: '부담 없이\n나아져요.',
+          description: '대화 흐름은 유지하면서 메시지 아래에서 부드러운 제안을 확인해요.',
+          originalMessage: 'I go to Dotonbori yesterday.',
+          correctionText: '제안: I went to Dotonbori yesterday.',
+          reasonText: '이유: 과거 시제 + 장소',
+        ),
       ),
-      'zh' => const _LanguagePairCopy(
-        title: '你想练习什么？',
-        description: '先选择对话语言和反馈语言。',
-      ),
-      _ => const _LanguagePairCopy(
-        title: 'What do you want\nto practice?',
-        description: 'Choose your conversation language and feedback language.',
+      _ => const _OnboardingCopy(
+        backLabel: 'BACK',
+        skipLabel: 'SKIP',
+        continueLabel: 'CONTINUE',
+        getStartedLabel: 'GET STARTED',
+        languagePair: _OnboardingPageCopy(
+          title: 'What do you want\nto practice?',
+          description:
+              'Choose your conversation language and feedback language.',
+        ),
+        interest: _InterestPageCopy(
+          title: 'Talk about what\nyou actually care about.',
+          description:
+              'Practice conversation with news, hobbies, sports, travel, or anything on your mind.',
+          leftMessage: 'Where are you heading?',
+          rightMessage: "I'm going to Osaka next week!",
+          chips: <String>['OSAKA FOOD', 'BASEBALL', 'AI NEWS'],
+        ),
+        topicPrep: _TopicPrepPageCopy(
+          title: 'Get ready before\nyou speak.',
+          description:
+              'Curitalk gathers helpful context and gives you starter questions, so beginning feels easy.',
+          sectionLabel: 'Topic summary',
+          topicTitle: 'Navigating\nCareer Transitions',
+          helperText: 'Three useful questions are ready for your conversation.',
+        ),
+        feedback: _FeedbackPageCopy(
+          title: 'Improve without\npressure.',
+          description:
+              'See gentle suggestions under your messages while the conversation keeps flowing.',
+          originalMessage: 'I go to Dotonbori yesterday.',
+          correctionText: 'Try: I went to Dotonbori yesterday.',
+          reasonText: 'Why: past tense + place',
+        ),
       ),
     };
   }
 }
 
+class _OnboardingPageCopy {
+  const _OnboardingPageCopy({required this.title, required this.description});
+
+  final String title;
+  final String description;
+}
+
+class _InterestPageCopy extends _OnboardingPageCopy {
+  const _InterestPageCopy({
+    required super.title,
+    required super.description,
+    required this.leftMessage,
+    required this.rightMessage,
+    required this.chips,
+  });
+
+  final String leftMessage;
+  final String rightMessage;
+  final List<String> chips;
+}
+
+class _TopicPrepPageCopy extends _OnboardingPageCopy {
+  const _TopicPrepPageCopy({
+    required super.title,
+    required super.description,
+    required this.sectionLabel,
+    required this.topicTitle,
+    required this.helperText,
+  });
+
+  final String sectionLabel;
+  final String topicTitle;
+  final String helperText;
+}
+
+class _FeedbackPageCopy extends _OnboardingPageCopy {
+  const _FeedbackPageCopy({
+    required super.title,
+    required super.description,
+    required this.originalMessage,
+    required this.correctionText,
+    required this.reasonText,
+  });
+
+  final String originalMessage;
+  final String correctionText;
+  final String reasonText;
+}
+
 class _TopicPrepPage extends StatelessWidget {
-  const _TopicPrepPage();
+  const _TopicPrepPage({required this.copy});
+
+  final _TopicPrepPageCopy copy;
 
   @override
   Widget build(BuildContext context) {
     return _OnboardingPageLayout(
-      title: 'Get ready before\nyou speak.',
-      description:
-          'Curitalk gathers helpful context and gives you starter questions, so beginning feels easy.',
-      illustration: const AppColorBlockCard(
+      title: copy.title,
+      description: copy.description,
+      illustration: AppColorBlockCard(
         color: AppPalette.blockLime,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            AppSectionLabel('Topic summary'),
-            SizedBox(height: AppSpacing.lg),
-            Text(
-              'Navigating\nCareer Transitions',
-              style: AppTypography.headlineLg,
-            ),
-            SizedBox(height: AppSpacing.lg),
-            Text(
-              'Three useful questions are ready for your conversation.',
-              style: AppTypography.bodySm,
-            ),
+            AppSectionLabel(copy.sectionLabel),
+            const SizedBox(height: AppSpacing.lg),
+            Text(copy.topicTitle, style: AppTypography.headlineLg),
+            const SizedBox(height: AppSpacing.lg),
+            Text(copy.helperText, style: AppTypography.bodySm),
           ],
         ),
       ),
@@ -267,35 +389,30 @@ class _TopicPrepPage extends StatelessWidget {
 }
 
 class _FeedbackPage extends StatelessWidget {
-  const _FeedbackPage();
+  const _FeedbackPage({required this.copy});
+
+  final _FeedbackPageCopy copy;
 
   @override
   Widget build(BuildContext context) {
     return _OnboardingPageLayout(
-      title: 'Improve without\npressure.',
-      description:
-          'See gentle suggestions under your messages while the conversation keeps flowing.',
+      title: copy.title,
+      description: copy.description,
       illustration: Column(
-        children: const <Widget>[
+        children: <Widget>[
           AppColorBlockCard(
             color: AppPalette.blockLilac,
-            child: Text(
-              'I go to Dotonbori yesterday.',
-              style: AppTypography.body,
-            ),
+            child: Text(copy.originalMessage, style: AppTypography.body),
           ),
-          SizedBox(height: AppSpacing.md),
+          const SizedBox(height: AppSpacing.md),
           AppColorBlockCard(
             color: AppPalette.blockCream,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Text(
-                  'Try: I went to Dotonbori yesterday.',
-                  style: AppTypography.body,
-                ),
-                SizedBox(height: AppSpacing.xs),
-                Text('Why: past tense + place', style: AppTypography.bodySm),
+                Text(copy.correctionText, style: AppTypography.body),
+                const SizedBox(height: AppSpacing.xs),
+                Text(copy.reasonText, style: AppTypography.bodySm),
               ],
             ),
           ),
@@ -303,6 +420,10 @@ class _FeedbackPage extends StatelessWidget {
       ),
     );
   }
+}
+
+String _onboardingLocaleCode(BuildContext context) {
+  return Localizations.localeOf(context).languageCode == 'ko' ? 'ko' : 'en';
 }
 
 class _OnboardingPageLayout extends StatelessWidget {

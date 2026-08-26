@@ -7,6 +7,7 @@ import 'package:curitalk/features/home/home.dart';
 import 'package:curitalk/features/language/language.dart';
 import 'package:curitalk/features/onboarding/onboarding.dart';
 import 'package:curitalk/features/topic_prep/topic_prep.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -60,6 +61,30 @@ void main() {
       );
     },
   );
+
+  testWidgets('onboarding copy follows Korean system locale', (
+    WidgetTester tester,
+  ) async {
+    tester.binding.platformDispatcher.localesTestValue = const <Locale>[
+      Locale('ko'),
+    ];
+    addTearDown(tester.binding.platformDispatcher.clearLocalesTestValue);
+
+    await tester.pumpWidget(
+      _appScope(
+        tokenStorage: _MemoryTokenStorage(),
+        onboardingStorage: _MemoryOnboardingStorage(false),
+        authRepository: _FakeAuthRepository(),
+        supabaseAuth: _FakeSupabaseAuthService(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('무엇을 연습할까요?'), findsOneWidget);
+    expect(find.text('건너뛰기'), findsOneWidget);
+    expect(find.text('계속'), findsOneWidget);
+    expect(find.text('你想练习什么？'), findsNothing);
+  });
 
   testWidgets('returning authenticated user moves from Splash to Home', (
     WidgetTester tester,

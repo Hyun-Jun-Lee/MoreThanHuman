@@ -23,17 +23,37 @@ class LanguagePairSelector extends StatelessWidget {
       children: <Widget>[
         for (final LearningLanguageContext option
             in LearningLanguageContext.supportedContexts) ...<Widget>[
-          AppSelectionCard(
-            title: option.pairLabel(localeCode),
-            description: option.helperText(localeCode),
-            selected: option == selected,
-            onTap: enabled ? () => onChanged(option) : null,
-            icon: Icon(_iconFor(option.targetLanguage)),
-          ),
+          _buildOption(context, option),
           if (option != LearningLanguageContext.supportedContexts.last)
             const SizedBox(height: AppSpacing.sm),
         ],
       ],
+    );
+  }
+
+  Widget _buildOption(BuildContext context, LearningLanguageContext option) {
+    final bool isAvailable = option.isAvailableInMobileSelector;
+    final bool isOptionEnabled = enabled && isAvailable;
+    final String comingSoonLabel = _comingSoonLabel(localeCode);
+
+    return AppSelectionCard(
+      title: option.pairLabel(localeCode),
+      description: option.helperText(localeCode),
+      selected: option == selected,
+      onTap: isOptionEnabled ? () => onChanged(option) : null,
+      icon: Icon(_iconFor(option.targetLanguage)),
+      trailing: isAvailable
+          ? null
+          : Tooltip(
+              message: comingSoonLabel,
+              child: Icon(
+                Icons.lock_clock_rounded,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+      semanticLabel: isAvailable
+          ? null
+          : '${option.pairLabel(localeCode)}, $comingSoonLabel',
     );
   }
 
@@ -42,6 +62,13 @@ class LanguagePairSelector extends StatelessWidget {
       LearningLanguageCode.ko => Icons.language_rounded,
       LearningLanguageCode.en => Icons.chat_bubble_outline_rounded,
       LearningLanguageCode.zh => Icons.translate_rounded,
+    };
+  }
+
+  static String _comingSoonLabel(String localeCode) {
+    return switch (localeCode) {
+      'ko' => '준비 중',
+      _ => 'Coming soon',
     };
   }
 }

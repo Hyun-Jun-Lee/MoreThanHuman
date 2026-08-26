@@ -114,6 +114,11 @@ class LearningLanguageContext {
   final LearningLanguageCode targetLanguage;
   final LearningLanguageCode feedbackLanguage;
 
+  bool get isAvailableInMobileSelector =>
+      nativeLanguage != LearningLanguageCode.zh &&
+      targetLanguage != LearningLanguageCode.zh &&
+      feedbackLanguage != LearningLanguageCode.zh;
+
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
       'native_language': nativeLanguage.code,
@@ -202,11 +207,6 @@ LearningLanguageContext defaultLanguageContextForLocale(String localeCode) {
       nativeLanguage: LearningLanguageCode.en,
       targetLanguage: LearningLanguageCode.ko,
       feedbackLanguage: LearningLanguageCode.en,
-    ),
-    'zh' => const LearningLanguageContext(
-      nativeLanguage: LearningLanguageCode.zh,
-      targetLanguage: LearningLanguageCode.ko,
-      feedbackLanguage: LearningLanguageCode.zh,
     ),
     _ => LearningLanguageContext.defaultContext,
   };
