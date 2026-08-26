@@ -1,4 +1,13 @@
+import 'dart:async';
+
+import 'package:curitalk/features/auth/auth.dart';
 import 'package:curitalk/features/conversation/conversation.dart';
+import 'package:curitalk/features/home/application/recent_conversations_controller.dart';
+import 'package:curitalk/features/home/data/api_home_repository.dart';
+import 'package:curitalk/features/home/domain/conversation_summary.dart';
+import 'package:curitalk/features/home/domain/home_repository.dart';
+import 'package:curitalk/features/language/language.dart';
+import 'package:curitalk/features/onboarding/data/onboarding_storage.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -83,16 +92,71 @@ void main() {
 
     await container
         .read(startConversationControllerProvider.notifier)
-        .startRoleplay(roleCharacter: 'A cafe barista who asks follow-ups.');
+        .startRoleplay(
+          roleCharacter: 'A cafe barista.',
+          roleplayDifficulty: 'CHALLENGE',
+        );
 
-    expect(repository.lastRoleCharacter, 'A cafe barista who asks follow-ups.');
+    expect(repository.lastRoleCharacter, 'A cafe barista.');
+    expect(repository.lastRoleplayDifficulty, 'CHALLENGE');
     expect(repository.lastRoleplayIncludeAudio, isTrue);
   });
+
+  test('refreshes recent conversations after roleplay starts', () async {
+    final _FakeConversationRepository conversationRepository =
+        _FakeConversationRepository();
+    final _FakeHomeRepository homeRepository = _FakeHomeRepository();
+    final ProviderContainer container = _conversationContainer(
+      conversationRepository: conversationRepository,
+      homeRepository: homeRepository,
+    );
+    addTearDown(container.dispose);
+
+    await container.read(authControllerProvider.future);
+    final List<ConversationSummary> initialConversations = await container.read(
+      recentConversationsControllerProvider.future,
+    );
+
+    expect(initialConversations.single.id, 'old-conversation-id');
+    expect(homeRepository.callCount, 1);
+
+    await container
+        .read(startConversationControllerProvider.notifier)
+        .startRoleplay(roleCharacter: 'A cafe barista.');
+
+    final List<ConversationSummary> refreshedConversations = await container
+        .read(recentConversationsControllerProvider.future);
+
+    expect(refreshedConversations.single.id, 'new-conversation-id');
+    expect(homeRepository.callCount, 2);
+  });
+}
+
+ProviderContainer _conversationContainer({
+  required _FakeConversationRepository conversationRepository,
+  required _FakeHomeRepository homeRepository,
+}) {
+  return ProviderContainer(
+    overrides: [
+      conversationRepositoryProvider.overrideWithValue(conversationRepository),
+      homeRepositoryProvider.overrideWithValue(homeRepository),
+      authRepositoryProvider.overrideWithValue(_FakeAuthRepository()),
+      supabaseAuthServiceProvider.overrideWithValue(_FakeSupabaseAuthService()),
+      googleIdentityServiceProvider.overrideWithValue(
+        _FakeGoogleIdentityService(),
+      ),
+      onboardingStorageProvider.overrideWithValue(_FakeOnboardingStorage()),
+      languagePreferencesRepositoryProvider.overrideWithValue(
+        _FakeLanguagePreferencesRepository(),
+      ),
+    ],
+  );
 }
 
 class _FakeConversationRepository implements ConversationRepository {
   Map<String, String?>? lastFreeChatBody;
   String? lastRoleCharacter;
+  String? lastRoleplayDifficulty;
   String? lastAudioFilename;
   bool? lastFreeChatIncludeAudio;
   bool? lastFreeChatAudioIncludeAudio;
@@ -154,10 +218,12 @@ class _FakeConversationRepository implements ConversationRepository {
   @override
   Future<MultimodalConversationResponse> startRoleplay({
     required String roleCharacter,
+    String roleplayDifficulty = 'NORMAL',
     String? searchContext,
     bool includeAudioResponse = true,
   }) async {
     lastRoleCharacter = roleCharacter;
+    lastRoleplayDifficulty = roleplayDifficulty;
     lastRoleplayIncludeAudio = includeAudioResponse;
     return _response(ConversationType.rolePlaying);
   }
@@ -195,6 +261,122 @@ class _FakeConversationRepository implements ConversationRepository {
     bool includeAudioResponse = true,
   }) {
     throw UnimplementedError();
+  }
+}
+
+class _FakeHomeRepository implements HomeRepository {
+  int callCount = 0;
+
+  @override
+  Future<List<ConversationSummary>> listRecentConversations({
+    int limit = 5,
+  }) async {
+    callCount += 1;
+    final String conversationId = callCount == 1
+        ? 'old-conversation-id'
+        : 'new-conversation-id';
+    return <ConversationSummary>[
+      ConversationSummary(
+        id: conversationId,
+        title: 'Roleplay',
+        kind: ConversationKind.roleplay,
+        messageCount: 1,
+        isActive: true,
+        updatedAt: DateTime(2026, 8, 14),
+      ),
+    ];
+  }
+}
+
+class _FakeAuthRepository implements AuthRepository {
+  @override
+  Future<UserProfile> getCurrentUser() async {
+    return UserProfile(
+      id: 'user-id',
+      email: 'learner@example.com',
+      name: 'Learner',
+      isActive: true,
+      createdAt: DateTime(2026, 8, 14),
+      updatedAt: DateTime(2026, 8, 14),
+    );
+  }
+}
+
+class _FakeSupabaseAuthService implements SupabaseAuthService {
+  @override
+  Stream<SupabaseSessionChange> get authStateChanges =>
+      const Stream<SupabaseSessionChange>.empty();
+
+  @override
+  Future<void> expireSession() async {}
+
+  @override
+  Future<bool> hasCurrentSession() async => true;
+
+  @override
+  Future<String?> readAccessToken() async => 'access-token';
+
+  @override
+  Future<String?> refreshAccessToken({
+    required String? previousAccessToken,
+  }) async {
+    return 'refreshed-token';
+  }
+
+  @override
+  Future<void> signInWithGoogleTokens({
+    required String idToken,
+    required String accessToken,
+  }) async {}
+
+  @override
+  Future<void> signOut() async {}
+}
+
+class _FakeGoogleIdentityService implements GoogleIdentityService {
+  @override
+  Future<GoogleIdentityTokens?> signIn() async {
+    return const GoogleIdentityTokens(
+      idToken: 'google-id-token',
+      accessToken: 'google-access-token',
+    );
+  }
+
+  @override
+  Future<void> signOut() async {}
+}
+
+class _FakeOnboardingStorage implements OnboardingStorage {
+  @override
+  Future<void> clearPendingLanguageContext() async {}
+
+  @override
+  Future<bool> isCompleted() async => true;
+
+  @override
+  Future<void> markCompleted() async {}
+
+  @override
+  Future<LearningLanguageContext?> readPendingLanguageContext() async => null;
+
+  @override
+  Future<void> writePendingLanguageContext(
+    LearningLanguageContext context,
+  ) async {}
+}
+
+class _FakeLanguagePreferencesRepository
+    implements LanguagePreferencesRepository {
+  @override
+  Future<LearningLanguageContext> getLanguagePreferences() async {
+    return LearningLanguageContext.defaultContext;
+  }
+
+  @override
+  Future<LearningLanguageContext> updateLanguagePreferences(
+    LearningLanguageContext context,
+  ) async {
+    return context;
   }
 }
 

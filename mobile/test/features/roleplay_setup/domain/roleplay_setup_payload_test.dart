@@ -32,39 +32,42 @@ void main() {
     );
   });
 
-  test('builds a backend-ready role character from a preset scenario', () {
-    final RoleplaySetupPayload payload = RoleplaySetupPayload(
-      situation: PresetRoleplaySituation(enRoleplayScenarios.first),
-      difficulty: RoleplayDifficulty.normal,
-    );
+  test(
+    'builds backend-ready role character and difficulty from a preset scenario',
+    () {
+      final RoleplaySetupPayload payload = RoleplaySetupPayload(
+        situation: PresetRoleplaySituation(enRoleplayScenarios.first),
+        difficulty: RoleplayDifficulty.normal,
+      );
 
-    expect(payload.isValid, isTrue);
-    expect(
-      payload.roleCharacter,
-      contains('a friendly cafe barista taking an order'),
-    );
-    expect(payload.roleCharacter, contains('everyday pacing'));
-    expect(payload.roleCharacter, contains('useful follow-up questions'));
-  });
+      expect(payload.isValid, isTrue);
+      expect(
+        payload.roleCharacter,
+        contains('a friendly cafe barista taking an order'),
+      );
+      expect(payload.roleCharacter, isNot(contains('everyday pacing')));
+      expect(payload.roleplayDifficultyValue, 'NORMAL');
+    },
+  );
 
-  test('adds easy difficulty instructions to the role character', () {
+  test('maps easy difficulty to its API value', () {
     final RoleplaySetupPayload payload = RoleplaySetupPayload(
       situation: PresetRoleplaySituation(enRoleplayScenarios.first),
       difficulty: RoleplayDifficulty.easy,
     );
 
-    expect(payload.roleCharacter, contains('short prompts'));
-    expect(payload.roleCharacter, contains('gentle'));
+    expect(payload.roleCharacter, enRoleplayScenarios.first.roleCharacter);
+    expect(payload.roleplayDifficultyValue, 'EASY');
   });
 
-  test('adds challenge difficulty instructions to the role character', () {
+  test('maps challenge difficulty to its API value', () {
     final RoleplaySetupPayload payload = RoleplaySetupPayload(
       situation: PresetRoleplaySituation(enRoleplayScenarios.first),
       difficulty: RoleplayDifficulty.challenge,
     );
 
-    expect(payload.roleCharacter, contains('unexpected follow-up questions'));
-    expect(payload.roleCharacter, contains('more precise answers'));
+    expect(payload.roleCharacter, enRoleplayScenarios.first.roleCharacter);
+    expect(payload.roleplayDifficultyValue, 'CHALLENGE');
   });
 
   test('trims custom situations and validates minimum length', () {

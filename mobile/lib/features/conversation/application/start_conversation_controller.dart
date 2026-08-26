@@ -1,6 +1,7 @@
 import 'package:curitalk/features/conversation/data/api_conversation_repository.dart';
 import 'package:curitalk/features/conversation/domain/conversation_models.dart';
 import 'package:curitalk/features/conversation/domain/conversation_repository.dart';
+import 'package:curitalk/features/home/application/recent_conversations_controller.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class InitialAssistantAudio {
@@ -68,6 +69,7 @@ class StartConversationController extends Notifier<StartConversationState> {
             includeAudioResponse: true,
           );
       _storeInitialAssistantAudio(response);
+      _refreshRecentConversations();
       state = const StartConversationState();
       return response;
     } on Object catch (_) {
@@ -98,6 +100,7 @@ class StartConversationController extends Notifier<StartConversationState> {
             includeAudioResponse: true,
           );
       _storeInitialAssistantAudio(response);
+      _refreshRecentConversations();
       state = const StartConversationState();
       return response;
     } on Object catch (_) {
@@ -110,6 +113,7 @@ class StartConversationController extends Notifier<StartConversationState> {
 
   Future<ConversationResponse?> startRoleplay({
     required String roleCharacter,
+    String roleplayDifficulty = 'NORMAL',
     String? searchContext,
   }) async {
     state = const StartConversationState(isStarting: true);
@@ -118,10 +122,12 @@ class StartConversationController extends Notifier<StartConversationState> {
           .read(conversationRepositoryProvider)
           .startRoleplay(
             roleCharacter: roleCharacter,
+            roleplayDifficulty: roleplayDifficulty,
             searchContext: searchContext,
             includeAudioResponse: true,
           );
       _storeInitialAssistantAudio(response);
+      _refreshRecentConversations();
       state = const StartConversationState();
       return response;
     } on Object catch (_) {
@@ -148,6 +154,13 @@ class StartConversationController extends Notifier<StartConversationState> {
             audioError: response.audioError,
           ),
         );
+  }
+
+  void _refreshRecentConversations() {
+    ref
+        .read(recentConversationsRefreshingProvider.notifier)
+        .setRefreshing(true);
+    ref.invalidate(recentConversationsControllerProvider);
   }
 }
 

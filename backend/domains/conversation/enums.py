@@ -18,6 +18,14 @@ class ConversationType(str, Enum):
     ROLE_PLAYING = "ROLE_PLAYING"
 
 
+class RoleplayDifficulty(str, Enum):
+    """롤플레이 난이도"""
+
+    EASY = "EASY"
+    NORMAL = "NORMAL"
+    CHALLENGE = "CHALLENGE"
+
+
 class FreeChatConversationDirection(str, Enum):
     """자유 대화 주제 준비 방향"""
 

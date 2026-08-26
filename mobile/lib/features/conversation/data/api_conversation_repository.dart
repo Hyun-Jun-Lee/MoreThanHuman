@@ -68,6 +68,7 @@ class ApiConversationRepository implements ConversationRepository {
   @override
   Future<MultimodalConversationResponse> startRoleplay({
     required String roleCharacter,
+    String roleplayDifficulty = 'NORMAL',
     String? searchContext,
     bool includeAudioResponse = true,
   }) async {
@@ -76,6 +77,7 @@ class ApiConversationRepository implements ConversationRepository {
           'conversations/start/roleplay/',
           data: <String, Object?>{
             'role_character': roleCharacter,
+            'roleplay_difficulty': roleplayDifficulty,
             'search_context': searchContext,
             'include_audio_response': includeAudioResponse,
           },

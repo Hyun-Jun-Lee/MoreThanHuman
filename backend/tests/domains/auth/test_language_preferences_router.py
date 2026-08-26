@@ -8,6 +8,8 @@ from database import Base, get_db
 from domains.auth.dependencies import get_supabase_auth_verifier
 from domains.auth.router import router
 from domains.auth.service import SupabaseUserClaims
+from domains.conversation.models import ConversationModel  # noqa: F401 - SQLAlchemy relationship registration
+from domains.grammar.models import GrammarFeedbackModel  # noqa: F401 - SQLAlchemy relationship registration
 
 
 class FakeVerifier:

@@ -9,6 +9,7 @@ void main() {
           'message_id': 'message-id',
           'conversation_type': 'FREE_CHAT',
           'role_character': null,
+          'roleplay_difficulty': null,
           'response': 'That sounds interesting. Tell me more.',
           'grammar_feedback': null,
         });
@@ -16,7 +17,25 @@ void main() {
     expect(response.conversationId, 'conversation-id');
     expect(response.messageId, 'message-id');
     expect(response.conversationType, ConversationType.freeChat);
+    expect(response.roleplayDifficulty, isNull);
     expect(response.response, contains('interesting'));
+  });
+
+  test('parses roleplay difficulty from conversation start response', () {
+    final ConversationResponse response =
+        ConversationResponse.fromJson(<String, dynamic>{
+          'conversation_id': 'conversation-id',
+          'message_id': 'message-id',
+          'conversation_type': 'ROLE_PLAYING',
+          'role_character': 'a cafe barista',
+          'roleplay_difficulty': 'CHALLENGE',
+          'response': 'Welcome in.',
+          'grammar_feedback': null,
+        });
+
+    expect(response.conversationType, ConversationType.rolePlaying);
+    expect(response.roleCharacter, 'a cafe barista');
+    expect(response.roleplayDifficulty, 'CHALLENGE');
   });
 
   test('parses multimodal text message response', () {
@@ -68,6 +87,7 @@ void main() {
           'message_id': 'message-id',
           'conversation_type': 'FREE_CHAT',
           'role_character': null,
+          'roleplay_difficulty': null,
           'response': 'That sounds interesting.',
           'grammar_feedback': null,
           'input_mode': 'audio',

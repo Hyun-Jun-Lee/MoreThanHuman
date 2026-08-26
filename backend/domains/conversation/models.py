@@ -8,7 +8,7 @@ from sqlalchemy.orm import relationship
 
 from database import Base
 from domains.auth.models import ProfileModel  # noqa: F401 - SQLAlchemy relationship registration
-from domains.conversation.enums import ConversationStatus, ConversationType, MessageRole
+from domains.conversation.enums import ConversationStatus, ConversationType, MessageRole, RoleplayDifficulty
 from domains.grammar.models import GrammarFeedbackModel  # noqa: F401 - SQLAlchemy relationship registration
 from shared.language import DEFAULT_LANGUAGE_CONTEXT, LearningLanguageContext, language_context_from_values
 
@@ -22,7 +22,8 @@ class ConversationModel(Base):
     user_id = Column(String(36), ForeignKey("profiles.id"), nullable=False, index=True)
     title = Column(String(200), nullable=True)  # 대화 제목 (첫 질문)
     conversation_type = Column(SQLEnum(ConversationType), default=ConversationType.FREE_CHAT, nullable=False)  # 대화 타입
-    role_character = Column(String(100), nullable=True)  # 롤플레이 캐릭터 (예: "카페 바리스타", "영어 선생님")
+    role_character = Column(String(500), nullable=True)  # 롤플레이 캐릭터/상황 설명
+    roleplay_difficulty = Column(SQLEnum(RoleplayDifficulty), nullable=True)  # 롤플레이 난이도
     native_language = Column(String(8), default=DEFAULT_LANGUAGE_CONTEXT.native_language.value, nullable=False)
     target_language = Column(String(8), default=DEFAULT_LANGUAGE_CONTEXT.target_language.value, nullable=False)
     feedback_language = Column(String(8), default=DEFAULT_LANGUAGE_CONTEXT.feedback_language.value, nullable=False)

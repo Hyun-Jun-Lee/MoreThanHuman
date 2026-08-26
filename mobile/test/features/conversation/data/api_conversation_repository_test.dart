@@ -129,6 +129,27 @@ void main() {
     expect(formData.files.single.value.filename, 'answer.m4a');
     expect(formData.files.single.value.contentType.toString(), 'audio/m4a');
   });
+
+  test('starts roleplay with separate role and difficulty fields', () async {
+    final _ConversationHttpClientAdapter adapter =
+        _ConversationHttpClientAdapter();
+    final ApiConversationRepository repository = _repository(adapter);
+
+    final MultimodalConversationResponse response = await repository
+        .startRoleplay(
+          roleCharacter: 'a friendly cafe barista taking an order',
+          roleplayDifficulty: 'NORMAL',
+        );
+
+    expect(response.roleplayDifficulty, 'NORMAL');
+    expect(adapter.lastRequest?.uri.path, '/api/conversations/start/roleplay/');
+    expect(adapter.lastRequest?.data, <String, Object?>{
+      'role_character': 'a friendly cafe barista taking an order',
+      'roleplay_difficulty': 'NORMAL',
+      'search_context': null,
+      'include_audio_response': true,
+    });
+  });
 }
 
 String? _fieldValue(FormData formData, String key) {
@@ -203,8 +224,15 @@ class _ConversationHttpClientAdapter implements HttpClientAdapter {
       _ => <String, dynamic>{
         'conversation_id': 'conversation-id',
         'message_id': 'message-id',
-        'conversation_type': 'FREE_CHAT',
-        'role_character': null,
+        'conversation_type': path.endsWith('/start/roleplay/')
+            ? 'ROLE_PLAYING'
+            : 'FREE_CHAT',
+        'role_character': path.endsWith('/start/roleplay/')
+            ? 'a friendly cafe barista taking an order'
+            : null,
+        'roleplay_difficulty': path.endsWith('/start/roleplay/')
+            ? 'NORMAL'
+            : null,
         'response': 'Hello!',
         'grammar_feedback': null,
         'input_mode': options.data is FormData ? 'audio' : 'text',

@@ -75,7 +75,10 @@ class _RoleplaySetupScreenState extends ConsumerState<RoleplaySetupScreen> {
                   }
                   final ConversationResponse? response = await ref
                       .read(startConversationControllerProvider.notifier)
-                      .startRoleplay(roleCharacter: payload.roleCharacter);
+                      .startRoleplay(
+                        roleCharacter: payload.roleCharacter,
+                        roleplayDifficulty: payload.roleplayDifficultyValue,
+                      );
                   if (!context.mounted || response == null) {
                     return;
                   }

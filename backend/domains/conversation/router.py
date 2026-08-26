@@ -363,6 +363,7 @@ async def start_roleplay_conversation(
             request.role_character,
             request.search_context,
             user_id=current_user.id,
+            roleplay_difficulty=request.roleplay_difficulty,
             language_context=ensure_language_context(getattr(current_user, "language", None)),
         )
         audio, audio_error = await _synthesize_optional_audio(

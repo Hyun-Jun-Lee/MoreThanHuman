@@ -130,6 +130,7 @@ class ConversationResponse {
     required this.conversationType,
     required this.response,
     this.roleCharacter,
+    this.roleplayDifficulty,
     this.grammarFeedback,
   });
 
@@ -144,12 +145,14 @@ class ConversationResponse {
     final Object? messageId = json['message_id'];
     final Object? response = json['response'];
     final Object? roleCharacter = json['role_character'];
+    final Object? roleplayDifficulty = json['roleplay_difficulty'];
     if (conversationId is! String ||
         conversationId.isEmpty ||
         messageId is! String ||
         messageId.isEmpty ||
         response is! String ||
-        (roleCharacter != null && roleCharacter is! String)) {
+        (roleCharacter != null && roleCharacter is! String) ||
+        (roleplayDifficulty != null && roleplayDifficulty is! String)) {
       throw const FormatException('Conversation response payload is invalid.');
     }
 
@@ -158,6 +161,7 @@ class ConversationResponse {
       messageId: messageId,
       conversationType: ConversationType.fromJson(json['conversation_type']),
       roleCharacter: roleCharacter as String?,
+      roleplayDifficulty: roleplayDifficulty as String?,
       response: response,
       grammarFeedback: json['grammar_feedback'] == null
           ? null
@@ -169,6 +173,7 @@ class ConversationResponse {
   final String messageId;
   final ConversationType conversationType;
   final String? roleCharacter;
+  final String? roleplayDifficulty;
   final String response;
   final GrammarFeedback? grammarFeedback;
 }
@@ -181,6 +186,7 @@ class MultimodalConversationResponse extends ConversationResponse {
     required super.response,
     required this.inputMode,
     super.roleCharacter,
+    super.roleplayDifficulty,
     super.grammarFeedback,
     this.transcript,
     this.audio,
@@ -199,6 +205,7 @@ class MultimodalConversationResponse extends ConversationResponse {
       messageId: response.messageId,
       conversationType: response.conversationType,
       roleCharacter: response.roleCharacter,
+      roleplayDifficulty: response.roleplayDifficulty,
       response: response.response,
       grammarFeedback: response.grammarFeedback,
       inputMode: ConversationInputMode.fromJson(

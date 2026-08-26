@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from domains.auth.dependencies import get_current_user
-from domains.conversation.enums import ConversationType
+from domains.conversation.enums import ConversationType, RoleplayDifficulty
 from domains.conversation.router import (
     _enforce_voice_content_length_limit,
     get_conversation_service,
@@ -58,6 +58,7 @@ class FakeConversationService:
         role_character,
         search_context=None,
         user_id="",
+        roleplay_difficulty=RoleplayDifficulty.NORMAL,
         language_context=None,
     ):
         self.started.append(
@@ -65,6 +66,7 @@ class FakeConversationService:
                 "role_character": role_character,
                 "search_context": search_context,
                 "user_id": user_id,
+                "roleplay_difficulty": roleplay_difficulty,
                 "language_context": language_context,
             }
         )
@@ -73,6 +75,7 @@ class FakeConversationService:
             message_id=uuid4(),
             conversation_type=ConversationType.ROLE_PLAYING,
             role_character=role_character,
+            roleplay_difficulty=roleplay_difficulty,
             response="Welcome in. What would you like to practice?",
             grammar_feedback=None,
         )
@@ -318,6 +321,7 @@ def test_roleplay_start_returns_tts_audio_when_requested():
         "/api/conversations/start/roleplay/",
         json={
             "role_character": "A cafe customer who asks follow-ups.",
+            "roleplay_difficulty": "CHALLENGE",
             "include_audio_response": True,
         },
     )
@@ -325,11 +329,29 @@ def test_roleplay_start_returns_tts_audio_when_requested():
     assert response.status_code == 200
     data = response.json()["data"]
     assert data["conversation_type"] == "ROLE_PLAYING"
+    assert data["roleplay_difficulty"] == "CHALLENGE"
     assert data["input_mode"] == "text"
     assert data["audio"]["base64"] == "YXVkaW8="
     assert data["audio_error"] is None
     assert conversation_service.started[0]["role_character"] == "A cafe customer who asks follow-ups."
+    assert conversation_service.started[0]["roleplay_difficulty"] == RoleplayDifficulty.CHALLENGE
     assert voice_service.synthesized == ["Welcome in. What would you like to practice?"]
+
+
+def test_roleplay_start_defaults_difficulty_to_normal():
+    conversation_service = FakeConversationService()
+    voice_service = FakeVoiceService()
+    client = TestClient(_conversation_app_with_overrides(conversation_service, voice_service))
+
+    response = client.post(
+        "/api/conversations/start/roleplay/",
+        json={"role_character": "A cafe customer."},
+    )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["roleplay_difficulty"] == "NORMAL"
+    assert conversation_service.started[0]["roleplay_difficulty"] == RoleplayDifficulty.NORMAL
 
 
 def test_multimodal_routes_publish_request_body_contracts():
@@ -340,9 +362,14 @@ def test_multimodal_routes_publish_request_body_contracts():
     schema = client.get("/openapi.json").json()
 
     free_chat_body = schema["paths"]["/api/conversations/start/free-chat/"]["post"]["requestBody"]
+    roleplay_body = schema["paths"]["/api/conversations/start/roleplay/"]["post"]["requestBody"]
     turn_body = schema["paths"]["/api/conversations/{conversation_id}/turn/"]["post"]["requestBody"]
     assert "application/json" in free_chat_body["content"]
     assert "multipart/form-data" in free_chat_body["content"]
+    roleplay_schema = roleplay_body["content"]["application/json"]["schema"]
+    roleplay_ref = roleplay_schema["$ref"].rsplit("/", 1)[-1]
+    roleplay_properties = schema["components"]["schemas"][roleplay_ref]["properties"]
+    assert "roleplay_difficulty" in roleplay_properties
     assert "application/json" in turn_body["content"]
     assert "multipart/form-data" in turn_body["content"]
 

@@ -56,7 +56,7 @@ class RoleplaySetupPayload {
 
   bool get isValid => situation.isValid;
 
-  String get roleCharacter {
-    return '${situation.promptBase} who ${difficulty.promptInstruction}';
-  }
+  String get roleCharacter => situation.promptBase;
+
+  String get roleplayDifficultyValue => difficulty.apiValue;
 }

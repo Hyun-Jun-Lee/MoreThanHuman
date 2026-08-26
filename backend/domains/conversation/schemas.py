@@ -12,6 +12,7 @@ from domains.conversation.enums import (
     ConversationType,
     FreeChatConversationDirection,
     MessageRole,
+    RoleplayDifficulty,
 )
 from domains.voice.schemas import VoiceAudioError, VoiceAudioResponse, VoiceInputMode
 from shared.language import LearningLanguageContext
@@ -33,6 +34,7 @@ class StartRoleplayRequest(BaseModel):
     """롤플레이 대화 시작 요청"""
 
     role_character: str
+    roleplay_difficulty: RoleplayDifficulty = RoleplayDifficulty.NORMAL
     search_context: str | None = None
     include_audio_response: bool = False
 
@@ -56,6 +58,7 @@ class Conversation(BaseModel):
     title: str | None = None
     conversation_type: ConversationType
     role_character: str | None = None
+    roleplay_difficulty: RoleplayDifficulty | None = None
     language: LearningLanguageContext = Field(default_factory=LearningLanguageContext)
     message_count: int
     status: ConversationStatus
@@ -87,6 +90,7 @@ class ConversationResponse(BaseModel):
     message_id: UUID  # 사용자 메시지 ID (SSE 연결용)
     conversation_type: ConversationType
     role_character: str | None = None
+    roleplay_difficulty: RoleplayDifficulty | None = None
     language: LearningLanguageContext = Field(default_factory=LearningLanguageContext)
     response: str
     grammar_feedback: dict | None = None

@@ -75,7 +75,10 @@ void main() {
     );
 
     expect(state.difficulty, RoleplayDifficulty.challenge);
-    expect(state.payload?.roleCharacter, contains('unexpected'));
-    expect(state.payload?.roleCharacter, contains('more precise answers'));
+    expect(
+      state.payload?.roleCharacter,
+      enRoleplayScenarios.first.roleCharacter,
+    );
+    expect(state.payload?.roleplayDifficultyValue, 'CHALLENGE');
   });
 }

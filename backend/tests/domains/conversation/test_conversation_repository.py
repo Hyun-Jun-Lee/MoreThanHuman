@@ -5,7 +5,7 @@ from sqlalchemy.orm import sessionmaker
 
 from database import Base
 from domains.auth.models import ProfileModel
-from domains.conversation.enums import ConversationType
+from domains.conversation.enums import ConversationType, RoleplayDifficulty
 from domains.conversation.models import ConversationModel
 from domains.conversation.repository import ConversationRepository
 from shared.exceptions import NotFoundException
@@ -90,3 +90,40 @@ def test_conversation_model_has_default_language_snapshot():
     assert saved.native_language == "ko"
     assert saved.target_language == "en"
     assert saved.feedback_language == "ko"
+
+
+def test_roleplay_conversation_persists_long_role_and_difficulty():
+    repository = _repository()
+    owner_id = str(uuid4())
+    repository.db.add(ProfileModel(id=owner_id, email="owner@example.com", name="Owner"))
+    long_role = "a friendly cafe barista taking an order " + "with practical follow-up questions " * 4
+    conversation = ConversationModel(
+        id=str(uuid4()),
+        user_id=owner_id,
+        title="Role: cafe practice",
+        conversation_type=ConversationType.ROLE_PLAYING,
+        role_character=long_role,
+        roleplay_difficulty=RoleplayDifficulty.NORMAL,
+    )
+
+    saved = repository.save(conversation)
+
+    assert len(saved.role_character) > 100
+    assert saved.role_character == long_role
+    assert saved.roleplay_difficulty == RoleplayDifficulty.NORMAL
+
+
+def test_free_chat_conversation_allows_null_roleplay_difficulty():
+    repository = _repository()
+    owner_id = str(uuid4())
+    repository.db.add(ProfileModel(id=owner_id, email="owner@example.com", name="Owner"))
+    conversation = ConversationModel(
+        id=str(uuid4()),
+        user_id=owner_id,
+        title="Free chat",
+        conversation_type=ConversationType.FREE_CHAT,
+    )
+
+    saved = repository.save(conversation)
+
+    assert saved.roleplay_difficulty is None

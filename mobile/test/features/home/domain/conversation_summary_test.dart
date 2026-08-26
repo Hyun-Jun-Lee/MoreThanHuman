@@ -27,12 +27,14 @@ void main() {
           'title': null,
           'conversation_type': 'ROLE_PLAYING',
           'role_character': 'Cafe barista',
+          'roleplay_difficulty': 'EASY',
           'message_count': 1,
           'status': 'COMPLETED',
           'updated_at': '2026-06-24T10:00:00Z',
         });
 
     expect(conversation.title, 'Cafe barista');
+    expect(conversation.roleplayDifficulty, 'EASY');
     expect(conversation.category, 'Roleplay');
     expect(conversation.preview, '1 message · Completed');
   });
