@@ -49,6 +49,7 @@ database Schema {
     title: STRING?
     conversation_type: "FREE_CHAT" | "ROLE_PLAYING"
     role_character: STRING?
+    roleplay_difficulty: "EASY" | "NORMAL" | "CHALLENGE"?
     native_language: "ko" | "en" | "zh" = "ko"
     target_language: "ko" | "en" | "zh" = "en"
     feedback_language: "ko" | "en" | "zh" = "ko"
@@ -114,6 +115,7 @@ supported LearningLanguagePairs = [
 ```dsl
 module Auth {
   router AuthRouter {
+    POST /api/auth/swagger/token        -> issueSwaggerToken
     GET  /api/auth/me                    -> getCurrentUser
     GET  /api/auth/me/language-preferences
                                             -> getLanguagePreferences
@@ -137,6 +139,7 @@ module Auth {
 ```
 
 모바일 앱은 Supabase Auth로 Google 로그인을 완료한 뒤 Supabase `access_token`을 FastAPI 보호 API의 `Authorization: Bearer` 헤더에 전달해요. `GET /api/auth/me`는 Supabase token을 검증하고, `profiles` row를 생성 또는 갱신한 뒤 기존 envelope 형식으로 `UserProfile`을 반환해요.
+`POST /api/auth/swagger/token`은 Swagger 수동 테스트를 위한 Supabase email/password token helper예요. `ENV=dev`에서는 사용할 수 있고, dev 외 환경에서는 `SWAGGER_TOKEN_ISSUER_ENABLED=true`와 `SWAGGER_TOKEN_ISSUER_SECRET`을 설정한 뒤 요청 body의 `secret`이 일치해야 해요. 발급된 `access_token`을 Swagger `Authorize`에 `Bearer <access_token>` 형식으로 넣어요.
 언어 선호는 프로필 기본값이며 새 대화 시작 시 `conversations` row에 snapshot으로 저장돼요. 기존 값이 없으면 `ko -> en`, feedback `ko`로 보정해요.
 `PUT /api/auth/me/language-preferences`는 profile default만 갱신해요. 모바일 Account UX는 변경값이 새 대화부터 적용되고 기존 conversation은 생성 시점 snapshot을 유지한다고 안내해야 해요.
 
@@ -170,11 +173,13 @@ module Conversation {
 
   type StartRoleplayRequest {
     role_character: String
+    roleplay_difficulty?: "EASY" | "NORMAL" | "CHALLENGE" = "NORMAL"
     search_context?: String
     include_audio_response?: Boolean = false
   }
 
-  `role_character`는 클라이언트가 선택한 preset/custom 상황과 난이도를 합성한 문자열이에요.
+  `role_character`는 클라이언트가 선택한 preset/custom 상황 또는 AI가 맡을 역할이에요.
+  `roleplay_difficulty`는 난이도와 진행 스타일을 나타내며, 서버가 roleplay prompt 생성 시점에 `role_character`와 조합해요.
   클라이언트 preset과 서버 roleplay prompt examples는 conversation snapshot의 `target_language`를 기준으로 연습 상황을 고르고, `feedback_language`는 도움말·설명 언어로만 사용해요.
   Conversation prompt policy도 snapshot의 `target_language`를 따라요. 한국어 target은 조사, 어미, 높임/격식, 띄어쓰기, 자연스러운 어순과 구어 뉘앙스를 우선하고, 영어 target은 tense, articles, prepositions, question formation, sentence completeness, natural spoken phrasing을 우선해요.
 
@@ -210,6 +215,7 @@ module Conversation {
     title?: String
     conversation_type: "FREE_CHAT" | "ROLE_PLAYING"
     role_character?: String
+    roleplay_difficulty?: "EASY" | "NORMAL" | "CHALLENGE"
     language: LearningLanguageContext
     message_count: Integer
     status: "ACTIVE" | "COMPLETED"
@@ -231,6 +237,7 @@ module Conversation {
     message_id: UUID
     conversation_type: String
     role_character?: String
+    roleplay_difficulty?: "EASY" | "NORMAL" | "CHALLENGE"
     language: LearningLanguageContext
     response: String
     grammar_feedback?: GrammarFeedback
@@ -275,7 +282,7 @@ module Conversation {
 ```dsl
 TextStart      = POST /api/conversations/start/free-chat/  { first_message, include_audio_response }
 AudioStart     = POST /api/conversations/start/free-chat/  multipart { audio_file, include_audio_response }
-RoleplayStart  = POST /api/conversations/start/roleplay/   { role_character, include_audio_response }
+RoleplayStart  = POST /api/conversations/start/roleplay/   { role_character, roleplay_difficulty, include_audio_response }
 TextContinue   = POST /api/conversations/{id}/turn/        { text, include_audio_response }
 AudioContinue  = POST /api/conversations/{id}/turn/        multipart { audio_file, include_audio_response }
 ```

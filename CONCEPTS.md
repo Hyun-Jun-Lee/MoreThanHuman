@@ -35,3 +35,8 @@ Retry Guidance는 불완전한 출력을 성공 경험으로 포장하지 않고
 진행 중인 conversation에 사용자가 텍스트 또는 녹음 파일 중 하나를 입력으로 보내는 한 번의 대화 차례예요.
 
 녹음 파일은 백엔드 STT를 거쳐 transcript가 canonical user message가 되고, 선택적으로 assistant response의 TTS audio가 같은 응답에 포함될 수 있어요.
+
+### Roleplay Difficulty
+롤플레이 conversation의 대화 난이도와 진행 스타일을 나타내는 닫힌 상태값이에요.
+
+Roleplay Difficulty는 AI가 맡을 역할인 `role_character`와 분리해서 저장하고, prompt를 만들 때만 역할 정보와 조합해요.

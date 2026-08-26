@@ -1,7 +1,16 @@
 # CHANGELOG — 완료된 작업 기록
 
+## 2026-08-26
+
+- **모바일 온보딩 언어쌍/locale copy 정리**: 중국어 포함 언어쌍을 선택 불가로 표시하고 온보딩 문구를 한국어 시스템 locale이면 한국어, 그 외에는 영어로 표시
+
 ## 2026-08-14
 
+- **Home 최근 대화 갱신 indicator 추가**: 새 대화 생성 후 최근 목록을 재조회하는 동안 기존 목록을 유지하고 `Recent` 헤더에 작은 loading indicator를 표시
+- **대화 생성 후 Home 최근 목록 갱신**: free chat/roleplay 생성 성공 시 최근 대화 provider를 invalidate해 Home 복귀 직후 새 대화가 보이도록 수정
+- **Roleplay 난이도 분리 구현**: `role_character`와 `roleplay_difficulty`를 별도 저장/전송하도록 백엔드 schema·migration·prompt, 모바일 payload, 문서/테스트를 동기화
+- **Home/Profile UI 피드백 반영**: Home 대화 추가 버튼을 중앙 하단으로 이동하고 최근 대화 4개 접기/펼치기 및 Profile sheet `CANCEL` 제거를 적용
+- **Swagger 테스트용 Supabase 토큰 helper 추가**: `/api/auth/swagger/token`에서 Supabase password grant 기반 access token을 발급하고 dev 외 환경은 enable+secret으로 보호
 - **Home 대화 추가 CTA와 언어쌍 약식 표기**: 모바일 Home 화면에 시작 시트로 연결되는 + 버튼을 추가하고 상단 언어쌍 badge를 `KR -> EN` 형식으로 축약
 - **Search quality judge JSON 안정화**: 품질 판정 LLM 출력 schema에서 source별 reject 사유 요구를 제거하고 기본 token budget을 1000으로 상향
 - **짧은 음성 녹음 차단과 STT 진단 로그**: 모바일 음성 녹음이 700ms 미만이면 업로드하지 않고 안내를 표시하며 STT 업로드/빈 transcript 로그를 추가

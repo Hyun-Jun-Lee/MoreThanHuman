@@ -161,6 +161,8 @@ Authorization: Bearer <access_token>
 3. `/api/search/`, `/api/search/topic-prep/`, `/api/conversations/` 같은 인증 API를 호출해요.
 4. 만료되었거나 다른 Supabase project의 token이면 FastAPI가 `401`을 반환해요.
 
+테스트 계정이 Supabase email/password 로그인을 사용할 수 있으면 Swagger에서 `POST /api/auth/swagger/token`으로 `access_token`을 발급받을 수 있어요. 이 helper는 `ENV=dev`에서는 기본 활성화되고, 그 외 환경에서는 `SWAGGER_TOKEN_ISSUER_ENABLED=true`와 `SWAGGER_TOKEN_ISSUER_SECRET`이 모두 설정되어야 해요. 운영에서 열 때는 nginx docs basic auth와 별개로 요청 body의 `secret`도 맞아야 합니다.
+
 ```text
 Flutter App
 → Google Sign-In SDK로 로그인
@@ -258,10 +260,13 @@ include_audio_response=true
 ```json
 {
   "role_character": "a barista at a coffee shop",
+  "roleplay_difficulty": "NORMAL",
   "search_context": null,
   "include_audio_response": true
 }
 ```
+
+`roleplay_difficulty`는 `EASY`, `NORMAL`, `CHALLENGE` 중 하나예요. 생략하면 `NORMAL`로 처리돼요. `role_character`는 AI가 맡을 역할이나 상황 설명만 담고, 난이도별 진행 스타일은 서버가 prompt 생성 시점에 조합해요.
 
 `include_audio_response=true`이면 시작 직후 AI 첫 응답도 `audio` 또는 `audio_error`를 포함한 멀티모달 응답으로 반환돼요. 모바일 v1은 AI 응답 자동 재생을 위해 free chat 시작, roleplay 시작, `/turn/` 이어가기 요청에 이 값을 항상 포함해요.
 
@@ -631,6 +636,8 @@ Query:
 | `SUPABASE_PUBLISHABLE_KEY` | 예 | 없음 | Supabase Auth `/user` 검증에 사용하는 publishable key |
 | `SUPABASE_AUTH_VERIFY_MODE` | 아니오 | `remote` | FastAPI bearer token 검증 방식. 현재는 Supabase `/auth/v1/user` 검증 |
 | `SUPABASE_AUTH_TIMEOUT_SECONDS` | 아니오 | `5` | Supabase Auth 검증 요청 timeout |
+| `SWAGGER_TOKEN_ISSUER_ENABLED` | 아니오 | `false` | `ENV`가 dev가 아닐 때 Swagger token helper를 명시적으로 활성화 |
+| `SWAGGER_TOKEN_ISSUER_SECRET` | 운영 helper 활성화 시 | 없음 | dev 외 환경에서 `/api/auth/swagger/token` 요청 body의 `secret`과 비교할 shared secret |
 | `AUTO_CREATE_TABLES` | 아니오 | `false` | Alembic 대신 SQLAlchemy `create_all`을 실행할지 여부. 로컬 임시 실행 외에는 `false` 권장 |
 | `JWT_SECRET_KEY` | 레거시 도구 사용 시 | 없음 | 기존 로컬 JWT tooling을 임시 유지할 때만 사용 |
 | `ENV` | 아니오 | `prod` | 실행 환경. `dev`/`development`/`local`이면 개발 전용 API 활성화 |
