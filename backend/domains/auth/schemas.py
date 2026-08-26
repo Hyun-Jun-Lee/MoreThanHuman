@@ -33,6 +33,17 @@ class DevTokenRequest(BaseModel):
     device_id: str = Field(default="swagger-local", min_length=1, max_length=64)
 
 
+class SwaggerTokenRequest(BaseModel):
+    """Swagger 테스트용 Supabase password grant 토큰 요청"""
+
+    email: EmailStr
+    password: str = Field(min_length=1, json_schema_extra={"format": "password"})
+    secret: str | None = Field(
+        default=None,
+        description="Required outside dev when SWAGGER_TOKEN_ISSUER_SECRET is configured.",
+    )
+
+
 class GoogleMobileLoginRequest(BaseModel):
     """Flutter Google Sign-In SDK id_token 로그인 요청"""
 
@@ -55,11 +66,12 @@ class LogoutRequest(BaseModel):
 
 
 class TokenResponse(BaseModel):
-    """JWT 토큰 응답"""
+    """Bearer 토큰 응답"""
 
     access_token: str
-    refresh_token: str
+    refresh_token: str | None = None
     token_type: str = "bearer"
+    expires_in: int | None = None
 
 
 class UserProfile(BaseModel):

@@ -4,9 +4,17 @@ Supabase Auth claim을 앱 프로필로 연결해요.
 """
 from dataclasses import dataclass
 
+import httpx
+
+from config import get_settings
 from domains.auth.models import ProfileModel
 from domains.auth.repository import AuthRepository
-from domains.auth.schemas import LanguagePreferencesRequest, LanguagePreferencesResponse, UserProfile
+from domains.auth.schemas import (
+    LanguagePreferencesRequest,
+    LanguagePreferencesResponse,
+    TokenResponse,
+    UserProfile,
+)
 from shared.language import language_context_to_dict
 from shared.exceptions import AuthenticationException
 
@@ -41,6 +49,42 @@ class AuthService:
             name=claims.name or claims.email.split("@")[0],
             oauth_provider=claims.oauth_provider,
             avatar_url=claims.avatar_url,
+        )
+
+    async def issue_swagger_token(self, *, email: str, password: str) -> TokenResponse:
+        """Swagger 테스트용 Supabase access token 발급"""
+        settings = get_settings()
+        try:
+            async with httpx.AsyncClient(timeout=settings.supabase_auth_timeout_seconds) as client:
+                response = await client.post(
+                    f"{settings.supabase_auth_url}/token?grant_type=password",
+                    headers={
+                        "apikey": settings.required_supabase_publishable_key,
+                        "Content-Type": "application/json",
+                    },
+                    json={"email": email, "password": password},
+                )
+        except httpx.HTTPError as exc:
+            raise AuthenticationException("Supabase token issuance failed") from exc
+
+        if response.status_code != 200:
+            raise AuthenticationException("Invalid Supabase email/password")
+
+        try:
+            data = response.json()
+        except ValueError as exc:
+            raise AuthenticationException("Invalid Supabase token response") from exc
+        if not isinstance(data, dict) or not isinstance(data.get("access_token"), str):
+            raise AuthenticationException("Invalid Supabase token response")
+
+        refresh_token = data.get("refresh_token")
+        token_type = data.get("token_type") if isinstance(data.get("token_type"), str) else "bearer"
+        expires_in = data.get("expires_in") if isinstance(data.get("expires_in"), int) else None
+        return TokenResponse(
+            access_token=data["access_token"],
+            refresh_token=refresh_token if isinstance(refresh_token, str) else None,
+            token_type=token_type,
+            expires_in=expires_in,
         )
 
     def get_profile(self, profile_id: str) -> UserProfile:

@@ -50,6 +50,8 @@ class Settings(BaseSettings):
     supabase_publishable_key: str | None = None
     supabase_auth_verify_mode: Literal["remote"] = "remote"
     supabase_auth_timeout_seconds: float = 5.0
+    swagger_token_issuer_enabled: bool = False
+    swagger_token_issuer_secret: str | None = None
     auto_create_tables: bool = False
 
     # Google OAuth2
