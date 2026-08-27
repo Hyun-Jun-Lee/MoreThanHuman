@@ -5,6 +5,7 @@ import pytest
 from domains.search.query import build_rule_query_analysis
 from domains.search.schemas import SearchQuality, SearchResultItem
 from domains.search.service import SearchService
+from shared.exceptions import ExternalAPIException
 
 
 def _quality(is_sufficient: bool) -> SearchQuality:
@@ -148,12 +149,22 @@ async def test_quality_judge_prompt_includes_current_date_and_timezone(monkeypat
     assert len(accepted_sources) == 2
     system_prompt = captured["request"].messages[0].content
     user_prompt = captured["request"].messages[1].content
-    assert "rejected_sources" not in system_prompt
+    assert "rejected_sources" in system_prompt
+    assert "portal homepages" in system_prompt
+    assert "when uncertain, reject conservatively" in system_prompt
+    assert "at least 2 independent accepted sources" in system_prompt
     assert "one short sentence" in system_prompt
     assert captured["request"].max_tokens == 1000
+    assert captured["request"].extra_params["response_format"]["type"] == "json_schema"
+    assert (
+        captured["request"].extra_params["response_format"]["json_schema"]["name"]
+        == "search_quality_judge"
+    )
     assert "Current date:" in user_prompt
     assert "Timezone: Asia/Seoul" in user_prompt
     assert "Recency intent:" in user_prompt
+    assert "Required phrases:" in user_prompt
+    assert "Exclude terms:" in user_prompt
     assert "Source 1" in user_prompt
 
 
@@ -209,6 +220,59 @@ def test_quality_judge_parser_accepts_common_llm_short_forms():
     assert result.relevance is True
     assert result.freshness is True
     assert result.specificity is True
+
+
+def test_quality_judge_parser_drops_alias_fields_after_normalization():
+    service = SearchService()
+
+    result = service._build_search_quality_judge_result(
+        {
+            "is_sufficient": True,
+            "accepted_ids": ["1", "2"],
+            "rejected_ids": ["3"],
+            "relevance": True,
+            "freshness": True,
+            "specificity": True,
+            "reason": None,
+            "retry_suggestion": None,
+        }
+    )
+
+    assert result.accepted_source_ids == [1, 2]
+    assert [source.id for source in result.rejected_sources] == [3]
+
+
+@pytest.mark.asyncio
+async def test_quality_judge_retries_without_structured_output_when_provider_rejects(monkeypatch):
+    service = SearchService()
+    analysis = build_rule_query_analysis("최근 애플 발표", current_date="2026-06-04")
+    calls = []
+
+    class FakeResponse:
+        content = '{"is_sufficient":true,"accepted_source_ids":[1,2],"rejected_sources":[],"relevance":true,"freshness":true,"specificity":true,"reason":null,"retry_suggestion":null}'
+
+    class FakeProvider:
+        async def chat_completion(self, request):
+            calls.append(request.extra_params)
+            if request.extra_params:
+                raise ExternalAPIException("response_format json_schema is not supported")
+            return FakeResponse()
+
+    monkeypatch.setattr("domains.search.service.LLMProviderFactory.create_provider", lambda: FakeProvider())
+
+    accepted_sources, quality = await service._judge_search_quality(
+        "최근 애플 발표",
+        [
+            SearchResultItem(title="Apple 발표", url="https://example.com/1", snippet="Apple announced a new product."),
+            SearchResultItem(title="Apple WWDC", url="https://example.com/2", snippet="Apple shared WWDC updates."),
+        ],
+        analysis,
+    )
+
+    assert len(accepted_sources) == 2
+    assert quality.is_sufficient is True
+    assert calls[0] is not None
+    assert calls[1] is None
 
 
 def test_quality_finalizer_rejects_invalid_source_id():

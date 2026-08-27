@@ -4,7 +4,7 @@ Search 도메인 모델 정의
 from datetime import datetime
 from enum import Enum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from shared.language import LearningLanguageContext
 
@@ -31,8 +31,23 @@ class SearchQuality(BaseModel):
     retry_suggestion: str | None = None
 
 
+class SearchQueryAnalysisResult(BaseModel):
+    """LLM 검색어 분석 응답"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    canonical_topic: str
+    required_phrases: list[str]
+    required_tokens: list[str]
+    context_terms: list[str]
+    recency_intent: bool
+    exclude_terms: list[str]
+
+
 class RejectedSearchSource(BaseModel):
     """LLM이 탈락시킨 검색 출처"""
+
+    model_config = ConfigDict(extra="forbid")
 
     id: int
     reason: str
@@ -41,9 +56,11 @@ class RejectedSearchSource(BaseModel):
 class SearchQualityJudgeResult(BaseModel):
     """LLM source judge 응답"""
 
+    model_config = ConfigDict(extra="forbid")
+
     is_sufficient: bool
-    accepted_source_ids: list[int] = Field(default_factory=list)
-    rejected_sources: list[RejectedSearchSource] = Field(default_factory=list)
+    accepted_source_ids: list[int]
+    rejected_sources: list[RejectedSearchSource]
     relevance: bool
     freshness: bool
     specificity: bool

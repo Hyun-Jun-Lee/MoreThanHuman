@@ -9,9 +9,12 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
+from pydantic import BaseModel, ValidationError
+
 from config import get_model_for_provider, get_settings
 from domains.llm.factory import LLMProviderFactory
-from domains.llm.schemas import LLMMessage, LLMRequest
+from domains.llm.provider import LLMProvider
+from domains.llm.schemas import LLMMessage, LLMRequest, LLMResponse
 from domains.search.provider import DuckDuckGoSearchProvider
 from domains.search.query import (
     QueryAnalysis,
@@ -23,6 +26,7 @@ from domains.search.schemas import (
     ConversationDirection,
     SearchQualityJudgeResult,
     SearchQuality,
+    SearchQueryAnalysisResult,
     SearchResult,
     SearchResultItem,
     TopicPrepCard,
@@ -254,11 +258,11 @@ class SearchService:
         request = LLMRequest(
             messages=[
                 LLMMessage(
-                        role="system",
-                        content=(
-                            f"You analyze a user's search topic for a {target_name} conversation app. "
-                            f"The learner's native language is {native_name}. "
-                            "Return only valid JSON with keys: canonical_topic, required_phrases, "
+                    role="system",
+                    content=(
+                        f"You analyze a user's search topic for a {target_name} conversation app. "
+                        f"The learner's native language is {native_name}. "
+                        "Return only valid JSON with keys: canonical_topic, required_phrases, "
                         "required_tokens, context_terms, recency_intent, exclude_terms. "
                         "Keep query expansion additive and do not change the user's intent."
                     ),
@@ -275,6 +279,10 @@ class SearchService:
             model=get_model_for_provider(),
             max_tokens=self.settings.search_query_analysis_max_tokens,
             temperature=0.1,
+            extra_params=self._build_structured_output_params(
+                SearchQueryAnalysisResult,
+                "search_query_analysis",
+            ),
         )
         logger.info(
             "Search LLM stage=query_analysis status=start provider=%s model=%s query=%r current_date=%s timezone=%s",
@@ -284,8 +292,13 @@ class SearchService:
             current_date,
             timezone,
         )
-        response = await provider.chat_completion(request)
-        data = self._parse_json_response(response.content)
+        response = await self._chat_completion_with_structured_fallback(
+            provider,
+            request,
+            stage="query_analysis",
+            query=query,
+        )
+        data = self._parse_structured_json_response(response.content, SearchQueryAnalysisResult)
         logger.info(
             "Search LLM stage=query_analysis status=success provider=%s model=%s duration_ms=%s response_chars=%s",
             self._provider_name(provider),
@@ -352,6 +365,7 @@ class SearchService:
         practice_summary = practice_priority_summary(language_context.target_language)
         current_date, timezone = current_search_context()
         source_text = self._format_numbered_sources(sources)
+        analysis_text = self._format_query_analysis_for_judge(analysis)
         try:
             provider = LLMProviderFactory.create_provider()
             started_at = time.perf_counter()
@@ -364,16 +378,27 @@ class SearchService:
                             "Select only sources that are directly useful for discussing the user's topic. "
                             f"Judge usefulness for target-language practice priorities: {practice_summary}. "
                             "Return only valid JSON with keys: is_sufficient, accepted_source_ids, "
-                            "relevance, freshness, specificity, reason, retry_suggestion. "
+                            "rejected_sources, relevance, freshness, specificity, reason, retry_suggestion. "
                             "Use 1-based source ids from the provided list. "
                             "accepted_source_ids must be an array of integers. "
+                            "rejected_sources must explain rejected ids with one short reason each. "
                             "is_sufficient, relevance, freshness, and specificity must be JSON booleans, "
                             "not numeric ratings. "
                             f"Write reason and retry_suggestion in {feedback_name}. "
                             "Keep reason and retry_suggestion to one short sentence each, or null when sufficient. "
-                            "Set is_sufficient true only when accepted sources are enough for a concrete "
-                            "conversation and summary. If recency_intent is false, freshness should not block "
-                            "sufficiency."
+                            f"Set is_sufficient true only when at least {self.settings.search_min_relevant_results} "
+                            "independent accepted sources are enough for a concrete conversation and summary. "
+                            "Treat canonical_topic, required_phrases, required_tokens, and exclude_terms as hard "
+                            "guidance from the query analysis. Reject sources that do not mention the canonical "
+                            "topic or required terms in the title/snippet, unless they are clearly equivalent. "
+                            "Reject portal homepages, search result pages, tag pages, news index pages, generic "
+                            "aggregators, ads, shallow listicles, unrelated profiles, duplicate sources, and "
+                            "snippets too vague to support a concrete conversation. Accept sources only when "
+                            "they provide concrete facts, events, people, places, outcomes, dates, or distinct "
+                            "context for the topic. If recency_intent is true, stale background sources or "
+                            "sources without current context are insufficient. If recency_intent is false, "
+                            "freshness should not block sufficiency. You only see title, snippet, and URL; "
+                            "when uncertain, reject conservatively."
                         ),
                     ),
                     LLMMessage(
@@ -383,7 +408,7 @@ class SearchService:
                             f"Timezone: {timezone}\n"
                             f"Original query: {query}\n"
                             f"Enhanced query: {analysis.enhanced_query}\n\n"
-                            f"Recency intent: {analysis.recency_intent}\n\n"
+                            f"Query analysis:\n{analysis_text}\n\n"
                             f"Sources:\n{source_text}"
                         ),
                     ),
@@ -391,6 +416,10 @@ class SearchService:
                 model=get_model_for_provider(),
                 max_tokens=self.settings.search_quality_judge_max_tokens,
                 temperature=0.1,
+                extra_params=self._build_structured_output_params(
+                    SearchQualityJudgeResult,
+                    "search_quality_judge",
+                ),
             )
             logger.info(
                 "Search LLM stage=quality_judge status=start provider=%s model=%s query=%r source_count=%s",
@@ -399,8 +428,13 @@ class SearchService:
                 query,
                 len(sources),
             )
-            response = await provider.chat_completion(request)
-            data = self._parse_json_response(response.content)
+            response = await self._chat_completion_with_structured_fallback(
+                provider,
+                request,
+                stage="quality_judge",
+                query=query,
+            )
+            data = self._parse_structured_json_response(response.content, SearchQualityJudgeResult)
             judge_result = self._build_search_quality_judge_result(data)
             accepted_sources, quality = self._finalize_search_quality(
                 query,
@@ -433,22 +467,118 @@ class SearchService:
                 retry_suggestion=self._build_retry_guidance(query, language_context=language_context),
             )
 
+    def _build_structured_output_params(
+        self,
+        schema_model: type[BaseModel],
+        schema_name: str,
+    ) -> dict[str, Any]:
+        """OpenAI-compatible structured output 파라미터 생성"""
+        return {
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": schema_name,
+                    "strict": True,
+                    "schema": schema_model.model_json_schema(),
+                },
+            },
+        }
+
+    async def _chat_completion_with_structured_fallback(
+        self,
+        provider: LLMProvider,
+        request: LLMRequest,
+        *,
+        stage: str,
+        query: str,
+    ) -> LLMResponse:
+        """structured output 미지원 모델은 기존 JSON prompt 방식으로 재시도"""
+        try:
+            return await provider.chat_completion(request)
+        except ExternalAPIException as exc:
+            if not self._should_retry_without_structured_output(exc):
+                raise
+            logger.warning(
+                "Search LLM stage=%s status=structured_output_fallback provider=%s query=%r error=%s",
+                stage,
+                self._provider_name(provider),
+                query,
+                exc,
+            )
+            return await provider.chat_completion(request.model_copy(update={"extra_params": None}))
+
+    def _should_retry_without_structured_output(self, exc: ExternalAPIException) -> bool:
+        """provider/model이 structured output을 거부한 오류인지 추정"""
+        message = str(exc).casefold()
+        return any(
+            marker in message
+            for marker in (
+                "response_format",
+                "json_schema",
+                "structured",
+                "schema",
+                "unsupported parameter",
+                "not support",
+            )
+        )
+
+    def _parse_structured_json_response(
+        self,
+        response: str,
+        schema_model: type[BaseModel],
+    ) -> dict:
+        """structured output 응답을 Pydantic으로 우선 검증하고 기존 parser로 보정"""
+        try:
+            return schema_model.model_validate_json(response).model_dump()
+        except ValidationError:
+            return self._parse_json_response(response)
+
+    def _format_query_analysis_for_judge(self, analysis: QueryAnalysis) -> str:
+        """source judge에 전달할 query analysis 상세 컨텍스트"""
+        return "\n".join(
+            [
+                f"Canonical topic: {analysis.canonical_topic}",
+                f"Required phrases: {self._format_string_list(analysis.required_phrases)}",
+                f"Required tokens: {self._format_string_list(analysis.required_tokens)}",
+                f"Context terms: {self._format_string_list(analysis.context_terms)}",
+                f"Exclude terms: {self._format_string_list(analysis.exclude_terms)}",
+                f"Recency intent: {analysis.recency_intent}",
+            ]
+        )
+
+    def _format_string_list(self, values: list[str]) -> str:
+        """프롬프트용 문자열 리스트 포맷"""
+        return ", ".join(values) if values else "none"
+
     def _build_search_quality_judge_result(self, data: dict) -> SearchQualityJudgeResult:
         """LLM source judge JSON을 내부 모델로 변환"""
         if not isinstance(data, dict):
             return SearchQualityJudgeResult.model_validate(data)
 
-        normalized = dict(data)
+        normalized = {
+            key: data.get(key)
+            for key in (
+                "is_sufficient",
+                "accepted_source_ids",
+                "rejected_sources",
+                "relevance",
+                "freshness",
+                "specificity",
+                "reason",
+                "retry_suggestion",
+            )
+            if key in data
+        }
         normalized["accepted_source_ids"] = self._coerce_int_list(
-            normalized.get("accepted_source_ids")
-            or normalized.get("accepted_sources")
-            or normalized.get("accepted_ids")
+            data.get("accepted_source_ids")
+            or data.get("accepted_sources")
+            or data.get("accepted_ids")
             or []
         )
         normalized["rejected_sources"] = self._coerce_rejected_sources(
-            normalized.get("rejected_sources")
-            or normalized.get("rejected_source_ids")
-            or normalized.get("rejected_ids")
+            data.get("rejected_sources")
+            or data.get("rejected_source_ids")
+            or data.get("rejected_ids")
             or []
         )
         for field in ("is_sufficient", "relevance", "freshness", "specificity"):

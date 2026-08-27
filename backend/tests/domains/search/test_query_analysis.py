@@ -12,7 +12,7 @@ def test_rule_analysis_enhances_recent_lotte_giants_query():
     assert "롯데" in analysis.required_tokens
     assert "KBO" in analysis.enhanced_query
     assert "경기 결과" in analysis.enhanced_query
-    assert "2026년 6월" in analysis.enhanced_query
+    assert "2026-06" in analysis.enhanced_query
 
 
 def test_rule_analysis_does_not_add_sports_terms_to_travel_query():
@@ -22,6 +22,22 @@ def test_rule_analysis_does_not_add_sports_terms_to_travel_query():
     assert "KBO" not in analysis.enhanced_query
     assert "2026년 6월" not in analysis.enhanced_query
     assert "여행 후기" in analysis.enhanced_query
+
+
+def test_rule_analysis_uses_iso_month_hint_for_recent_queries():
+    analysis = build_rule_query_analysis("latest Apple announcement", current_date="2026-06-04")
+
+    assert analysis.recency_intent is True
+    assert "2026-06" in analysis.enhanced_query
+    assert "2026년 6월" not in analysis.enhanced_query
+
+
+def test_rule_analysis_uses_iso_month_hint_for_chinese_recent_query():
+    analysis = build_rule_query_analysis("最新 苹果 发布", current_date="2026-06-04")
+
+    assert "2026-06" in analysis.enhanced_query
+    assert "2026年6月" not in analysis.enhanced_query
+    assert "2026년 6월" not in analysis.enhanced_query
 
 
 def test_merge_query_analysis_keeps_rule_baseline_when_llm_is_missing():
@@ -50,6 +66,11 @@ async def test_llm_query_analyzer_prompt_includes_current_date_and_timezone(monk
     data = await SearchService()._generate_llm_query_analysis("최근 롯데 자이언츠 경기", "2026-06-04", "Asia/Seoul")
 
     assert data["canonical_topic"] == "롯데 자이언츠"
+    assert captured["request"].extra_params["response_format"]["type"] == "json_schema"
+    assert (
+        captured["request"].extra_params["response_format"]["json_schema"]["name"]
+        == "search_query_analysis"
+    )
     user_prompt = captured["request"].messages[1].content
     assert "Current date: 2026-06-04" in user_prompt
     assert "Timezone: Asia/Seoul" in user_prompt

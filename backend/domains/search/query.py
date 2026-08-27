@@ -22,6 +22,12 @@ RECENCY_TERMS = {
     "yesterday",
     "this",
     "last",
+    "最新",
+    "最近",
+    "今天",
+    "昨天",
+    "本周",
+    "上周",
 }
 
 INTENT_STOPWORDS = {
@@ -178,8 +184,7 @@ def build_enhanced_query(
     """검색용 additive query 생성"""
     parts = [canonical_topic or original_query, *context_terms]
     if recency_intent and current_date:
-        year, month, *_ = current_date.split("-")
-        parts.append(f"{year}년 {int(month)}월")
+        parts.append(_build_recency_date_hint(parts, current_date))
     return " ".join(_dedupe([part for part in parts if part.strip()]))
 
 
@@ -188,7 +193,13 @@ def _normalize_spaces(value: str) -> str:
 
 
 def _tokenize(value: str) -> list[str]:
-    return re.findall(r"[가-힣A-Za-z0-9]+", value)
+    return re.findall(r"[가-힣\u4e00-\u9fffA-Za-z0-9]+", value)
+
+
+def _build_recency_date_hint(_query_parts: list[str], current_date: str) -> str:
+    """검색 provider에 전달할 언어 중립 월 힌트 생성"""
+    year, month, *_ = current_date.split("-")
+    return f"{year}-{month}"
 
 
 def _compact(value: str) -> str:
