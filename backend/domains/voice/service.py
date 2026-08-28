@@ -37,6 +37,7 @@ class UploadedAudio(Protocol):
 class VoiceService:
     """음성 입력/응답 처리 서비스"""
 
+    minimum_audio_bytes = 1024
     supported_content_types = {
         "audio/flac",
         "audio/mpeg",
@@ -114,7 +115,11 @@ class VoiceService:
         self._validate_audio_metadata(filename, content_type)
 
         audio_bytes = await self._read_limited_upload(audio_file)
-        self._validate_audio_size(audio_bytes)
+        self._validate_audio_size(
+            audio_bytes,
+            filename=filename,
+            content_type=content_type,
+        )
         self._validate_audio_signature(filename, audio_bytes)
 
         provider = self.provider
@@ -214,9 +219,31 @@ class VoiceService:
 
         return b"".join(chunks)
 
-    def _validate_audio_size(self, audio_bytes: bytes) -> None:
+    def _validate_audio_size(
+        self,
+        audio_bytes: bytes,
+        *,
+        filename: str,
+        content_type: str,
+    ) -> None:
         if not audio_bytes:
             raise ValidationException("audio_file is empty.")
+        if len(audio_bytes) < self.minimum_audio_bytes:
+            logger.warning(
+                "Voice STT stage=upload status=rejected reason=too_small filename=%r "
+                "content_type=%s byte_length=%s minimum_byte_length=%s",
+                filename,
+                content_type,
+                len(audio_bytes),
+                self.minimum_audio_bytes,
+            )
+            raise ValidationException(
+                "audio_file is too small.",
+                details={
+                    "byte_length": len(audio_bytes),
+                    "minimum_byte_length": self.minimum_audio_bytes,
+                },
+            )
         max_bytes = settings.voice_max_upload_mb * 1024 * 1024
         if len(audio_bytes) > max_bytes:
             raise ValidationException(

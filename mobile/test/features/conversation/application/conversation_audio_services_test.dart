@@ -5,13 +5,69 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:record/record.dart';
 
 void main() {
+  test('iOS recorder starts a WAV recording', () async {
+    final _FakeAudioBackend backend = _FakeAudioBackend();
+    final _FakeAudioFileStore fileStore = _FakeAudioFileStore();
+    final RecordConversationAudioRecorder recorder =
+        RecordConversationAudioRecorder(
+          backend: backend,
+          fileStore: fileStore,
+          platform: VoiceRecordingPlatform.ios,
+        );
+
+    await recorder.start();
+
+    expect(backend.startedPath, endsWith('.wav'));
+    expect(backend.startedConfig?.encoder, AudioEncoder.wav);
+    await recorder.cancel();
+  });
+
+  test('Android recorder keeps AAC M4A recording', () async {
+    final _FakeAudioBackend backend = _FakeAudioBackend();
+    final _FakeAudioFileStore fileStore = _FakeAudioFileStore();
+    final RecordConversationAudioRecorder recorder =
+        RecordConversationAudioRecorder(
+          backend: backend,
+          fileStore: fileStore,
+          platform: VoiceRecordingPlatform.android,
+        );
+
+    await recorder.start();
+
+    expect(backend.startedPath, endsWith('.m4a'));
+    expect(backend.startedConfig?.encoder, AudioEncoder.aacLc);
+    await recorder.cancel();
+  });
+
+  test('iOS recorder returns WAV metadata after a valid recording', () async {
+    final _FakeAudioBackend backend = _FakeAudioBackend(
+      stopPath: '/tmp/recording.wav',
+    );
+    final _FakeAudioFileStore fileStore = _FakeAudioFileStore(
+      bytesByPath: <String, List<int>>{
+        '/tmp/recording.wav': List<int>.filled(minimumVoiceRecordingBytes, 1),
+      },
+    );
+    final RecordConversationAudioRecorder recorder =
+        RecordConversationAudioRecorder(
+          backend: backend,
+          fileStore: fileStore,
+          platform: VoiceRecordingPlatform.ios,
+        );
+
+    final ConversationAudioFile audioFile = await recorder.stop();
+
+    expect(audioFile.filename, 'recording.wav');
+    expect(audioFile.contentType, 'audio/wav');
+  });
+
   test('recorder stop returns bytes and deletes the temporary file', () async {
     final _FakeAudioBackend backend = _FakeAudioBackend(
       stopPath: '/tmp/recording.m4a',
     );
     final _FakeAudioFileStore fileStore = _FakeAudioFileStore(
       bytesByPath: <String, List<int>>{
-        '/tmp/recording.m4a': <int>[1, 2, 3],
+        '/tmp/recording.m4a': List<int>.filled(minimumVoiceRecordingBytes, 1),
       },
     );
     final RecordConversationAudioRecorder recorder =
@@ -20,18 +76,21 @@ void main() {
     final ConversationAudioFile audioFile = await recorder.stop();
 
     expect(audioFile.filename, 'recording.m4a');
-    expect(audioFile.bytes, <int>[1, 2, 3]);
+    expect(audioFile.bytes, hasLength(minimumVoiceRecordingBytes));
+    expect(audioFile.contentType, 'audio/m4a');
     expect(fileStore.deletedPaths, <String>['/tmp/recording.m4a']);
   });
 
   test(
-    'recorder stop rejects empty audio and deletes the temporary file',
+    'recorder stop rejects undersized audio and deletes the temporary file',
     () async {
       final _FakeAudioBackend backend = _FakeAudioBackend(
         stopPath: '/tmp/empty.m4a',
       );
       final _FakeAudioFileStore fileStore = _FakeAudioFileStore(
-        bytesByPath: <String, List<int>>{'/tmp/empty.m4a': <int>[]},
+        bytesByPath: <String, List<int>>{
+          '/tmp/empty.m4a': List<int>.filled(minimumVoiceRecordingBytes - 1, 1),
+        },
       );
       final RecordConversationAudioRecorder recorder =
           RecordConversationAudioRecorder(
@@ -132,6 +191,7 @@ class _FakeAudioBackend implements ConversationAudioRecorderBackend {
   int cancelCount = 0;
   int disposeCount = 0;
   String? startedPath;
+  RecordConfig? startedConfig;
 
   @override
   Future<void> cancel() async {
@@ -152,6 +212,7 @@ class _FakeAudioBackend implements ConversationAudioRecorderBackend {
 
   @override
   Future<void> start(RecordConfig config, {required String path}) async {
+    startedConfig = config;
     startedPath = path;
   }
 

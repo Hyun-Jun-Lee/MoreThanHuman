@@ -9,8 +9,10 @@ from domains.voice.openrouter_provider import OpenRouterVoiceProvider
 from domains.voice.service import VoiceService
 from shared.exceptions import AppException, ValidationException
 
-WEBM_BYTES = b"\x1A\x45\xDF\xA3fake webm audio"
-M4A_BYTES = b"\x00\x00\x00\x18ftypM4A fake m4a audio"
+WEBM_BYTES = b"\x1A\x45\xDF\xA3" + (b"w" * 2048)
+M4A_BYTES = b"\x00\x00\x00\x18ftypM4A" + (b"m" * 2048)
+WAV_BYTES = b"RIFF\x00\x00\x00\x00WAVEfmt " + (b"w" * 2048)
+HEADER_ONLY_M4A_BYTES = b"\x00\x00\x00\x18ftypM4A"
 
 
 class FakeUpload:
@@ -130,6 +132,41 @@ async def test_transcribe_upload_accepts_x_m4a_content_type():
 
 
 @pytest.mark.asyncio
+async def test_transcribe_upload_rejects_undersized_audio_before_provider_call(caplog):
+    provider = FakeVoiceProvider()
+    service = VoiceService(provider=provider)
+
+    with caplog.at_level(logging.WARNING, logger="domains.voice.service"):
+        with pytest.raises(ValidationException, match="too small"):
+            await service.transcribe_upload(
+                FakeUpload(
+                    HEADER_ONLY_M4A_BYTES,
+                    filename="header-only.m4a",
+                    content_type="audio/m4a",
+                )
+            )
+
+    assert provider.transcribe_calls == []
+    assert "Voice STT stage=upload status=rejected reason=too_small" in caplog.text
+    assert f"byte_length={len(HEADER_ONLY_M4A_BYTES)}" in caplog.text
+    assert f"minimum_byte_length={VoiceService.minimum_audio_bytes}" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_transcribe_upload_accepts_minimum_size_wav():
+    provider = FakeVoiceProvider()
+    service = VoiceService(provider=provider)
+    wav_bytes = WAV_BYTES[: VoiceService.minimum_audio_bytes]
+
+    result = await service.transcribe_upload(
+        FakeUpload(wav_bytes, filename="speech.wav", content_type="audio/wav")
+    )
+
+    assert result.text == provider.transcript
+    assert provider.transcribe_calls[0]["content_type"] == "audio/wav"
+
+
+@pytest.mark.asyncio
 async def test_transcribe_upload_rejects_empty_transcript(caplog):
     service = VoiceService(provider=FakeVoiceProvider(transcript="   "))
 
@@ -156,7 +193,7 @@ async def test_transcribe_upload_rejects_invalid_audio_signature():
     service = VoiceService(provider=FakeVoiceProvider())
 
     with pytest.raises(ValidationException, match="Invalid audio file signature"):
-        await service.transcribe_upload(FakeUpload(b"fake audio"))
+        await service.transcribe_upload(FakeUpload(b"x" * 2048))
 
 
 @pytest.mark.asyncio

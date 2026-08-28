@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:developer' as developer;
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -12,7 +13,22 @@ import 'package:record/record.dart';
 
 const Duration minimumVoiceRecordingDuration = Duration(milliseconds: 700);
 const Duration voiceRecordingTimerTick = Duration(milliseconds: 100);
+const int minimumVoiceRecordingBytes = 1024;
 const String voiceNotRecognizedMessage = '음성이 인식되지 않았어요. 조금 더 크게/길게 말해주세요.';
+
+enum VoiceRecordingPlatform { ios, android }
+
+class VoiceRecordingOutput {
+  const VoiceRecordingOutput({
+    required this.extension,
+    required this.contentType,
+    required this.config,
+  });
+
+  final String extension;
+  final String contentType;
+  final RecordConfig config;
+}
 
 enum ConversationAudioExceptionReason {
   unknown,
@@ -106,11 +122,42 @@ class RecordConversationAudioRecorder implements ConversationAudioRecorder {
   RecordConversationAudioRecorder({
     ConversationAudioRecorderBackend? backend,
     this.fileStore = const ConversationAudioFileStore(),
-  }) : _backend = backend ?? RecordAudioRecorderBackend();
+    VoiceRecordingPlatform? platform,
+  }) : _backend = backend ?? RecordAudioRecorderBackend(),
+       _platform =
+           platform ??
+           (Platform.isIOS
+               ? VoiceRecordingPlatform.ios
+               : VoiceRecordingPlatform.android);
 
   final ConversationAudioRecorderBackend _backend;
   final ConversationAudioFileStore fileStore;
+  final VoiceRecordingPlatform _platform;
   String? _currentPath;
+
+  VoiceRecordingOutput get _output {
+    if (_platform == VoiceRecordingPlatform.ios) {
+      return const VoiceRecordingOutput(
+        extension: 'wav',
+        contentType: 'audio/wav',
+        config: RecordConfig(
+          encoder: AudioEncoder.wav,
+          sampleRate: 16000,
+          numChannels: 1,
+        ),
+      );
+    }
+    return const VoiceRecordingOutput(
+      extension: 'm4a',
+      contentType: 'audio/m4a',
+      config: RecordConfig(
+        encoder: AudioEncoder.aacLc,
+        bitRate: 64000,
+        sampleRate: 16000,
+        numChannels: 1,
+      ),
+    );
+  }
 
   @override
   Future<void> start() async {
@@ -123,18 +170,11 @@ class RecordConversationAudioRecorder implements ConversationAudioRecorder {
         );
       }
       final Directory directory = await fileStore.temporaryDirectory();
+      final VoiceRecordingOutput output = _output;
       final String path =
-          '${directory.path}/curitalk-${DateTime.now().microsecondsSinceEpoch}.m4a';
+          '${directory.path}/curitalk-${DateTime.now().microsecondsSinceEpoch}.${output.extension}';
       _currentPath = path;
-      await _backend.start(
-        const RecordConfig(
-          encoder: AudioEncoder.aacLc,
-          bitRate: 64000,
-          sampleRate: 16000,
-          numChannels: 1,
-        ),
-        path: path,
-      );
+      await _backend.start(output.config, path: path);
     } on ConversationAudioException {
       rethrow;
     } on Object catch (error) {
@@ -164,7 +204,12 @@ class RecordConversationAudioRecorder implements ConversationAudioRecorder {
         );
       }
       final List<int> bytes = await fileStore.readBytes(resolvedPath);
-      if (bytes.isEmpty) {
+      if (bytes.length < minimumVoiceRecordingBytes) {
+        developer.log(
+          'Voice recording rejected: platform=${_platform.name} content_type=${_output.contentType} '
+          'byte_length=${bytes.length} minimum_byte_length=$minimumVoiceRecordingBytes',
+          name: 'curitalk.voice',
+        );
         throw const ConversationAudioException(
           'Recording did not produce audio.',
           reason: ConversationAudioExceptionReason.emptyRecording,
@@ -173,7 +218,7 @@ class RecordConversationAudioRecorder implements ConversationAudioRecorder {
       return ConversationAudioFile(
         bytes: bytes,
         filename: fileStore.basename(resolvedPath),
-        contentType: 'audio/m4a',
+        contentType: _output.contentType,
       );
     } on ConversationAudioException {
       rethrow;
