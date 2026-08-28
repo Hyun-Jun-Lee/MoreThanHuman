@@ -1,9 +1,11 @@
+import logging
+
 import httpx
 import pytest
 
 from domains.voice import openrouter_provider as openrouter_provider_module
 from domains.voice.openrouter_provider import OpenRouterVoiceProvider
-from shared.exceptions import AppException, RateLimitException
+from shared.exceptions import AppException, ExternalAPIException, RateLimitException
 
 
 class FakeAsyncClient:
@@ -96,6 +98,41 @@ async def test_openrouter_transcribe_audio_maps_rate_limit(monkeypatch):
             content_type="audio/webm",
             audio_bytes=b"audio-bytes",
         )
+
+
+@pytest.mark.asyncio
+async def test_openrouter_transcribe_audio_logs_response_details_on_http_error(monkeypatch, caplog):
+    fake_client = FakeAsyncClient(
+        make_response(
+            400,
+            json_data={"error": {"message": "Unsupported audio codec"}},
+            headers={"x-generation-id": "generation-123"},
+        )
+    )
+    monkeypatch.setattr(openrouter_provider_module.httpx, "AsyncClient", lambda: fake_client)
+    monkeypatch.setattr(openrouter_provider_module.settings, "openrouter_api_key", "test-key")
+    monkeypatch.setattr(
+        openrouter_provider_module.settings,
+        "stt_model",
+        "openai/gpt-4o-mini-transcribe",
+    )
+
+    with caplog.at_level(logging.WARNING, logger="domains.voice.openrouter_provider"):
+        with pytest.raises(ExternalAPIException, match="OpenRouter transcription failed"):
+            await OpenRouterVoiceProvider().transcribe_audio(
+                filename="speech.webm",
+                content_type="audio/webm",
+                audio_bytes=b"audio-bytes",
+            )
+
+    assert "OpenRouter STT request failed status_code=400" in caplog.text
+    assert "model=openai/gpt-4o-mini-transcribe" in caplog.text
+    assert "filename='speech.webm'" in caplog.text
+    assert "content_type=audio/webm" in caplog.text
+    assert "byte_length=11" in caplog.text
+    assert "request_id=generation-123" in caplog.text
+    assert "Unsupported audio codec" in caplog.text
+    assert "test-key" not in caplog.text
 
 
 @pytest.mark.asyncio
