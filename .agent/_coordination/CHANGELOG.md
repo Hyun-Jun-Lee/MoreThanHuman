@@ -184,3 +184,9 @@
 - **Flutter 멀티모달 turn 연동 구현**: Conversation composer를 `/turn/` 텍스트·음성 입력으로 전환하고 녹음 업로드, transcript 표시, optional TTS 재생을 연결
 - **Flutter 음성 녹음·재생 UX 계획 작성**: 녹음 상태, 취소·권한 실패, 임시 파일 정리, assistant audio playback 상태 강화 계획을 추가
 - **Flutter 음성 녹음·재생 UX 구현**: 녹음 타이머·취소·권한/빈 녹음 오류, 임시 파일 정리, assistant audio playback 상태와 중복 재생 방지를 적용
+
+## 2026-08-28
+
+- **Assistant 음성 재생 제어 개선**: 새 응답만 한 번 자동 재생하고, AI 말풍선 우하단 스피커 아이콘으로 재생·중단을 제어하도록 변경
+- **대화 제어 아이콘 가시성 보정**: Home·History 카드 삭제 X를 우상단으로 고정하고, AI 말풍선 음성 아이콘의 대비와 위치를 강화
+- **대화 삭제 로딩 즉시화**: 삭제 확인 직후 Home·History 목록을 로딩 상태로 전환하고, 삭제 완료 뒤 최신 목록을 표시하도록 변경

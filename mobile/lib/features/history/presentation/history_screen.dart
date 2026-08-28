@@ -131,10 +131,12 @@ class HistoryScreen extends ConsumerWidget {
           'Conversation deletion is unavailable for this repository.',
         );
       }
-      await (repository as ConversationDeletionRepository).deleteConversation(
-        conversation.id,
-      );
-      await ref.read(recentConversationsControllerProvider.notifier).reload();
+      await ref
+          .read(recentConversationsControllerProvider.notifier)
+          .refreshAfterMutation(
+            () => (repository as ConversationDeletionRepository)
+                .deleteConversation(conversation.id),
+          );
     } on Object {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

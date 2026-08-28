@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:curitalk/app/theme/app_theme.dart';
+import 'package:curitalk/app/theme/tokens/tokens.dart';
 import 'package:curitalk/features/conversation/conversation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -69,8 +70,21 @@ void main() {
       ),
     );
 
-    expect(find.text('Play response'), findsOneWidget);
-    await tester.tap(find.text('Play response'));
+    expect(find.byIcon(Icons.volume_up_rounded), findsOneWidget);
+    final Finder audioIconFinder = find.byTooltip('Replay response');
+    final Finder bubbleFinder = find.descendant(
+      of: find.byType(ConversationMessageTile),
+      matching: find.byType(DecoratedBox),
+    );
+    final Rect audioIconRect = tester.getRect(audioIconFinder);
+    final Rect bubbleRect = tester.getRect(bubbleFinder);
+    expect(audioIconRect.right, closeTo(bubbleRect.right - AppSpacing.lg, 0.1));
+    expect(
+      audioIconRect.bottom,
+      closeTo(bubbleRect.bottom - AppSpacing.md, 0.1),
+    );
+
+    await tester.tap(find.byTooltip('Replay response'));
     await tester.pump();
 
     expect(player.playedAudio?.format, 'mp3');
@@ -80,6 +94,7 @@ void main() {
     WidgetTester tester,
   ) async {
     final _FakeConversationAudioPlayer player = _FakeConversationAudioPlayer();
+    int autoPlayStartedCount = 0;
     await tester.pumpWidget(
       _app(
         ConversationMessage(
@@ -96,6 +111,7 @@ void main() {
         ),
         audioPlayer: player,
         autoPlayAudio: true,
+        onAutoPlayStarted: () => autoPlayStartedCount++,
       ),
     );
 
@@ -103,13 +119,15 @@ void main() {
     await tester.pump();
 
     expect(player.playCount, 1);
-    expect(find.text('Replay response'), findsOneWidget);
+    expect(autoPlayStartedCount, 1);
+    expect(find.byTooltip('Replay response'), findsOneWidget);
 
     await tester.pump();
     expect(player.playCount, 1);
+    expect(autoPlayStartedCount, 1);
   });
 
-  testWidgets('prevents duplicate assistant audio playback taps', (
+  testWidgets('stops assistant audio playback from the bubble icon', (
     WidgetTester tester,
   ) async {
     final Completer<void> playCompleter = Completer<void>();
@@ -134,18 +152,16 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('Play response'));
+    await tester.tap(find.byTooltip('Replay response'));
     await tester.pump();
-    expect(find.text('Playing response'), findsOneWidget);
+    expect(find.byTooltip('Stop audio response'), findsOneWidget);
 
-    await tester.tap(find.text('Playing response'), warnIfMissed: false);
+    await tester.tap(find.byTooltip('Stop audio response'));
+    await tester.pump();
     expect(player.playCount, 1);
+    expect(player.stopCount, 1);
 
-    playCompleter.complete();
-    await tester.pump();
-    expect(find.text('Replay response'), findsOneWidget);
-
-    await tester.tap(find.text('Replay response'));
+    await tester.tap(find.byTooltip('Replay response'));
     await tester.pump();
     expect(player.playCount, 2);
   });
@@ -177,7 +193,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('Play response'));
+    await tester.tap(find.byTooltip('Replay response'));
     await tester.pumpAndSettle();
 
     expect(
@@ -205,7 +221,9 @@ void main() {
 
     expect(find.textContaining('Sure.'), findsOneWidget);
     expect(
-      find.text('Audio for this response is unavailable. You can keep chatting with the text.'),
+      find.text(
+        'Audio for this response is unavailable. You can keep chatting with the text.',
+      ),
       findsOneWidget,
     );
     expect(find.text('Retry'), findsNothing);
@@ -216,6 +234,7 @@ Widget _app(
   ConversationMessage message, {
   ConversationAudioPlayer? audioPlayer,
   bool autoPlayAudio = false,
+  VoidCallback? onAutoPlayStarted,
 }) {
   return ProviderScope(
     overrides: [
@@ -228,6 +247,7 @@ Widget _app(
         body: ConversationMessageTile(
           message: message,
           autoPlayAudio: autoPlayAudio,
+          onAutoPlayStarted: onAutoPlayStarted,
         ),
       ),
     ),
@@ -241,6 +261,7 @@ class _FakeConversationAudioPlayer implements ConversationAudioPlayer {
   final ConversationAudioException? error;
   VoiceAudioResponse? playedAudio;
   int playCount = 0;
+  int stopCount = 0;
 
   @override
   Future<void> play(VoiceAudioResponse audio) async {
@@ -258,6 +279,15 @@ class _FakeConversationAudioPlayer implements ConversationAudioPlayer {
 
   @override
   Future<void> dispose() async {}
+
+  @override
+  Future<void> stop() async {
+    stopCount++;
+    final Completer<void>? completer = playCompleter;
+    if (completer != null && !completer.isCompleted) {
+      completer.complete();
+    }
+  }
 }
 
 GrammarFeedback _feedback({required bool hasErrors}) {

@@ -193,6 +193,8 @@ class AppCopy {
   String get audioLoadingLabel => isKorean ? '음성 불러오는 중' : 'Loading audio';
   String get audioPlayingLabel => isKorean ? '응답 음성 재생 중' : 'Playing response';
   String get audioReplayLabel => isKorean ? '응답 음성 다시 듣기' : 'Replay response';
+  String get stopAudioResponseLabel =>
+      isKorean ? '음성 응답 중단' : 'Stop audio response';
   String get audioPlayLabel => isKorean ? '응답 음성 듣기' : 'Play response';
   String get customRoleplayInputTooShort =>
       isKorean ? '두 글자 이상 입력해 주세요.' : 'Enter at least 2 characters.';

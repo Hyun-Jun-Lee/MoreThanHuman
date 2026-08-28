@@ -29,6 +29,18 @@ void main() {
     expect(state.isSending, isFalse);
     expect(state.messages.last.content, 'AI response');
     expect(state.messages.last.audio?.format, 'mp3');
+    expect(state.autoPlayAudioMessageIds, <String>{state.messages.last.id});
+
+    container
+        .read(conversationControllerProvider('conversation-id').notifier)
+        .consumeAutoPlayAudio(state.messages.last.id);
+    expect(
+      container
+          .read(conversationControllerProvider('conversation-id'))
+          .value!
+          .autoPlayAudioMessageIds,
+      isEmpty,
+    );
   });
 
   test('keeps retry target when send fails', () async {
@@ -94,6 +106,7 @@ void main() {
       );
       expect(state.messages.last.content, 'AI response');
       expect(state.messages.last.audio?.format, 'mp3');
+      expect(state.autoPlayAudioMessageIds, <String>{state.messages.last.id});
     },
   );
 
@@ -155,6 +168,11 @@ void main() {
     );
 
     expect(state.messages.single.audio?.format, 'mp3');
+    expect(state.autoPlayAudioMessageIds, <String>{state.messages.single.id});
+    expect(
+      container.read(initialAssistantAudioProvider('conversation-id')),
+      isNull,
+    );
   });
 }
 

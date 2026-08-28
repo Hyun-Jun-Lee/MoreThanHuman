@@ -27,6 +27,10 @@ class InitialAssistantAudioController extends Notifier<InitialAssistantAudio?> {
   void setAudio(InitialAssistantAudio audio) {
     state = audio;
   }
+
+  void clear() {
+    state = null;
+  }
 }
 
 enum StartConversationFailureReason {

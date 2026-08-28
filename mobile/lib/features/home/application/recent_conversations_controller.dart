@@ -38,6 +38,26 @@ class RecentConversationsController
     }
   }
 
+  Future<void> refreshAfterMutation(Future<void> Function() mutation) async {
+    final List<ConversationSummary>? previous = state.value;
+    _setRefreshing(true);
+    state = const AsyncLoading<List<ConversationSummary>>();
+    try {
+      await mutation();
+      final List<ConversationSummary> conversations = await ref
+          .read(homeRepositoryProvider)
+          .listRecentConversations();
+      state = AsyncData<List<ConversationSummary>>(conversations);
+    } on Object catch (error, stackTrace) {
+      state = previous == null
+          ? AsyncError<List<ConversationSummary>>(error, stackTrace)
+          : AsyncData<List<ConversationSummary>>(previous);
+      rethrow;
+    } finally {
+      _setRefreshing(false);
+    }
+  }
+
   void _setRefreshing(bool isRefreshing) {
     ref
         .read(recentConversationsRefreshingProvider.notifier)

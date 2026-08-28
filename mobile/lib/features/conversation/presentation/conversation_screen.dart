@@ -329,7 +329,10 @@ class _ConversationMessageList extends ConsumerWidget {
         ConversationMessageTile(
           key: ValueKey(message.id),
           message: message,
-          autoPlayAudio: _shouldAutoPlayAudio(message),
+          autoPlayAudio: state.autoPlayAudioMessageIds.contains(message.id),
+          onAutoPlayStarted: () => ref
+              .read(conversationControllerProvider(conversationId).notifier)
+              .consumeAutoPlayAudio(message.id),
         ),
         const SizedBox(height: AppSpacing.md),
       ],
@@ -379,10 +382,6 @@ class _ConversationMessageList extends ConsumerWidget {
     return ListView(children: children);
   }
 
-  bool _shouldAutoPlayAudio(ConversationMessage message) {
-    return message.role == ConversationMessageRole.assistant &&
-        message.audio != null;
-  }
 }
 
 class _SendFailureCard extends StatelessWidget {

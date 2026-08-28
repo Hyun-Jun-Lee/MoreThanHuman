@@ -16,6 +16,7 @@ class ConversationState {
     this.failedAudioFile,
     this.failureReason,
     this.assistantAudioStatus,
+    this.autoPlayAudioMessageIds = const <String>{},
   });
 
   const ConversationState.empty()
@@ -24,7 +25,8 @@ class ConversationState {
       failedMessage = null,
       failedAudioFile = null,
       failureReason = null,
-      assistantAudioStatus = null;
+      assistantAudioStatus = null,
+      autoPlayAudioMessageIds = const <String>{};
 
   final List<ConversationMessage> messages;
   final bool isSending;
@@ -32,6 +34,7 @@ class ConversationState {
   final ConversationAudioFile? failedAudioFile;
   final ConversationSendFailureReason? failureReason;
   final AssistantAudioStatus? assistantAudioStatus;
+  final Set<String> autoPlayAudioMessageIds;
 
   ConversationState copyWith({
     List<ConversationMessage>? messages,
@@ -43,6 +46,7 @@ class ConversationState {
     ConversationSendFailureReason? failureReason,
     AssistantAudioStatus? assistantAudioStatus,
     bool clearAssistantAudioStatus = false,
+    Set<String>? autoPlayAudioMessageIds,
   }) {
     return ConversationState(
       messages: messages ?? this.messages,
@@ -57,6 +61,8 @@ class ConversationState {
       assistantAudioStatus: clearAssistantAudioStatus
           ? null
           : assistantAudioStatus ?? this.assistantAudioStatus,
+      autoPlayAudioMessageIds:
+          autoPlayAudioMessageIds ?? this.autoPlayAudioMessageIds,
     );
   }
 }
@@ -71,17 +77,35 @@ class ConversationController extends AsyncNotifier<ConversationState> {
     final PaginatedMessages page = await ref
         .watch(conversationRepositoryProvider)
         .listMessages(conversationId);
+    final InitialAssistantAudio? initialAudio = ref.read(
+      initialAssistantAudioProvider(conversationId),
+    );
+    final List<ConversationMessage> messages = _attachInitialAssistantAudio(
+      page.results,
+      initialAudio,
+    );
+    final int initialAssistantIndex = initialAudio == null
+        ? -1
+        : _findInitialAssistantIndex(messages, initialAudio.responseText);
+    final String? initialAutoPlayMessageId =
+        initialAudio?.audio == null || initialAssistantIndex < 0
+        ? null
+        : messages[initialAssistantIndex].id;
+    if (initialAudio != null) {
+      ref.read(initialAssistantAudioProvider(conversationId).notifier).clear();
+    }
     return ConversationState(
-      messages: _attachInitialAssistantAudio(page.results),
+      messages: messages,
+      autoPlayAudioMessageIds: initialAutoPlayMessageId == null
+          ? const <String>{}
+          : <String>{initialAutoPlayMessageId},
     );
   }
 
   List<ConversationMessage> _attachInitialAssistantAudio(
     List<ConversationMessage> messages,
+    InitialAssistantAudio? initialAudio,
   ) {
-    final InitialAssistantAudio? initialAudio = ref.read(
-      initialAssistantAudioProvider(conversationId),
-    );
     if (initialAudio == null) {
       return messages;
     }
@@ -127,7 +151,9 @@ class ConversationController extends AsyncNotifier<ConversationState> {
   Future<void> reload() async {
     final ConversationState previous =
         state.value ?? const ConversationState.empty();
-    state = AsyncData<ConversationState>(previous.copyWith(failureReason: null));
+    state = AsyncData<ConversationState>(
+      previous.copyWith(failureReason: null),
+    );
     final AsyncValue<ConversationState> next = await AsyncValue.guard(() async {
       final PaginatedMessages page = await ref
           .read(conversationRepositoryProvider)
@@ -204,6 +230,9 @@ class ConversationController extends AsyncNotifier<ConversationState> {
           assistantAudioStatus: response.audioError == null
               ? null
               : AssistantAudioStatus.unavailable,
+          autoPlayAudioMessageIds: response.audio == null
+              ? const <String>{}
+              : <String>{assistantMessage.id},
         ),
       );
     } on Object catch (_) {
@@ -276,6 +305,9 @@ class ConversationController extends AsyncNotifier<ConversationState> {
           assistantAudioStatus: response.audioError == null
               ? null
               : AssistantAudioStatus.unavailable,
+          autoPlayAudioMessageIds: response.audio == null
+              ? const <String>{}
+              : <String>{assistantMessage.id},
         ),
       );
     } on Object catch (_) {
@@ -305,6 +337,20 @@ class ConversationController extends AsyncNotifier<ConversationState> {
       return;
     }
     await sendAudio(audioFile);
+  }
+
+  void consumeAutoPlayAudio(String messageId) {
+    final ConversationState? current = state.value;
+    if (current == null ||
+        !current.autoPlayAudioMessageIds.contains(messageId)) {
+      return;
+    }
+    state = AsyncData<ConversationState>(
+      current.copyWith(
+        autoPlayAudioMessageIds: <String>{...current.autoPlayAudioMessageIds}
+          ..remove(messageId),
+      ),
+    );
   }
 }
 

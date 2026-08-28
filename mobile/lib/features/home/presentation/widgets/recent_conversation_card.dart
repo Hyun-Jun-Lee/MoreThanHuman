@@ -29,39 +29,60 @@ class RecentConversationCard extends StatelessWidget {
       semanticLabel: AppCopy.of(
         context,
       ).recentConversationSemanticLabel(category, title),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: Text(
-                  title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTypography.headlineMd.copyWith(
-                    color: Theme.of(context).colorScheme.onSurface,
+      child: SizedBox(
+        width: double.infinity,
+        child: Stack(
+          children: <Widget>[
+            Padding(
+              padding: EdgeInsets.only(
+                right: onDelete == null ? 0 : AppSpacing.xl,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.headlineMd.copyWith(
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
                   ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    preview,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.bodySm.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (onDelete != null)
+              Positioned(
+                top: 0,
+                right: 0,
+                child: IconButton(
+                  tooltip: AppCopy.of(context).deleteConversationTooltip,
+                  onPressed: onDelete,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints.tightFor(
+                    width: 28,
+                    height: 28,
+                  ),
+                  style: IconButton.styleFrom(
+                    backgroundColor: Colors.transparent,
+                    foregroundColor: Theme.of(context).colorScheme.onSurface,
+                    minimumSize: const Size.square(28),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  icon: const Icon(Icons.close_rounded, size: 18),
                 ),
               ),
-              if (onDelete != null)
-                IconButton(
-                  tooltip: AppCopy.of(context).deleteConversationTooltip,
-                  icon: const Icon(Icons.close_rounded, size: 20),
-                  onPressed: onDelete,
-                ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            preview,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: AppTypography.bodySm.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -16,11 +16,13 @@ class ConversationMessageTile extends ConsumerWidget {
   const ConversationMessageTile({
     required this.message,
     this.autoPlayAudio = false,
+    this.onAutoPlayStarted,
     super.key,
   });
 
   final ConversationMessage message;
   final bool autoPlayAudio;
+  final VoidCallback? onAutoPlayStarted;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -45,15 +47,25 @@ class ConversationMessageTile extends ConsumerWidget {
         ChatBubble(
           message: message.content,
           speaker: isUser ? ChatSpeaker.user : ChatSpeaker.assistant,
+          footer: !isUser && message.audio != null
+              ? _AssistantAudioSlot(
+                  message: message,
+                  autoPlayAudio: autoPlayAudio,
+                  onAutoPlayStarted: onAutoPlayStarted,
+                )
+              : null,
         ),
         if (isUser && !message.isLocalPending) ...<Widget>[
           const SizedBox(height: AppSpacing.xs),
           _GrammarFeedbackSlot(message: message),
         ],
-        if (!isUser &&
-            (message.audio != null || message.audioError != null)) ...<Widget>[
+        if (!isUser && message.audioError != null) ...<Widget>[
           const SizedBox(height: AppSpacing.xs),
-          _AssistantAudioSlot(message: message, autoPlayAudio: autoPlayAudio),
+          _FeedbackStatusText(
+            label: AppCopy.of(
+              context,
+            ).failureMessage('assistantAudioUnavailable'),
+          ),
         ],
       ],
     );
@@ -64,10 +76,12 @@ class _AssistantAudioSlot extends ConsumerStatefulWidget {
   const _AssistantAudioSlot({
     required this.message,
     required this.autoPlayAudio,
+    this.onAutoPlayStarted,
   });
 
   final ConversationMessage message;
   final bool autoPlayAudio;
+  final VoidCallback? onAutoPlayStarted;
 
   @override
   ConsumerState<_AssistantAudioSlot> createState() =>
@@ -76,9 +90,7 @@ class _AssistantAudioSlot extends ConsumerStatefulWidget {
 
 class _AssistantAudioSlotState extends ConsumerState<_AssistantAudioSlot> {
   _AssistantAudioPhase _phase = _AssistantAudioPhase.idle;
-  ConversationAudioExceptionReason? _playbackFailureReason;
   bool _autoPlayStarted = false;
-  bool _hasPlayed = false;
 
   @override
   void initState() {
@@ -91,21 +103,13 @@ class _AssistantAudioSlotState extends ConsumerState<_AssistantAudioSlot> {
     super.didUpdateWidget(oldWidget);
     if (_audioIdentity(oldWidget.message) != _audioIdentity(widget.message)) {
       _phase = _AssistantAudioPhase.idle;
-      _playbackFailureReason = null;
       _autoPlayStarted = false;
-      _hasPlayed = false;
     }
     _scheduleAutoPlayIfNeeded();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (widget.message.audioError != null) {
-      return _FeedbackStatusText(
-        label: AppCopy.of(context).failureMessage('assistantAudioUnavailable'),
-      );
-    }
-
     final VoiceAudioResponse? audio = widget.message.audio;
     if (audio == null) {
       return const SizedBox.shrink();
@@ -114,44 +118,25 @@ class _AssistantAudioSlotState extends ConsumerState<_AssistantAudioSlot> {
     final bool isBusy =
         _phase == _AssistantAudioPhase.loading ||
         _phase == _AssistantAudioPhase.playing;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Align(
-          alignment: Alignment.centerLeft,
-          child: OutlinedButton.icon(
-            onPressed: isBusy ? null : () => _play(audio),
-            icon: _phase == _AssistantAudioPhase.loading
-                ? SizedBox.square(
-                    dimension: AppSize.icon,
-                    child: CircularProgressIndicator(
-                      strokeWidth: AppBorderWidth.focused,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  )
-                : Icon(
-                    _phase == _AssistantAudioPhase.playing
-                        ? Icons.graphic_eq_rounded
-                        : Icons.volume_up_rounded,
-                  ),
-            label: Text(switch (_phase) {
-              _AssistantAudioPhase.loading => AppCopy.of(context).audioLoadingLabel,
-              _AssistantAudioPhase.playing => AppCopy.of(context).audioPlayingLabel,
-              _ => _hasPlayed
-                  ? AppCopy.of(context).audioReplayLabel
-                  : AppCopy.of(context).audioPlayLabel,
-            }),
+    final AppCopy copy = AppCopy.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.xs),
+      child: Tooltip(
+        message: isBusy ? copy.stopAudioResponseLabel : copy.audioReplayLabel,
+        child: IconButton(
+          onPressed: isBusy ? _stop : () => _play(audio),
+          iconSize: 20,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+          style: IconButton.styleFrom(
+            backgroundColor: AppPalette.blockLime,
+            foregroundColor: AppPalette.ink,
+            minimumSize: const Size.square(32),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           ),
+          icon: Icon(isBusy ? Icons.stop_rounded : Icons.volume_up_rounded),
         ),
-        if (_playbackFailureReason != null) ...<Widget>[
-          const SizedBox(height: AppSpacing.xxs),
-          _FeedbackStatusText(
-            label: AppCopy.of(context).failureMessage(
-              _playbackFailureReason!.name,
-            ),
-          ),
-        ],
-      ],
+      ),
     );
   }
 
@@ -166,6 +151,7 @@ class _AssistantAudioSlotState extends ConsumerState<_AssistantAudioSlot> {
     _autoPlayStarted = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
+        widget.onAutoPlayStarted?.call();
         unawaited(_play(audio));
       }
     });
@@ -178,7 +164,6 @@ class _AssistantAudioSlotState extends ConsumerState<_AssistantAudioSlot> {
     }
     setState(() {
       _phase = _AssistantAudioPhase.loading;
-      _playbackFailureReason = null;
     });
     try {
       final Future<void> playFuture = ref
@@ -190,26 +175,44 @@ class _AssistantAudioSlotState extends ConsumerState<_AssistantAudioSlot> {
       setState(() => _phase = _AssistantAudioPhase.playing);
       await playFuture;
       if (mounted) {
-        setState(() {
-          _phase = _AssistantAudioPhase.idle;
-          _hasPlayed = true;
-        });
+        setState(() => _phase = _AssistantAudioPhase.idle);
       }
     } on ConversationAudioException catch (error) {
       if (mounted) {
         setState(() {
           _phase = _AssistantAudioPhase.error;
-          _playbackFailureReason = error.reason;
         });
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(
+        ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
               AppCopy.of(context).failureMessage(error.reason.name),
             ),
           ),
         );
+      }
+    }
+  }
+
+  Future<void> _stop() async {
+    if (_phase != _AssistantAudioPhase.loading &&
+        _phase != _AssistantAudioPhase.playing) {
+      return;
+    }
+    try {
+      await ref.read(conversationAudioPlayerProvider).stop();
+    } on ConversationAudioException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              AppCopy.of(context).failureMessage(error.reason.name),
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _phase = _AssistantAudioPhase.idle);
       }
     }
   }
@@ -250,9 +253,9 @@ class _GrammarFeedbackSlot extends ConsumerWidget {
         label: AppCopy.of(context).grammarDelayedLabel,
       ),
       GrammarFeedbackPollingStatus.error => _FeedbackStatusText(
-        label: AppCopy.of(context).failureMessage(
-          state.failureReason?.name ?? 'grammarRequestFailed',
-        ),
+        label: AppCopy.of(
+          context,
+        ).failureMessage(state.failureReason?.name ?? 'grammarRequestFailed'),
       ),
     };
   }

@@ -51,6 +51,32 @@ void main() {
     await tester.tap(find.text('Osaka food trip'));
     expect(tapCount, 1);
   });
+
+  testWidgets('places the small delete X at the card top right', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      _themedApp(
+        RecentConversationCard(
+          category: 'Travel',
+          title: 'Osaka food trip',
+          preview: 'Let us make sure we visit Dotonbori for takoyaki.',
+          color: AppPalette.blockLimeSoft,
+          onTap: () {},
+          onDelete: () {},
+        ),
+      ),
+    );
+
+    final Finder cardFinder = find.byType(RecentConversationCard);
+    final Finder deleteFinder = find.byTooltip('Delete conversation');
+    final Rect cardRect = tester.getRect(cardFinder);
+    final Rect deleteRect = tester.getRect(deleteFinder);
+
+    expect(deleteRect.size, const Size(28, 28));
+    expect(deleteRect.right, closeTo(cardRect.right - AppSpacing.lg, 0.1));
+    expect(deleteRect.top, closeTo(cardRect.top + AppSpacing.lg, 0.1));
+  });
 }
 
 Widget _themedApp(Widget child) {

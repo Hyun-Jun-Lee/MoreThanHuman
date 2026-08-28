@@ -10,12 +10,14 @@ class ChatBubble extends StatelessWidget {
   const ChatBubble({
     required this.message,
     required this.speaker,
+    this.footer,
     this.semanticLabel,
     super.key,
   });
 
   final String message;
   final ChatSpeaker speaker;
+  final Widget? footer;
   final String? semanticLabel;
 
   bool get _isUser => speaker == ChatSpeaker.user;
@@ -65,11 +67,22 @@ class ChatBubble extends StatelessWidget {
                     horizontal: AppSpacing.lg,
                     vertical: AppSpacing.md,
                   ),
-                  child: AppParagraphText(
-                    text: displayMessage,
-                    style: AppTypography.bodySm.copyWith(
-                      color: foregroundColor,
-                    ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      AppParagraphText(
+                        text: displayMessage,
+                        style: AppTypography.bodySm.copyWith(
+                          color: foregroundColor,
+                        ),
+                      ),
+                      if (footer != null)
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: footer!,
+                        ),
+                    ],
                   ),
                 ),
               ),

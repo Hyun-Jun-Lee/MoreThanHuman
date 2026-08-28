@@ -84,7 +84,7 @@ void main() {
     expect(repository.sentAudioIncludeAudio, <bool>[true]);
     expect(find.text('Audio transcript'), findsOneWidget);
     expect(audioPlayer.playCount, 1);
-    expect(find.text('Replay response'), findsOneWidget);
+    expect(find.byTooltip('Replay response'), findsOneWidget);
   });
 
   testWidgets('voice input can cancel recording without upload', (
@@ -188,7 +188,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.text('We could not hear enough audio. Try speaking a little longer.'),
+      find.text(
+        'We could not hear enough audio. Try speaking a little longer.',
+      ),
       findsOneWidget,
     );
     expect(repository.sentAudioFilenames, isEmpty);
@@ -223,7 +225,9 @@ void main() {
 
       expect(recorder.stopCount, 1);
       expect(
-        find.text('We could not hear enough audio. Try speaking a little longer.'),
+        find.text(
+          'We could not hear enough audio. Try speaking a little longer.',
+        ),
         findsOneWidget,
       );
       expect(repository.sentAudioFilenames, isEmpty);
@@ -264,7 +268,9 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.text('We could not hear enough audio. Try speaking a little longer.'),
+      find.text(
+        'We could not hear enough audio. Try speaking a little longer.',
+      ),
       findsNothing,
     );
     expect(repository.sentAudioFilenames, <String>['recording.m4a']);
@@ -308,7 +314,7 @@ void main() {
     expect(repository.sentTextTurns, <String>['I need coffee.']);
     expect(repository.sentTextIncludeAudio, <bool>[true]);
     expect(audioPlayer.playCount, 1);
-    expect(find.text('Replay response'), findsOneWidget);
+    expect(find.byTooltip('Replay response'), findsOneWidget);
   });
 }
 
@@ -498,6 +504,9 @@ class _FakeConversationAudioPlayer implements ConversationAudioPlayer {
   Future<void> play(VoiceAudioResponse audio) async {
     playCount++;
   }
+
+  @override
+  Future<void> stop() async {}
 
   @override
   Future<void> dispose() async {}

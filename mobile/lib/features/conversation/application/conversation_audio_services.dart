@@ -263,6 +263,8 @@ class RecordConversationAudioRecorder implements ConversationAudioRecorder {
 abstract interface class ConversationAudioPlayer {
   Future<void> play(VoiceAudioResponse audio);
 
+  Future<void> stop();
+
   Future<void> dispose();
 }
 
@@ -271,14 +273,17 @@ class AudioplayersConversationAudioPlayer implements ConversationAudioPlayer {
     : _player = player ?? AudioPlayer();
 
   final AudioPlayer _player;
+  Completer<void>? _activeCompletion;
+  StreamSubscription<void>? _activeCompletionSubscription;
 
   @override
   Future<void> play(VoiceAudioResponse audio) async {
     try {
+      await stop();
       final Uint8List bytes = base64Decode(audio.base64);
       final Completer<void> completed = Completer<void>();
-      late final StreamSubscription<void> subscription;
-      subscription = _player.onPlayerComplete.listen((_) {
+      _activeCompletion = completed;
+      _activeCompletionSubscription = _player.onPlayerComplete.listen((_) {
         if (!completed.isCompleted) {
           completed.complete();
         }
@@ -287,8 +292,16 @@ class AudioplayersConversationAudioPlayer implements ConversationAudioPlayer {
         await _player.play(BytesSource(bytes, mimeType: audio.contentType));
         await completed.future;
       } finally {
-        await subscription.cancel();
+        if (identical(_activeCompletion, completed)) {
+          _activeCompletion = null;
+          final StreamSubscription<void>? subscription =
+              _activeCompletionSubscription;
+          _activeCompletionSubscription = null;
+          await subscription?.cancel();
+        }
       }
+    } on ConversationAudioException {
+      rethrow;
     } on Object catch (error) {
       throw ConversationAudioException(
         'Could not play audio response.',
@@ -299,8 +312,37 @@ class AudioplayersConversationAudioPlayer implements ConversationAudioPlayer {
   }
 
   @override
+  Future<void> stop() async {
+    try {
+      final Completer<void>? completed = _activeCompletion;
+      _activeCompletion = null;
+      if (completed != null && !completed.isCompleted) {
+        completed.complete();
+      }
+      final StreamSubscription<void>? subscription =
+          _activeCompletionSubscription;
+      _activeCompletionSubscription = null;
+      try {
+        await subscription?.cancel();
+      } finally {
+        await _player.stop();
+      }
+    } on Object catch (error) {
+      throw ConversationAudioException(
+        'Could not stop audio response.',
+        reason: ConversationAudioExceptionReason.playbackFailed,
+        cause: error,
+      );
+    }
+  }
+
+  @override
   Future<void> dispose() async {
-    await _player.dispose();
+    try {
+      await stop();
+    } finally {
+      await _player.dispose();
+    }
   }
 }
 

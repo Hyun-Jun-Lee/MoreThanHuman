@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:curitalk/app/theme/app_theme.dart';
 import 'package:curitalk/core/storage/storage.dart';
 import 'package:curitalk/features/auth/auth.dart';
+import 'package:curitalk/features/conversation/conversation.dart';
 import 'package:curitalk/features/home/home.dart';
 import 'package:curitalk/features/language/language.dart';
 import 'package:curitalk/features/onboarding/onboarding.dart';
@@ -277,6 +278,35 @@ void main() {
     expect(_refreshIndicator, findsNothing);
   });
 
+  testWidgets(
+    'shows loading immediately after confirming conversation deletion',
+    (WidgetTester tester) async {
+      final _DeferredDeletionConversationRepository conversationRepository =
+          _DeferredDeletionConversationRepository();
+      await tester.pumpWidget(
+        _homeApp(
+          homeRepository: _DeletionHomeRepository(),
+          conversationRepository: conversationRepository,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Delete conversation'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete'));
+      await tester.pump();
+
+      expect(conversationRepository.deleteStarted, isTrue);
+      expect(find.text('Loading recent conversations...'), findsOneWidget);
+      expect(find.text('Conversation 1'), findsNothing);
+
+      conversationRepository.completeDeletion();
+      await tester.pumpAndSettle();
+
+      expect(find.text('Start a conversation'), findsOneWidget);
+    },
+  );
+
   testWidgets('History tab calls navigation callback', (
     WidgetTester tester,
   ) async {
@@ -383,6 +413,7 @@ Widget _homeApp({
   VoidCallback? onHistorySelected,
   List<ConversationSummary> conversations = const <ConversationSummary>[],
   HomeRepository? homeRepository,
+  ConversationRepository? conversationRepository,
 }) {
   final _MemoryTokenStorage effectiveTokenStorage =
       tokenStorage ?? _MemoryTokenStorage(tokens: _tokens, deviceId: _deviceId);
@@ -411,6 +442,10 @@ Widget _homeApp({
       homeRepositoryProvider.overrideWithValue(
         homeRepository ?? _FakeHomeRepository(conversations: conversations),
       ),
+      if (conversationRepository != null)
+        conversationRepositoryProvider.overrideWithValue(
+          conversationRepository,
+        ),
     ],
     child: MaterialApp(
       theme: AppTheme.light,
@@ -616,6 +651,91 @@ class _RefreshableHomeRepository implements HomeRepository {
       ),
     ]);
   }
+}
+
+class _DeletionHomeRepository implements HomeRepository {
+  int _callCount = 0;
+
+  @override
+  Future<List<ConversationSummary>> listRecentConversations({
+    int limit = 5,
+  }) async {
+    _callCount += 1;
+    return _callCount == 1
+        ? _recentConversations(count: 1)
+        : const <ConversationSummary>[];
+  }
+}
+
+class _DeferredDeletionConversationRepository
+    implements ConversationRepository, ConversationDeletionRepository {
+  final Completer<void> _deleteCompleter = Completer<void>();
+  bool deleteStarted = false;
+
+  @override
+  Future<void> deleteConversation(String conversationId) {
+    deleteStarted = true;
+    return _deleteCompleter.future;
+  }
+
+  void completeDeletion() {
+    _deleteCompleter.complete();
+  }
+
+  @override
+  Future<PaginatedMessages> listMessages(
+    String conversationId, {
+    int limit = 50,
+    int offset = 0,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<MessageResponse> sendMessage({
+    required String conversationId,
+    required String message,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<MultimodalMessageResponse> sendAudioTurn({
+    required String conversationId,
+    required ConversationAudioFile audioFile,
+    bool includeAudioResponse = true,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<MultimodalMessageResponse> sendTextTurn({
+    required String conversationId,
+    required String text,
+    bool includeAudioResponse = true,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<MultimodalConversationResponse> startFreeChat({
+    required String firstMessage,
+    String? searchContext,
+    String? topic,
+    String? conversationDirection,
+    String? selectedQuestion,
+    bool includeAudioResponse = true,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<MultimodalConversationResponse> startFreeChatWithAudio({
+    required ConversationAudioFile audioFile,
+    String? searchContext,
+    String? topic,
+    String? conversationDirection,
+    String? selectedQuestion,
+    bool includeAudioResponse = true,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<MultimodalConversationResponse> startRoleplay({
+    required String roleCharacter,
+    String roleplayDifficulty = 'NORMAL',
+    String? searchContext,
+    bool includeAudioResponse = true,
+  }) => throw UnimplementedError();
 }
 
 List<ConversationSummary> _recentConversations({required int count}) {
