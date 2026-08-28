@@ -43,13 +43,16 @@ def test_free_chat_prompt_includes_topic_prep_handoff_context():
     assert "counterarguments" in prompt
 
 
-def test_free_chat_prompt_without_topic_prep_keeps_existing_shape():
+def test_free_chat_prompt_prioritizes_natural_conversation_over_unsolicited_teaching():
     service = ConversationService(repository=None, grammar_repository=None)
 
     prompt = service.build_free_chat_prompt(search_context=None)
 
     assert "Topic Prep Handoff" not in prompt
-    assert "friendly and helpful English conversation learning assistant" in prompt
+    assert "natural English conversation partner for a learner" in prompt
+    assert "only when the user explicitly asks" in prompt
+    assert "Do not proactively correct, evaluate, or teach" in prompt
+    assert "Teach practical English expressions" not in prompt
 
 
 def test_free_chat_prompt_can_target_korean_with_english_feedback():
@@ -62,7 +65,7 @@ def test_free_chat_prompt_can_target_korean_with_english_feedback():
 
     prompt = service.build_free_chat_prompt(search_context=None, language_context=context)
 
-    assert "Korean conversation learning assistant" in prompt
+    assert "natural Korean conversation partner for a learner" in prompt
     assert "Always communicate in Korean" in prompt
     assert "Use English only for brief explanations" in prompt
     assert "particles" in prompt
