@@ -167,6 +167,14 @@ Splash → Onboarding(최초 1회) → Google Login → Home
 - History: 하단 `History` 탭에서 대화 목록을 보고 기존 대화로 다시 진입
 - Conversation: 최근 대화, Free Chat 시작, Roleplay 시작이 모두 `/conversation/:conversationId`로 합류
 
+## 시스템 UI 언어와 학습 언어
+
+`AppCopy.of(context)`는 기기 시스템 locale이 `ko`일 때만 한국어 UI를 표시하고, 영어와 그 밖의 locale은 영어 UI로 표시해요. 이 규칙은 온보딩과 로그인뿐 아니라 내비게이션, 버튼, 로딩·오류 안내, 음성 control, 접근성 label까지 적용돼요.
+
+시스템 UI 언어는 profile의 학습 언어와 별개예요. `LearningLanguageContext`는 native/target/feedback language와 기존 conversation snapshot을 계속 소유하므로, 시스템 언어가 바뀌어도 대화·문법 피드백·역할극·Topic Prep의 원문 콘텐츠와 서버 요청은 바뀌지 않아요. Topic Input의 정적 예시 검색어만 사용자의 native language로 선택하고, 누른 문구를 그대로 검색 요청에 사용해요. 레거시 `zh` 학습 프로필은 유지하며, 이때도 앱 chrome은 영어 fallback을 사용해요.
+
+클라이언트 전송·녹음·재생·문법 조회 실패는 controller가 locale-neutral reason으로 전달하고 presentation이 `AppCopy`의 낮은 압박의 재시도 문구로 표시해요. 서버·provider의 원본 오류 detail은 사용자 화면에 노출하지 않아요.
+
 ## Home Navigation 흐름
 
 Home의 좌측 햄버거 메뉴는 v1에서 제거했어요. 하단 네비게이션은 다음처럼 동작해요.
@@ -222,7 +230,7 @@ Conversation 화면은 Free Chat 시작, Roleplay 시작, Home 최근 대화 진
 
 메시지는 서버의 시간순 목록을 기준으로 표시해요. 텍스트 전송 중에는 사용자 메시지를 즉시 보여주고 `TypingIndicator`를 표시한 뒤, 성공하면 AI 응답을 반영하고 canonical 메시지 목록을 다시 불러와요. 실패하면 같은 메시지를 Retry할 수 있어요. AI 응답은 서버 원문을 바꾸지 않고 화면 표시 단계에서 문장 단위 줄바꿈과 누락된 공백을 보정해 읽기 쉽게 보여줘요.
 
-새 채팅 composer는 기존 텍스트 전용 `/message/` 대신 `/turn/` API를 사용해요. 텍스트 입력은 JSON body의 `text`와 `include_audio_response=false`를 보내고, 음성 입력은 마이크 버튼으로 `.m4a`를 녹음한 뒤 multipart `audio_file`과 `include_audio_response=false`를 보내요. 음성 turn 응답의 `transcript`는 사용자 말풍선으로 표시하고, `audio`가 포함되면 AI 말풍선 아래에 재생 버튼을 보여줘요. `audio_error`는 대화 전송 실패와 분리된 비차단 안내로 표시해요.
+새 채팅 composer는 기존 텍스트 전용 `/message/` 대신 `/turn/` API를 사용해요. 텍스트 입력은 JSON body의 `text`와 `include_audio_response=false`를 보내고, 음성 입력은 iOS에서 `.wav`/`audio/wav`, Android에서 `.m4a`/`audio/m4a`를 녹음한 뒤 같은 multipart `audio_file`과 `include_audio_response=false`를 보내요. 1KiB 미만 녹음은 업로드하지 않고 재녹음을 안내해요. 음성 turn 응답의 `transcript`는 사용자 말풍선으로 표시하고, `audio`가 포함되면 AI 말풍선 아래에 재생 버튼을 보여줘요. `audio_error`는 대화 전송 실패와 분리된 비차단 안내로 표시해요.
 
 음성 입력은 `Voice input → Stop recording` 흐름으로 동작하며, 녹음 중에는 타이머와 cancel 버튼을 보여주고 텍스트 입력·전송을 잠가 한 turn에 text와 audio가 섞이지 않게 해요. cancel은 업로드 없이 녹음을 폐기하고, 권한 거부·빈 녹음·녹음 실패는 대화 전송 실패와 분리된 안내로 표시해요. 녹음 임시 파일은 성공적으로 읽은 뒤와 cancel/dispose 시 best-effort로 정리해요. assistant audio 재생은 메시지 단위 loading/playing/error 상태를 가지며, 중복 재생 탭을 막고 playback failure를 send retry와 분리해요.
 

@@ -154,7 +154,10 @@ void main() {
     WidgetTester tester,
   ) async {
     final _FakeConversationAudioPlayer player = _FakeConversationAudioPlayer(
-      error: const ConversationAudioException('Could not play audio response.'),
+      error: const ConversationAudioException(
+        'Could not play audio response.',
+        reason: ConversationAudioExceptionReason.playbackFailed,
+      ),
     );
     await tester.pumpWidget(
       _app(
@@ -177,7 +180,10 @@ void main() {
     await tester.tap(find.text('Play response'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Could not play audio response.'), findsWidgets);
+    expect(
+      find.text('Audio could not be played. Please try again.'),
+      findsWidgets,
+    );
     expect(find.text('Retry'), findsNothing);
   });
 
@@ -198,7 +204,10 @@ void main() {
     );
 
     expect(find.textContaining('Sure.'), findsOneWidget);
-    expect(find.text('TTS unavailable.'), findsOneWidget);
+    expect(
+      find.text('Audio for this response is unavailable. You can keep chatting with the text.'),
+      findsOneWidget,
+    );
     expect(find.text('Retry'), findsNothing);
   });
 }

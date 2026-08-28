@@ -1,4 +1,5 @@
 import 'package:curitalk/app/theme/tokens/tokens.dart';
+import 'package:curitalk/core/copy/copy.dart';
 import 'package:curitalk/core/network/network.dart';
 import 'package:curitalk/core/widgets/widgets.dart';
 import 'package:curitalk/features/auth/auth.dart';
@@ -13,10 +14,10 @@ class LoginScreen extends ConsumerStatefulWidget {
 }
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
-  String? _errorMessage;
+  LoginFailureReason? _failureReason;
 
   Future<void> _signIn() async {
-    setState(() => _errorMessage = null);
+    setState(() => _failureReason = null);
     try {
       if (ref.read(authControllerProvider).hasError) {
         await ref.read(authControllerProvider.notifier).restoreSession();
@@ -32,23 +33,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           .read(authControllerProvider.notifier)
           .signInWithGoogleTokens(tokens);
     } on GoogleIdentityException catch (error) {
-      _showError(error.message);
+      debugPrint('CuritalkAuth login screen GoogleIdentityException: $error');
+      _showFailure(LoginFailureReason.identity);
     } on ApiException catch (error) {
       debugPrint('CuritalkAuth login screen ApiException: $error');
       if (!ref.read(authControllerProvider).hasError) {
         await _signOutGoogleSafely();
       }
-      _showError(error.message);
+      _showFailure(LoginFailureReason.request);
     } on Object catch (error, stackTrace) {
       debugPrint('CuritalkAuth login screen unexpected error: $error');
       debugPrintStack(stackTrace: stackTrace);
-      _showError('Sign-in could not be completed. Please try again.');
+      _showFailure(LoginFailureReason.unknown);
     }
   }
 
-  void _showError(String message) {
+  void _showFailure(LoginFailureReason reason) {
     if (mounted) {
-      setState(() => _errorMessage = message);
+      setState(() => _failureReason = reason);
     }
   }
 
@@ -63,6 +65,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final AsyncValue<AuthSession> auth = ref.watch(authControllerProvider);
+    final AppCopy appCopy = AppCopy.of(context);
+    final AppLoginCopy copy = appCopy.login;
     return AppScaffold(
       body: SingleChildScrollView(
         child: Column(
@@ -70,30 +74,27 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           children: <Widget>[
             Text('CURITALK', style: AppTypography.headlineMd),
             const SizedBox(height: AppSpacing.xxl),
-            Text(
-              'Practice conversation with your own topics.',
-              style: AppTypography.displayLg,
-            ),
+            Text(copy.title, style: AppTypography.displayLg),
             const SizedBox(height: AppSpacing.lg),
             Text(
-              'Build fluency by discussing what actually matters to you. Your interests lead the conversation.',
+              copy.description,
               style: AppTypography.body.copyWith(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
             const SizedBox(height: AppSpacing.xl),
             AppPrimaryButton(
-              label: auth.hasError ? 'TRY AGAIN' : 'CONTINUE WITH GOOGLE',
+              label: auth.hasError ? copy.tryAgainLabel : copy.googleLabel,
               leading: const _GoogleMark(),
               isLoading: auth.isLoading,
               onPressed: _signIn,
             ),
-            if (_errorMessage != null) ...<Widget>[
+            if (_failureReason != null) ...<Widget>[
               const SizedBox(height: AppSpacing.md),
               Semantics(
                 liveRegion: true,
                 child: Text(
-                  _errorMessage!,
+                  appCopy.loginFailureMessage(_failureReason!.name),
                   style: AppTypography.bodySm.copyWith(
                     color: Theme.of(context).colorScheme.error,
                   ),
@@ -101,21 +102,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ),
             ],
             const SizedBox(height: AppSpacing.xxl),
-            const AppColorBlockCard(
+            AppColorBlockCard(
               color: AppPalette.blockPink,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Text('Your topics', style: AppTypography.headlineMd),
-                  SizedBox(height: AppSpacing.lg),
+                  Text(copy.topicCardTitle, style: AppTypography.headlineMd),
+                  const SizedBox(height: AppSpacing.lg),
                   Wrap(
                     spacing: AppSpacing.xs,
                     runSpacing: AppSpacing.xs,
                     children: <Widget>[
-                      Chip(label: Text('GLOBAL NEWS')),
-                      Chip(label: Text('TRAVEL')),
-                      Chip(label: Text('BASEBALL')),
-                      Chip(label: Text('TECHNOLOGY')),
+                      for (final String topic in copy.topicChips)
+                        Chip(label: Text(topic)),
                     ],
                   ),
                 ],
@@ -127,6 +126,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 }
+
+enum LoginFailureReason { identity, request, unknown }
 
 class _GoogleMark extends StatelessWidget {
   const _GoogleMark();

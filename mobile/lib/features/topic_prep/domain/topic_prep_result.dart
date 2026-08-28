@@ -3,7 +3,6 @@ import 'package:curitalk/features/language/language.dart';
 enum TopicPrepDirectionType {
   casualChat('CASUAL_CHAT'),
   debate('DEBATE'),
-  interviewQa('INTERVIEW_QA'),
   explanationPractice('EXPLANATION_PRACTICE');
 
   const TopicPrepDirectionType(this.value);
@@ -182,7 +181,7 @@ class TopicPrepCard {
         summary is! String ||
         summary.trim().isEmpty ||
         directions is! List ||
-        directions.length != 4 ||
+        directions.length != 3 ||
         sources is! List ||
         timestamp == null) {
       throw const FormatException('Topic prep card payload is invalid.');
@@ -205,6 +204,70 @@ class TopicPrepCard {
   final List<SearchSource> sources;
   final TopicPrepQuality quality;
   final DateTime timestamp;
+}
+
+class CustomFocusQuestions {
+  const CustomFocusQuestions({
+    required this.ready,
+    required this.customFocus,
+    required this.firstQuestions,
+    this.retryGuidance,
+  });
+
+  factory CustomFocusQuestions.fromJson(Object? json) {
+    if (json is! Map<String, dynamic>) {
+      throw const FormatException('Custom focus questions must be an object.');
+    }
+    final Object? ready = json['ready'];
+    final Object? customFocus = json['custom_focus'];
+    final Object? questions = json['first_questions'];
+    final Object? retryGuidance = json['retry_guidance'];
+    if (ready is! bool ||
+        customFocus is! String ||
+        customFocus.trim().isEmpty ||
+        questions is! List ||
+        (retryGuidance != null && retryGuidance is! String) ||
+        (ready &&
+            (questions.length != 3 ||
+                questions.any(
+                  (Object? value) => value is! String || value.trim().isEmpty,
+                )))) {
+      throw const FormatException('Custom focus questions payload is invalid.');
+    }
+    return CustomFocusQuestions(
+      ready: ready,
+      customFocus: customFocus.trim(),
+      firstQuestions: questions
+          .whereType<String>()
+          .map((String question) => question.trim())
+          .toList(growable: false),
+      retryGuidance: retryGuidance as String?,
+    );
+  }
+
+  final bool ready;
+  final String customFocus;
+  final List<String> firstQuestions;
+  final String? retryGuidance;
+}
+
+class TopicPrepDirections {
+  const TopicPrepDirections(this.directions);
+
+  factory TopicPrepDirections.fromJson(Object? json) {
+    if (json is! Map<String, dynamic> || json['directions'] is! List) {
+      throw const FormatException('Topic prep directions payload is invalid.');
+    }
+    final List<TopicPrepDirection> directions = (json['directions'] as List)
+        .map(TopicPrepDirection.fromJson)
+        .toList(growable: false);
+    if (directions.length != 3) {
+      throw const FormatException('Topic prep directions count is invalid.');
+    }
+    return TopicPrepDirections(directions);
+  }
+
+  final List<TopicPrepDirection> directions;
 }
 
 class TopicPrepResult {

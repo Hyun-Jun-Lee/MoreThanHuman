@@ -2,12 +2,16 @@ import 'dart:async';
 
 import 'package:curitalk/app/router/app_router.dart';
 import 'package:curitalk/app/theme/tokens/tokens.dart';
+import 'package:curitalk/core/copy/copy.dart';
 import 'package:curitalk/core/widgets/widgets.dart';
 import 'package:curitalk/features/conversation/application/conversation_audio_services.dart';
 import 'package:curitalk/features/conversation/application/conversation_controller.dart';
 import 'package:curitalk/features/conversation/domain/conversation_models.dart';
 import 'package:curitalk/features/conversation/domain/conversation_repository.dart';
+import 'package:curitalk/features/conversation/data/api_conversation_repository.dart';
+import 'package:curitalk/features/conversation/presentation/conversation_delete_dialog.dart';
 import 'package:curitalk/features/conversation/presentation/widgets/widgets.dart';
+import 'package:curitalk/features/home/application/recent_conversations_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -26,6 +30,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
   late final ConversationAudioRecorder _recorder;
   Timer? _recordingTimer;
   _VoiceInputState _voiceInput = const _VoiceInputState.idle();
+  bool _isDeleting = false;
 
   @override
   void initState() {
@@ -49,28 +54,36 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
     final AsyncValue<ConversationState> conversation = ref.watch(
       conversationControllerProvider(widget.conversationId),
     );
+    final AppCopy copy = AppCopy.of(context);
     final bool isSending = conversation.value?.isSending == true;
 
     return AppScaffold(
       appBar: AppBar(
         leading: IconButton(
-          tooltip: 'Back to home',
+          tooltip: copy.backToHomeLabel,
           icon: const Icon(Icons.arrow_back_rounded),
           onPressed: _goBack,
         ),
-        title: const Text('Conversation'),
+        title: Text(copy.conversationTitle),
+        actions: <Widget>[
+          IconButton(
+            tooltip: copy.deleteConversationTooltip,
+            onPressed: _isDeleting ? null : _deleteConversation,
+            icon: const Icon(Icons.delete_outline_rounded),
+          ),
+        ],
       ),
       bottomNavigationBar: AppBottomActionBar(
         child: ChatComposer(
           controller: _composerController,
-          enabled: conversation.hasValue,
+          enabled: conversation.hasValue && !_isDeleting,
           isSending: isSending,
           isRecording: _voiceInput.phase == _VoiceInputPhase.recording,
           isVoiceBusy: _voiceInput.isBusy,
           recordingElapsedText: _voiceInput.phase == _VoiceInputPhase.recording
               ? _formatElapsed(_voiceInput.elapsed)
               : null,
-          voiceStatusLabel: _voiceInput.statusLabel,
+          voiceStatusLabel: _voiceInput.statusLabel(copy),
           onSend: _sendMessage,
           onVoiceInput: _toggleVoiceInput,
           onCancelVoiceInput: _voiceInput.isRecordingActive
@@ -79,11 +92,10 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
         ),
       ),
       body: conversation.when(
-        loading: () =>
-            const AppAsyncStateView.loading(message: 'Loading messages...'),
+        loading: () => AppAsyncStateView.loading(message: copy.loadingMessages),
         error: (_, _) => AppAsyncStateView.error(
-          title: 'Could not load this conversation.',
-          message: 'Check your connection and try again.',
+          title: copy.loadConversationFailedTitle,
+          message: copy.connectionRetryMessage,
           onRetry: () => ref
               .read(
                 conversationControllerProvider(widget.conversationId).notifier,
@@ -93,7 +105,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
         data: (ConversationState state) => _ConversationMessageList(
           conversationId: widget.conversationId,
           state: state,
-          voiceErrorMessage: _voiceInput.errorMessage,
+          voiceFailureReason: _voiceInput.failureReason,
         ),
       ),
     );
@@ -132,8 +144,8 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
             () => _voiceInput =
                 error.reason ==
                     ConversationAudioExceptionReason.permissionDenied
-                ? _VoiceInputState.permissionDenied(error.message)
-                : _VoiceInputState.failed(error.message),
+                ? _VoiceInputState.permissionDenied(error.reason)
+                : _VoiceInputState.failed(error.reason),
           );
         }
       }
@@ -173,7 +185,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
       if (mounted) {
         _stopRecordingTimer();
         setState(() {
-          _voiceInput = _VoiceInputState.failed(error.message);
+          _voiceInput = _VoiceInputState.failed(error.reason);
         });
       }
     }
@@ -227,6 +239,37 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
     }
     context.go(AppRoute.home);
   }
+
+  Future<void> _deleteConversation() async {
+    final bool confirmed = await showConversationDeleteDialog(
+      context: context,
+      title: AppCopy.of(context).conversationTitle,
+    );
+    if (!confirmed || !mounted) return;
+    setState(() => _isDeleting = true);
+    try {
+      final ConversationRepository repository = ref.read(
+        conversationRepositoryProvider,
+      );
+      if (repository is! ConversationDeletionRepository) {
+        throw StateError(
+          'Conversation deletion is unavailable for this repository.',
+        );
+      }
+      await (repository as ConversationDeletionRepository).deleteConversation(
+        widget.conversationId,
+      );
+      ref.invalidate(recentConversationsControllerProvider);
+      if (mounted) context.go(AppRoute.home);
+    } on Object {
+      if (mounted) {
+        setState(() => _isDeleting = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppCopy.of(context).deleteConversationFailed)),
+        );
+      }
+    }
+  }
 }
 
 enum _VoiceInputPhase {
@@ -243,7 +286,7 @@ class _VoiceInputState {
   const _VoiceInputState._({
     required this.phase,
     this.elapsed = Duration.zero,
-    this.errorMessage,
+    this.failureReason,
   });
 
   const _VoiceInputState.idle() : this._(phase: _VoiceInputPhase.idle);
@@ -257,15 +300,16 @@ class _VoiceInputState {
 
   const _VoiceInputState.sending() : this._(phase: _VoiceInputPhase.sending);
 
-  const _VoiceInputState.failed(String message)
-    : this._(phase: _VoiceInputPhase.failed, errorMessage: message);
+  const _VoiceInputState.failed(ConversationAudioExceptionReason reason)
+    : this._(phase: _VoiceInputPhase.failed, failureReason: reason);
 
-  const _VoiceInputState.permissionDenied(String message)
-    : this._(phase: _VoiceInputPhase.permissionDenied, errorMessage: message);
+  const _VoiceInputState.permissionDenied(
+    ConversationAudioExceptionReason reason,
+  ) : this._(phase: _VoiceInputPhase.permissionDenied, failureReason: reason);
 
   final _VoiceInputPhase phase;
   final Duration elapsed;
-  final String? errorMessage;
+  final ConversationAudioExceptionReason? failureReason;
 
   bool get isBusy =>
       phase == _VoiceInputPhase.starting ||
@@ -277,12 +321,12 @@ class _VoiceInputState {
       phase == _VoiceInputPhase.recording ||
       phase == _VoiceInputPhase.stopping;
 
-  String? get statusLabel {
+  String? statusLabel(AppCopy copy) {
     return switch (phase) {
-      _VoiceInputPhase.starting => 'Starting recording...',
-      _VoiceInputPhase.recording => 'Recording...',
-      _VoiceInputPhase.stopping => 'Finishing recording...',
-      _VoiceInputPhase.sending => 'Sending voice message...',
+      _VoiceInputPhase.starting => copy.voiceStatus('starting'),
+      _VoiceInputPhase.recording => copy.voiceStatus('recording'),
+      _VoiceInputPhase.stopping => copy.voiceStatus('stopping'),
+      _VoiceInputPhase.sending => copy.voiceStatus('sending'),
       _ => null,
     };
   }
@@ -291,7 +335,7 @@ class _VoiceInputState {
     return _VoiceInputState._(
       phase: phase,
       elapsed: elapsed ?? this.elapsed,
-      errorMessage: errorMessage,
+      failureReason: failureReason,
     );
   }
 }
@@ -300,23 +344,24 @@ class _ConversationMessageList extends ConsumerWidget {
   const _ConversationMessageList({
     required this.conversationId,
     required this.state,
-    this.voiceErrorMessage,
+    this.voiceFailureReason,
   });
 
   final String conversationId;
   final ConversationState state;
-  final String? voiceErrorMessage;
+  final ConversationAudioExceptionReason? voiceFailureReason;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (state.messages.isEmpty &&
         state.failedMessage == null &&
         state.failedAudioFile == null &&
-        state.errorMessage == null &&
+        state.failureReason == null &&
         !state.isSending) {
-      return const AppAsyncStateView.empty(
-        title: 'No messages yet.',
-        message: 'Send your first reply to begin practicing.',
+      final AppCopy copy = AppCopy.of(context);
+      return AppAsyncStateView.empty(
+        title: copy.noMessagesTitle,
+        message: copy.noMessagesMessage,
       );
     }
 
@@ -334,9 +379,11 @@ class _ConversationMessageList extends ConsumerWidget {
         const TypingIndicator(),
         const SizedBox(height: AppSpacing.md),
       ],
-      if (state.failedMessage != null || state.errorMessage != null)
+      if (state.failedMessage != null || state.failureReason != null)
         _SendFailureCard(
-          message: state.errorMessage ?? 'Message could not be sent.',
+          reason:
+              state.failureReason ??
+              ConversationSendFailureReason.textRequestFailed,
           onRetry: () {
             final ConversationController controller = ref.read(
               conversationControllerProvider(conversationId).notifier,
@@ -348,17 +395,23 @@ class _ConversationMessageList extends ConsumerWidget {
             }
           },
         ),
-      if (state.audioErrorMessage != null) ...<Widget>[
+      if (state.assistantAudioStatus != null) ...<Widget>[
         AppColorBlockCard(
           color: AppPalette.blockCream,
-          child: Text(state.audioErrorMessage!, style: AppTypography.bodySm),
+          child: Text(
+            AppCopy.of(context).failureMessage('assistantAudioUnavailable'),
+            style: AppTypography.bodySm,
+          ),
         ),
         const SizedBox(height: AppSpacing.md),
       ],
-      if (voiceErrorMessage != null) ...<Widget>[
+      if (voiceFailureReason != null) ...<Widget>[
         AppColorBlockCard(
           color: AppPalette.blockPink,
-          child: Text(voiceErrorMessage!, style: AppTypography.bodySm),
+          child: Text(
+            AppCopy.of(context).failureMessage(voiceFailureReason!.name),
+            style: AppTypography.bodySm,
+          ),
         ),
         const SizedBox(height: AppSpacing.md),
       ],
@@ -375,9 +428,9 @@ class _ConversationMessageList extends ConsumerWidget {
 }
 
 class _SendFailureCard extends StatelessWidget {
-  const _SendFailureCard({required this.message, required this.onRetry});
+  const _SendFailureCard({required this.reason, required this.onRetry});
 
-  final String message;
+  final ConversationSendFailureReason reason;
   final VoidCallback onRetry;
 
   @override
@@ -387,12 +440,15 @@ class _SendFailureCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text(message, style: AppTypography.bodySm),
+          Text(
+            AppCopy.of(context).failureMessage(reason.name),
+            style: AppTypography.bodySm,
+          ),
           const SizedBox(height: AppSpacing.sm),
           OutlinedButton.icon(
             onPressed: onRetry,
             icon: const Icon(Icons.refresh_rounded),
-            label: const Text('Retry'),
+            label: Text(AppCopy.of(context).retryLabel),
           ),
         ],
       ),

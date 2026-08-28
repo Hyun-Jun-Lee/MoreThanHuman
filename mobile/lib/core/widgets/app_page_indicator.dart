@@ -1,4 +1,5 @@
 import 'package:curitalk/app/theme/tokens/tokens.dart';
+import 'package:curitalk/core/copy/copy.dart';
 import 'package:flutter/material.dart';
 
 class AppPageIndicator extends StatelessWidget {
@@ -24,7 +25,7 @@ class AppPageIndicator extends StatelessWidget {
         inactiveColor ?? Theme.of(context).colorScheme.outlineVariant;
 
     return Semantics(
-      label: 'Page ${currentIndex + 1} of $count',
+      label: AppCopy.of(context).pageLabel(currentIndex + 1, count),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: List<Widget>.generate(count, (int index) {

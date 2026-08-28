@@ -3,12 +3,18 @@ import 'package:curitalk/app/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:curitalk/features/auth/auth.dart';
 
 class CuritalkApp extends ConsumerWidget {
   const CuritalkApp({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final String? appLocale = ref
+        .watch(authControllerProvider)
+        .value
+        ?.user
+        ?.appLocale;
     return MaterialApp.router(
       title: 'Curitalk',
       debugShowCheckedModeBanner: false,
@@ -19,6 +25,7 @@ class CuritalkApp extends ConsumerWidget {
         GlobalWidgetsLocalizations.delegate,
       ],
       supportedLocales: const <Locale>[Locale('en'), Locale('ko')],
+      locale: appLocale == null ? null : Locale(appLocale),
       routerConfig: ref.watch(appRouterProvider),
     );
   }

@@ -2,6 +2,7 @@ import 'package:curitalk/app/theme/app_theme.dart';
 import 'package:curitalk/app/theme/tokens/tokens.dart';
 import 'package:curitalk/core/widgets/widgets.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -111,10 +112,42 @@ void main() {
     expect(selectedDestination, MainNavigationDestination.chat);
     expect(find.byType(NavigationDestination), findsNWidgets(4));
   });
+
+  testWidgets('shared chrome follows the Korean system locale', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      _themedApp(
+        Column(
+          children: <Widget>[
+            Expanded(child: AppAsyncStateView.loading()),
+            MainNavigationBar(
+              destination: MainNavigationDestination.home,
+              onDestinationSelected: (_) {},
+            ),
+            AppPageIndicator(count: 3, currentIndex: 1),
+          ],
+        ),
+        locale: const Locale('ko'),
+      ),
+    );
+
+    expect(find.text('불러오는 중...'), findsOneWidget);
+    expect(find.text('홈'), findsOneWidget);
+    expect(find.text('대화'), findsOneWidget);
+    expect(find.bySemanticsLabel('3개 중 2번째 페이지'), findsOneWidget);
+  });
 }
 
-Widget _themedApp(Widget child) {
+Widget _themedApp(Widget child, {Locale? locale}) {
   return MaterialApp(
+    locale: locale,
+    supportedLocales: const <Locale>[Locale('en'), Locale('ko')],
+    localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
+      GlobalMaterialLocalizations.delegate,
+      GlobalCupertinoLocalizations.delegate,
+      GlobalWidgetsLocalizations.delegate,
+    ],
     theme: AppTheme.light,
     home: Scaffold(body: child),
   );

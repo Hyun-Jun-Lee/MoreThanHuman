@@ -82,6 +82,35 @@ void main() {
     });
   });
 
+  test('starts free chat with a custom focus', () async {
+    final _FakeConversationRepository repository =
+        _FakeConversationRepository();
+    final ProviderContainer container = ProviderContainer(
+      overrides: [conversationRepositoryProvider.overrideWithValue(repository)],
+    );
+    addTearDown(container.dispose);
+
+    final ConversationResponse? response = await container
+        .read(startConversationControllerProvider.notifier)
+        .startFreeChat(
+          firstMessage: 'The bullpen was decisive.',
+          searchContext: 'Lotte won 8-3.',
+          topic: '롯데 자이언츠 최근 경기',
+          selectedQuestion: 'How did the bullpen affect the game?',
+          customFocus: 'the bullpen performance',
+        );
+
+    expect(response?.conversationId, 'conversation-id');
+    expect(repository.lastCustomFocus, 'the bullpen performance');
+    expect(repository.lastFreeChatBody, <String, String?>{
+      'first_message': 'The bullpen was decisive.',
+      'search_context': 'Lotte won 8-3.',
+      'topic': '롯데 자이언츠 최근 경기',
+      'conversation_direction': null,
+      'selected_question': 'How did the bullpen affect the game?',
+    });
+  });
+
   test('starts roleplay with role character', () async {
     final _FakeConversationRepository repository =
         _FakeConversationRepository();
@@ -153,7 +182,8 @@ ProviderContainer _conversationContainer({
   );
 }
 
-class _FakeConversationRepository implements ConversationRepository {
+class _FakeConversationRepository
+    implements ConversationRepository, CustomFocusConversationRepository {
   Map<String, String?>? lastFreeChatBody;
   String? lastRoleCharacter;
   String? lastRoleplayDifficulty;
@@ -161,6 +191,7 @@ class _FakeConversationRepository implements ConversationRepository {
   bool? lastFreeChatIncludeAudio;
   bool? lastFreeChatAudioIncludeAudio;
   bool? lastRoleplayIncludeAudio;
+  String? lastCustomFocus;
 
   @override
   Future<MultimodalConversationResponse> startFreeChat({
@@ -213,6 +244,49 @@ class _FakeConversationRepository implements ConversationRepository {
         format: 'mp3',
       ),
     );
+  }
+
+  @override
+  Future<MultimodalConversationResponse> startFreeChatWithCustomFocus({
+    required String firstMessage,
+    String? searchContext,
+    String? topic,
+    String? selectedQuestion,
+    required String customFocus,
+    bool includeAudioResponse = true,
+  }) async {
+    lastCustomFocus = customFocus;
+    lastFreeChatIncludeAudio = includeAudioResponse;
+    lastFreeChatBody = <String, String?>{
+      'first_message': firstMessage,
+      'search_context': searchContext,
+      'topic': topic,
+      'conversation_direction': null,
+      'selected_question': selectedQuestion,
+    };
+    return _response(ConversationType.freeChat);
+  }
+
+  @override
+  Future<MultimodalConversationResponse> startFreeChatWithAudioAndCustomFocus({
+    required ConversationAudioFile audioFile,
+    String? searchContext,
+    String? topic,
+    String? selectedQuestion,
+    required String customFocus,
+    bool includeAudioResponse = true,
+  }) async {
+    lastAudioFilename = audioFile.filename;
+    lastCustomFocus = customFocus;
+    lastFreeChatAudioIncludeAudio = includeAudioResponse;
+    lastFreeChatBody = <String, String?>{
+      'first_message': null,
+      'search_context': searchContext,
+      'topic': topic,
+      'conversation_direction': null,
+      'selected_question': selectedQuestion,
+    };
+    return _response(ConversationType.freeChat);
   }
 
   @override

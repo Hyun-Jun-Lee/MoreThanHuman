@@ -4,14 +4,18 @@ import 'package:curitalk/features/conversation/domain/conversation_models.dart';
 import 'package:curitalk/features/conversation/domain/conversation_repository.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+enum ConversationSendFailureReason { textRequestFailed, audioRequestFailed }
+
+enum AssistantAudioStatus { unavailable }
+
 class ConversationState {
   const ConversationState({
     required this.messages,
     this.isSending = false,
     this.failedMessage,
     this.failedAudioFile,
-    this.errorMessage,
-    this.audioErrorMessage,
+    this.failureReason,
+    this.assistantAudioStatus,
   });
 
   const ConversationState.empty()
@@ -19,15 +23,15 @@ class ConversationState {
       isSending = false,
       failedMessage = null,
       failedAudioFile = null,
-      errorMessage = null,
-      audioErrorMessage = null;
+      failureReason = null,
+      assistantAudioStatus = null;
 
   final List<ConversationMessage> messages;
   final bool isSending;
   final String? failedMessage;
   final ConversationAudioFile? failedAudioFile;
-  final String? errorMessage;
-  final String? audioErrorMessage;
+  final ConversationSendFailureReason? failureReason;
+  final AssistantAudioStatus? assistantAudioStatus;
 
   ConversationState copyWith({
     List<ConversationMessage>? messages,
@@ -36,9 +40,9 @@ class ConversationState {
     bool clearFailedMessage = false,
     ConversationAudioFile? failedAudioFile,
     bool clearFailedAudioFile = false,
-    String? errorMessage,
-    String? audioErrorMessage,
-    bool clearAudioErrorMessage = false,
+    ConversationSendFailureReason? failureReason,
+    AssistantAudioStatus? assistantAudioStatus,
+    bool clearAssistantAudioStatus = false,
   }) {
     return ConversationState(
       messages: messages ?? this.messages,
@@ -49,10 +53,10 @@ class ConversationState {
       failedAudioFile: clearFailedAudioFile
           ? null
           : failedAudioFile ?? this.failedAudioFile,
-      errorMessage: errorMessage,
-      audioErrorMessage: clearAudioErrorMessage
+      failureReason: failureReason,
+      assistantAudioStatus: clearAssistantAudioStatus
           ? null
-          : audioErrorMessage ?? this.audioErrorMessage,
+          : assistantAudioStatus ?? this.assistantAudioStatus,
     );
   }
 }
@@ -123,7 +127,7 @@ class ConversationController extends AsyncNotifier<ConversationState> {
   Future<void> reload() async {
     final ConversationState previous =
         state.value ?? const ConversationState.empty();
-    state = AsyncData<ConversationState>(previous.copyWith(errorMessage: null));
+    state = AsyncData<ConversationState>(previous.copyWith(failureReason: null));
     final AsyncValue<ConversationState> next = await AsyncValue.guard(() async {
       final PaginatedMessages page = await ref
           .read(conversationRepositoryProvider)
@@ -159,8 +163,8 @@ class ConversationController extends AsyncNotifier<ConversationState> {
         isSending: true,
         clearFailedMessage: true,
         clearFailedAudioFile: true,
-        errorMessage: null,
-        clearAudioErrorMessage: true,
+        failureReason: null,
+        clearAssistantAudioStatus: true,
       ),
     );
 
@@ -196,8 +200,10 @@ class ConversationController extends AsyncNotifier<ConversationState> {
           isSending: false,
           clearFailedMessage: true,
           clearFailedAudioFile: true,
-          errorMessage: null,
-          audioErrorMessage: response.audioError?.message,
+          failureReason: null,
+          assistantAudioStatus: response.audioError == null
+              ? null
+              : AssistantAudioStatus.unavailable,
         ),
       );
     } on Object catch (_) {
@@ -206,8 +212,8 @@ class ConversationController extends AsyncNotifier<ConversationState> {
           isSending: false,
           failedMessage: normalized,
           clearFailedAudioFile: true,
-          errorMessage: 'Message could not be sent.',
-          clearAudioErrorMessage: true,
+          failureReason: ConversationSendFailureReason.textRequestFailed,
+          clearAssistantAudioStatus: true,
         ),
       );
     }
@@ -225,8 +231,8 @@ class ConversationController extends AsyncNotifier<ConversationState> {
         isSending: true,
         clearFailedMessage: true,
         clearFailedAudioFile: true,
-        errorMessage: null,
-        clearAudioErrorMessage: true,
+        failureReason: null,
+        clearAssistantAudioStatus: true,
       ),
     );
 
@@ -266,8 +272,10 @@ class ConversationController extends AsyncNotifier<ConversationState> {
           isSending: false,
           clearFailedMessage: true,
           clearFailedAudioFile: true,
-          errorMessage: null,
-          audioErrorMessage: response.audioError?.message,
+          failureReason: null,
+          assistantAudioStatus: response.audioError == null
+              ? null
+              : AssistantAudioStatus.unavailable,
         ),
       );
     } on Object catch (_) {
@@ -276,8 +284,8 @@ class ConversationController extends AsyncNotifier<ConversationState> {
           isSending: false,
           clearFailedMessage: true,
           failedAudioFile: audioFile,
-          errorMessage: 'Voice message could not be sent.',
-          clearAudioErrorMessage: true,
+          failureReason: ConversationSendFailureReason.audioRequestFailed,
+          clearAssistantAudioStatus: true,
         ),
       );
     }

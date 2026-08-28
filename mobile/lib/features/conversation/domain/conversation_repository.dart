@@ -61,3 +61,27 @@ abstract interface class ConversationRepository {
     bool includeAudioResponse = true,
   });
 }
+
+abstract interface class CustomFocusConversationRepository {
+  Future<MultimodalConversationResponse> startFreeChatWithCustomFocus({
+    required String firstMessage,
+    String? searchContext,
+    String? topic,
+    String? selectedQuestion,
+    required String customFocus,
+    bool includeAudioResponse = true,
+  });
+
+  Future<MultimodalConversationResponse> startFreeChatWithAudioAndCustomFocus({
+    required ConversationAudioFile audioFile,
+    String? searchContext,
+    String? topic,
+    String? selectedQuestion,
+    required String customFocus,
+    bool includeAudioResponse = true,
+  });
+}
+
+abstract interface class ConversationDeletionRepository {
+  Future<void> deleteConversation(String conversationId);
+}

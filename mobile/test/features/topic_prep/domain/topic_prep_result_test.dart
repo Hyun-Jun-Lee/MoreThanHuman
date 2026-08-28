@@ -9,7 +9,7 @@ void main() {
     expect(result.ready, isTrue);
     expect(result.card?.summary, 'Lotte won 8-3 after ending a losing streak.');
     expect(result.card?.sources.first.title, 'Lotte game recap');
-    expect(result.card?.directions, hasLength(4));
+    expect(result.card?.directions, hasLength(3));
     expect(
       result.card?.directions.first.direction,
       TopicPrepDirectionType.casualChat,
@@ -74,7 +74,6 @@ Map<String, dynamic> _readyResult() {
       'directions': <Map<String, dynamic>>[
         _direction('CASUAL_CHAT', 'Casual Chat'),
         _direction('DEBATE', 'Debate'),
-        _direction('INTERVIEW_QA', 'Interview'),
         _direction('EXPLANATION_PRACTICE', 'Explain'),
       ],
       'sources': <Map<String, dynamic>>[

@@ -83,6 +83,7 @@ class ConversationService:
         topic: str | None = None,
         conversation_direction: str | None = None,
         selected_question: str | None = None,
+        custom_focus: str | None = None,
         language_context: LearningLanguageContext | None = None,
     ) -> ConversationResponse:
         """
@@ -126,6 +127,7 @@ class ConversationService:
                 topic=topic,
                 conversation_direction=conversation_direction,
                 selected_question=selected_question,
+                custom_focus=custom_focus,
                 language_context=language_context,
             )
 
@@ -513,6 +515,7 @@ class ConversationService:
         topic: str | None = None,
         conversation_direction: str | None = None,
         selected_question: str | None = None,
+        custom_focus: str | None = None,
         language_context: LearningLanguageContext | None = None,
     ) -> str:
         """
@@ -543,6 +546,7 @@ class ConversationService:
                 topic=topic,
                 conversation_direction=conversation_direction,
                 selected_question=selected_question,
+                custom_focus=custom_focus,
                 language_context=language_context,
             )
 
@@ -642,6 +646,7 @@ class ConversationService:
         topic: str | None = None,
         conversation_direction: str | None = None,
         selected_question: str | None = None,
+        custom_focus: str | None = None,
         language_context: LearningLanguageContext | None = None,
     ) -> str:
         """자유 대화용 시스템 프롬프트"""
@@ -694,10 +699,11 @@ class ConversationService:
         topic: str | None = None,
         conversation_direction: str | None = None,
         selected_question: str | None = None,
+        custom_focus: str | None = None,
         language_context: LearningLanguageContext | None = None,
     ) -> str:
         """주제 준비 카드 handoff 프롬프트"""
-        if not any([topic, conversation_direction, selected_question]):
+        if not any([topic, conversation_direction, selected_question, custom_focus]):
             return ""
 
         language_context = ensure_language_context(language_context)
@@ -710,6 +716,8 @@ class ConversationService:
             prompt += f"\n- Topic: {topic}"
         if conversation_direction:
             prompt += f"\n- Selected conversation direction: {conversation_direction}"
+        if custom_focus:
+            prompt += f"\n- User's custom conversation focus: {custom_focus}"
         if selected_question:
             prompt += f"\n- The user is answering this first question: {selected_question}"
         if direction_guidance:
@@ -719,7 +727,7 @@ class ConversationService:
         prompt += f"""
 
 Use the user's first message as an answer to the selected first question.
-Continue naturally in {target_name} in the selected direction while keeping the conversation short and interactive.
+Continue naturally in {target_name} in the selected direction or custom focus while keeping the conversation short and interactive.
 Do not re-ask the selected first question unless the user's answer is unclear."""
         return prompt
 

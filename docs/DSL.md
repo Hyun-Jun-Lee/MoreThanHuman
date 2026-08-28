@@ -121,6 +121,7 @@ module Auth {
                                             -> getLanguagePreferences
     PUT  /api/auth/me/language-preferences
                                             -> updateLanguagePreferences
+    PUT  /api/auth/me/app-locale            -> updateAppLocale
   }
 
   type UserProfile {
@@ -130,11 +131,13 @@ module Auth {
     is_active: Boolean
     oauth_provider?: String
     avatar_url?: String
+    app_locale?: "ko" | "en"
     language: LearningLanguageContext
   }
 
   type LanguagePreferencesRequest extends LearningLanguageContext
   type LanguagePreferencesResponse extends LearningLanguageContext
+  type AppLocaleRequest { app_locale: "ko" | "en" }
 }
 ```
 
@@ -142,6 +145,7 @@ module Auth {
 `POST /api/auth/swagger/token`은 Swagger 수동 테스트를 위한 Supabase email/password token helper예요. `ENV=dev`에서는 사용할 수 있고, dev 외 환경에서는 `SWAGGER_TOKEN_ISSUER_ENABLED=true`와 `SWAGGER_TOKEN_ISSUER_SECRET`을 설정한 뒤 요청 body의 `secret`이 일치해야 해요. 발급된 `access_token`을 Swagger `Authorize`에 `Bearer <access_token>` 형식으로 넣어요.
 언어 선호는 프로필 기본값이며 새 대화 시작 시 `conversations` row에 snapshot으로 저장돼요. 기존 값이 없으면 `ko -> en`, feedback `ko`로 보정해요.
 `PUT /api/auth/me/language-preferences`는 profile default만 갱신해요. 모바일 Account UX는 변경값이 새 대화부터 적용되고 기존 conversation은 생성 시점 snapshot을 유지한다고 안내해야 해요.
+`PUT /api/auth/me/app-locale`는 앱 chrome 표시 언어만 저장해요. 값이 없는 기존 profile은 기기 system locale을 따르며 학습 언어쌍과 기존 conversation snapshot은 바꾸지 않아요.
 
 ## 5. Conversation 모듈
 
@@ -168,6 +172,7 @@ module Conversation {
     topic?: String
     conversation_direction?: "CASUAL_CHAT" | "DEBATE" | "INTERVIEW_QA" | "EXPLANATION_PRACTICE"
     selected_question?: String
+    custom_focus?: String
     include_audio_response?: Boolean = false
   }
 
@@ -338,8 +343,10 @@ module Grammar {
 ```dsl
 module Search {
   router SearchRouter {
-    POST /api/search/             -> search
-    POST /api/search/topic-prep/  -> prepareTopic
+    POST /api/search/                              -> search
+    POST /api/search/topic-prep/                   -> prepareTopic
+    POST /api/search/topic-prep/custom-questions/  -> prepareCustomFocusQuestions
+    POST /api/search/topic-prep/directions/        -> regenerateTopicPrepDirections
   }
 
   service SearchService {
@@ -401,6 +408,27 @@ module Search {
     topic: String
   }
 
+  type CustomFocusQuestionsRequest {
+    topic: String
+    custom_focus: String
+  }
+
+  type CustomFocusQuestionsResult {
+    ready: Boolean
+    custom_focus: String
+    first_questions: List<String>
+    retry_guidance?: String
+  }
+
+  type TopicPrepDirectionsRequest {
+    topic: String
+    previous_directions: List<String>
+  }
+
+  type TopicPrepDirectionsResult {
+    directions: List<TopicPrepDirection>
+  }
+
   type TopicPrepResult {
     ready: Boolean
     language: LearningLanguageContext
@@ -410,7 +438,7 @@ module Search {
     example_topics: List<String>
   }
 
-  Topic Prep의 ready card 질문과 fallback direction은 `target_language` 연습에 맞춰 생성돼요.
+  Topic Prep summary와 direction title/description은 입력 topic 언어를 우선하고, 모호하면 `native_language`로 fallback해요. first question과 실제 conversation은 계속 `target_language` 연습에 맞춰 생성돼요.
   Topic Prep prompt policy도 conversation과 같은 target-language practice priorities를 사용해요.
   Low-quality 상태의 `retry_guidance`와 `example_topics`는 사용자가 이해할 수 있도록 `feedback_language`로 표시하되, 예시 유형은 target language 연습 목적을 반영해요.
 
@@ -425,7 +453,7 @@ module Search {
   }
 
   type TopicPrepDirection {
-    direction: "CASUAL_CHAT" | "DEBATE" | "INTERVIEW_QA" | "EXPLANATION_PRACTICE"
+    direction: "CASUAL_CHAT" | "DEBATE" | "EXPLANATION_PRACTICE"
     title: String
     description: String
     first_questions: List<String>
@@ -443,6 +471,8 @@ module Search {
   }
 }
 ```
+
+ready Topic Prep card는 정확히 세 recommendation을 제공해요. `custom_focus`는 고정 direction enum에 추가하지 않고 free-chat handoff에 별도로 전달해요. directions 재생성은 현재 화면의 summary/source를 유지한 채 새로운 recommendation 세 개와 target-language first question만 반환해요.
 
 ## 8. LLM 모듈
 

@@ -18,6 +18,11 @@ void main() {
     expect(find.text('Lotte won 8-3.'), findsOneWidget);
     expect(find.text('example.com'), findsOneWidget);
     expect(find.text('CASUAL CHAT'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('What stood out in the game?'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('What stood out in the game?'), findsOneWidget);
     expect(find.bySemanticsLabel('Source: Lotte recap'), findsOneWidget);
   });
@@ -31,9 +36,53 @@ void main() {
     await tester.tap(find.text('DEBATE'));
     await tester.pumpAndSettle();
 
+    await tester.scrollUntilVisible(
+      find.text('Was the result convincing?'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('Was the result convincing?'), findsOneWidget);
     expect(find.text('What stood out in the game?'), findsNothing);
   });
+
+  testWidgets('custom focus generates three first-question options', (
+    WidgetTester tester,
+  ) async {
+    final _FakeTopicPrepRepository repository = _FakeTopicPrepRepository();
+    await tester.pumpWidget(_app(repository: repository));
+    await tester.pumpAndSettle();
+
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, -500));
+    await tester.pumpAndSettle();
+    final Finder customFocusField = find.byType(TextField).first;
+    await tester.enterText(customFocusField, 'the bullpen performance');
+    await tester.tap(find.text('Submit'));
+    await tester.pumpAndSettle();
+
+    expect(repository.lastCustomFocus, 'the bullpen performance');
+    await tester.scrollUntilVisible(
+      find.text('How did the bullpen affect the game?'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('How did the bullpen affect the game?'), findsOneWidget);
+  });
+
+  testWidgets(
+    'regenerating directions keeps the topic card and replaces options',
+    (WidgetTester tester) async {
+      final _FakeTopicPrepRepository repository = _FakeTopicPrepRepository();
+      await tester.pumpWidget(_app(repository: repository));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Show different directions'));
+      await tester.pumpAndSettle();
+
+      expect(repository.regenerateCallCount, 1);
+      expect(find.text('FRESH CONVERSATION'), findsOneWidget);
+      expect(find.text('Lotte won 8-3.'), findsOneWidget);
+    },
+  );
 
   testWidgets('low-quality state can retry with an example topic', (
     WidgetTester tester,
@@ -201,11 +250,14 @@ Widget _app({
   );
 }
 
-class _FakeTopicPrepRepository implements TopicPrepRepository {
+class _FakeTopicPrepRepository
+    implements TopicPrepRepository, TopicPrepCustomFocusRepository {
   _FakeTopicPrepRepository({this.failFirstTopic});
 
   final String? failFirstTopic;
   final List<String> topics = <String>[];
+  String? lastCustomFocus;
+  int regenerateCallCount = 0;
 
   @override
   Future<TopicPrepResult> prepareTopic(String topic) async {
@@ -240,11 +292,6 @@ class _FakeTopicPrepRepository implements TopicPrepRepository {
             'Which side has the stronger argument?',
             'What would critics say?',
           ]),
-          _direction(TopicPrepDirectionType.interviewQa, 'Interview', <String>[
-            'What would you ask the manager?',
-            'How would you interview a player?',
-            'What detail needs a follow-up?',
-          ]),
           _direction(
             TopicPrepDirectionType.explanationPractice,
             'Explain',
@@ -270,6 +317,56 @@ class _FakeTopicPrepRepository implements TopicPrepRepository {
       exampleTopics: const <String>[],
     );
   }
+
+  @override
+  Future<CustomFocusQuestions> prepareCustomFocusQuestions({
+    required String topic,
+    required String customFocus,
+  }) async {
+    lastCustomFocus = customFocus;
+    return CustomFocusQuestions(
+      ready: true,
+      customFocus: customFocus,
+      firstQuestions: const <String>[
+        'How did the bullpen affect the game?',
+        'Which reliever mattered most?',
+        'What would you say about the bullpen?',
+      ],
+    );
+  }
+
+  @override
+  Future<TopicPrepDirections> regenerateDirections({
+    required String topic,
+    required List<String> previousDirections,
+  }) async {
+    regenerateCallCount += 1;
+    return TopicPrepDirections(<TopicPrepDirection>[
+      _direction(
+        TopicPrepDirectionType.casualChat,
+        'Fresh conversation',
+        <String>[
+          'What was the key moment?',
+          'Who impressed you?',
+          'How would you describe it?',
+        ],
+      ),
+      _direction(TopicPrepDirectionType.debate, 'Different opinion', <String>[
+        'Do you agree with the result?',
+        'What is the strongest reason?',
+        'What would the other side say?',
+      ]),
+      _direction(
+        TopicPrepDirectionType.explanationPractice,
+        'New explanation',
+        <String>[
+          'How would you explain the result?',
+          'What background matters?',
+          'What happened first?',
+        ],
+      ),
+    ]);
+  }
 }
 
 const LearningLanguageContext _koreanPracticeLanguage = LearningLanguageContext(
@@ -291,11 +388,13 @@ TopicPrepDirection _direction(
   );
 }
 
-class _FakeConversationRepository implements ConversationRepository {
+class _FakeConversationRepository
+    implements ConversationRepository, CustomFocusConversationRepository {
   String? lastFirstMessage;
   String? lastDirection;
   String? lastSelectedQuestion;
   String? lastAudioFilename;
+  String? lastCustomFocus;
 
   @override
   Future<MultimodalConversationResponse> startFreeChat({
@@ -337,6 +436,48 @@ class _FakeConversationRepository implements ConversationRepository {
       response: 'Great. Tell me more.',
       inputMode: ConversationInputMode.audio,
       transcript: '오늘 불펜이 좋았어요.',
+    );
+  }
+
+  @override
+  Future<MultimodalConversationResponse> startFreeChatWithCustomFocus({
+    required String firstMessage,
+    String? searchContext,
+    String? topic,
+    String? selectedQuestion,
+    required String customFocus,
+    bool includeAudioResponse = true,
+  }) async {
+    lastFirstMessage = firstMessage;
+    lastSelectedQuestion = selectedQuestion;
+    lastCustomFocus = customFocus;
+    return const MultimodalConversationResponse(
+      conversationId: 'conversation-id',
+      messageId: 'message-id',
+      conversationType: ConversationType.freeChat,
+      response: 'Great. Tell me more.',
+      inputMode: ConversationInputMode.text,
+    );
+  }
+
+  @override
+  Future<MultimodalConversationResponse> startFreeChatWithAudioAndCustomFocus({
+    required ConversationAudioFile audioFile,
+    String? searchContext,
+    String? topic,
+    String? selectedQuestion,
+    required String customFocus,
+    bool includeAudioResponse = true,
+  }) async {
+    lastAudioFilename = audioFile.filename;
+    lastSelectedQuestion = selectedQuestion;
+    lastCustomFocus = customFocus;
+    return const MultimodalConversationResponse(
+      conversationId: 'conversation-id',
+      messageId: 'message-id',
+      conversationType: ConversationType.freeChat,
+      response: 'Great. Tell me more.',
+      inputMode: ConversationInputMode.audio,
     );
   }
 

@@ -3,6 +3,8 @@ import 'package:curitalk/features/roleplay_setup/domain/roleplay_scenario.dart';
 import 'package:curitalk/features/roleplay_setup/domain/roleplay_setup_payload.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+enum RoleplaySetupValidationReason { customInputTooShort }
+
 class RoleplaySetupState {
   const RoleplaySetupState({
     this.selectedScenario,
@@ -38,13 +40,13 @@ class RoleplaySetupState {
     return null;
   }
 
-  String? get customErrorText {
+  RoleplaySetupValidationReason? get customValidationReason {
     if (!isCustomMode ||
         normalizedCustomInput.isEmpty ||
         normalizedCustomInput.length >= 2) {
       return null;
     }
-    return 'Enter at least 2 characters.';
+    return RoleplaySetupValidationReason.customInputTooShort;
   }
 
   RoleplaySetupState copyWith({

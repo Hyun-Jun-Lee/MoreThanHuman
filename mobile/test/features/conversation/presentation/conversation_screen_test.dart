@@ -187,7 +187,10 @@ void main() {
     await tester.tap(find.byTooltip('Stop recording'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Recording did not produce audio.'), findsOneWidget);
+    expect(
+      find.text('We could not hear enough audio. Try speaking a little longer.'),
+      findsOneWidget,
+    );
     expect(repository.sentAudioFilenames, isEmpty);
   });
 
@@ -219,7 +222,10 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(recorder.stopCount, 1);
-      expect(find.text(voiceNotRecognizedMessage), findsOneWidget);
+      expect(
+        find.text('We could not hear enough audio. Try speaking a little longer.'),
+        findsOneWidget,
+      );
       expect(repository.sentAudioFilenames, isEmpty);
     },
   );
@@ -253,8 +259,14 @@ void main() {
     await tester.tap(find.byTooltip('Stop recording'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Voice message could not be sent.'), findsOneWidget);
-    expect(find.text('Recording did not produce audio.'), findsNothing);
+    expect(
+      find.text('Your voice message could not be sent. Please try again.'),
+      findsOneWidget,
+    );
+    expect(
+      find.text('We could not hear enough audio. Try speaking a little longer.'),
+      findsNothing,
+    );
     expect(repository.sentAudioFilenames, <String>['recording.m4a']);
 
     await tester.tap(find.text('Retry'));

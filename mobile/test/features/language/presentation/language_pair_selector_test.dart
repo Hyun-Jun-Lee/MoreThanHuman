@@ -15,7 +15,6 @@ void main() {
         home: Scaffold(
           body: LanguagePairSelector(
             selected: LearningLanguageContext.defaultContext,
-            localeCode: 'en',
             onChanged: (LearningLanguageContext next) => changed = next,
           ),
         ),

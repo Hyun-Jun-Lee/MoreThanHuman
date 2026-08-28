@@ -1,5 +1,18 @@
 # CHANGELOG — 완료된 작업 기록
 
+## 2026-08-28
+
+- **프로필 앱 표시 언어·대화 완전 삭제 구현 계획 작성**: profile 기반 `ko`/`en` locale override, 기존 system fallback, 대화·메시지·문법 피드백의 복구 없는 삭제 UI와 검증 범위를 정리
+- **Topic Prep 입력 언어·직접 주제 구현 계획 작성**: 설명 언어 resolver, 세 추천 방향, custom focus 질문 생성·대화 handoff, 한국어·영어 copy와 검증 범위를 정리
+- **Topic Prep 계획 구현 결정 확정**: `interview_qa` 제거, custom focus 질문 3개, 주제와 무관한 focus의 recovery 정책을 확정
+- **Topic Prep 방향 재생성 범위 추가**: 준비 완료된 주제에서 summary·출처를 유지하며 추천 대화 방향 세 개와 첫 질문을 새로 만드는 흐름을 계획에 포함
+- **Topic Prep CTA 언어 정책 확정**: custom focus 제출과 추천 방향 재생성 버튼은 한국어 화면에서도 영어 CTA로 고정
+- **시스템 locale UI copy 구현 계획 작성**: 공통 `AppCopy`, 오류 reason, 모국어 기준 예시 검색어, 학습 콘텐츠 경계, 레거시 `zh` 호환과 검증 범위를 구현 단위로 정리
+- **모바일 온보딩·로그인 copy 조정**: 온보딩 3/4페이지 문구와 로그인 화면 한국어·영어 locale copy를 정렬
+- **시스템 locale UI copy 구현**: `AppCopy` 공통 계층으로 앱 chrome·접근성·클라이언트 오류를 한국어/영어로 분기하고, native language 기반 Topic Input 예시 검색어와 관련 테스트·문서를 추가
+- **OpenRouter STT 실패 진단 로그 보강**: 전사 HTTP 오류에 모델·파일 메타데이터·응답 본문 일부·요청 추적 ID를 안전하게 기록하고 단위 테스트를 추가
+- **Topic Prep·프로필 언어·대화 삭제 구현**: 입력 언어 우선 요약/방향 설명, 세 방향 재생성·직접 focus 질문 및 handoff, profile `ko`/`en` 앱 언어 override, 대화 완전 삭제 UI·API 계약을 구현하고 문서와 검증을 정렬
+
 ## 2026-08-27
 
 - **검색 최신성 날짜 힌트 정리**: recency 쿼리의 날짜 보강을 언어 중립 ISO 월 힌트로 통일하고 중국어 최신성 토큰 인식을 보강

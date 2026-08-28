@@ -2,12 +2,13 @@ import 'dart:math' as math;
 
 import 'package:curitalk/app/theme/app_semantic_colors.dart';
 import 'package:curitalk/app/theme/tokens/tokens.dart';
+import 'package:curitalk/core/copy/copy.dart';
 import 'package:flutter/material.dart';
 
 class TypingIndicator extends StatefulWidget {
-  const TypingIndicator({this.semanticLabel = 'AI is typing', super.key});
+  const TypingIndicator({this.semanticLabel, super.key});
 
-  final String semanticLabel;
+  final String? semanticLabel;
 
   @override
   State<TypingIndicator> createState() => _TypingIndicatorState();
@@ -54,7 +55,7 @@ class _TypingIndicatorState extends State<TypingIndicator>
     return Semantics(
       container: true,
       liveRegion: true,
-      label: widget.semanticLabel,
+      label: widget.semanticLabel ?? AppCopy.of(context).typingSemanticLabel,
       child: ExcludeSemantics(
         child: Align(
           alignment: Alignment.centerLeft,

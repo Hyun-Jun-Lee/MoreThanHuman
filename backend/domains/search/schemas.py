@@ -88,7 +88,6 @@ class ConversationDirection(str, Enum):
 
     CASUAL_CHAT = "CASUAL_CHAT"
     DEBATE = "DEBATE"
-    INTERVIEW_QA = "INTERVIEW_QA"
     EXPLANATION_PRACTICE = "EXPLANATION_PRACTICE"
 
 
@@ -96,6 +95,18 @@ class TopicPrepRequest(BaseModel):
     """주제 준비 카드 생성 요청"""
 
     topic: str = Field(..., min_length=2, max_length=200)
+
+
+class CustomFocusQuestionsRequest(TopicPrepRequest):
+    """직접 입력한 대화 방향의 첫 질문 생성 요청"""
+
+    custom_focus: str = Field(..., min_length=2, max_length=200)
+
+
+class TopicPrepDirectionsRequest(TopicPrepRequest):
+    """같은 주제의 새로운 추천 방향 생성 요청"""
+
+    previous_directions: list[str] = Field(default_factory=list, max_length=3)
 
 
 class TopicPrepQuality(BaseModel):
@@ -126,7 +137,7 @@ class TopicPrepCard(BaseModel):
     topic: str
     language: LearningLanguageContext = Field(default_factory=LearningLanguageContext)
     summary: str
-    directions: list[TopicPrepDirection] = Field(..., min_length=4, max_length=4)
+    directions: list[TopicPrepDirection] = Field(..., min_length=3, max_length=3)
     sources: list[SearchResultItem]
     quality: TopicPrepQuality
     timestamp: datetime
@@ -141,3 +152,18 @@ class TopicPrepResult(BaseModel):
     quality: TopicPrepQuality
     retry_guidance: str | None = None
     example_topics: list[str] = Field(default_factory=list)
+
+
+class CustomFocusQuestionsResult(BaseModel):
+    """직접 입력 방향에 맞춘 첫 질문 결과"""
+
+    ready: bool
+    custom_focus: str
+    first_questions: list[str] = Field(default_factory=list, max_length=3)
+    retry_guidance: str | None = None
+
+
+class TopicPrepDirectionsResult(BaseModel):
+    """재생성한 추천 방향 결과"""
+
+    directions: list[TopicPrepDirection] = Field(..., min_length=3, max_length=3)

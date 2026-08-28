@@ -28,6 +28,7 @@ class StartFreeChatRequest(BaseModel):
     topic: str | None = None
     conversation_direction: FreeChatConversationDirection | None = None
     selected_question: str | None = None
+    custom_focus: str | None = Field(default=None, min_length=2, max_length=200)
 
 
 class StartRoleplayRequest(BaseModel):

@@ -94,6 +94,22 @@ class AuthController extends AsyncNotifier<AuthSession> {
     state = const AsyncData<AuthSession>(AuthSession.unauthenticated());
   }
 
+  Future<void> updateAppLocale(String appLocale) async {
+    final UserProfile? currentUser = state.value?.user;
+    if (currentUser == null) {
+      throw StateError('A signed-in user is required to update app locale.');
+    }
+    final AuthRepository repository = _repository;
+    if (repository is! AppLocaleRepository) {
+      throw StateError(
+        'App locale updates are unavailable for this repository.',
+      );
+    }
+    final UserProfile updated = await (repository as AppLocaleRepository)
+        .updateAppLocale(appLocale);
+    state = AsyncData<AuthSession>(AuthSession.authenticated(updated));
+  }
+
   Future<AuthSession> _restoreSession() async {
     final bool hasSession = await _supabaseAuthService.hasCurrentSession();
     if (!hasSession) {

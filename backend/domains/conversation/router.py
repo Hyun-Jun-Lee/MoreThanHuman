@@ -228,6 +228,7 @@ async def _parse_free_chat_input(http_request: Request) -> tuple[StartFreeChatRe
             "topic": form.get("topic"),
             "conversation_direction": form.get("conversation_direction"),
             "selected_question": form.get("selected_question"),
+            "custom_focus": form.get("custom_focus"),
         }
         return StartFreeChatRequest.model_validate(payload), include_audio_response, audio_file
 
@@ -314,6 +315,7 @@ async def start_free_chat_conversation(
                 else None
             ),
             selected_question=request.selected_question,
+            custom_focus=request.custom_focus,
             language_context=ensure_language_context(getattr(current_user, "language", None)),
         )
         audio, audio_error = await _synthesize_optional_audio(

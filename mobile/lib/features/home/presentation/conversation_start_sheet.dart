@@ -1,4 +1,5 @@
 import 'package:curitalk/app/theme/tokens/tokens.dart';
+import 'package:curitalk/core/copy/copy.dart';
 import 'package:curitalk/core/widgets/widgets.dart';
 import 'package:curitalk/features/home/domain/conversation_start_type.dart';
 import 'package:flutter/material.dart';
@@ -9,6 +10,7 @@ Future<ConversationStartType?> showConversationStartSheet(
   return showAppModalSheet<ConversationStartType>(
     context: context,
     builder: (BuildContext sheetContext) {
+      final AppCopy copy = AppCopy.of(sheetContext);
       return Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -24,11 +26,11 @@ Future<ConversationStartType?> showConversationStartSheet(
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
-          const Text('Start a conversation', style: AppTypography.headlineMd),
+          Text(copy.startConversationTitle, style: AppTypography.headlineMd),
           const SizedBox(height: AppSpacing.lg),
           AppSelectionCard(
-            title: 'Free Chat',
-            description: 'Bring your own topic',
+            title: copy.freeChatTitle,
+            description: copy.freeChatDescription,
             icon: const Icon(Icons.forum_outlined),
             selected: false,
             onTap: () =>
@@ -36,8 +38,8 @@ Future<ConversationStartType?> showConversationStartSheet(
           ),
           const SizedBox(height: AppSpacing.md),
           AppSelectionCard(
-            title: 'Roleplay',
-            description: 'Practice a real-world situation',
+            title: copy.roleplayTitle,
+            description: copy.roleplayDescription,
             icon: const Icon(Icons.theater_comedy_outlined),
             selected: false,
             onTap: () =>
@@ -46,7 +48,7 @@ Future<ConversationStartType?> showConversationStartSheet(
           const SizedBox(height: AppSpacing.sm),
           TextButton(
             onPressed: () => Navigator.pop(sheetContext),
-            child: const Text('CANCEL'),
+            child: Text(copy.cancelLabel),
           ),
         ],
       );

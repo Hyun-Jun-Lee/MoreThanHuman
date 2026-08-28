@@ -11,8 +11,25 @@ from domains.search.schemas import (
     TopicPrepQuality,
 )
 from domains.search.query import build_rule_query_analysis
-from domains.search.service import PreparedSearchResult, SearchService
-from shared.language import LearningLanguageContext
+from domains.search.service import PreparedSearchResult, SearchService, resolve_topic_display_language
+from shared.language import LanguageCode, LearningLanguageContext
+
+
+@pytest.mark.parametrize(
+    ("topic", "native_language", "expected"),
+    [
+        ("리센느", LanguageCode.ENGLISH, LanguageCode.KOREAN),
+        ("recent Dodgers game", LanguageCode.KOREAN, LanguageCode.ENGLISH),
+        ("RESCENE", LanguageCode.KOREAN, LanguageCode.KOREAN),
+        ("2026", LanguageCode.ENGLISH, LanguageCode.ENGLISH),
+    ],
+)
+def test_resolve_topic_display_language_prefers_input_and_falls_back_to_native(
+    topic: str,
+    native_language: LanguageCode,
+    expected: LanguageCode,
+):
+    assert resolve_topic_display_language(topic, native_language) == expected
 
 
 def _raw_result(index: int) -> dict:
@@ -128,7 +145,7 @@ async def test_prepare_topic_returns_ready_card_when_search_quality_is_sufficien
     assert result.ready is True
     assert result.card is not None
     assert result.card.topic == "recent Dodgers game result"
-    assert len(result.card.directions) == 4
+    assert len(result.card.directions) == 3
     assert all(len(direction.first_questions) == 3 for direction in result.card.directions)
     assert "Dodgers" in result.card.directions[0].first_questions[0]
 
@@ -266,7 +283,7 @@ async def test_prepare_topic_uses_english_feedback_for_korean_practice_retry(mon
         {
             "quality": {"is_sufficient": True, "relevance": True, "freshness": True, "specificity": True},
             "summary": "The Dodgers won a specific recent game.",
-            "directions": _direction_payload()[:3],
+            "directions": _direction_payload()[:2],
         },
         {
             "quality": {"is_sufficient": True, "relevance": True, "freshness": True, "specificity": True},
@@ -348,7 +365,7 @@ def test_topic_prep_card_uses_target_language_fallback_directions():
         for direction in card.directions
         if direction.direction == ConversationDirection.EXPLANATION_PRACTICE
     )
-    assert explanation.title == "설명 연습"
+    assert explanation.title == "Explanation practice"
     assert "쉬운 한국어" in explanation.first_questions[0]
 
 

@@ -9,4 +9,5 @@ export 'domain/conversation_repository.dart';
 export 'domain/grammar_feedback.dart';
 export 'domain/grammar_feedback_repository.dart';
 export 'presentation/conversation_screen.dart';
+export 'presentation/conversation_delete_dialog.dart';
 export 'presentation/widgets/widgets.dart';

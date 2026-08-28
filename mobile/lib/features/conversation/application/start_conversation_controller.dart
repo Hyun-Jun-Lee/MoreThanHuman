@@ -29,16 +29,24 @@ class InitialAssistantAudioController extends Notifier<InitialAssistantAudio?> {
   }
 }
 
+enum StartConversationFailureReason {
+  freeChatRequestFailed,
+  roleplayRequestFailed,
+}
+
 class StartConversationState {
-  const StartConversationState({this.isStarting = false, this.errorMessage});
+  const StartConversationState({this.isStarting = false, this.failureReason});
 
   final bool isStarting;
-  final String? errorMessage;
+  final StartConversationFailureReason? failureReason;
 
-  StartConversationState copyWith({bool? isStarting, String? errorMessage}) {
+  StartConversationState copyWith({
+    bool? isStarting,
+    StartConversationFailureReason? failureReason,
+  }) {
     return StartConversationState(
       isStarting: isStarting ?? this.isStarting,
-      errorMessage: errorMessage,
+      failureReason: failureReason,
     );
   }
 }
@@ -55,26 +63,39 @@ class StartConversationController extends Notifier<StartConversationState> {
     String? topic,
     String? conversationDirection,
     String? selectedQuestion,
+    String? customFocus,
   }) async {
     state = const StartConversationState(isStarting: true);
     try {
-      final ConversationResponse response = await ref
-          .read(conversationRepositoryProvider)
-          .startFreeChat(
-            firstMessage: firstMessage,
-            searchContext: searchContext,
-            topic: topic,
-            conversationDirection: conversationDirection,
-            selectedQuestion: selectedQuestion,
-            includeAudioResponse: true,
-          );
+      final ConversationRepository repository = ref.read(
+        conversationRepositoryProvider,
+      );
+      final ConversationResponse response = customFocus == null
+          ? await repository.startFreeChat(
+              firstMessage: firstMessage,
+              searchContext: searchContext,
+              topic: topic,
+              conversationDirection: conversationDirection,
+              selectedQuestion: selectedQuestion,
+              includeAudioResponse: true,
+            )
+          : await _customFocusRepository(
+              repository,
+            ).startFreeChatWithCustomFocus(
+              firstMessage: firstMessage,
+              searchContext: searchContext,
+              topic: topic,
+              selectedQuestion: selectedQuestion,
+              customFocus: customFocus,
+              includeAudioResponse: true,
+            );
       _storeInitialAssistantAudio(response);
       _refreshRecentConversations();
       state = const StartConversationState();
       return response;
     } on Object catch (_) {
       state = const StartConversationState(
-        errorMessage: 'Could not start the conversation. Please try again.',
+        failureReason: StartConversationFailureReason.freeChatRequestFailed,
       );
       return null;
     }
@@ -86,26 +107,39 @@ class StartConversationController extends Notifier<StartConversationState> {
     String? topic,
     String? conversationDirection,
     String? selectedQuestion,
+    String? customFocus,
   }) async {
     state = const StartConversationState(isStarting: true);
     try {
-      final ConversationResponse response = await ref
-          .read(conversationRepositoryProvider)
-          .startFreeChatWithAudio(
-            audioFile: audioFile,
-            searchContext: searchContext,
-            topic: topic,
-            conversationDirection: conversationDirection,
-            selectedQuestion: selectedQuestion,
-            includeAudioResponse: true,
-          );
+      final ConversationRepository repository = ref.read(
+        conversationRepositoryProvider,
+      );
+      final ConversationResponse response = customFocus == null
+          ? await repository.startFreeChatWithAudio(
+              audioFile: audioFile,
+              searchContext: searchContext,
+              topic: topic,
+              conversationDirection: conversationDirection,
+              selectedQuestion: selectedQuestion,
+              includeAudioResponse: true,
+            )
+          : await _customFocusRepository(
+              repository,
+            ).startFreeChatWithAudioAndCustomFocus(
+              audioFile: audioFile,
+              searchContext: searchContext,
+              topic: topic,
+              selectedQuestion: selectedQuestion,
+              customFocus: customFocus,
+              includeAudioResponse: true,
+            );
       _storeInitialAssistantAudio(response);
       _refreshRecentConversations();
       state = const StartConversationState();
       return response;
     } on Object catch (_) {
       state = const StartConversationState(
-        errorMessage: 'Could not start the conversation. Please try again.',
+        failureReason: StartConversationFailureReason.freeChatRequestFailed,
       );
       return null;
     }
@@ -132,7 +166,7 @@ class StartConversationController extends Notifier<StartConversationState> {
       return response;
     } on Object catch (_) {
       state = const StartConversationState(
-        errorMessage: 'Could not start roleplay. Please try again.',
+        failureReason: StartConversationFailureReason.roleplayRequestFailed,
       );
       return null;
     }
@@ -161,6 +195,17 @@ class StartConversationController extends Notifier<StartConversationState> {
         .read(recentConversationsRefreshingProvider.notifier)
         .setRefreshing(true);
     ref.invalidate(recentConversationsControllerProvider);
+  }
+
+  CustomFocusConversationRepository _customFocusRepository(
+    ConversationRepository repository,
+  ) {
+    if (repository is CustomFocusConversationRepository) {
+      return repository as CustomFocusConversationRepository;
+    }
+    throw StateError(
+      'Custom focus conversations are unavailable for this repository.',
+    );
   }
 }
 

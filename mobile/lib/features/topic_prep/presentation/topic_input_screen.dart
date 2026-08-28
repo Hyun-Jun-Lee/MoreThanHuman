@@ -1,26 +1,35 @@
 import 'package:curitalk/app/router/app_router.dart';
 import 'package:curitalk/app/theme/tokens/tokens.dart';
+import 'package:curitalk/core/copy/copy.dart';
 import 'package:curitalk/core/widgets/widgets.dart';
+import 'package:curitalk/features/auth/auth.dart';
+import 'package:curitalk/features/language/language.dart';
+import 'package:curitalk/features/topic_prep/domain/topic_starter_examples.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-class TopicInputScreen extends StatefulWidget {
+final Provider<LearningLanguageCode> topicStarterNativeLanguageProvider =
+    Provider<LearningLanguageCode>((Ref ref) {
+      return ref.watch(
+        authControllerProvider.select(
+          (AsyncValue<AuthSession> auth) =>
+              auth.value?.user?.language.nativeLanguage ??
+              LearningLanguageContext.defaultContext.nativeLanguage,
+        ),
+      );
+    });
+
+class TopicInputScreen extends ConsumerStatefulWidget {
   const TopicInputScreen({this.initialTopic, super.key});
 
   final String? initialTopic;
 
   @override
-  State<TopicInputScreen> createState() => _TopicInputScreenState();
+  ConsumerState<TopicInputScreen> createState() => _TopicInputScreenState();
 }
 
-class _TopicInputScreenState extends State<TopicInputScreen> {
-  static const List<String> _examples = <String>[
-    'AI news this week',
-    'Osaka food trip',
-    'World Cup qualifier',
-    'Apple WWDC update',
-  ];
-
+class _TopicInputScreenState extends ConsumerState<TopicInputScreen> {
   late final TextEditingController _controller;
   String? _errorText;
 
@@ -38,20 +47,27 @@ class _TopicInputScreenState extends State<TopicInputScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final AppCopy copy = AppCopy.of(context);
+    final LearningLanguageCode nativeLanguage = ref.watch(
+      topicStarterNativeLanguageProvider,
+    );
+    final List<String> examples = TopicStarterExamples.forNativeLanguage(
+      nativeLanguage,
+    );
     return AppScaffold(
-      appBar: AppBar(title: const Text('Free Chat')),
+      appBar: AppBar(title: Text(copy.freeChatTitle)),
       body: ListView(
         children: <Widget>[
           const SizedBox(height: AppSpacing.xl),
           Text(
-            'What topic do you want to talk about?',
+            copy.topicInputTitle,
             style: AppTypography.headlineLg.copyWith(
               color: Theme.of(context).colorScheme.onSurface,
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
           Text(
-            'Bring a news story, hobby, trip idea, sports result, or anything you actually care about.',
+            copy.topicInputDescription,
             style: AppTypography.body.copyWith(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
@@ -59,11 +75,11 @@ class _TopicInputScreenState extends State<TopicInputScreen> {
           const SizedBox(height: AppSpacing.xl),
           AppTextField(
             controller: _controller,
-            hintText: 'AI news this week',
+            hintText: examples.first,
             errorText: _errorText,
             autofocus: true,
             textInputAction: TextInputAction.done,
-            semanticLabel: 'Conversation topic',
+            semanticLabel: copy.conversationTopicLabel,
             onChanged: (_) {
               if (_errorText != null) {
                 setState(() => _errorText = null);
@@ -72,13 +88,13 @@ class _TopicInputScreenState extends State<TopicInputScreen> {
             onSubmitted: (_) => _prepare(),
           ),
           const SizedBox(height: AppSpacing.xl),
-          const AppSectionLabel('Examples'),
+          AppSectionLabel(copy.examplesLabel),
           const SizedBox(height: AppSpacing.md),
           Wrap(
             spacing: AppSpacing.xs,
             runSpacing: AppSpacing.xs,
             children: <Widget>[
-              for (final String example in _examples)
+              for (final String example in examples)
                 ActionChip(
                   label: Text(example),
                   onPressed: () {
@@ -89,7 +105,7 @@ class _TopicInputScreenState extends State<TopicInputScreen> {
             ],
           ),
           const SizedBox(height: AppSpacing.xxl),
-          AppPrimaryButton(label: 'PREPARE', onPressed: _prepare),
+          AppPrimaryButton(label: copy.prepareLabel, onPressed: _prepare),
         ],
       ),
     );
@@ -99,7 +115,7 @@ class _TopicInputScreenState extends State<TopicInputScreen> {
     final String topic = _controller.text.trim();
     if (topic.length < 2) {
       setState(() {
-        _errorText = 'Enter at least 2 characters.';
+        _errorText = AppCopy.of(context).customRoleplayInputTooShort;
       });
       return;
     }

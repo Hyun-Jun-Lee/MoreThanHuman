@@ -4,6 +4,7 @@ Search Service Layer
 import asyncio
 import json
 import logging
+import re
 import time
 from dataclasses import dataclass
 from datetime import datetime
@@ -24,6 +25,7 @@ from domains.search.query import (
 )
 from domains.search.schemas import (
     ConversationDirection,
+    CustomFocusQuestionsResult,
     SearchQualityJudgeResult,
     SearchQuality,
     SearchQueryAnalysisResult,
@@ -31,6 +33,7 @@ from domains.search.schemas import (
     SearchResultItem,
     TopicPrepCard,
     TopicPrepDirection,
+    TopicPrepDirectionsResult,
     TopicPrepQuality,
     TopicPrepResult,
 )
@@ -50,6 +53,22 @@ logger = logging.getLogger(__name__)
 
 MIN_TOPIC_PREP_SOURCE_COUNT = 3
 INCOMPLETE_TOPIC_PREP_CARD_REASON = "검색 결과로 대화 준비 카드를 완성하지 못했어요."
+
+
+def resolve_topic_display_language(topic: str, native_language: LanguageCode) -> LanguageCode:
+    """입력 주제의 표시 언어를 판별하고 모호하면 모국어를 사용한다."""
+    hangul_count = len(re.findall(r"[가-힣]", topic))
+    han_count = len(re.findall(r"[\u4e00-\u9fff]", topic))
+    latin_words = re.findall(r"[A-Za-z]+", topic)
+
+    if hangul_count > 0 and hangul_count >= han_count:
+        return LanguageCode.KOREAN
+    if han_count > 0:
+        return LanguageCode.CHINESE
+    # 단일 로마자 고유명사는 언어를 단정하지 않는다.
+    if len(latin_words) >= 2:
+        return LanguageCode.ENGLISH
+    return native_language
 
 
 @dataclass(frozen=True)
@@ -159,6 +178,124 @@ class SearchService:
             language=language_context,
             card=card,
             quality=card.quality,
+        )
+
+    async def prepare_custom_focus_questions(
+        self,
+        topic: str,
+        custom_focus: str,
+        language_context: LearningLanguageContext | None = None,
+    ) -> CustomFocusQuestionsResult:
+        """사용자가 직접 적은 대화 방향에 맞는 첫 질문을 생성한다."""
+        language_context = ensure_language_context(language_context)
+        focus = custom_focus.strip()
+        display_language = resolve_topic_display_language(topic, language_context.native_language)
+        prepared = await self._prepare_search_results(topic, language_context=language_context)
+        if not prepared.quality.is_sufficient:
+            return CustomFocusQuestionsResult(
+                ready=False,
+                custom_focus=focus,
+                retry_guidance=self._custom_focus_retry_guidance(display_language),
+            )
+
+        source_text = self._format_topic_prep_sources(prepared.sources)
+        target_name = language_name(language_context.target_language)
+        display_name = language_name(display_language)
+        provider = LLMProviderFactory.create_provider()
+        response = await provider.chat_completion(
+            LLMRequest(
+                messages=[
+                    LLMMessage(
+                        role="system",
+                        content=(
+                            f"Create exactly three first conversation questions in {target_name}. "
+                            "The learner must answer in the practice target language. "
+                            f"Decide whether the user's focus is genuinely about the topic. "
+                            f"Write retry_guidance in {display_name} only when it is unrelated. "
+                            'Return JSON only: {"is_relevant": true, "first_questions": ["q1", "q2", "q3"], '
+                            '"retry_guidance": null}.'
+                        ),
+                    ),
+                    LLMMessage(
+                        role="user",
+                        content=f"Topic: {topic}\nFocus: {focus}\n\nSearch Results:\n{source_text}",
+                    ),
+                ],
+                model=get_model_for_provider(),
+                max_tokens=min(self.settings.max_tokens, 700),
+                temperature=0.4,
+            )
+        )
+        data = self._parse_json_response(response.content)
+        questions = [str(question).strip() for question in data.get("first_questions", []) if str(question).strip()]
+        is_relevant = data.get("is_relevant") is True and len(questions) == 3
+        return CustomFocusQuestionsResult(
+            ready=is_relevant,
+            custom_focus=focus,
+            first_questions=questions if is_relevant else [],
+            retry_guidance=(
+                None
+                if is_relevant
+                else str(data.get("retry_guidance") or self._custom_focus_retry_guidance(display_language))
+            ),
+        )
+
+    async def regenerate_topic_prep_directions(
+        self,
+        topic: str,
+        previous_directions: list[str],
+        language_context: LearningLanguageContext | None = None,
+    ) -> TopicPrepDirectionsResult:
+        """같은 검증 주제에서 새로운 세 대화 방향만 생성한다."""
+        language_context = ensure_language_context(language_context)
+        display_language = resolve_topic_display_language(topic, language_context.native_language)
+        prepared = await self._prepare_search_results(topic, language_context=language_context)
+        if not prepared.quality.is_sufficient:
+            raise ExternalAPIException("Topic prep directions are unavailable for this topic")
+
+        source_text = self._format_topic_prep_sources(prepared.sources)
+        target_name = language_name(language_context.target_language)
+        display_name = language_name(display_language)
+        directions = ", ".join(direction.value for direction in ConversationDirection)
+        provider = LLMProviderFactory.create_provider()
+        response = await provider.chat_completion(
+            LLMRequest(
+                messages=[
+                    LLMMessage(
+                        role="system",
+                        content=(
+                            f"Create exactly three conversation directions for a {target_name} learner. "
+                            f"Use exactly these values once each: {directions}. "
+                            f"Write each title and description in {display_name}; write each of exactly three first questions in {target_name}. "
+                            "Make them materially different from the previous direction text. "
+                            'Return JSON only: {"directions": [{"direction": "CASUAL_CHAT", "title": "...", '
+                            '"description": "...", "first_questions": ["q1", "q2", "q3"]}]}.'
+                        ),
+                    ),
+                    LLMMessage(
+                        role="user",
+                        content=(
+                            f"Topic: {topic}\nPrevious directions: {json.dumps(previous_directions)}\n\n"
+                            f"Search Results:\n{source_text}"
+                        ),
+                    ),
+                ],
+                model=get_model_for_provider(),
+                max_tokens=min(self.settings.max_tokens, 1000),
+                temperature=0.75,
+            )
+        )
+        data = self._parse_json_response(response.content)
+        raw_directions = data.get("directions", [])
+        if not self._has_complete_directions_payload(raw_directions):
+            raise ExternalAPIException("Topic prep directions response was incomplete")
+        return TopicPrepDirectionsResult(
+            directions=self._normalize_topic_prep_directions(
+                topic,
+                raw_directions,
+                language_context=language_context,
+                display_language=display_language,
+            )
         )
 
     async def _prepare_search_results(
@@ -826,9 +963,13 @@ class SearchService:
         sources: list[SearchResultItem],
         analysis: QueryAnalysis | None = None,
         language_context: LearningLanguageContext | None = None,
+        display_language: LanguageCode | None = None,
     ) -> TopicPrepCard:
         """LLM으로 검색 품질 판정과 준비 카드 내용을 생성"""
         language_context = ensure_language_context(language_context)
+        display_language = display_language or resolve_topic_display_language(
+            topic, language_context.native_language
+        )
         source_text = "\n".join(
             f"- Title: {source.title}\n  Snippet: {source.snippet}\n  URL: {source.url}"
             for source in sources
@@ -841,7 +982,10 @@ class SearchService:
                 messages=[
                     LLMMessage(
                         role="system",
-                        content=self._build_topic_prep_system_prompt(language_context=language_context),
+                        content=self._build_topic_prep_system_prompt(
+                            language_context=language_context,
+                            display_language=display_language,
+                        ),
                     ),
                     LLMMessage(
                         role="user",
@@ -865,6 +1009,7 @@ class SearchService:
                 sources,
                 data,
                 language_context=language_context,
+                display_language=display_language,
             )
         except ExternalAPIException:
             raise
@@ -875,12 +1020,15 @@ class SearchService:
     def _build_topic_prep_system_prompt(
         self,
         language_context: LearningLanguageContext | None = None,
+        display_language: LanguageCode | None = None,
     ) -> str:
         """주제 준비 카드 생성 프롬프트"""
         language_context = ensure_language_context(language_context)
+        display_language = display_language or language_context.native_language
         target_name = language_name(language_context.target_language)
         feedback_name = language_name(language_context.feedback_language)
         native_name = language_name(language_context.native_language)
+        display_name = language_name(display_language)
         topic_prep_priorities = format_topic_prep_priorities(language_context.target_language)
         directions = ", ".join(direction.value for direction in ConversationDirection)
         return f"""You create pre-conversation topic prep cards for {target_name} learners.
@@ -901,11 +1049,12 @@ Judge quality using:
 4. specificity: concrete people, events, results, or issues rather than generic background
 
 If the quality is insufficient, set is_sufficient to false and explain how to make the topic more specific.
-If sufficient, create a short {target_name} summary and exactly four conversation directions.
+If sufficient, create a short {display_name} summary and exactly three conversation directions.
 Each direction must use one of these direction values: {directions}.
 Each direction must include exactly three first questions.
 Questions must be specific to the search summary and must not be generic questions like "Do you like baseball?"
-For sufficient cards, write titles, descriptions, and first questions in {target_name}.
+For sufficient cards, write the summary, titles, and descriptions in {display_name}.
+Write every first question in {target_name}.
 When is_sufficient is false, write quality reason and retry_suggestion in {feedback_name} so the learner can recover.
 
 Respond only in JSON:
@@ -918,7 +1067,7 @@ Respond only in JSON:
     "reason": "brief reason",
     "retry_suggestion": null
   }},
-  "summary": "3-5 short {target_name} sentences grounded in the search results.",
+  "summary": "3-5 short {display_name} sentences grounded in the search results.",
   "directions": [
     {{
       "direction": "CASUAL_CHAT",
@@ -950,9 +1099,13 @@ Respond only in JSON:
         sources: list[SearchResultItem],
         data: dict,
         language_context: LearningLanguageContext | None = None,
+        display_language: LanguageCode | None = None,
     ) -> TopicPrepCard:
         """LLM 응답 dict를 TopicPrepCard로 변환"""
         language_context = ensure_language_context(language_context)
+        display_language = display_language or resolve_topic_display_language(
+            topic, language_context.native_language
+        )
         quality_data = data.get("quality", {})
         raw_directions = data.get("directions", [])
         summary = str(data.get("summary") or "").strip()
@@ -984,6 +1137,7 @@ Respond only in JSON:
             topic,
             raw_directions,
             language_context=language_context,
+            display_language=display_language,
         )
         return TopicPrepCard(
             topic=topic,
@@ -1002,6 +1156,12 @@ Respond only in JSON:
     def _has_complete_topic_prep_payload(self, summary: str, raw_directions: object) -> bool:
         """ready=true 카드로 반환 가능한 최소 LLM payload 검증"""
         if not summary or not isinstance(raw_directions, list):
+            return False
+        return bool(summary) and self._has_complete_directions_payload(raw_directions)
+
+    def _has_complete_directions_payload(self, raw_directions: object) -> bool:
+        """방향 세 개가 enum과 질문 수 계약을 충족하는지 확인한다."""
+        if not isinstance(raw_directions, list):
             return False
         if len(raw_directions) != len(ConversationDirection):
             return False
@@ -1031,14 +1191,18 @@ Respond only in JSON:
         topic: str,
         raw_directions: list[dict],
         language_context: LearningLanguageContext | None = None,
+        display_language: LanguageCode | None = None,
     ) -> list[TopicPrepDirection]:
-        """대화 방향 4개를 고정 순서로 정규화"""
+        """대화 방향 3개를 고정 순서로 정규화"""
         by_direction = {
             item.get("direction"): item
             for item in raw_directions
             if isinstance(item, dict)
         }
         defaults = self._default_direction_metadata(topic, language_context=language_context)
+        display_copy = self._direction_display_copy(
+            display_language or ensure_language_context(language_context).native_language
+        )
         normalized = []
         for direction in ConversationDirection:
             item = by_direction.get(direction.value, {})
@@ -1053,8 +1217,8 @@ Respond only in JSON:
             normalized.append(
                 TopicPrepDirection(
                     direction=direction,
-                    title=item.get("title") or defaults[direction]["title"],
-                    description=item.get("description") or defaults[direction]["description"],
+                    title=item.get("title") or display_copy[direction]["title"],
+                    description=item.get("description") or display_copy[direction]["description"],
                     first_questions=questions,
                 )
             )
@@ -1087,15 +1251,6 @@ Respond only in JSON:
                         f"반대 의견을 가진 사람은 어떤 말을 할 수 있을까요?",
                     ],
                 },
-                ConversationDirection.INTERVIEW_QA: {
-                    "title": "인터뷰 / 질의응답",
-                    "description": "구체적인 질문에 답하며 설명을 이어가요.",
-                    "fallback_questions": [
-                        f"{topic}에서 사람들이 꼭 알아야 할 점은 무엇인가요?",
-                        f"{topic}이 지금 중요한 이유는 무엇인가요?",
-                        f"전문가에게 {topic}에 대해 어떤 질문을 하고 싶나요?",
-                    ],
-                },
                 ConversationDirection.EXPLANATION_PRACTICE: {
                     "title": "설명 연습",
                     "description": "주제를 이해하기 쉽게 정리해서 말해요.",
@@ -1126,15 +1281,6 @@ Respond only in JSON:
                     f"What might someone on the other side of {topic} say?",
                 ],
             },
-            ConversationDirection.INTERVIEW_QA: {
-                "title": "Interview / Q&A",
-                "description": "Answer focused questions as if you are being interviewed.",
-                "fallback_questions": [
-                    f"What is the most important fact people should know about {topic}?",
-                    f"Why does {topic} matter right now?",
-                    f"What question would you ask an expert about {topic}?",
-                ],
-            },
             ConversationDirection.EXPLANATION_PRACTICE: {
                 "title": "Explanation practice",
                 "description": "Practice explaining the topic clearly to someone else.",
@@ -1145,6 +1291,41 @@ Respond only in JSON:
                 ],
             },
         }
+
+    def _direction_display_copy(self, display_language: LanguageCode) -> dict[ConversationDirection, dict[str, str]]:
+        """방향 제목과 설명은 입력 주제 언어로 fallback한다."""
+        if display_language == LanguageCode.KOREAN:
+            return {
+                ConversationDirection.CASUAL_CHAT: {"title": "가볍게 대화하기", "description": "주제에 대한 생각과 경험을 자연스럽게 말해요."},
+                ConversationDirection.DEBATE: {"title": "의견 말하기", "description": "입장을 정하고 이유를 차분하게 설명해요."},
+                ConversationDirection.EXPLANATION_PRACTICE: {"title": "설명 연습", "description": "주제를 이해하기 쉽게 정리해서 말해요."},
+            }
+        if display_language == LanguageCode.CHINESE:
+            return {
+                ConversationDirection.CASUAL_CHAT: {"title": "轻松聊天", "description": "自然分享你对这个话题的想法和经历。"},
+                ConversationDirection.DEBATE: {"title": "表达观点", "description": "提出立场并平静说明理由。"},
+                ConversationDirection.EXPLANATION_PRACTICE: {"title": "说明练习", "description": "练习清楚地向别人解释这个话题。"},
+            }
+        return {
+            ConversationDirection.CASUAL_CHAT: {"title": "Casual conversation", "description": "Share opinions and personal reactions about the topic."},
+            ConversationDirection.DEBATE: {"title": "Debate", "description": "Take a position and explain your reasons."},
+            ConversationDirection.EXPLANATION_PRACTICE: {"title": "Explanation practice", "description": "Practice explaining the topic clearly to someone else."},
+        }
+
+    @staticmethod
+    def _format_topic_prep_sources(sources: list[SearchResultItem]) -> str:
+        return "\n".join(
+            f"- Title: {source.title}\n  Snippet: {source.snippet}\n  URL: {source.url}"
+            for source in sources
+        )
+
+    @staticmethod
+    def _custom_focus_retry_guidance(display_language: LanguageCode) -> str:
+        if display_language == LanguageCode.KOREAN:
+            return "이 주제 안에서 이야기하고 싶은 방향을 다시 입력해 주세요."
+        if display_language == LanguageCode.CHINESE:
+            return "请围绕这个主题重新输入想讨论的方向。"
+        return "Please enter a focus that stays within this topic."
 
     def _build_low_quality_result(
         self,

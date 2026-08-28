@@ -1,4 +1,5 @@
 import 'package:curitalk/app/theme/tokens/tokens.dart';
+import 'package:curitalk/core/copy/copy.dart';
 import 'package:curitalk/core/widgets/widgets.dart';
 import 'package:curitalk/features/auth/auth.dart';
 import 'package:curitalk/features/language/language.dart';
@@ -15,9 +16,14 @@ Future<void> showAccountSheet({
     builder: (BuildContext sheetContext) {
       bool isLoggingOut = false;
       bool isSavingLanguage = false;
+      bool isSavingAppLocale = false;
       String? languageError;
+      String? appLocaleError;
       LearningLanguageContext selectedLanguage =
           user?.language ?? LearningLanguageContext.defaultContext;
+      String selectedAppLocale =
+          user?.appLocale ??
+          (Localizations.localeOf(context).languageCode == 'ko' ? 'ko' : 'en');
       final String name = user?.name.trim().isNotEmpty == true
           ? user!.name.trim()
           : 'Curitalk user';
@@ -25,15 +31,13 @@ Future<void> showAccountSheet({
 
       return StatefulBuilder(
         builder: (BuildContext context, StateSetter setSheetState) {
-          final String localeCode = Localizations.localeOf(
-            context,
-          ).languageCode;
+          final AppCopy copy = AppCopy.of(context);
           return SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
-                const AppSectionLabel('Account'),
+                AppSectionLabel(copy.accountLabel),
                 const SizedBox(height: AppSpacing.lg),
                 Row(
                   children: <Widget>[
@@ -69,7 +73,7 @@ Future<void> showAccountSheet({
                 ),
                 const SizedBox(height: AppSpacing.xl),
                 AppPrimaryButton(
-                  label: 'LOG OUT',
+                  label: copy.logOutLabel,
                   isLoading: isLoggingOut,
                   onPressed: isLoggingOut
                       ? null
@@ -84,10 +88,90 @@ Future<void> showAccountSheet({
                         },
                 ),
                 const SizedBox(height: AppSpacing.xl),
-                const AppSectionLabel('Language Pair'),
+                AppSectionLabel(copy.appLanguageSectionLabel),
+                const SizedBox(height: AppSpacing.md),
+                Wrap(
+                  spacing: AppSpacing.xs,
+                  children: <Widget>[
+                    AppSelectionChip(
+                      label: copy.appLanguageKoreanLabel,
+                      selected: selectedAppLocale == 'ko',
+                      onSelected: isSavingAppLocale || isLoggingOut
+                          ? null
+                          : (bool selected) {
+                              if (selected) {
+                                setSheetState(() {
+                                  selectedAppLocale = 'ko';
+                                  appLocaleError = null;
+                                });
+                              }
+                            },
+                    ),
+                    AppSelectionChip(
+                      label: copy.appLanguageEnglishLabel,
+                      selected: selectedAppLocale == 'en',
+                      onSelected: isSavingAppLocale || isLoggingOut
+                          ? null
+                          : (bool selected) {
+                              if (selected) {
+                                setSheetState(() {
+                                  selectedAppLocale = 'en';
+                                  appLocaleError = null;
+                                });
+                              }
+                            },
+                    ),
+                  ],
+                ),
+                if (appLocaleError != null) ...<Widget>[
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    appLocaleError!,
+                    style: AppTypography.bodySm.copyWith(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: AppSpacing.md),
+                AppPrimaryButton(
+                  label: copy.saveAppLanguageLabel,
+                  isLoading: isSavingAppLocale,
+                  onPressed:
+                      isLoggingOut ||
+                          isSavingAppLocale ||
+                          selectedAppLocale == user?.appLocale
+                      ? null
+                      : () async {
+                          setSheetState(() {
+                            isSavingAppLocale = true;
+                            appLocaleError = null;
+                          });
+                          try {
+                            await ref
+                                .read(authControllerProvider.notifier)
+                                .updateAppLocale(selectedAppLocale);
+                            if (sheetContext.mounted) {
+                              Navigator.pop(sheetContext);
+                            }
+                          } on Object {
+                            if (sheetContext.mounted) {
+                              setSheetState(
+                                () =>
+                                    appLocaleError = copy.appLanguageSaveFailed,
+                              );
+                            }
+                          } finally {
+                            if (sheetContext.mounted) {
+                              setSheetState(() => isSavingAppLocale = false);
+                            }
+                          }
+                        },
+                ),
+                const SizedBox(height: AppSpacing.xl),
+                AppSectionLabel(copy.languagePairSectionLabel),
                 const SizedBox(height: AppSpacing.xs),
                 Text(
-                  selectedLanguage.preferenceChangePolicyText(localeCode),
+                  copy.preferenceChangePolicyText(),
                   style: AppTypography.bodySm.copyWith(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
@@ -101,7 +185,6 @@ Future<void> showAccountSheet({
                       languageError = null;
                     });
                   },
-                  localeCode: localeCode,
                   enabled: !isSavingLanguage && !isLoggingOut,
                 ),
                 if (languageError != null) ...<Widget>[
@@ -118,7 +201,7 @@ Future<void> showAccountSheet({
                 ],
                 const SizedBox(height: AppSpacing.md),
                 AppPrimaryButton(
-                  label: 'SAVE LANGUAGE PAIR',
+                  label: copy.saveLanguagePairLabel,
                   isLoading: isSavingLanguage,
                   onPressed:
                       isLoggingOut ||
@@ -148,8 +231,7 @@ Future<void> showAccountSheet({
                           } on Object {
                             if (sheetContext.mounted) {
                               setSheetState(() {
-                                languageError =
-                                    'Language pair could not be saved.';
+                                languageError = copy.languagePairSaveFailed;
                               });
                             }
                           } finally {

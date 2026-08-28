@@ -51,7 +51,10 @@ void main() {
         .value!;
 
     expect(state.failedMessage, 'Retry me');
-    expect(state.errorMessage, 'Message could not be sent.');
+    expect(
+      state.failureReason,
+      ConversationSendFailureReason.textRequestFailed,
+    );
   });
 
   test(
@@ -121,7 +124,10 @@ void main() {
 
     expect(state.failedAudioFile?.filename, 'retry.webm');
     expect(state.failedMessage, isNull);
-    expect(state.errorMessage, 'Voice message could not be sent.');
+    expect(
+      state.failureReason,
+      ConversationSendFailureReason.audioRequestFailed,
+    );
   });
 
   test('attaches initial assistant audio from start handoff', () async {

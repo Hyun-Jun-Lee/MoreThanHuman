@@ -123,6 +123,27 @@ void main() {
     },
   );
 
+  test('updates the signed-in user app locale', () async {
+    final _FakeSupabaseAuthService supabaseAuth = _FakeSupabaseAuthService(
+      hasSession: true,
+    );
+    final _FakeAuthRepository repository = _FakeAuthRepository(user: _user);
+    final ProviderContainer container = _createContainer(
+      supabaseAuth,
+      repository,
+    );
+    addTearDown(container.dispose);
+    await container.read(authControllerProvider.future);
+
+    await container.read(authControllerProvider.notifier).updateAppLocale('ko');
+
+    expect(repository.updatedAppLocale, 'ko');
+    expect(
+      container.read(authControllerProvider).requireValue.user?.appLocale,
+      'ko',
+    );
+  });
+
   test(
     'session expiration immediately publishes unauthenticated state',
     () async {
@@ -330,12 +351,13 @@ class _FakeLanguagePreferencesRepository
   }
 }
 
-class _FakeAuthRepository implements AuthRepository {
+class _FakeAuthRepository implements AuthRepository, AppLocaleRepository {
   _FakeAuthRepository({this.user, this.profileError});
 
   final UserProfile? user;
   final Object? profileError;
   int profileRequestCount = 0;
+  String? updatedAppLocale;
 
   @override
   Future<UserProfile> getCurrentUser() async {
@@ -344,6 +366,12 @@ class _FakeAuthRepository implements AuthRepository {
       throw error;
     }
     return user ?? _user;
+  }
+
+  @override
+  Future<UserProfile> updateAppLocale(String appLocale) async {
+    updatedAppLocale = appLocale;
+    return (user ?? _user).copyWith(appLocale: appLocale);
   }
 }
 

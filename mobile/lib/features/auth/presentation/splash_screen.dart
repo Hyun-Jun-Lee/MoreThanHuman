@@ -1,4 +1,5 @@
 import 'package:curitalk/app/theme/tokens/tokens.dart';
+import 'package:curitalk/core/copy/copy.dart';
 import 'package:curitalk/features/auth/auth.dart';
 import 'package:curitalk/features/onboarding/onboarding.dart';
 import 'package:flutter/material.dart';
@@ -9,6 +10,7 @@ class SplashScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final AppCopy copy = AppCopy.of(context);
     final AsyncValue<AuthSession> auth = ref.watch(authControllerProvider);
     final AsyncValue<bool> onboarding = ref.watch(onboardingControllerProvider);
     final bool hasError = auth.hasError || onboarding.hasError;
@@ -29,7 +31,7 @@ class SplashScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 Text(
-                  'Speak about anything.',
+                  copy.splashTagline,
                   style: AppTypography.labelMono.copyWith(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
@@ -41,7 +43,7 @@ class SplashScreen extends ConsumerWidget {
                       ref.invalidate(authControllerProvider);
                       ref.invalidate(onboardingControllerProvider);
                     },
-                    child: const Text('Try again'),
+                    child: Text(copy.tryAgainLabel),
                   )
                 else
                   const SizedBox.square(

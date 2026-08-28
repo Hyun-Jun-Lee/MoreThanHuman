@@ -1,4 +1,5 @@
 import 'package:curitalk/app/theme/tokens/tokens.dart';
+import 'package:curitalk/core/copy/copy.dart';
 import 'package:flutter/material.dart';
 
 class SourceLinkTile extends StatelessWidget {
@@ -27,7 +28,7 @@ class SourceLinkTile extends StatelessWidget {
 
     return Semantics(
       button: true,
-      label: 'Source: $title',
+      label: AppCopy.of(context).sourceSemanticLabel(title),
       excludeSemantics: true,
       child: Material(
         color: theme.colorScheme.surface,

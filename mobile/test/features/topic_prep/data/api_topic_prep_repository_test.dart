@@ -60,7 +60,6 @@ class _TopicPrepHttpClientAdapter implements HttpClientAdapter {
             'directions': <Map<String, dynamic>>[
               _direction('CASUAL_CHAT', 'Casual Chat'),
               _direction('DEBATE', 'Debate'),
-              _direction('INTERVIEW_QA', 'Interview'),
               _direction('EXPLANATION_PRACTICE', 'Explain'),
             ],
             'sources': <Map<String, dynamic>>[

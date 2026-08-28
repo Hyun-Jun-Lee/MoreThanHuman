@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:curitalk/app/router/app_router.dart';
 import 'package:curitalk/app/theme/tokens/tokens.dart';
+import 'package:curitalk/core/copy/copy.dart';
 import 'package:curitalk/core/widgets/widgets.dart';
 import 'package:curitalk/features/conversation/conversation.dart';
 import 'package:curitalk/features/language/language.dart';
@@ -22,11 +23,18 @@ class TopicPrepScreen extends ConsumerStatefulWidget {
 class _TopicPrepScreenState extends ConsumerState<TopicPrepScreen> {
   late String _topic;
   late final TextEditingController _answerController;
+  late final TextEditingController _customFocusController;
   late final ConversationAudioRecorder _recorder;
   Timer? _recordingTimer;
   TopicPrepDirectionType? _selectedDirection;
   int _selectedQuestionIndex = 0;
   String? _answerErrorText;
+  String? _customFocusErrorText;
+  String? _directionsErrorText;
+  CustomFocusQuestions? _customFocusQuestions;
+  TopicPrepDirections? _regeneratedDirections;
+  bool _isPreparingCustomFocus = false;
+  bool _isRegeneratingDirections = false;
   _PrepVoiceInputState _voiceInput = const _PrepVoiceInputState.idle();
 
   @override
@@ -34,6 +42,7 @@ class _TopicPrepScreenState extends ConsumerState<TopicPrepScreen> {
     super.initState();
     _topic = widget.initialTopic.trim();
     _answerController = TextEditingController();
+    _customFocusController = TextEditingController();
     _recorder = ref.read(conversationAudioRecorderProvider);
   }
 
@@ -44,11 +53,13 @@ class _TopicPrepScreenState extends ConsumerState<TopicPrepScreen> {
       unawaited(_recorder.cancel());
     }
     _answerController.dispose();
+    _customFocusController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final AppCopy copy = AppCopy.of(context);
     final AsyncValue<TopicPrepResult> result = ref.watch(
       topicPrepControllerProvider(_topic),
     );
@@ -57,14 +68,13 @@ class _TopicPrepScreenState extends ConsumerState<TopicPrepScreen> {
     );
 
     return AppScaffold(
-      appBar: AppBar(title: const Text('Topic Prep')),
+      appBar: AppBar(title: Text(copy.topicPrepTitle)),
       body: result.when(
-        loading: () => const AppAsyncStateView.loading(
-          message: 'Preparing your conversation...',
-        ),
+        loading: () =>
+            AppAsyncStateView.loading(message: copy.preparingConversation),
         error: (_, _) => AppAsyncStateView.error(
-          title: 'Could not prepare this topic.',
-          message: 'Check your connection and try again.',
+          title: copy.topicPrepFailedTitle,
+          message: copy.connectionRetryMessage,
           onRetry: () {
             ref.read(topicPrepControllerProvider(_topic).notifier).reload();
           },
@@ -79,29 +89,50 @@ class _TopicPrepScreenState extends ConsumerState<TopicPrepScreen> {
           }
           return _ReadyTopicPrepView(
             card: result.card!,
+            directions:
+                _regeneratedDirections?.directions ?? result.card!.directions,
             language: result.language,
             answerController: _answerController,
+            customFocusController: _customFocusController,
             selectedDirection: _selectedDirection,
             selectedQuestionIndex: _selectedQuestionIndex,
             answerErrorText: _answerErrorText,
-            startErrorText: startState.errorMessage,
+            customFocusErrorText: _customFocusErrorText,
+            directionsErrorText: _directionsErrorText,
+            customFocusQuestions: _customFocusQuestions,
+            startErrorText: startState.failureReason == null
+                ? null
+                : copy.failureMessage(startState.failureReason!.name),
             isStarting: startState.isStarting,
+            isPreparingCustomFocus: _isPreparingCustomFocus,
+            isRegeneratingDirections: _isRegeneratingDirections,
             isRecording: _voiceInput.phase == _PrepVoiceInputPhase.recording,
             isVoiceBusy: _voiceInput.isBusy,
             recordingElapsedText:
                 _voiceInput.phase == _PrepVoiceInputPhase.recording
                 ? _formatElapsed(_voiceInput.elapsed)
                 : null,
-            voiceStatusLabel: _voiceInput.statusLabel,
-            voiceErrorText: _voiceInput.errorMessage,
+            voiceStatusLabel: _voiceInput.statusLabel(copy),
+            voiceErrorText: _voiceInput.failureReason == null
+                ? null
+                : copy.failureMessage(_voiceInput.failureReason!.name),
             onDirectionSelected: (TopicPrepDirectionType direction) {
               setState(() {
                 _selectedDirection = direction;
                 _selectedQuestionIndex = 0;
+                _customFocusQuestions = null;
               });
             },
             onQuestionSelected: (int index) {
               setState(() => _selectedQuestionIndex = index);
+            },
+            onCustomFocusSubmit: () =>
+                _prepareCustomFocusQuestions(result.card!),
+            onRegenerateDirections: () => _regenerateDirections(result.card!),
+            onCustomFocusChanged: (_) {
+              if (_customFocusErrorText != null) {
+                setState(() => _customFocusErrorText = null);
+              }
             },
             onAnswerChanged: (_) {
               if (_answerErrorText != null) {
@@ -127,6 +158,11 @@ class _TopicPrepScreenState extends ConsumerState<TopicPrepScreen> {
       _selectedQuestionIndex = 0;
       _answerController.clear();
       _answerErrorText = null;
+      _customFocusErrorText = null;
+      _directionsErrorText = null;
+      _customFocusQuestions = null;
+      _regeneratedDirections = null;
+      _customFocusController.clear();
       _voiceInput = const _PrepVoiceInputState.idle();
     });
   }
@@ -142,24 +178,34 @@ class _TopicPrepScreenState extends ConsumerState<TopicPrepScreen> {
     required String firstMessage,
   }) async {
     if (firstMessage.length < 2) {
-      setState(() => _answerErrorText = 'Enter at least 2 characters.');
+      setState(
+        () =>
+            _answerErrorText = AppCopy.of(context).customRoleplayInputTooShort,
+      );
       return;
     }
 
-    final TopicPrepDirection direction = _resolveSelectedDirection(card);
+    final List<TopicPrepDirection> directions =
+        _regeneratedDirections?.directions ?? card.directions;
+    final TopicPrepDirection direction = _resolveSelectedDirection(directions);
+    final CustomFocusQuestions? customFocus = _customFocusQuestions;
+    final List<String> questions =
+        customFocus?.firstQuestions ?? direction.firstQuestions;
     final String? selectedQuestion =
-        direction.firstQuestions.isEmpty ||
-            _selectedQuestionIndex >= direction.firstQuestions.length
+        questions.isEmpty || _selectedQuestionIndex >= questions.length
         ? null
-        : direction.firstQuestions[_selectedQuestionIndex];
+        : questions[_selectedQuestionIndex];
     final ConversationResponse? response = await ref
         .read(startConversationControllerProvider.notifier)
         .startFreeChat(
           firstMessage: firstMessage,
           searchContext: card.summary,
           topic: card.topic,
-          conversationDirection: direction.direction.value,
+          conversationDirection: customFocus == null
+              ? direction.direction.value
+              : null,
           selectedQuestion: selectedQuestion,
+          customFocus: customFocus?.customFocus,
         );
     if (!mounted || response == null) {
       return;
@@ -171,20 +217,27 @@ class _TopicPrepScreenState extends ConsumerState<TopicPrepScreen> {
     TopicPrepCard card,
     ConversationAudioFile audioFile,
   ) async {
-    final TopicPrepDirection direction = _resolveSelectedDirection(card);
+    final List<TopicPrepDirection> directions =
+        _regeneratedDirections?.directions ?? card.directions;
+    final TopicPrepDirection direction = _resolveSelectedDirection(directions);
+    final CustomFocusQuestions? customFocus = _customFocusQuestions;
+    final List<String> questions =
+        customFocus?.firstQuestions ?? direction.firstQuestions;
     final String? selectedQuestion =
-        direction.firstQuestions.isEmpty ||
-            _selectedQuestionIndex >= direction.firstQuestions.length
+        questions.isEmpty || _selectedQuestionIndex >= questions.length
         ? null
-        : direction.firstQuestions[_selectedQuestionIndex];
+        : questions[_selectedQuestionIndex];
     final ConversationResponse? response = await ref
         .read(startConversationControllerProvider.notifier)
         .startFreeChatWithAudio(
           audioFile: audioFile,
           searchContext: card.summary,
           topic: card.topic,
-          conversationDirection: direction.direction.value,
+          conversationDirection: customFocus == null
+              ? direction.direction.value
+              : null,
           selectedQuestion: selectedQuestion,
+          customFocus: customFocus?.customFocus,
         );
     if (!mounted || response == null) {
       return;
@@ -214,8 +267,8 @@ class _TopicPrepScreenState extends ConsumerState<TopicPrepScreen> {
             () => _voiceInput =
                 error.reason ==
                     ConversationAudioExceptionReason.permissionDenied
-                ? _PrepVoiceInputState.permissionDenied(error.message)
-                : _PrepVoiceInputState.failed(error.message),
+                ? const _PrepVoiceInputState.permissionDenied()
+                : _PrepVoiceInputState.failed(error.reason),
           );
         }
       }
@@ -254,9 +307,7 @@ class _TopicPrepScreenState extends ConsumerState<TopicPrepScreen> {
     } on ConversationAudioException catch (error) {
       if (mounted) {
         _stopRecordingTimer();
-        setState(
-          () => _voiceInput = _PrepVoiceInputState.failed(error.message),
-        );
+        setState(() => _voiceInput = _PrepVoiceInputState.failed(error.reason));
       }
     }
   }
@@ -303,54 +354,170 @@ class _TopicPrepScreenState extends ConsumerState<TopicPrepScreen> {
     return '$minutes:${seconds.toString().padLeft(2, '0')}';
   }
 
-  TopicPrepDirection _resolveSelectedDirection(TopicPrepCard card) {
+  TopicPrepDirection _resolveSelectedDirection(
+    List<TopicPrepDirection> directions,
+  ) {
     final TopicPrepDirectionType preferred =
         _selectedDirection ?? TopicPrepDirectionType.casualChat;
-    return card.directions.firstWhere(
+    return directions.firstWhere(
       (TopicPrepDirection direction) => direction.direction == preferred,
-      orElse: () => card.directions.first,
+      orElse: () => directions.first,
     );
+  }
+
+  Future<void> _prepareCustomFocusQuestions(TopicPrepCard card) async {
+    final String focus = _customFocusController.text.trim();
+    if (focus.isEmpty) {
+      setState(
+        () => _customFocusErrorText = AppCopy.of(context).customFocusEmptyError,
+      );
+      return;
+    }
+    setState(() {
+      _isPreparingCustomFocus = true;
+      _customFocusErrorText = null;
+    });
+    try {
+      final TopicPrepRepository repository = ref.read(
+        topicPrepRepositoryProvider,
+      );
+      if (repository is! TopicPrepCustomFocusRepository) {
+        throw StateError('Custom focus is unavailable for this repository.');
+      }
+      final CustomFocusQuestions result =
+          await (repository as TopicPrepCustomFocusRepository)
+              .prepareCustomFocusQuestions(
+                topic: card.topic,
+                customFocus: focus,
+              );
+      if (!mounted) return;
+      setState(() {
+        _customFocusQuestions = result.ready ? result : null;
+        _customFocusErrorText = result.ready
+            ? null
+            : result.retryGuidance ??
+                  AppCopy.of(context).customFocusQuestionsFailed;
+        _selectedQuestionIndex = 0;
+      });
+    } on Object {
+      if (mounted) {
+        setState(
+          () => _customFocusErrorText = AppCopy.of(
+            context,
+          ).customFocusQuestionsFailed,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isPreparingCustomFocus = false);
+    }
+  }
+
+  Future<void> _regenerateDirections(TopicPrepCard card) async {
+    if (_isRegeneratingDirections) return;
+    final List<TopicPrepDirection> current =
+        _regeneratedDirections?.directions ?? card.directions;
+    setState(() {
+      _isRegeneratingDirections = true;
+      _directionsErrorText = null;
+    });
+    try {
+      final TopicPrepRepository repository = ref.read(
+        topicPrepRepositoryProvider,
+      );
+      if (repository is! TopicPrepCustomFocusRepository) {
+        throw StateError(
+          'Direction regeneration is unavailable for this repository.',
+        );
+      }
+      final TopicPrepDirections result =
+          await (repository as TopicPrepCustomFocusRepository)
+              .regenerateDirections(
+                topic: card.topic,
+                previousDirections: current
+                    .map(
+                      (TopicPrepDirection item) =>
+                          '${item.title}: ${item.description}',
+                    )
+                    .toList(),
+              );
+      if (!mounted) return;
+      setState(() {
+        _regeneratedDirections = result;
+        _selectedDirection = null;
+        _selectedQuestionIndex = 0;
+      });
+    } on Object {
+      if (mounted) {
+        setState(
+          () => _directionsErrorText = AppCopy.of(
+            context,
+          ).regenerateDirectionsFailed,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isRegeneratingDirections = false);
+    }
   }
 }
 
 class _ReadyTopicPrepView extends StatelessWidget {
   const _ReadyTopicPrepView({
     required this.card,
+    required this.directions,
     required this.language,
     required this.answerController,
+    required this.customFocusController,
     required this.selectedQuestionIndex,
     required this.onDirectionSelected,
     required this.onQuestionSelected,
+    required this.onCustomFocusSubmit,
+    required this.onRegenerateDirections,
+    required this.onCustomFocusChanged,
     required this.onAnswerChanged,
     required this.onStart,
     required this.onVoiceInput,
     this.selectedDirection,
     this.answerErrorText,
+    this.customFocusErrorText,
+    this.directionsErrorText,
+    this.customFocusQuestions,
     this.startErrorText,
     this.voiceErrorText,
     this.recordingElapsedText,
     this.voiceStatusLabel,
     this.onCancelVoiceInput,
     this.isStarting = false,
+    this.isPreparingCustomFocus = false,
+    this.isRegeneratingDirections = false,
     this.isRecording = false,
     this.isVoiceBusy = false,
   });
 
   final TopicPrepCard card;
+  final List<TopicPrepDirection> directions;
   final LearningLanguageContext language;
   final TextEditingController answerController;
+  final TextEditingController customFocusController;
   final TopicPrepDirectionType? selectedDirection;
   final int selectedQuestionIndex;
   final String? answerErrorText;
+  final String? customFocusErrorText;
+  final String? directionsErrorText;
+  final CustomFocusQuestions? customFocusQuestions;
   final String? startErrorText;
   final String? voiceErrorText;
   final String? recordingElapsedText;
   final String? voiceStatusLabel;
   final bool isStarting;
+  final bool isPreparingCustomFocus;
+  final bool isRegeneratingDirections;
   final bool isRecording;
   final bool isVoiceBusy;
   final ValueChanged<TopicPrepDirectionType> onDirectionSelected;
   final ValueChanged<int> onQuestionSelected;
+  final VoidCallback onCustomFocusSubmit;
+  final VoidCallback onRegenerateDirections;
+  final ValueChanged<String> onCustomFocusChanged;
   final ValueChanged<String> onAnswerChanged;
   final ValueChanged<String> onStart;
   final VoidCallback onVoiceInput;
@@ -358,8 +525,10 @@ class _ReadyTopicPrepView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppCopy copy = AppCopy.of(context);
     final TopicPrepDirection direction = _selectedDirection;
-    final List<String> questions = direction.firstQuestions;
+    final List<String> questions =
+        customFocusQuestions?.firstQuestions ?? direction.firstQuestions;
     final String localeCode = Localizations.localeOf(context).languageCode;
 
     return ListView(
@@ -372,7 +541,7 @@ class _ReadyTopicPrepView extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              const AppSectionLabel('Summary'),
+              AppSectionLabel(copy.summaryLabel),
               const SizedBox(height: AppSpacing.md),
               Text(card.summary, style: AppTypography.body),
             ],
@@ -380,41 +549,95 @@ class _ReadyTopicPrepView extends StatelessWidget {
         ),
         if (card.sources.isNotEmpty) ...<Widget>[
           const SizedBox(height: AppSpacing.xl),
-          const AppSectionLabel('Sources'),
+          AppSectionLabel(copy.sourcesLabel),
           const SizedBox(height: AppSpacing.sm),
           for (final SearchSource source in card.sources.take(3))
             SourceLinkTile(title: source.title, url: source.url, onTap: () {}),
         ],
         const SizedBox(height: AppSpacing.xl),
-        const AppSectionLabel('Choose direction'),
+        AppSectionLabel(copy.chooseDirectionLabel),
         const SizedBox(height: AppSpacing.md),
         Wrap(
           spacing: AppSpacing.xs,
           runSpacing: AppSpacing.xs,
           children: <Widget>[
-            for (final TopicPrepDirection option in card.directions)
+            for (final TopicPrepDirection option in directions)
               AppSelectionChip(
                 label: option.title,
                 selected: option.direction == direction.direction,
-                onSelected: (_) => onDirectionSelected(option.direction),
+                onSelected: (bool selected) {
+                  if (selected) {
+                    onDirectionSelected(option.direction);
+                  }
+                },
               ),
           ],
         ),
+        const SizedBox(height: AppSpacing.md),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton(
+            onPressed: isRegeneratingDirections ? null : onRegenerateDirections,
+            child: Text(
+              isRegeneratingDirections
+                  ? copy.preparingDirections
+                  : copy.regenerateDirectionsLabel,
+            ),
+          ),
+        ),
+        if (directionsErrorText != null)
+          Text(
+            directionsErrorText!,
+            style: AppTypography.bodySm.copyWith(
+              color: Theme.of(context).colorScheme.error,
+            ),
+          ),
         const SizedBox(height: AppSpacing.xl),
-        const AppSectionLabel('Pick a first question'),
+        AppSectionLabel(copy.customFocusLabel),
+        const SizedBox(height: AppSpacing.sm),
+        AppTextField(
+          controller: customFocusController,
+          hintText: copy.customFocusPlaceholder,
+          enabled: !isPreparingCustomFocus,
+          maxLines: 2,
+          textInputAction: TextInputAction.done,
+          onChanged: onCustomFocusChanged,
+          onSubmitted: (_) => onCustomFocusSubmit(),
+          semanticLabel: copy.customFocusLabel,
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        AppPrimaryButton(
+          label: copy.customFocusSubmitLabel,
+          isLoading: isPreparingCustomFocus,
+          onPressed: isPreparingCustomFocus ? null : onCustomFocusSubmit,
+        ),
+        if (customFocusErrorText != null) ...<Widget>[
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            customFocusErrorText!,
+            style: AppTypography.bodySm.copyWith(
+              color: Theme.of(context).colorScheme.error,
+            ),
+          ),
+        ],
+        const SizedBox(height: AppSpacing.xl),
+        AppSectionLabel(copy.pickFirstQuestionLabel),
         const SizedBox(height: AppSpacing.md),
         for (int index = 0; index < questions.length; index++) ...<Widget>[
           AppSelectionCard(
             title: questions[index],
             selected: selectedQuestionIndex == index,
             onTap: () => onQuestionSelected(index),
-            semanticLabel: 'First question ${index + 1}: ${questions[index]}',
+            semanticLabel: copy.firstQuestionSemanticLabel(
+              index + 1,
+              questions[index],
+            ),
           ),
           if (index != questions.length - 1)
             const SizedBox(height: AppSpacing.sm),
         ],
         const SizedBox(height: AppSpacing.xl),
-        const AppSectionLabel('Answer to begin'),
+        AppSectionLabel(copy.answerToBeginLabel),
         const SizedBox(height: AppSpacing.md),
         ChatComposer(
           controller: answerController,
@@ -450,9 +673,9 @@ class _ReadyTopicPrepView extends StatelessWidget {
   TopicPrepDirection get _selectedDirection {
     final TopicPrepDirectionType preferred =
         selectedDirection ?? TopicPrepDirectionType.casualChat;
-    return card.directions.firstWhere(
+    return directions.firstWhere(
       (TopicPrepDirection direction) => direction.direction == preferred,
-      orElse: () => card.directions.first,
+      orElse: () => directions.first,
     );
   }
 }
@@ -471,7 +694,7 @@ class _PrepVoiceInputState {
   const _PrepVoiceInputState._({
     required this.phase,
     this.elapsed = Duration.zero,
-    this.errorMessage,
+    this.failureReason,
   });
 
   const _PrepVoiceInputState.idle() : this._(phase: _PrepVoiceInputPhase.idle);
@@ -488,18 +711,18 @@ class _PrepVoiceInputState {
   const _PrepVoiceInputState.sending()
     : this._(phase: _PrepVoiceInputPhase.sending);
 
-  const _PrepVoiceInputState.failed(String message)
-    : this._(phase: _PrepVoiceInputPhase.failed, errorMessage: message);
+  const _PrepVoiceInputState.failed(ConversationAudioExceptionReason reason)
+    : this._(phase: _PrepVoiceInputPhase.failed, failureReason: reason);
 
-  const _PrepVoiceInputState.permissionDenied(String message)
+  const _PrepVoiceInputState.permissionDenied()
     : this._(
         phase: _PrepVoiceInputPhase.permissionDenied,
-        errorMessage: message,
+        failureReason: ConversationAudioExceptionReason.permissionDenied,
       );
 
   final _PrepVoiceInputPhase phase;
   final Duration elapsed;
-  final String? errorMessage;
+  final ConversationAudioExceptionReason? failureReason;
 
   bool get isBusy =>
       phase == _PrepVoiceInputPhase.starting ||
@@ -511,10 +734,10 @@ class _PrepVoiceInputState {
       phase == _PrepVoiceInputPhase.starting ||
       phase == _PrepVoiceInputPhase.stopping;
 
-  String? get statusLabel => switch (phase) {
-    _PrepVoiceInputPhase.starting => 'Starting recording...',
-    _PrepVoiceInputPhase.stopping => 'Finishing recording...',
-    _PrepVoiceInputPhase.sending => 'Starting with your voice...',
+  String? statusLabel(AppCopy copy) => switch (phase) {
+    _PrepVoiceInputPhase.starting => copy.voiceStatus('starting'),
+    _PrepVoiceInputPhase.stopping => copy.voiceStatus('stopping'),
+    _PrepVoiceInputPhase.sending => copy.voiceStatus('startingConversation'),
     _ => null,
   };
 
@@ -522,7 +745,7 @@ class _PrepVoiceInputState {
     return _PrepVoiceInputState._(
       phase: phase,
       elapsed: elapsed ?? this.elapsed,
-      errorMessage: errorMessage,
+      failureReason: failureReason,
     );
   }
 }
@@ -565,7 +788,7 @@ class _LowQualityTopicPrepView extends StatelessWidget {
         ),
         if (result.exampleTopics.isNotEmpty) ...<Widget>[
           const SizedBox(height: AppSpacing.xl),
-          const AppSectionLabel('Try one of these'),
+          AppSectionLabel(AppCopy.of(context).tryOneOfTheseLabel),
           const SizedBox(height: AppSpacing.md),
           Wrap(
             spacing: AppSpacing.xs,

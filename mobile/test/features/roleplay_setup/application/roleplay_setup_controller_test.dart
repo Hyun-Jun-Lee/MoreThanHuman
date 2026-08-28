@@ -51,13 +51,16 @@ void main() {
     expect(state.selectedScenario, isNull);
     expect(state.isCustomMode, isTrue);
     expect(state.canStart, isFalse);
-    expect(state.customErrorText, 'Enter at least 2 characters.');
+    expect(
+      state.customValidationReason,
+      RoleplaySetupValidationReason.customInputTooShort,
+    );
 
     controller.updateCustomInput('오사카 식당 예약 확인');
     state = container.read(roleplaySetupControllerProvider);
 
     expect(state.canStart, isTrue);
-    expect(state.customErrorText, isNull);
+    expect(state.customValidationReason, isNull);
     expect(state.payload?.roleCharacter, contains('오사카 식당 예약 확인'));
   });
 

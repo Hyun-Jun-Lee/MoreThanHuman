@@ -1,6 +1,8 @@
 import 'package:curitalk/app/theme/tokens/tokens.dart';
+import 'package:curitalk/core/copy/copy.dart';
 import 'package:curitalk/core/widgets/widgets.dart';
 import 'package:curitalk/features/auth/auth.dart';
+import 'package:curitalk/features/conversation/conversation.dart';
 import 'package:curitalk/features/home/application/recent_conversations_controller.dart';
 import 'package:curitalk/features/home/domain/conversation_summary.dart';
 import 'package:curitalk/features/home/domain/conversation_start_type.dart';
@@ -8,6 +10,7 @@ import 'package:curitalk/features/home/presentation/account_sheet.dart';
 import 'package:curitalk/features/home/presentation/conversation_start_sheet.dart';
 import 'package:curitalk/features/home/presentation/widgets/recent_conversation_card.dart';
 import 'package:curitalk/features/language/language.dart';
+import 'package:curitalk/features/topic_prep/topic_prep.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -25,6 +28,7 @@ class HomeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final AppCopy copy = AppCopy.of(context);
     final UserProfile? user = ref.watch(authControllerProvider).value?.user;
     final AsyncValue<List<ConversationSummary>> recent = ref.watch(
       recentConversationsControllerProvider,
@@ -38,7 +42,7 @@ class HomeScreen extends ConsumerWidget {
       padding: EdgeInsets.zero,
       safeAreaBottom: false,
       floatingActionButton: FloatingActionButton(
-        tooltip: 'Start conversation',
+        tooltip: copy.startConversationTooltip,
         onPressed: () => _showStartSheet(context),
         child: const Icon(Icons.add_rounded),
       ),
@@ -68,14 +72,14 @@ class HomeScreen extends ConsumerWidget {
             ),
             sliver: SliverList(
               delegate: SliverChildListDelegate(<Widget>[
-                Text('Hi, $firstName', style: AppTypography.displayLg),
+                Text(copy.greeting(firstName), style: AppTypography.displayLg),
                 const SizedBox(height: AppSpacing.xxl),
                 recent.when(
-                  loading: () => const AppAsyncStateView.loading(
-                    message: 'Loading recent conversations...',
+                  loading: () => AppAsyncStateView.loading(
+                    message: copy.loadingRecentConversations,
                   ),
                   error: (_, _) => AppAsyncStateView.error(
-                    message: 'Recent conversations could not be loaded.',
+                    message: copy.recentConversationsLoadFailed,
                     onRetry: () => ref
                         .read(recentConversationsControllerProvider.notifier)
                         .reload(),
@@ -87,11 +91,16 @@ class HomeScreen extends ConsumerWidget {
                         isRecentRefreshing;
                     if (conversations.isEmpty) {
                       if (isRefreshing) {
-                        return const AppAsyncStateView.loading(
-                          message: 'Updating conversations...',
+                        return AppAsyncStateView.loading(
+                          message: copy.updatingConversations,
                         );
                       }
                       return _EmptyHome(
+                        nativeLanguage:
+                            user?.language.nativeLanguage ??
+                            LearningLanguageContext
+                                .defaultContext
+                                .nativeLanguage,
                         onStart: () => _showStartSheet(context),
                       );
                     }
@@ -99,6 +108,8 @@ class HomeScreen extends ConsumerWidget {
                       conversations: conversations,
                       isRefreshing: isRefreshing,
                       onSelected: onConversationSelected,
+                      onDelete: (ConversationSummary conversation) =>
+                          _deleteConversation(context, ref, conversation),
                     );
                   },
                 ),
@@ -134,6 +145,38 @@ class HomeScreen extends ConsumerWidget {
         onHistorySelected?.call();
       case MainNavigationDestination.profile:
         showAccountSheet(context: context, ref: ref, user: user);
+    }
+  }
+
+  Future<void> _deleteConversation(
+    BuildContext context,
+    WidgetRef ref,
+    ConversationSummary conversation,
+  ) async {
+    final bool confirmed = await showConversationDeleteDialog(
+      context: context,
+      title: conversation.title,
+    );
+    if (!confirmed || !context.mounted) return;
+    try {
+      final ConversationRepository repository = ref.read(
+        conversationRepositoryProvider,
+      );
+      if (repository is! ConversationDeletionRepository) {
+        throw StateError(
+          'Conversation deletion is unavailable for this repository.',
+        );
+      }
+      await (repository as ConversationDeletionRepository).deleteConversation(
+        conversation.id,
+      );
+      ref.invalidate(recentConversationsControllerProvider);
+    } on Object {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppCopy.of(context).deleteConversationFailed)),
+        );
+      }
     }
   }
 
@@ -178,7 +221,9 @@ class _HomeHeader extends StatelessWidget {
           const SizedBox(width: AppSpacing.sm),
           Semantics(
             button: true,
-            label: 'Profile for ${user?.name ?? 'user'}',
+            label: AppCopy.of(context).profileSemanticLabel(
+              user?.name ?? AppCopy.of(context).profileLabel,
+            ),
             child: InkWell(
               borderRadius: const BorderRadius.all(
                 Radius.circular(AppRadius.full),
@@ -233,6 +278,7 @@ class _RecentConversations extends StatefulWidget {
     required this.conversations,
     required this.isRefreshing,
     required this.onSelected,
+    required this.onDelete,
   });
 
   static const List<Color> _colors = <Color>[
@@ -246,6 +292,7 @@ class _RecentConversations extends StatefulWidget {
   final List<ConversationSummary> conversations;
   final bool isRefreshing;
   final ValueChanged<String>? onSelected;
+  final ValueChanged<ConversationSummary> onDelete;
 
   @override
   State<_RecentConversations> createState() => _RecentConversationsState();
@@ -258,6 +305,7 @@ class _RecentConversationsState extends State<_RecentConversations> {
 
   @override
   Widget build(BuildContext context) {
+    final AppCopy copy = AppCopy.of(context);
     final bool canToggle = widget.conversations.length > _collapsedCount;
     final List<ConversationSummary> visibleConversations =
         canToggle && !_isExpanded
@@ -269,11 +317,11 @@ class _RecentConversationsState extends State<_RecentConversations> {
       children: <Widget>[
         Row(
           children: <Widget>[
-            const AppSectionLabel('Recent'),
+            AppSectionLabel(copy.recentLabel),
             if (widget.isRefreshing) ...<Widget>[
               const SizedBox(width: AppSpacing.sm),
               Semantics(
-                label: 'Updating conversations',
+                label: copy.updatingConversationsSemanticLabel,
                 liveRegion: true,
                 child: const SizedBox.square(
                   key: ValueKey<String>(
@@ -295,14 +343,20 @@ class _RecentConversationsState extends State<_RecentConversations> {
           index++
         ) ...<Widget>[
           RecentConversationCard(
-            category: visibleConversations[index].category,
+            category: copy.conversationCategory(
+              visibleConversations[index].kind.name,
+            ),
             title: visibleConversations[index].title,
-            preview: visibleConversations[index].preview,
+            preview: copy.conversationPreview(
+              messageCount: visibleConversations[index].messageCount,
+              isActive: visibleConversations[index].isActive,
+            ),
             color: _RecentConversations
                 ._colors[index % _RecentConversations._colors.length],
             onTap: widget.onSelected == null
                 ? null
                 : () => widget.onSelected!(visibleConversations[index].id),
+            onDelete: () => widget.onDelete(visibleConversations[index]),
           ),
           if (index != visibleConversations.length - 1)
             const SizedBox(height: AppSpacing.md),
@@ -320,7 +374,7 @@ class _RecentConversationsState extends State<_RecentConversations> {
                     ? Icons.keyboard_arrow_up_rounded
                     : Icons.keyboard_arrow_down_rounded,
               ),
-              label: Text(_isExpanded ? 'SHOW LESS' : 'SHOW ALL'),
+              label: Text(_isExpanded ? copy.showLessLabel : copy.showAllLabel),
             ),
           ),
         ],
@@ -330,42 +384,46 @@ class _RecentConversationsState extends State<_RecentConversations> {
 }
 
 class _EmptyHome extends StatelessWidget {
-  const _EmptyHome({required this.onStart});
+  const _EmptyHome({required this.nativeLanguage, required this.onStart});
 
+  final LearningLanguageCode nativeLanguage;
   final VoidCallback onStart;
 
   @override
   Widget build(BuildContext context) {
+    final AppCopy copy = AppCopy.of(context);
+    final List<String> starterTopics = TopicStarterExamples.forNativeLanguage(
+      nativeLanguage,
+    );
     return Column(
       children: <Widget>[
         Text(
-          'Welcome to Curitalk',
+          copy.welcomeToCuritalk,
           textAlign: TextAlign.center,
           style: AppTypography.headlineLg,
         ),
         const SizedBox(height: AppSpacing.md),
         Text(
-          'Your conversation canvas is clear. What would you like to explore today?',
+          copy.homeEmptyMessage,
           textAlign: TextAlign.center,
           style: AppTypography.body.copyWith(
             color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
         ),
         const SizedBox(height: AppSpacing.xl),
-        const AppColorBlockCard(
+        AppColorBlockCard(
           color: AppPalette.blockLime,
           child: Column(
             children: <Widget>[
-              AppSectionLabel('Suggested starting points'),
+              AppSectionLabel(copy.suggestedStartingPoints),
               SizedBox(height: AppSpacing.lg),
               Wrap(
                 alignment: WrapAlignment.center,
                 spacing: AppSpacing.xs,
                 runSpacing: AppSpacing.xs,
                 children: <Widget>[
-                  Chip(label: Text('PLAN TRAVEL')),
-                  Chip(label: Text('BASEBALL STATS')),
-                  Chip(label: Text('AI NEWS')),
+                  for (final String topic in starterTopics.take(3))
+                    Chip(label: Text(topic)),
                 ],
               ),
             ],
@@ -373,7 +431,7 @@ class _EmptyHome extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.lg),
         AppPrimaryButton(
-          label: 'START CONVERSATION',
+          label: copy.startConversationLabel,
           leading: const Icon(Icons.add_rounded),
           onPressed: onStart,
         ),

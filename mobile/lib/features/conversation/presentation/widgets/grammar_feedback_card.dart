@@ -1,5 +1,6 @@
 import 'package:curitalk/app/theme/app_semantic_colors.dart';
 import 'package:curitalk/app/theme/tokens/tokens.dart';
+import 'package:curitalk/core/copy/copy.dart';
 import 'package:curitalk/core/widgets/widgets.dart';
 import 'package:curitalk/features/conversation/presentation/widgets/conversation_text_formatter.dart';
 import 'package:flutter/material.dart';
@@ -8,13 +9,13 @@ class GrammarFeedbackCard extends StatefulWidget {
   const GrammarFeedbackCard({
     required this.suggestion,
     required this.explanation,
-    this.reasonLabel = 'Why',
+    this.reasonLabel,
     super.key,
   });
 
   final String suggestion;
   final String explanation;
-  final String reasonLabel;
+  final String? reasonLabel;
 
   @override
   State<GrammarFeedbackCard> createState() => _GrammarFeedbackCardState();
@@ -25,6 +26,7 @@ class _GrammarFeedbackCardState extends State<GrammarFeedbackCard> {
 
   @override
   Widget build(BuildContext context) {
+    final AppCopy copy = AppCopy.of(context);
     final AppSemanticColors colors = AppSemanticColors.of(context);
     final String displaySuggestion =
         ConversationTextFormatter.formatAssistantMessage(widget.suggestion);
@@ -39,7 +41,7 @@ class _GrammarFeedbackCardState extends State<GrammarFeedbackCard> {
 
     return Semantics(
       container: true,
-      label: 'Grammar feedback',
+      label: copy.grammarFeedbackSemanticLabel,
       child: Material(
         color: colors.grammarSuggestionSurface,
         borderRadius: const BorderRadius.all(Radius.circular(AppRadius.lg)),
@@ -72,7 +74,7 @@ class _GrammarFeedbackCardState extends State<GrammarFeedbackCard> {
                   ),
                   const SizedBox(height: AppSpacing.md),
                   _ReasonBlock(
-                    label: widget.reasonLabel,
+                    label: widget.reasonLabel ?? copy.grammarReasonLabel,
                     text: displayExplanation,
                     style: explanationStyle,
                     expanded: _expanded || !canExpand,
@@ -83,7 +85,9 @@ class _GrammarFeedbackCardState extends State<GrammarFeedbackCard> {
                       onPressed: () {
                         setState(() => _expanded = !_expanded);
                       },
-                      child: Text(_expanded ? 'SHOW LESS' : 'SHOW MORE'),
+                      child: Text(
+                        _expanded ? copy.showLessLabel : copy.showMoreLabel,
+                      ),
                     ),
                   ],
                 ],

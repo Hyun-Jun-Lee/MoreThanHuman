@@ -372,6 +372,7 @@ Widget _homeApp({
     ],
     child: MaterialApp(
       theme: AppTheme.light,
+      locale: const Locale('en'),
       home: HomeScreen(
         onConversationSelected: onConversationSelected,
         onStartTypeSelected: onStartTypeSelected,

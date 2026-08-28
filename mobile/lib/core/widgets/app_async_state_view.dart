@@ -1,17 +1,18 @@
 import 'package:curitalk/app/theme/tokens/tokens.dart';
+import 'package:curitalk/core/copy/copy.dart';
 import 'package:flutter/material.dart';
 
 enum AppAsyncStateType { loading, error, empty }
 
 class AppAsyncStateView extends StatelessWidget {
-  const AppAsyncStateView.loading({this.message = 'Loading...', super.key})
+  const AppAsyncStateView.loading({this.message, super.key})
     : type = AppAsyncStateType.loading,
       title = null,
       onRetry = null,
       icon = null;
 
   const AppAsyncStateView.error({
-    this.title = 'Something went wrong.',
+    this.title,
     this.message,
     this.onRetry,
     this.icon,
@@ -19,7 +20,7 @@ class AppAsyncStateView extends StatelessWidget {
   }) : type = AppAsyncStateType.error;
 
   const AppAsyncStateView.empty({
-    this.title = 'Nothing here yet.',
+    this.title,
     this.message,
     this.icon,
     super.key,
@@ -34,6 +35,14 @@ class AppAsyncStateView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppCopy copy = AppCopy.of(context);
+    final String? resolvedTitle = title ?? switch (type) {
+      AppAsyncStateType.error => copy.defaultErrorTitle,
+      AppAsyncStateType.empty => copy.defaultEmptyTitle,
+      AppAsyncStateType.loading => null,
+    };
+    final String? resolvedMessage = message ??
+        (type == AppAsyncStateType.loading ? copy.defaultLoadingLabel : null);
     return Semantics(
       liveRegion: type != AppAsyncStateType.empty,
       child: Center(
@@ -43,20 +52,20 @@ class AppAsyncStateView extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
               _buildVisual(context),
-              if (title != null) ...<Widget>[
+              if (resolvedTitle != null) ...<Widget>[
                 const SizedBox(height: AppSpacing.md),
                 Text(
-                  title!,
+                  resolvedTitle,
                   textAlign: TextAlign.center,
                   style: AppTypography.headlineMd.copyWith(
                     color: Theme.of(context).colorScheme.onSurface,
                   ),
                 ),
               ],
-              if (message != null) ...<Widget>[
+              if (resolvedMessage != null) ...<Widget>[
                 const SizedBox(height: AppSpacing.xs),
                 Text(
-                  message!,
+                  resolvedMessage,
                   textAlign: TextAlign.center,
                   style: AppTypography.bodySm.copyWith(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -65,7 +74,10 @@ class AppAsyncStateView extends StatelessWidget {
               ],
               if (onRetry != null) ...<Widget>[
                 const SizedBox(height: AppSpacing.lg),
-                OutlinedButton(onPressed: onRetry, child: const Text('Retry')),
+                OutlinedButton(
+                  onPressed: onRetry,
+                  child: Text(copy.retryLabel),
+                ),
               ],
             ],
           ),

@@ -12,55 +12,75 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets(
-    'first launch flows through onboarding and Google login to Home',
-    (WidgetTester tester) async {
-      final _MemoryTokenStorage tokenStorage = _MemoryTokenStorage();
-      final _MemoryOnboardingStorage onboardingStorage =
-          _MemoryOnboardingStorage(false);
-      final _FakeAuthRepository authRepository = _FakeAuthRepository();
-      final _FakeSupabaseAuthService supabaseAuth = _FakeSupabaseAuthService();
+  testWidgets('first launch flows through onboarding and Google login to Home', (
+    WidgetTester tester,
+  ) async {
+    final _MemoryTokenStorage tokenStorage = _MemoryTokenStorage();
+    final _MemoryOnboardingStorage onboardingStorage = _MemoryOnboardingStorage(
+      false,
+    );
+    final _FakeAuthRepository authRepository = _FakeAuthRepository();
+    final _FakeSupabaseAuthService supabaseAuth = _FakeSupabaseAuthService();
 
-      await tester.pumpWidget(
-        _appScope(
-          tokenStorage: tokenStorage,
-          onboardingStorage: onboardingStorage,
-          authRepository: authRepository,
-          supabaseAuth: supabaseAuth,
-        ),
-      );
-      await tester.pumpAndSettle();
+    await tester.pumpWidget(
+      _appScope(
+        tokenStorage: tokenStorage,
+        onboardingStorage: onboardingStorage,
+        authRepository: authRepository,
+        supabaseAuth: supabaseAuth,
+      ),
+    );
+    await tester.pumpAndSettle();
 
-      expect(find.text('What do you want\nto practice?'), findsOneWidget);
+    expect(find.text('What do you want\nto practice?'), findsOneWidget);
 
-      await tester.tap(find.text('SKIP'));
-      await tester.pumpAndSettle();
+    await tester.tap(find.text('CONTINUE'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('CONTINUE'));
+    await tester.pumpAndSettle();
 
-      expect(
-        find.text('Practice conversation with your own topics.'),
-        findsOneWidget,
-      );
+    expect(
+      find.text('Pick a topic,\nand questions are ready to get you talking.'),
+      findsOneWidget,
+    );
+    expect(
+      find.text(
+        'Choose what you want to talk about, and get questions you can answer right away.',
+      ),
+      findsOneWidget,
+    );
 
-      await tester.tap(find.text('CONTINUE WITH GOOGLE'));
-      await tester.pumpAndSettle();
+    await tester.tap(find.text('CONTINUE'));
+    await tester.pumpAndSettle();
 
-      expect(find.text('Hi, Learner'), findsOneWidget);
-      expect(find.text('Welcome to Curitalk'), findsOneWidget);
-      expect(onboardingStorage.completed, isTrue);
-      expect(supabaseAuth.hasSession, isTrue);
-      expect(supabaseAuth.lastIdToken, 'google-id-token');
+    expect(
+      find.text("You don't have to be perfect.\nLearn naturally as you chat."),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Enjoy the conversation and let learning happen naturally.'),
+      findsOneWidget,
+    );
 
-      await tester.tap(find.text('START CONVERSATION').first);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Free Chat'));
-      await tester.pumpAndSettle();
+    await tester.tap(find.text('GET STARTED'));
+    await tester.pumpAndSettle();
 
-      expect(
-        find.text('What topic do you want to talk about?'),
-        findsOneWidget,
-      );
-    },
-  );
+    await tester.tap(find.text('CONTINUE WITH GOOGLE'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Hi, Learner'), findsOneWidget);
+    expect(find.text('Welcome to Curitalk'), findsOneWidget);
+    expect(onboardingStorage.completed, isTrue);
+    expect(supabaseAuth.hasSession, isTrue);
+    expect(supabaseAuth.lastIdToken, 'google-id-token');
+
+    await tester.tap(find.text('START CONVERSATION').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Free Chat'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('What topic do you want to talk about?'), findsOneWidget);
+  });
 
   testWidgets('onboarding copy follows Korean system locale', (
     WidgetTester tester,
@@ -84,6 +104,35 @@ void main() {
     expect(find.text('건너뛰기'), findsOneWidget);
     expect(find.text('계속'), findsOneWidget);
     expect(find.text('你想练习什么？'), findsNothing);
+
+    await tester.tap(find.text('계속'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('계속'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('주제만 정하면,\n바로 이야기할 수 있는 질문이 준비돼요.'), findsOneWidget);
+    expect(
+      find.text('대화하고 싶은 주제를 고르면, 바로 이야기할 수 있는 질문을 받아볼 수 있어요.'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('계속'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('완벽하지 않아도 괜찮아요.\n대화하며 자연스럽게 배워요.'), findsOneWidget);
+    expect(find.text('재미있게 대화하고 자연스레 학습해요.'), findsOneWidget);
+
+    await tester.tap(find.text('건너뛰기'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('내가 고른 주제로\n대화해요.'), findsOneWidget);
+    expect(
+      find.text('나에게 중요한 이야기를 나누며 회화를 연습해요. 관심사가 대화를 이끌어요.'),
+      findsOneWidget,
+    );
+    expect(find.text('Google로 계속하기'), findsOneWidget);
+    expect(find.text('나의 주제'), findsOneWidget);
+    expect(find.text('GLOBAL NEWS'), findsNothing);
   });
 
   testWidgets('returning authenticated user moves from Splash to Home', (
@@ -194,6 +243,36 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets('login unexpected error copy follows Korean system locale', (
+    WidgetTester tester,
+  ) async {
+    tester.binding.platformDispatcher.localesTestValue = const <Locale>[
+      Locale('ko'),
+    ];
+    addTearDown(tester.binding.platformDispatcher.clearLocalesTestValue);
+
+    await tester.pumpWidget(
+      _appScope(
+        tokenStorage: _MemoryTokenStorage(),
+        onboardingStorage: _MemoryOnboardingStorage(true),
+        authRepository: _FakeAuthRepository(),
+        googleIdentityService: _FakeGoogleIdentityService(
+          signInError: StateError('unexpected'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Google로 계속하기'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('로그인을 완료할 수 없어요. 다시 시도해 주세요.'), findsOneWidget);
+    expect(
+      find.text('Sign-in could not be completed. Please try again.'),
+      findsNothing,
+    );
+  });
 }
 
 const String _deviceId = '550e8400-e29b-41d4-a716-446655440000';
@@ -216,6 +295,8 @@ ProviderScope _appScope({
   required _MemoryOnboardingStorage onboardingStorage,
   required _FakeAuthRepository authRepository,
   _FakeSupabaseAuthService? supabaseAuth,
+  _FakeGoogleIdentityService googleIdentityService =
+      const _FakeGoogleIdentityService(),
 }) {
   return ProviderScope(
     overrides: [
@@ -224,9 +305,7 @@ ProviderScope _appScope({
         InstallationIdService(tokenStorage, generateId: () => _deviceId),
       ),
       onboardingStorageProvider.overrideWithValue(onboardingStorage),
-      googleIdentityServiceProvider.overrideWithValue(
-        const _FakeGoogleIdentityService(),
-      ),
+      googleIdentityServiceProvider.overrideWithValue(googleIdentityService),
       authRepositoryProvider.overrideWithValue(authRepository),
       languagePreferencesRepositoryProvider.overrideWithValue(
         _FakeLanguagePreferencesRepository(),
@@ -244,10 +323,16 @@ ProviderScope _appScope({
 }
 
 class _FakeGoogleIdentityService implements GoogleIdentityService {
-  const _FakeGoogleIdentityService();
+  const _FakeGoogleIdentityService({this.signInError});
+
+  final Object? signInError;
 
   @override
   Future<GoogleIdentityTokens?> signIn() async {
+    final Object? error = signInError;
+    if (error != null) {
+      throw error;
+    }
     return const GoogleIdentityTokens(
       idToken: 'google-id-token',
       accessToken: 'google-access-token',

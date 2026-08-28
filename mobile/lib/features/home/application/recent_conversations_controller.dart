@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:curitalk/features/auth/auth.dart';
 import 'package:curitalk/features/home/data/api_home_repository.dart';
 import 'package:curitalk/features/home/domain/conversation_summary.dart';
@@ -10,16 +12,17 @@ class RecentConversationsController
   Future<List<ConversationSummary>> build() async {
     final AuthSession? session = ref.watch(authControllerProvider).value;
     if (session == null || !session.isAuthenticated) {
-      _setRefreshing(false);
       return const <ConversationSummary>[];
     }
     final HomeRepository repository = ref.watch(homeRepositoryProvider);
     try {
       return await repository.listRecentConversations();
     } finally {
-      if (ref.mounted) {
-        _setRefreshing(false);
-      }
+      scheduleMicrotask(() {
+        if (ref.mounted) {
+          _setRefreshing(false);
+        }
+      });
     }
   }
 

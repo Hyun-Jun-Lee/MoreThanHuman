@@ -186,6 +186,7 @@ Supabase access token으로 검증된 현재 사용자 프로필을 반환해요
   "is_active": true,
   "oauth_provider": "google",
   "avatar_url": null,
+  "app_locale": "ko",
   "language": {
     "native_language": "ko",
     "target_language": "en",
@@ -213,6 +214,14 @@ Supabase access token으로 검증된 현재 사용자 프로필을 반환해요
 }
 ```
 
+### `PUT /api/auth/me/app-locale`
+
+프로필에 저장되는 앱 표시 언어를 `ko` 또는 `en`으로 변경해요. 이 값은 기기 시스템 언어보다 우선하지만, 학습 언어쌍과 기존 대화의 언어 snapshot에는 영향을 주지 않아요.
+
+```json
+{ "app_locale": "ko" }
+```
+
 ## Conversation API
 
 모든 conversation API는 인증이 필요해요.
@@ -230,6 +239,7 @@ LLM prompt policy도 같은 snapshot을 사용해요. `target_language`는 자�
   "topic": null,
   "conversation_direction": null,
   "selected_question": null,
+  "custom_focus": null,
   "include_audio_response": true
 }
 ```
@@ -250,8 +260,9 @@ include_audio_response=true
 |------|------|
 | `search_context` | 준비 카드의 검색 기반 요약 |
 | `topic` | 사용자가 입력한 관심 주제 |
-| `conversation_direction` | `CASUAL_CHAT`, `DEBATE`, `INTERVIEW_QA`, `EXPLANATION_PRACTICE` 중 하나 |
+| `conversation_direction` | `CASUAL_CHAT`, `DEBATE`, `EXPLANATION_PRACTICE` 중 하나 |
 | `selected_question` | 사용자가 선택해 답변하는 AI 첫 질문 |
+| `custom_focus` | 직접 입력한 대화 방향. 고정 direction 대신 전달 가능 |
 
 ### `POST /api/conversations/start/roleplay/`
 
@@ -406,7 +417,7 @@ Query:
 
 ### `DELETE /api/conversations/{conversation_id}/`
 
-대화와 관련 메시지를 삭제해요.
+현재 사용자 소유 대화와 관련 메시지·문법 피드백을 복구 없이 삭제해요. 다른 사용자의 대화 ID는 `404`로 처리해 존재 여부를 노출하지 않아요.
 
 ### `GET /api/conversations/messages/{message_id}/grammar-feedback/stream`
 

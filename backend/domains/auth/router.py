@@ -13,6 +13,7 @@ from domains.auth.models import ProfileModel
 from domains.auth.schemas import (
     LanguagePreferencesRequest,
     LanguagePreferencesResponse,
+    AppLocaleRequest,
     SwaggerTokenRequest,
     TokenResponse,
     UserProfile,
@@ -102,3 +103,14 @@ def update_language_preferences(
     """현재 사용자 언어 선호 갱신"""
     preferences = service.update_language_preferences(current_user.id, request)
     return SuccessResponse(data=preferences)
+
+
+@router.put("/me/app-locale", response_model=SuccessResponse[UserProfile])
+def update_app_locale(
+    request: AppLocaleRequest,
+    current_user: ProfileModel = Depends(get_current_user),
+    service: AuthService = Depends(get_auth_service),
+):
+    """현재 사용자의 앱 표시 언어 갱신"""
+    profile = service.update_app_locale(current_user.id, request)
+    return SuccessResponse(data=profile)

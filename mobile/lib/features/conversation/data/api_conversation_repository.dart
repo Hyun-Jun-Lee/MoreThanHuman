@@ -4,7 +4,11 @@ import 'package:curitalk/features/conversation/domain/conversation_repository.da
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class ApiConversationRepository implements ConversationRepository {
+class ApiConversationRepository
+    implements
+        ConversationRepository,
+        CustomFocusConversationRepository,
+        ConversationDeletionRepository {
   const ApiConversationRepository(this.apiClient);
 
   final ApiClient apiClient;
@@ -153,6 +157,71 @@ class ApiConversationRepository implements ConversationRepository {
           data: formData,
           contentType: Headers.multipartFormDataContentType,
           decodeData: MultimodalMessageResponse.fromJson,
+        );
+    return response.data;
+  }
+
+  @override
+  Future<void> deleteConversation(String conversationId) async {
+    await apiClient.request<Object?>(
+      'conversations/$conversationId/',
+      method: 'DELETE',
+      decodeData: (Object? value) => value,
+    );
+  }
+
+  @override
+  Future<MultimodalConversationResponse> startFreeChatWithCustomFocus({
+    required String firstMessage,
+    String? searchContext,
+    String? topic,
+    String? selectedQuestion,
+    required String customFocus,
+    bool includeAudioResponse = true,
+  }) async {
+    final ApiResponse<MultimodalConversationResponse> response = await apiClient
+        .post<MultimodalConversationResponse>(
+          'conversations/start/free-chat/',
+          data: <String, Object?>{
+            'first_message': firstMessage,
+            'search_context': searchContext,
+            'topic': topic,
+            'selected_question': selectedQuestion,
+            'custom_focus': customFocus,
+            'include_audio_response': includeAudioResponse,
+          },
+          decodeData: MultimodalConversationResponse.fromJson,
+        );
+    return response.data;
+  }
+
+  @override
+  Future<MultimodalConversationResponse> startFreeChatWithAudioAndCustomFocus({
+    required ConversationAudioFile audioFile,
+    String? searchContext,
+    String? topic,
+    String? selectedQuestion,
+    required String customFocus,
+    bool includeAudioResponse = true,
+  }) async {
+    final FormData formData = FormData.fromMap(<String, Object?>{
+      'audio_file': MultipartFile.fromBytes(
+        audioFile.bytes,
+        filename: audioFile.filename,
+        contentType: DioMediaType.parse(audioFile.contentType),
+      ),
+      'search_context': searchContext,
+      'topic': topic,
+      'selected_question': selectedQuestion,
+      'custom_focus': customFocus,
+      'include_audio_response': includeAudioResponse.toString(),
+    });
+    final ApiResponse<MultimodalConversationResponse> response = await apiClient
+        .post<MultimodalConversationResponse>(
+          'conversations/start/free-chat/',
+          data: formData,
+          contentType: Headers.multipartFormDataContentType,
+          decodeData: MultimodalConversationResponse.fromJson,
         );
     return response.data;
   }

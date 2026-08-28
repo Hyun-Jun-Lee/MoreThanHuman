@@ -1,5 +1,6 @@
 import 'package:curitalk/app/theme/app_semantic_colors.dart';
 import 'package:curitalk/app/theme/tokens/tokens.dart';
+import 'package:curitalk/core/copy/copy.dart';
 import 'package:flutter/material.dart';
 
 class ChatComposer extends StatefulWidget {
@@ -7,7 +8,7 @@ class ChatComposer extends StatefulWidget {
     required this.controller,
     required this.onSend,
     this.onVoiceInput,
-    this.hintText = 'Type in English...',
+    this.hintText,
     this.enabled = true,
     this.isSending = false,
     this.isRecording = false,
@@ -23,7 +24,7 @@ class ChatComposer extends StatefulWidget {
   final TextEditingController controller;
   final ValueChanged<String> onSend;
   final VoidCallback? onVoiceInput;
-  final String hintText;
+  final String? hintText;
   final bool enabled;
   final bool isSending;
   final bool isRecording;
@@ -94,13 +95,14 @@ class _ChatComposerState extends State<ChatComposer> {
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
+    final AppCopy copy = AppCopy.of(context);
     final AppSemanticColors colors = AppSemanticColors.of(context);
     final bool voiceEnabled =
         widget.enabled && !widget.isSending && !widget.isVoiceBusy;
     final bool showVoiceStatus =
         widget.isRecording || widget.voiceStatusLabel != null;
     final String voiceStatusText = widget.isRecording
-        ? 'Recording ${widget.recordingElapsedText ?? '0:00'}'
+        ? copy.recordingElapsedLabel(widget.recordingElapsedText ?? '0:00')
         : widget.voiceStatusLabel ?? '';
 
     return Material(
@@ -121,8 +123,8 @@ class _ChatComposerState extends State<ChatComposer> {
               IconButton(
                 onPressed: voiceEnabled ? widget.onVoiceInput : null,
                 tooltip: widget.isRecording
-                    ? 'Stop recording'
-                    : widget.voiceStatusLabel ?? 'Voice input',
+                    ? copy.stopRecordingTooltip
+                    : widget.voiceStatusLabel ?? copy.voiceInputTooltip,
                 style: IconButton.styleFrom(
                   backgroundColor: widget.isRecording
                       ? colors.selectedSurface
@@ -173,7 +175,7 @@ class _ChatComposerState extends State<ChatComposer> {
                         textInputAction: TextInputAction.send,
                         onSubmitted: (_) => _send(),
                         decoration: InputDecoration(
-                          hintText: widget.hintText,
+                          hintText: widget.hintText ?? copy.chatMessageHint,
                           filled: false,
                           border: InputBorder.none,
                           enabledBorder: InputBorder.none,
@@ -192,12 +194,12 @@ class _ChatComposerState extends State<ChatComposer> {
                 onPressed: widget.isVoiceBusy
                     ? null
                     : widget.onCancelVoiceInput,
-                tooltip: 'Cancel recording',
+                tooltip: copy.cancelRecordingTooltip,
                 icon: const Icon(Icons.close_rounded),
               ),
             IconButton(
               onPressed: _canSend ? _send : null,
-              tooltip: 'Send message',
+              tooltip: copy.sendMessageTooltip,
               style: IconButton.styleFrom(
                 backgroundColor: colors.selectedSurface,
                 foregroundColor: colors.onSelected,

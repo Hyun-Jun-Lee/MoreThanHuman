@@ -12,6 +12,7 @@ from domains.auth.repository import AuthRepository
 from domains.auth.schemas import (
     LanguagePreferencesRequest,
     LanguagePreferencesResponse,
+    AppLocaleRequest,
     TokenResponse,
     UserProfile,
 )
@@ -110,3 +111,11 @@ class AuthService:
             feedback_language=request.feedback_language.value,
         )
         return LanguagePreferencesResponse.model_validate(language_context_to_dict(profile.language))
+
+    def update_app_locale(self, profile_id: str, request: AppLocaleRequest) -> UserProfile:
+        """앱 표시 언어를 저장한 최신 프로필을 반환"""
+        profile = self.repository.update_app_locale(
+            profile_id=profile_id,
+            app_locale=request.app_locale.value,
+        )
+        return UserProfile.model_validate(profile)

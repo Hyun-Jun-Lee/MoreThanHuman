@@ -1,15 +1,12 @@
 import 'package:curitalk/app/theme/tokens/tokens.dart';
+import 'package:curitalk/core/copy/copy.dart';
 import 'package:flutter/material.dart';
 
 class NaturalFeedbackBadge extends StatelessWidget {
-  const NaturalFeedbackBadge({
-    required this.onTap,
-    this.label = 'Looks natural',
-    super.key,
-  });
+  const NaturalFeedbackBadge({required this.onTap, this.label, super.key});
 
   final VoidCallback onTap;
-  final String label;
+  final String? label;
 
   @override
   Widget build(BuildContext context) {
@@ -21,7 +18,9 @@ class NaturalFeedbackBadge extends StatelessWidget {
         color: foreground,
         size: AppSize.icon,
       ),
-      label: Text(label.toUpperCase()),
+      label: Text(
+        (label ?? AppCopy.of(context).looksNaturalLabel).toUpperCase(),
+      ),
       onPressed: onTap,
       side: BorderSide(color: foreground, width: AppBorderWidth.hairline),
       shape: const StadiumBorder(),

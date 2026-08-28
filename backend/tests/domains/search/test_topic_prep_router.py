@@ -74,7 +74,7 @@ def test_prepare_topic_endpoint_returns_card_for_authenticated_user():
     assert body["success"] is True
     assert body["data"]["ready"] is True
     assert body["data"]["card"]["topic"] == "recent Dodgers game"
-    assert len(body["data"]["card"]["directions"]) == 4
+    assert len(body["data"]["card"]["directions"]) == 3
 
 
 def test_prepare_topic_endpoint_returns_retry_guidance_for_low_quality_topic():

@@ -84,3 +84,12 @@ class AuthRepository:
         self.db.commit()
         self.db.refresh(profile)
         return profile
+
+    def update_app_locale(self, *, profile_id: str, app_locale: str) -> ProfileModel:
+        """프로필의 앱 표시 언어를 갱신"""
+        profile = self.find_by_id(profile_id)
+        profile.app_locale = app_locale
+        profile.updated_at = datetime.utcnow()
+        self.db.commit()
+        self.db.refresh(profile)
+        return profile

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:curitalk/app/theme/tokens/tokens.dart';
+import 'package:curitalk/core/copy/copy.dart';
 import 'package:curitalk/features/conversation/application/conversation_audio_services.dart';
 import 'package:curitalk/features/conversation/application/grammar_feedback_polling_controller.dart';
 import 'package:curitalk/features/conversation/domain/conversation_models.dart';
@@ -75,7 +76,7 @@ class _AssistantAudioSlot extends ConsumerStatefulWidget {
 
 class _AssistantAudioSlotState extends ConsumerState<_AssistantAudioSlot> {
   _AssistantAudioPhase _phase = _AssistantAudioPhase.idle;
-  String? _playbackError;
+  ConversationAudioExceptionReason? _playbackFailureReason;
   bool _autoPlayStarted = false;
   bool _hasPlayed = false;
 
@@ -90,7 +91,7 @@ class _AssistantAudioSlotState extends ConsumerState<_AssistantAudioSlot> {
     super.didUpdateWidget(oldWidget);
     if (_audioIdentity(oldWidget.message) != _audioIdentity(widget.message)) {
       _phase = _AssistantAudioPhase.idle;
-      _playbackError = null;
+      _playbackFailureReason = null;
       _autoPlayStarted = false;
       _hasPlayed = false;
     }
@@ -99,9 +100,10 @@ class _AssistantAudioSlotState extends ConsumerState<_AssistantAudioSlot> {
 
   @override
   Widget build(BuildContext context) {
-    final VoiceAudioError? audioError = widget.message.audioError;
-    if (audioError != null) {
-      return _FeedbackStatusText(label: audioError.message);
+    if (widget.message.audioError != null) {
+      return _FeedbackStatusText(
+        label: AppCopy.of(context).failureMessage('assistantAudioUnavailable'),
+      );
     }
 
     final VoiceAudioResponse? audio = widget.message.audio;
@@ -133,15 +135,21 @@ class _AssistantAudioSlotState extends ConsumerState<_AssistantAudioSlot> {
                         : Icons.volume_up_rounded,
                   ),
             label: Text(switch (_phase) {
-              _AssistantAudioPhase.loading => 'Loading audio',
-              _AssistantAudioPhase.playing => 'Playing response',
-              _ => _hasPlayed ? 'Replay response' : 'Play response',
+              _AssistantAudioPhase.loading => AppCopy.of(context).audioLoadingLabel,
+              _AssistantAudioPhase.playing => AppCopy.of(context).audioPlayingLabel,
+              _ => _hasPlayed
+                  ? AppCopy.of(context).audioReplayLabel
+                  : AppCopy.of(context).audioPlayLabel,
             }),
           ),
         ),
-        if (_playbackError != null) ...<Widget>[
+        if (_playbackFailureReason != null) ...<Widget>[
           const SizedBox(height: AppSpacing.xxs),
-          _FeedbackStatusText(label: _playbackError!),
+          _FeedbackStatusText(
+            label: AppCopy.of(context).failureMessage(
+              _playbackFailureReason!.name,
+            ),
+          ),
         ],
       ],
     );
@@ -170,7 +178,7 @@ class _AssistantAudioSlotState extends ConsumerState<_AssistantAudioSlot> {
     }
     setState(() {
       _phase = _AssistantAudioPhase.loading;
-      _playbackError = null;
+      _playbackFailureReason = null;
     });
     try {
       final Future<void> playFuture = ref
@@ -191,11 +199,17 @@ class _AssistantAudioSlotState extends ConsumerState<_AssistantAudioSlot> {
       if (mounted) {
         setState(() {
           _phase = _AssistantAudioPhase.error;
-          _playbackError = error.message;
+          _playbackFailureReason = error.reason;
         });
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(error.message)));
+        ).showSnackBar(
+          SnackBar(
+            content: Text(
+              AppCopy.of(context).failureMessage(error.reason.name),
+            ),
+          ),
+        );
       }
     }
   }
@@ -225,18 +239,20 @@ class _GrammarFeedbackSlot extends ConsumerWidget {
     );
     return switch (state.status) {
       GrammarFeedbackPollingStatus.pending => _FeedbackStatusText(
-        label: 'Grammar: checking...',
+        label: AppCopy.of(context).grammarCheckingLabel,
         liveRegion: true,
       ),
       GrammarFeedbackPollingStatus.completed =>
         state.feedback == null
             ? const SizedBox.shrink()
             : _CompletedGrammarFeedback(feedback: state.feedback!),
-      GrammarFeedbackPollingStatus.timeout => const _FeedbackStatusText(
-        label: 'Grammar feedback is taking longer than usual.',
+      GrammarFeedbackPollingStatus.timeout => _FeedbackStatusText(
+        label: AppCopy.of(context).grammarDelayedLabel,
       ),
       GrammarFeedbackPollingStatus.error => _FeedbackStatusText(
-        label: state.errorMessage ?? 'Grammar feedback is unavailable.',
+        label: AppCopy.of(context).failureMessage(
+          state.failureReason?.name ?? 'grammarRequestFailed',
+        ),
       ),
     };
   }

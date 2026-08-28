@@ -1,5 +1,6 @@
 import 'package:curitalk/app/router/app_router.dart';
 import 'package:curitalk/app/theme/tokens/tokens.dart';
+import 'package:curitalk/core/copy/copy.dart';
 import 'package:curitalk/core/widgets/widgets.dart';
 import 'package:curitalk/features/auth/auth.dart';
 import 'package:curitalk/features/conversation/conversation.dart';
@@ -46,6 +47,7 @@ class _RoleplaySetupScreenState extends ConsumerState<RoleplaySetupScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final AppCopy copy = AppCopy.of(context);
     final RoleplaySetupState state = ref.watch(roleplaySetupControllerProvider);
     final LearningLanguageCode targetLanguage = ref.watch(
       roleplayTargetLanguageProvider,
@@ -61,10 +63,10 @@ class _RoleplaySetupScreenState extends ConsumerState<RoleplaySetupScreen> {
     );
 
     return AppScaffold(
-      appBar: AppBar(title: const Text('Roleplay')),
+      appBar: AppBar(title: Text(copy.roleplayTitle)),
       bottomNavigationBar: AppBottomActionBar(
         child: AppPrimaryButton(
-          label: 'START ROLEPLAY',
+          label: copy.startRoleplayLabel,
           isLoading: startState.isStarting,
           onPressed: state.canStart && !startState.isStarting
               ? () async {
@@ -93,29 +95,29 @@ class _RoleplaySetupScreenState extends ConsumerState<RoleplaySetupScreen> {
         children: <Widget>[
           const SizedBox(height: AppSpacing.lg),
           Text(
-            'Choose a situation',
+            copy.chooseSituationTitle,
             style: AppTypography.headlineLg.copyWith(
               color: Theme.of(context).colorScheme.onSurface,
             ),
           ),
           const SizedBox(height: AppSpacing.md),
           Text(
-            'Pick a real-world moment to practice, or write your own custom roleplay.',
+            copy.chooseSituationDescription,
             style: AppTypography.body.copyWith(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
           const SizedBox(height: AppSpacing.xl),
-          const AppSectionLabel('Choose difficulty'),
+          AppSectionLabel(copy.chooseDifficultyLabel),
           const SizedBox(height: AppSpacing.md),
           _RoleplayDifficultySelector(
             selected: state.difficulty,
             onSelected: controller.selectDifficulty,
           ),
-          if (startState.errorMessage != null) ...<Widget>[
+          if (startState.failureReason != null) ...<Widget>[
             const SizedBox(height: AppSpacing.md),
             Text(
-              startState.errorMessage!,
+              copy.failureMessage(startState.failureReason!.name),
               style: AppTypography.bodySm.copyWith(
                 color: Theme.of(context).colorScheme.error,
               ),
@@ -134,25 +136,27 @@ class _RoleplaySetupScreenState extends ConsumerState<RoleplaySetupScreen> {
             const SizedBox(height: AppSpacing.md),
           ],
           const SizedBox(height: AppSpacing.sm),
-          const AppSectionLabel('Want a different situation?'),
+          AppSectionLabel(copy.differentSituationLabel),
           const SizedBox(height: AppSpacing.md),
           OutlinedButton.icon(
             onPressed: () {
               controller.enableCustomMode();
             },
             icon: const Icon(Icons.edit_note_rounded),
-            label: const Text('CUSTOM ROLEPLAY'),
+            label: Text(copy.customRoleplayLabel),
           ),
           if (state.isCustomMode) ...<Widget>[
             const SizedBox(height: AppSpacing.md),
             AppTextField(
               controller: _customController,
               hintText: roleplayCustomSituationHintFor(targetLanguage),
-              errorText: state.customErrorText,
+              errorText: state.customValidationReason == null
+                  ? null
+                  : copy.customRoleplayInputTooShort,
               autofocus: state.customInput.isEmpty,
               maxLines: 3,
               textInputAction: TextInputAction.done,
-              semanticLabel: 'Custom roleplay situation or your role',
+              semanticLabel: copy.customRoleplaySemanticLabel,
               onChanged: controller.updateCustomInput,
             ),
           ],
@@ -174,6 +178,7 @@ class _RoleplayDifficultySelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppCopy copy = AppCopy.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
@@ -186,7 +191,7 @@ class _RoleplayDifficultySelector extends StatelessWidget {
                   fit: BoxFit.scaleDown,
                   alignment: Alignment.centerLeft,
                   child: AppSelectionChip(
-                    label: difficulty.label,
+                    label: copy.roleplayDifficultyLabel(difficulty.apiValue),
                     selected: selected == difficulty,
                     onSelected: (_) => onSelected(difficulty),
                   ),
@@ -199,7 +204,7 @@ class _RoleplayDifficultySelector extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.sm),
         Text(
-          selected.description,
+          copy.roleplayDifficultyDescription(selected.apiValue),
           style: AppTypography.bodySm.copyWith(
             color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),

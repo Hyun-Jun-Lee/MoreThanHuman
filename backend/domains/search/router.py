@@ -6,7 +6,15 @@ from pydantic import BaseModel, Field
 
 from domains.auth.dependencies import get_current_user
 from domains.auth.models import ProfileModel
-from domains.search.schemas import SearchResult, TopicPrepRequest, TopicPrepResult
+from domains.search.schemas import (
+    CustomFocusQuestionsRequest,
+    CustomFocusQuestionsResult,
+    SearchResult,
+    TopicPrepDirectionsRequest,
+    TopicPrepDirectionsResult,
+    TopicPrepRequest,
+    TopicPrepResult,
+)
 from domains.search.service import SearchService
 from shared.exceptions import AppException
 from shared.language import ensure_language_context
@@ -56,6 +64,42 @@ async def prepare_topic(
     try:
         result = await service.prepare_topic(
             request.topic,
+            language_context=ensure_language_context(getattr(current_user, "language", None)),
+        )
+        return SuccessResponse(data=result)
+    except AppException as e:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=e.message)
+
+
+@router.post("/topic-prep/custom-questions/", response_model=SuccessResponse[CustomFocusQuestionsResult])
+async def prepare_custom_focus_questions(
+    request: CustomFocusQuestionsRequest,
+    current_user: ProfileModel = Depends(get_current_user),
+    service: SearchService = Depends(get_search_service),
+):
+    """직접 입력한 대화 방향의 첫 질문 생성"""
+    try:
+        result = await service.prepare_custom_focus_questions(
+            request.topic,
+            request.custom_focus,
+            language_context=ensure_language_context(getattr(current_user, "language", None)),
+        )
+        return SuccessResponse(data=result)
+    except AppException as e:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=e.message)
+
+
+@router.post("/topic-prep/directions/", response_model=SuccessResponse[TopicPrepDirectionsResult])
+async def regenerate_topic_prep_directions(
+    request: TopicPrepDirectionsRequest,
+    current_user: ProfileModel = Depends(get_current_user),
+    service: SearchService = Depends(get_search_service),
+):
+    """현재 주제의 새로운 추천 대화 방향 생성"""
+    try:
+        result = await service.regenerate_topic_prep_directions(
+            request.topic,
+            request.previous_directions,
             language_context=ensure_language_context(getattr(current_user, "language", None)),
         )
         return SuccessResponse(data=result)

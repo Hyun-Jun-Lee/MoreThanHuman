@@ -9,6 +9,7 @@ class UserProfile {
     required this.createdAt,
     required this.updatedAt,
     this.language = LearningLanguageContext.defaultContext,
+    this.appLocale,
     this.oauthProvider,
   });
 
@@ -22,6 +23,7 @@ class UserProfile {
     final Object? name = json['name'];
     final Object? isActive = json['is_active'];
     final Object? oauthProvider = json['oauth_provider'];
+    final Object? appLocale = json['app_locale'];
     final DateTime? createdAt = DateTime.tryParse('${json['created_at']}');
     final DateTime? updatedAt = DateTime.tryParse('${json['updated_at']}');
     if (id is! String || id.isEmpty) {
@@ -39,6 +41,12 @@ class UserProfile {
     if (oauthProvider != null && oauthProvider is! String) {
       throw const FormatException('User profile OAuth provider is invalid.');
     }
+    if (appLocale != null && appLocale is! String) {
+      throw const FormatException('User profile app locale is invalid.');
+    }
+    if (appLocale != null && appLocale != 'ko' && appLocale != 'en') {
+      throw const FormatException('User profile app locale is unsupported.');
+    }
     if (createdAt == null || updatedAt == null) {
       throw const FormatException('User profile timestamp is invalid.');
     }
@@ -49,6 +57,7 @@ class UserProfile {
       name: name,
       isActive: isActive,
       oauthProvider: oauthProvider as String?,
+      appLocale: appLocale as String?,
       language: LearningLanguageContext.fromJson(json['language']),
       createdAt: createdAt,
       updatedAt: updatedAt,
@@ -60,7 +69,22 @@ class UserProfile {
   final String name;
   final bool isActive;
   final String? oauthProvider;
+  final String? appLocale;
   final LearningLanguageContext language;
   final DateTime createdAt;
   final DateTime updatedAt;
+
+  UserProfile copyWith({String? appLocale}) {
+    return UserProfile(
+      id: id,
+      email: email,
+      name: name,
+      isActive: isActive,
+      oauthProvider: oauthProvider,
+      language: language,
+      appLocale: appLocale ?? this.appLocale,
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+    );
+  }
 }

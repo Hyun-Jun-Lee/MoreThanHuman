@@ -5,6 +5,8 @@ import 'package:curitalk/core/storage/storage.dart';
 import 'package:curitalk/features/auth/auth.dart';
 import 'package:curitalk/features/history/history.dart';
 import 'package:curitalk/features/home/home.dart';
+import 'package:curitalk/features/language/language.dart';
+import 'package:curitalk/features/onboarding/onboarding.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -143,6 +145,12 @@ Widget _historyApp({
         _MemoryTokenStorage(tokens: _tokens, deviceId: _deviceId),
       ),
       authRepositoryProvider.overrideWithValue(const _FakeAuthRepository()),
+      languagePreferencesRepositoryProvider.overrideWithValue(
+        const _FakeLanguagePreferencesRepository(),
+      ),
+      onboardingStorageProvider.overrideWithValue(
+        const _FakeOnboardingStorage(),
+      ),
       googleIdentityServiceProvider.overrideWithValue(
         const _FakeGoogleIdentityService(),
       ),
@@ -155,6 +163,7 @@ Widget _historyApp({
     ],
     child: MaterialApp(
       theme: AppTheme.light,
+      locale: const Locale('en'),
       home: HistoryScreen(
         onHomeSelected: onHomeSelected,
         onStartTypeSelected: onStartTypeSelected,
@@ -184,6 +193,41 @@ class _FakeAuthRepository implements AuthRepository {
 
   @override
   Future<UserProfile> getCurrentUser() async => _user;
+}
+
+class _FakeLanguagePreferencesRepository
+    implements LanguagePreferencesRepository {
+  const _FakeLanguagePreferencesRepository();
+
+  @override
+  Future<LearningLanguageContext> getLanguagePreferences() async =>
+      LearningLanguageContext.defaultContext;
+
+  @override
+  Future<LearningLanguageContext> updateLanguagePreferences(
+    LearningLanguageContext context,
+  ) async => context;
+}
+
+class _FakeOnboardingStorage implements OnboardingStorage {
+  const _FakeOnboardingStorage();
+
+  @override
+  Future<void> clearPendingLanguageContext() async {}
+
+  @override
+  Future<bool> isCompleted() async => true;
+
+  @override
+  Future<void> markCompleted() async {}
+
+  @override
+  Future<LearningLanguageContext?> readPendingLanguageContext() async => null;
+
+  @override
+  Future<void> writePendingLanguageContext(
+    LearningLanguageContext context,
+  ) async {}
 }
 
 class _FakeSupabaseAuthService implements SupabaseAuthService {

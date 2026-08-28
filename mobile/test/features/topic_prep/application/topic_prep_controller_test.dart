@@ -40,7 +40,6 @@ class _FakeTopicPrepRepository implements TopicPrepRepository {
         directions: <TopicPrepDirection>[
           _direction(TopicPrepDirectionType.casualChat),
           _direction(TopicPrepDirectionType.debate),
-          _direction(TopicPrepDirectionType.interviewQa),
           _direction(TopicPrepDirectionType.explanationPractice),
         ],
         sources: const <SearchSource>[],
