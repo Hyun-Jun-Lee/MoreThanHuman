@@ -1,5 +1,7 @@
 import 'package:curitalk/app/theme/app_semantic_colors.dart';
 import 'package:curitalk/app/theme/app_theme.dart';
+import 'package:curitalk/app/theme/tokens/tokens.dart';
+import 'package:curitalk/features/conversation/domain/grammar_feedback.dart';
 import 'package:curitalk/features/conversation/presentation/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -212,19 +214,30 @@ void main() {
     expect(find.text('What can I get started for you today?'), findsOneWidget);
   });
 
-  testWidgets('GrammarFeedbackCard renders suggestion and explanation', (
+  testWidgets('GrammarFeedbackCard highlights original and corrected text', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
       _themedApp(
         const GrammarFeedbackCard(
-          suggestion: 'I went to Dotonbori yesterday.',
+          originalText: 'I was surprise.',
+          suggestion: 'I was surprised.',
           explanation: 'Use the past tense for a completed action.',
+          errors: <GrammarError>[
+            GrammarError(
+              original: 'surprise',
+              corrected: 'surprised',
+              explanation: 'Use the past tense for a completed action.',
+            ),
+          ],
         ),
       ),
     );
 
-    expect(find.textContaining('I went to Dotonbori'), findsOneWidget);
+    expect(find.text('YOUR SENTENCE'), findsOneWidget);
+    expect(find.text('SUGGESTED'), findsOneWidget);
+    expect(find.text('I was surprise.'), findsOneWidget);
+    expect(find.text('I was surprised.'), findsOneWidget);
     expect(find.text('WHY'), findsOneWidget);
     expect(find.byIcon(Icons.lightbulb_outline_rounded), findsNothing);
     expect(find.textContaining('Try'), findsNothing);
@@ -240,6 +253,25 @@ void main() {
           (Semantics item) => item.properties.label == 'Grammar feedback',
         );
     expect(semantics.properties.label, 'Grammar feedback');
+
+    final Text original = tester.widget<Text>(
+      find.byKey(const ValueKey<String>('grammar-feedback-original-text')),
+    );
+    final Text suggested = tester.widget<Text>(
+      find.byKey(const ValueKey<String>('grammar-feedback-suggestion-text')),
+    );
+    final TextSpan originalError = _spanWithText(
+      original.textSpan! as TextSpan,
+      'surprise',
+    );
+    final TextSpan suggestedCorrection = _spanWithText(
+      suggested.textSpan! as TextSpan,
+      'surprised',
+    );
+    expect(originalError.style?.color, AppPalette.semanticError);
+    expect(originalError.style?.decoration, TextDecoration.lineThrough);
+    expect(suggestedCorrection.style?.color, AppPalette.semanticSuccess);
+    expect(suggestedCorrection.style?.fontWeight, FontWeight.w700);
 
     final Material card = tester.widget<Material>(
       find.descendant(
@@ -295,6 +327,12 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
     expect(tester.binding.transientCallbackCount, 0);
   });
+}
+
+TextSpan _spanWithText(TextSpan parent, String text) {
+  return parent.children!.whereType<TextSpan>().firstWhere(
+    (TextSpan child) => child.text == text,
+  );
 }
 
 Widget _themedApp(Widget child, {bool disableAnimations = false}) {
