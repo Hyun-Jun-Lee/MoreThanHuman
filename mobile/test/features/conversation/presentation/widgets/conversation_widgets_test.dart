@@ -214,13 +214,12 @@ void main() {
     expect(find.text('What can I get started for you today?'), findsOneWidget);
   });
 
-  testWidgets('GrammarFeedbackCard highlights original and corrected text', (
+  testWidgets('GrammarFeedbackCard highlights corrected text only', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
       _themedApp(
         const GrammarFeedbackCard(
-          originalText: 'I was surprise.',
           suggestion: 'I was surprised.',
           explanation: 'Use the past tense for a completed action.',
           errors: <GrammarError>[
@@ -234,9 +233,9 @@ void main() {
       ),
     );
 
-    expect(find.text('YOUR SENTENCE'), findsOneWidget);
-    expect(find.text('SUGGESTED'), findsOneWidget);
-    expect(find.text('I was surprise.'), findsOneWidget);
+    expect(find.text('YOUR SENTENCE'), findsNothing);
+    expect(find.text('SUGGESTED'), findsNothing);
+    expect(find.text('I was surprise.'), findsNothing);
     expect(find.text('I was surprised.'), findsOneWidget);
     expect(find.text('WHY'), findsOneWidget);
     expect(find.byIcon(Icons.lightbulb_outline_rounded), findsNothing);
@@ -254,22 +253,13 @@ void main() {
         );
     expect(semantics.properties.label, 'Grammar feedback');
 
-    final Text original = tester.widget<Text>(
-      find.byKey(const ValueKey<String>('grammar-feedback-original-text')),
-    );
     final Text suggested = tester.widget<Text>(
       find.byKey(const ValueKey<String>('grammar-feedback-suggestion-text')),
-    );
-    final TextSpan originalError = _spanWithText(
-      original.textSpan! as TextSpan,
-      'surprise',
     );
     final TextSpan suggestedCorrection = _spanWithText(
       suggested.textSpan! as TextSpan,
       'surprised',
     );
-    expect(originalError.style?.color, AppPalette.semanticError);
-    expect(originalError.style?.decoration, TextDecoration.lineThrough);
     expect(suggestedCorrection.style?.color, AppPalette.semanticSuccess);
     expect(suggestedCorrection.style?.fontWeight, FontWeight.w700);
 
@@ -300,14 +290,33 @@ void main() {
 
     expect(find.text('SHOW MORE'), findsOneWidget);
     expect(find.text('SHOW LESS'), findsNothing);
-    expect(find.text('I went there yesterday.'), findsNothing);
+    expect(
+      tester
+          .widget<Text>(
+            find.byKey(
+              const ValueKey<String>('grammar-feedback-suggestion-text'),
+            ),
+          )
+          .maxLines,
+      1,
+    );
 
     await tester.tap(find.text('SHOW MORE'));
     await tester.pump();
 
     expect(find.text('SHOW LESS'), findsOneWidget);
-    expect(find.text('I went there yesterday.'), findsOneWidget);
-    expect(find.text('It was fun.'), findsOneWidget);
+    expect(
+      tester
+          .widget<Text>(
+            find.byKey(
+              const ValueKey<String>('grammar-feedback-suggestion-text'),
+            ),
+          )
+          .maxLines,
+      isNull,
+    );
+    expect(find.textContaining('I went there yesterday.'), findsOneWidget);
+    expect(find.textContaining('It was fun.'), findsOneWidget);
     expect(find.text('Use past tense for completed actions.'), findsOneWidget);
     expect(find.text('Add a space after punctuation.'), findsOneWidget);
   });

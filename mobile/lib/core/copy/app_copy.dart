@@ -387,8 +387,6 @@ class AppCopy {
       isKorean ? '아직 내용이 없어요.' : 'Nothing here yet.';
   String get grammarFeedbackSemanticLabel =>
       isKorean ? '문법 피드백' : 'Grammar feedback';
-  String get grammarOriginalLabel => isKorean ? '내 문장' : 'Your sentence';
-  String get grammarSuggestionLabel => isKorean ? '수정 제안' : 'Suggested';
   String get grammarReasonLabel => isKorean ? '이유' : 'Why';
   String get splashTagline =>
       isKorean ? '무엇이든 이야기해요.' : 'Speak about anything.';

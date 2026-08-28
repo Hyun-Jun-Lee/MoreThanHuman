@@ -270,7 +270,6 @@ class _CompletedGrammarFeedback extends StatelessWidget {
     }
 
     return GrammarFeedbackCard(
-      originalText: feedback.originalText,
       suggestion: feedback.correctedText,
       explanation: feedback.explanation,
       errors: feedback.errors,

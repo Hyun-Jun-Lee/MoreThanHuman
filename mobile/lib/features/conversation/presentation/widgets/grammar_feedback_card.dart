@@ -10,7 +10,6 @@ class GrammarFeedbackCard extends StatefulWidget {
   const GrammarFeedbackCard({
     required this.suggestion,
     required this.explanation,
-    this.originalText,
     this.errors = const <GrammarError>[],
     this.reasonLabel,
     super.key,
@@ -18,7 +17,6 @@ class GrammarFeedbackCard extends StatefulWidget {
 
   final String suggestion;
   final String explanation;
-  final String? originalText;
   final List<GrammarError> errors;
   final String? reasonLabel;
 
@@ -37,23 +35,8 @@ class _GrammarFeedbackCardState extends State<GrammarFeedbackCard> {
         ConversationTextFormatter.formatAssistantMessage(widget.suggestion);
     final String displayExplanation =
         ConversationTextFormatter.formatAssistantMessage(widget.explanation);
-    final String? displayOriginal = widget.originalText == null
-        ? null
-        : ConversationTextFormatter.formatAssistantMessage(
-            widget.originalText!,
-          );
     final TextStyle suggestionStyle = AppTypography.bodySm.copyWith(
       color: colors.onGrammarSuggestion,
-    );
-    final TextStyle originalStyle = AppTypography.bodySm.copyWith(
-      color: colors.onGrammarOriginal,
-    );
-    final TextStyle errorStyle = originalStyle.copyWith(
-      color: Theme.of(context).colorScheme.error,
-      decoration: TextDecoration.lineThrough,
-      decorationColor: Theme.of(context).colorScheme.error,
-      decorationThickness: 2,
-      fontWeight: FontWeight.w600,
     );
     final TextStyle correctionStyle = suggestionStyle.copyWith(
       color: AppPalette.semanticSuccess,
@@ -74,13 +57,6 @@ class _GrammarFeedbackCardState extends State<GrammarFeedbackCard> {
           child: LayoutBuilder(
             builder: (BuildContext context, BoxConstraints constraints) {
               final bool canExpand =
-                  (displayOriginal != null &&
-                      _exceedsSingleLine(
-                        text: displayOriginal,
-                        style: originalStyle,
-                        maxWidth: constraints.maxWidth,
-                        textScaler: MediaQuery.textScalerOf(context),
-                      )) ||
                   _exceedsSingleLine(
                     text: displaySuggestion,
                     style: suggestionStyle,
@@ -98,40 +74,18 @@ class _GrammarFeedbackCardState extends State<GrammarFeedbackCard> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
-                  if (displayOriginal != null) ...<Widget>[
-                    _FeedbackSentence(
-                      label: copy.grammarOriginalLabel,
-                      text: displayOriginal,
-                      style: originalStyle,
-                      highlightStyle: errorStyle,
-                      highlightedValues: widget.errors
-                          .map((GrammarError error) => error.original)
-                          .toList(growable: false),
-                      expanded: _expanded || !canExpand,
-                      textKey: const ValueKey<String>(
-                        'grammar-feedback-original-text',
-                      ),
+                  _HighlightedFeedbackText(
+                    text: displaySuggestion,
+                    style: suggestionStyle,
+                    highlightStyle: correctionStyle,
+                    highlightedValues: widget.errors
+                        .map((GrammarError error) => error.corrected)
+                        .toList(growable: false),
+                    expanded: _expanded || !canExpand,
+                    textKey: const ValueKey<String>(
+                      'grammar-feedback-suggestion-text',
                     ),
-                    const SizedBox(height: AppSpacing.md),
-                    _FeedbackSentence(
-                      label: copy.grammarSuggestionLabel,
-                      text: displaySuggestion,
-                      style: suggestionStyle,
-                      highlightStyle: correctionStyle,
-                      highlightedValues: widget.errors
-                          .map((GrammarError error) => error.corrected)
-                          .toList(growable: false),
-                      expanded: _expanded || !canExpand,
-                      textKey: const ValueKey<String>(
-                        'grammar-feedback-suggestion-text',
-                      ),
-                    ),
-                  ] else
-                    _FeedbackText(
-                      text: displaySuggestion,
-                      style: suggestionStyle,
-                      expanded: _expanded || !canExpand,
-                    ),
+                  ),
                   const SizedBox(height: AppSpacing.md),
                   _ReasonBlock(
                     label: widget.reasonLabel ?? copy.grammarReasonLabel,
@@ -222,9 +176,8 @@ class _ReasonBlock extends StatelessWidget {
   }
 }
 
-class _FeedbackSentence extends StatelessWidget {
-  const _FeedbackSentence({
-    required this.label,
+class _HighlightedFeedbackText extends StatelessWidget {
+  const _HighlightedFeedbackText({
     required this.text,
     required this.style,
     required this.highlightStyle,
@@ -233,7 +186,6 @@ class _FeedbackSentence extends StatelessWidget {
     required this.textKey,
   });
 
-  final String label;
   final String text;
   final TextStyle style;
   final TextStyle highlightStyle;
@@ -243,32 +195,18 @@ class _FeedbackSentence extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final AppSemanticColors colors = AppSemanticColors.of(context);
     final String displayText = expanded ? text : _singleLineText(text);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: <Widget>[
-        Text(
-          label.toUpperCase(),
-          style: AppTypography.captionMono.copyWith(
-            color: colors.onGrammarSuggestion,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        Text.rich(
-          _highlightedTextSpan(
-            text: displayText,
-            style: style,
-            highlightStyle: highlightStyle,
-            highlightedValues: highlightedValues,
-          ),
-          key: textKey,
-          maxLines: expanded ? null : 1,
-          overflow: expanded ? TextOverflow.visible : TextOverflow.ellipsis,
-        ),
-      ],
+    return Text.rich(
+      _highlightedTextSpan(
+        text: displayText,
+        style: style,
+        highlightStyle: highlightStyle,
+        highlightedValues: highlightedValues,
+      ),
+      key: textKey,
+      maxLines: expanded ? null : 1,
+      overflow: expanded ? TextOverflow.visible : TextOverflow.ellipsis,
     );
   }
 }
