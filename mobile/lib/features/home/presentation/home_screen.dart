@@ -36,8 +36,6 @@ class HomeScreen extends ConsumerWidget {
     final bool isRecentRefreshing = ref.watch(
       recentConversationsRefreshingProvider,
     );
-    final String firstName = _firstName(user?.name);
-
     return AppScaffold(
       padding: EdgeInsets.zero,
       safeAreaBottom: false,
@@ -72,8 +70,6 @@ class HomeScreen extends ConsumerWidget {
             ),
             sliver: SliverList(
               delegate: SliverChildListDelegate(<Widget>[
-                Text(copy.greeting(firstName), style: AppTypography.displayLg),
-                const SizedBox(height: AppSpacing.xxl),
                 recent.when(
                   loading: () => AppAsyncStateView.loading(
                     message: copy.loadingRecentConversations,
@@ -170,7 +166,7 @@ class HomeScreen extends ConsumerWidget {
       await (repository as ConversationDeletionRepository).deleteConversation(
         conversation.id,
       );
-      ref.invalidate(recentConversationsControllerProvider);
+      await ref.read(recentConversationsControllerProvider.notifier).reload();
     } on Object {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -178,14 +174,6 @@ class HomeScreen extends ConsumerWidget {
         );
       }
     }
-  }
-
-  static String _firstName(String? name) {
-    final String normalized = name?.trim() ?? '';
-    if (normalized.isEmpty) {
-      return 'there';
-    }
-    return normalized.split(RegExp(r'\s+')).first;
   }
 }
 
@@ -398,17 +386,9 @@ class _EmptyHome extends StatelessWidget {
     return Column(
       children: <Widget>[
         Text(
-          copy.welcomeToCuritalk,
+          copy.homeEmptyTitle,
           textAlign: TextAlign.center,
           style: AppTypography.headlineLg,
-        ),
-        const SizedBox(height: AppSpacing.md),
-        Text(
-          copy.homeEmptyMessage,
-          textAlign: TextAlign.center,
-          style: AppTypography.body.copyWith(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
         ),
         const SizedBox(height: AppSpacing.xl),
         AppColorBlockCard(

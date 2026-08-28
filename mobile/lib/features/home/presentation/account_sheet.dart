@@ -19,9 +19,9 @@ Future<void> showAccountSheet({
       bool isSavingAppLocale = false;
       String? languageError;
       String? appLocaleError;
-      LearningLanguageContext selectedLanguage =
+      final LearningLanguageContext selectedLanguage =
           user?.language ?? LearningLanguageContext.defaultContext;
-      String selectedAppLocale =
+      final String selectedAppLocale =
           user?.appLocale ??
           (Localizations.localeOf(context).languageCode == 'ko' ? 'ko' : 'en');
       final String name = user?.name.trim().isNotEmpty == true
@@ -98,13 +98,20 @@ Future<void> showAccountSheet({
                       selected: selectedAppLocale == 'ko',
                       onSelected: isSavingAppLocale || isLoggingOut
                           ? null
-                          : (bool selected) {
-                              if (selected) {
-                                setSheetState(() {
-                                  selectedAppLocale = 'ko';
-                                  appLocaleError = null;
-                                });
-                              }
+                          : (_) async {
+                              await _changeAppLocale(
+                                context: context,
+                                sheetContext: sheetContext,
+                                ref: ref,
+                                copy: copy,
+                                user: user,
+                                nextLocale: 'ko',
+                                setSheetState: setSheetState,
+                                setSaving: (bool value) =>
+                                    isSavingAppLocale = value,
+                                setError: (String? value) =>
+                                    appLocaleError = value,
+                              );
                             },
                     ),
                     AppSelectionChip(
@@ -112,13 +119,20 @@ Future<void> showAccountSheet({
                       selected: selectedAppLocale == 'en',
                       onSelected: isSavingAppLocale || isLoggingOut
                           ? null
-                          : (bool selected) {
-                              if (selected) {
-                                setSheetState(() {
-                                  selectedAppLocale = 'en';
-                                  appLocaleError = null;
-                                });
-                              }
+                          : (_) async {
+                              await _changeAppLocale(
+                                context: context,
+                                sheetContext: sheetContext,
+                                ref: ref,
+                                copy: copy,
+                                user: user,
+                                nextLocale: 'en',
+                                setSheetState: setSheetState,
+                                setSaving: (bool value) =>
+                                    isSavingAppLocale = value,
+                                setError: (String? value) =>
+                                    appLocaleError = value,
+                              );
                             },
                     ),
                   ],
@@ -132,41 +146,16 @@ Future<void> showAccountSheet({
                     ),
                   ),
                 ],
-                const SizedBox(height: AppSpacing.md),
-                AppPrimaryButton(
-                  label: copy.saveAppLanguageLabel,
-                  isLoading: isSavingAppLocale,
-                  onPressed:
-                      isLoggingOut ||
-                          isSavingAppLocale ||
-                          selectedAppLocale == user?.appLocale
-                      ? null
-                      : () async {
-                          setSheetState(() {
-                            isSavingAppLocale = true;
-                            appLocaleError = null;
-                          });
-                          try {
-                            await ref
-                                .read(authControllerProvider.notifier)
-                                .updateAppLocale(selectedAppLocale);
-                            if (sheetContext.mounted) {
-                              Navigator.pop(sheetContext);
-                            }
-                          } on Object {
-                            if (sheetContext.mounted) {
-                              setSheetState(
-                                () =>
-                                    appLocaleError = copy.appLanguageSaveFailed,
-                              );
-                            }
-                          } finally {
-                            if (sheetContext.mounted) {
-                              setSheetState(() => isSavingAppLocale = false);
-                            }
-                          }
-                        },
-                ),
+                if (isSavingAppLocale)
+                  const Padding(
+                    padding: EdgeInsets.only(top: AppSpacing.md),
+                    child: Center(
+                      child: SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ),
+                  ),
                 const SizedBox(height: AppSpacing.xl),
                 AppSectionLabel(copy.languagePairSectionLabel),
                 const SizedBox(height: AppSpacing.xs),
@@ -179,11 +168,18 @@ Future<void> showAccountSheet({
                 const SizedBox(height: AppSpacing.md),
                 LanguagePairSelector(
                   selected: selectedLanguage,
-                  onChanged: (LearningLanguageContext next) {
-                    setSheetState(() {
-                      selectedLanguage = next;
-                      languageError = null;
-                    });
+                  onChanged: (LearningLanguageContext next) async {
+                    await _changeLanguagePair(
+                      context: context,
+                      sheetContext: sheetContext,
+                      ref: ref,
+                      copy: copy,
+                      currentLanguage: selectedLanguage,
+                      nextLanguage: next,
+                      setSheetState: setSheetState,
+                      setSaving: (bool value) => isSavingLanguage = value,
+                      setError: (String? value) => languageError = value,
+                    );
                   },
                   enabled: !isSavingLanguage && !isLoggingOut,
                 ),
@@ -199,48 +195,16 @@ Future<void> showAccountSheet({
                     ),
                   ),
                 ],
-                const SizedBox(height: AppSpacing.md),
-                AppPrimaryButton(
-                  label: copy.saveLanguagePairLabel,
-                  isLoading: isSavingLanguage,
-                  onPressed:
-                      isLoggingOut ||
-                          isSavingLanguage ||
-                          selectedLanguage ==
-                              (user?.language ??
-                                  LearningLanguageContext.defaultContext)
-                      ? null
-                      : () async {
-                          setSheetState(() {
-                            isSavingLanguage = true;
-                            languageError = null;
-                          });
-                          try {
-                            await ref
-                                .read(languagePreferencesRepositoryProvider)
-                                .updateLanguagePreferences(selectedLanguage);
-                            ref.invalidate(
-                              languagePreferencesControllerProvider,
-                            );
-                            await ref
-                                .read(authControllerProvider.notifier)
-                                .restoreSession();
-                            if (sheetContext.mounted) {
-                              Navigator.pop(sheetContext);
-                            }
-                          } on Object {
-                            if (sheetContext.mounted) {
-                              setSheetState(() {
-                                languageError = copy.languagePairSaveFailed;
-                              });
-                            }
-                          } finally {
-                            if (sheetContext.mounted) {
-                              setSheetState(() => isSavingLanguage = false);
-                            }
-                          }
-                        },
-                ),
+                if (isSavingLanguage)
+                  const Padding(
+                    padding: EdgeInsets.only(top: AppSpacing.md),
+                    child: Center(
+                      child: SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ),
+                  ),
               ],
             ),
           );
@@ -248,6 +212,117 @@ Future<void> showAccountSheet({
       );
     },
   );
+}
+
+Future<void> _changeAppLocale({
+  required BuildContext context,
+  required BuildContext sheetContext,
+  required WidgetRef ref,
+  required AppCopy copy,
+  required UserProfile? user,
+  required String nextLocale,
+  required StateSetter setSheetState,
+  required ValueChanged<bool> setSaving,
+  required ValueChanged<String?> setError,
+}) async {
+  if (nextLocale == user?.appLocale) return;
+  final bool confirmed = await _showPreferenceChangeDialog(
+    context: context,
+    copy: copy,
+    message: copy.changeAppLanguageMessage(copy.languageName(nextLocale)),
+  );
+  if (!confirmed || !sheetContext.mounted) return;
+
+  setSheetState(() {
+    setSaving(true);
+    setError(null);
+  });
+  try {
+    await ref.read(authControllerProvider.notifier).updateAppLocale(nextLocale);
+    if (sheetContext.mounted) {
+      Navigator.pop(sheetContext);
+    }
+  } on Object {
+    if (sheetContext.mounted) {
+      setSheetState(() => setError(copy.appLanguageSaveFailed));
+    }
+  } finally {
+    if (sheetContext.mounted) {
+      setSheetState(() => setSaving(false));
+    }
+  }
+}
+
+Future<void> _changeLanguagePair({
+  required BuildContext context,
+  required BuildContext sheetContext,
+  required WidgetRef ref,
+  required AppCopy copy,
+  required LearningLanguageContext currentLanguage,
+  required LearningLanguageContext nextLanguage,
+  required StateSetter setSheetState,
+  required ValueChanged<bool> setSaving,
+  required ValueChanged<String?> setError,
+}) async {
+  if (nextLanguage == currentLanguage) return;
+  final String nextLabel = copy.languagePairLabel(
+    nativeCode: nextLanguage.nativeLanguage.code,
+    targetCode: nextLanguage.targetLanguage.code,
+  );
+  final bool confirmed = await _showPreferenceChangeDialog(
+    context: context,
+    copy: copy,
+    message: copy.changeLanguagePairMessage(nextLabel),
+  );
+  if (!confirmed || !sheetContext.mounted) return;
+
+  setSheetState(() {
+    setSaving(true);
+    setError(null);
+  });
+  try {
+    await ref
+        .read(languagePreferencesRepositoryProvider)
+        .updateLanguagePreferences(nextLanguage);
+    ref.invalidate(languagePreferencesControllerProvider);
+    await ref.read(authControllerProvider.notifier).restoreSession();
+    if (sheetContext.mounted) {
+      Navigator.pop(sheetContext);
+    }
+  } on Object {
+    if (sheetContext.mounted) {
+      setSheetState(() => setError(copy.languagePairSaveFailed));
+    }
+  } finally {
+    if (sheetContext.mounted) {
+      setSheetState(() => setSaving(false));
+    }
+  }
+}
+
+Future<bool> _showPreferenceChangeDialog({
+  required BuildContext context,
+  required AppCopy copy,
+  required String message,
+}) async {
+  return await showDialog<bool>(
+        context: context,
+        builder: (BuildContext dialogContext) => AlertDialog(
+          title: Text(copy.preferenceChangeConfirmationTitle),
+          content: Text(message),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: Text(copy.cancelLabel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: Text(copy.confirmChangeLabel),
+            ),
+          ],
+        ),
+      ) ??
+      false;
 }
 
 String _initialFor(String name) {

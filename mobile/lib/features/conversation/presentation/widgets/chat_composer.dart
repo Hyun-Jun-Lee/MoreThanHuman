@@ -150,12 +150,16 @@ class _ChatComposerState extends State<ChatComposer> {
                           horizontal: AppSpacing.xs,
                           vertical: AppSpacing.sm,
                         ),
-                        child: Text(
-                          voiceStatusText,
-                          style: AppTypography.bodySm.copyWith(
-                            color: widget.isRecording
-                                ? theme.colorScheme.onSurface
-                                : theme.colorScheme.onSurfaceVariant,
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: Text(
+                            voiceStatusText,
+                            textAlign: TextAlign.center,
+                            style: AppTypography.bodySm.copyWith(
+                              color: widget.isRecording
+                                  ? theme.colorScheme.onSurface
+                                  : theme.colorScheme.onSurfaceVariant,
+                            ),
                           ),
                         ),
                       ),

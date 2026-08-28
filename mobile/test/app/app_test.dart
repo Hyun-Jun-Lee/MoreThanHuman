@@ -68,8 +68,8 @@ void main() {
     await tester.tap(find.text('CONTINUE WITH GOOGLE'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Hi, Learner'), findsOneWidget);
-    expect(find.text('Welcome to Curitalk'), findsOneWidget);
+    expect(find.text('Hi, Learner'), findsNothing);
+    expect(find.text('Start a conversation'), findsOneWidget);
     expect(onboardingStorage.completed, isTrue);
     expect(supabaseAuth.hasSession, isTrue);
     expect(supabaseAuth.lastIdToken, 'google-id-token');
@@ -153,7 +153,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Hi, Learner'), findsOneWidget);
+    expect(find.text('Hi, Learner'), findsNothing);
     expect(
       find.text('Practice conversation with your own topics.'),
       findsNothing,

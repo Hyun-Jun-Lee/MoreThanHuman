@@ -213,15 +213,21 @@ class AppCopy {
   String get appLanguageSectionLabel => isKorean ? '앱 언어' : 'App language';
   String get appLanguageKoreanLabel => isKorean ? '한국어' : 'Korean';
   String get appLanguageEnglishLabel => isKorean ? '영어' : 'English';
-  String get saveAppLanguageLabel => isKorean ? '앱 언어 저장' : 'Save app language';
   String get appLanguageSaveFailed => isKorean
       ? '앱 언어를 저장하지 못했어요. 다시 시도해 주세요.'
       : 'Could not save app language. Please try again.';
+  String get preferenceChangeConfirmationTitle =>
+      isKorean ? '변경하시겠습니까?' : 'Save this change?';
+  String changeAppLanguageMessage(String language) => isKorean
+      ? '앱 언어를 $language로 변경할까요?'
+      : 'Change the app language to $language?';
+  String changeLanguagePairMessage(String pair) =>
+      isKorean ? '언어쌍을 $pair로 변경할까요?' : 'Change the language pair to $pair?';
+  String get confirmChangeLabel => isKorean ? '변경' : 'Change';
   String get startConversationLabel =>
       isKorean ? '대화 시작하기' : 'START CONVERSATION';
   String get startConversationTooltip =>
       isKorean ? '대화 시작하기' : 'Start conversation';
-  String greeting(String name) => isKorean ? '안녕하세요, $name' : 'Hi, $name';
   String get recentLabel => isKorean ? '최근 대화' : 'Recent';
   String get loadingRecentConversations =>
       isKorean ? '최근 대화를 불러오는 중...' : 'Loading recent conversations...';
@@ -230,11 +236,7 @@ class AppCopy {
       : 'Recent conversations could not be loaded.';
   String get updatingConversations =>
       isKorean ? '대화를 업데이트하는 중...' : 'Updating conversations...';
-  String get welcomeToCuritalk =>
-      isKorean ? 'Curitalk에 오신 것을 환영해요' : 'Welcome to Curitalk';
-  String get homeEmptyMessage => isKorean
-      ? '대화할 주제를 골라 보세요.'
-      : 'Your conversation canvas is clear. What would you like to explore today?';
+  String get homeEmptyTitle => isKorean ? '대화를 시작하세요' : 'Start a conversation';
   String get suggestedStartingPoints =>
       isKorean ? '대화 시작 아이디어' : 'Suggested starting points';
   String get showAllLabel => isKorean ? '모두 보기' : 'SHOW ALL';
@@ -247,8 +249,6 @@ class AppCopy {
   String get accountLabel => isKorean ? '계정' : 'Account';
   String get languagePairSectionLabel => isKorean ? '언어쌍' : 'Language Pair';
   String get logOutLabel => isKorean ? '로그아웃' : 'LOG OUT';
-  String get saveLanguagePairLabel =>
-      isKorean ? '언어쌍 저장' : 'SAVE LANGUAGE PAIR';
   String get languagePairSaveFailed =>
       isKorean ? '언어쌍을 저장하지 못했어요.' : 'Language pair could not be saved.';
   String get startConversationTitle =>

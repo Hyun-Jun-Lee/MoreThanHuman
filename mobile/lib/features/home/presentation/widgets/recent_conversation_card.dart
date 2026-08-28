@@ -47,7 +47,7 @@ class RecentConversationCard extends StatelessWidget {
               if (onDelete != null)
                 IconButton(
                   tooltip: AppCopy.of(context).deleteConversationTooltip,
-                  icon: const Icon(Icons.delete_outline_rounded),
+                  icon: const Icon(Icons.close_rounded, size: 20),
                   onPressed: onDelete,
                 ),
             ],

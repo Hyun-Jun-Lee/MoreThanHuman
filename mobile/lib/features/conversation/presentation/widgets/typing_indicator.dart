@@ -58,7 +58,7 @@ class _TypingIndicatorState extends State<TypingIndicator>
       label: widget.semanticLabel ?? AppCopy.of(context).typingSemanticLabel,
       child: ExcludeSemantics(
         child: Align(
-          alignment: Alignment.centerLeft,
+          alignment: Alignment.center,
           child: DecoratedBox(
             decoration: BoxDecoration(
               color: colors.aiMessageSurface,

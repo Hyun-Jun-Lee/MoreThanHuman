@@ -8,10 +8,7 @@ import 'package:curitalk/features/conversation/application/conversation_audio_se
 import 'package:curitalk/features/conversation/application/conversation_controller.dart';
 import 'package:curitalk/features/conversation/domain/conversation_models.dart';
 import 'package:curitalk/features/conversation/domain/conversation_repository.dart';
-import 'package:curitalk/features/conversation/data/api_conversation_repository.dart';
-import 'package:curitalk/features/conversation/presentation/conversation_delete_dialog.dart';
 import 'package:curitalk/features/conversation/presentation/widgets/widgets.dart';
-import 'package:curitalk/features/home/application/recent_conversations_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -30,7 +27,6 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
   late final ConversationAudioRecorder _recorder;
   Timer? _recordingTimer;
   _VoiceInputState _voiceInput = const _VoiceInputState.idle();
-  bool _isDeleting = false;
 
   @override
   void initState() {
@@ -65,18 +61,11 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
           onPressed: _goBack,
         ),
         title: Text(copy.conversationTitle),
-        actions: <Widget>[
-          IconButton(
-            tooltip: copy.deleteConversationTooltip,
-            onPressed: _isDeleting ? null : _deleteConversation,
-            icon: const Icon(Icons.delete_outline_rounded),
-          ),
-        ],
       ),
       bottomNavigationBar: AppBottomActionBar(
         child: ChatComposer(
           controller: _composerController,
-          enabled: conversation.hasValue && !_isDeleting,
+          enabled: conversation.hasValue,
           isSending: isSending,
           isRecording: _voiceInput.phase == _VoiceInputPhase.recording,
           isVoiceBusy: _voiceInput.isBusy,
@@ -238,37 +227,6 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
       return;
     }
     context.go(AppRoute.home);
-  }
-
-  Future<void> _deleteConversation() async {
-    final bool confirmed = await showConversationDeleteDialog(
-      context: context,
-      title: AppCopy.of(context).conversationTitle,
-    );
-    if (!confirmed || !mounted) return;
-    setState(() => _isDeleting = true);
-    try {
-      final ConversationRepository repository = ref.read(
-        conversationRepositoryProvider,
-      );
-      if (repository is! ConversationDeletionRepository) {
-        throw StateError(
-          'Conversation deletion is unavailable for this repository.',
-        );
-      }
-      await (repository as ConversationDeletionRepository).deleteConversation(
-        widget.conversationId,
-      );
-      ref.invalidate(recentConversationsControllerProvider);
-      if (mounted) context.go(AppRoute.home);
-    } on Object {
-      if (mounted) {
-        setState(() => _isDeleting = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppCopy.of(context).deleteConversationFailed)),
-        );
-      }
-    }
   }
 }
 

@@ -134,7 +134,7 @@ class HistoryScreen extends ConsumerWidget {
       await (repository as ConversationDeletionRepository).deleteConversation(
         conversation.id,
       );
-      ref.invalidate(recentConversationsControllerProvider);
+      await ref.read(recentConversationsControllerProvider.notifier).reload();
     } on Object {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

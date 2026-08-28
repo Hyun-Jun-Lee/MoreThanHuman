@@ -35,7 +35,7 @@ void main() {
     );
   });
 
-  testWidgets('language pair save refreshes Home active pair', (
+  testWidgets('language pair confirmation refreshes Home active pair', (
     WidgetTester tester,
   ) async {
     final _FakeLanguagePreferencesRepository languageRepository =
@@ -60,9 +60,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('English -> Korean'));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('SAVE LANGUAGE PAIR'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('SAVE LANGUAGE PAIR'));
+    expect(find.text('Save this change?'), findsOneWidget);
+    await tester.tap(find.text('Change'));
     await tester.pumpAndSettle();
 
     expect(find.text('EN -> KR'), findsOneWidget);
@@ -72,7 +71,7 @@ void main() {
     );
   });
 
-  testWidgets('language pair save failure keeps policy note visible', (
+  testWidgets('language pair confirmation failure keeps policy note visible', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
@@ -90,9 +89,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('English -> Korean'));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('SAVE LANGUAGE PAIR'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('SAVE LANGUAGE PAIR'));
+    await tester.tap(find.text('Change'));
     await tester.pumpAndSettle();
 
     expect(find.text('Language pair could not be saved.'), findsOneWidget);
@@ -102,6 +99,51 @@ void main() {
       ),
       findsOneWidget,
     );
+  });
+
+  testWidgets('canceling a language pair change keeps the current setting', (
+    WidgetTester tester,
+  ) async {
+    final _FakeLanguagePreferencesRepository languageRepository =
+        _FakeLanguagePreferencesRepository();
+    await tester.pumpWidget(
+      _homeApp(languagePreferencesRepository: languageRepository),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('L'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('English -> Korean'));
+    await tester.tap(find.text('English -> Korean'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('CANCEL'));
+    await tester.pumpAndSettle();
+
+    expect(
+      languageRepository.currentLanguage,
+      LearningLanguageContext.defaultContext,
+    );
+    expect(find.text('ACCOUNT'), findsOneWidget);
+  });
+
+  testWidgets('app language saves immediately after confirmation', (
+    WidgetTester tester,
+  ) async {
+    final _FakeAuthRepository authRepository = _FakeAuthRepository();
+    await tester.pumpWidget(_homeApp(authRepository: authRepository));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('L'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('KOREAN'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Change the app language to Korean?'), findsOneWidget);
+    await tester.tap(find.text('Change'));
+    await tester.pumpAndSettle();
+
+    expect(authRepository.appLocale, 'ko');
+    expect(find.text('ACCOUNT'), findsNothing);
   });
 
   testWidgets('Chat tab opens start conversation sheet', (
@@ -121,7 +163,7 @@ void main() {
     await tester.tap(find.text('Chat'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Start a conversation'), findsOneWidget);
+    expect(find.text('Free Chat'), findsOneWidget);
 
     await tester.tap(find.text('Free Chat'));
     await tester.pumpAndSettle();
@@ -152,7 +194,7 @@ void main() {
     await tester.tap(addButton);
     await tester.pumpAndSettle();
 
-    expect(find.text('Start a conversation'), findsOneWidget);
+    expect(find.text('Free Chat'), findsOneWidget);
 
     await tester.tap(find.text('Free Chat'));
     await tester.pumpAndSettle();
@@ -405,16 +447,23 @@ class _FakeGoogleIdentityService implements GoogleIdentityService {
   }
 }
 
-class _FakeAuthRepository implements AuthRepository {
+class _FakeAuthRepository implements AuthRepository, AppLocaleRepository {
   _FakeAuthRepository({this.languageProvider});
 
   final LearningLanguageContext Function()? languageProvider;
+  String? appLocale;
 
   @override
   Future<UserProfile> getCurrentUser() async {
     return _userWithLanguage(
       languageProvider?.call() ?? LearningLanguageContext.defaultContext,
-    );
+    ).copyWith(appLocale: appLocale);
+  }
+
+  @override
+  Future<UserProfile> updateAppLocale(String value) async {
+    appLocale = value;
+    return getCurrentUser();
   }
 }
 
