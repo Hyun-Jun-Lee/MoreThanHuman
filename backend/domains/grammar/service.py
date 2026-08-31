@@ -217,6 +217,7 @@ NATURAL CONVERSATIONAL RESPONSES (Do NOT mark as errors):
 - Short responses like "Went to the park" are natural replies to questions like "What did you do?"
 - Elliptical answers that omit subjects/verbs when context is clear
 - Casual expressions like "gonna", "wanna", "yeah", "nope" in informal conversation
+- Fillers, hesitations, repeated words, and self-corrections unless they block meaning
 
 MUST CHECK FOR THESE ERRORS:
 {correction_priorities}
@@ -234,14 +235,25 @@ User's response: "{text}"
 CRITICAL CORRECTION RULES:
 1. The corrected sentence MUST make logical sense and be grammatically complete
 2. If a word seems out of place or makes no sense, consider it might be:
-   - A typo (e.g., "know" might be "now")
+   - A speech recognition substitution (e.g., "know" might be "now")
    - Should be removed entirely
    - Part of a different intended phrase
-3. Fix ALL errors to create a natural, meaningful sentence
-4. Examples:
-   - "hi know i want seat of mine" → "Hi, I want my seat." (remove nonsensical "know")
-   - "what you think where is best?" → "What do you think is the best?" (fix question structure)
-   - "other groups you know?" → "What other groups do you know?" (add missing question word)
+3. Do not correct, mention, or create errors for uppercase/lowercase capitalization.
+   Speech transcripts may not preserve capitalization, so ignore sentence starts, "i" vs "I",
+   proper nouns, names, acronyms, and titles.
+4. Do not correct, mention, or create errors for transcript formatting artifacts:
+   - punctuation, commas, periods, question marks, quotation marks, or hyphens
+   - apostrophes or contraction spelling such as dont/don't and lets/let's
+   - pure spelling differences that may come from speech recognition
+   - sentence boundary formatting, run-on sentences, or comma splices caused only by missing punctuation
+   - fillers, hesitations, repeated words, or self-corrections that do not block meaning
+5. When writing corrected_sentence, preserve the user's original capitalization and punctuation unless the text changes
+   for a non-capitalization grammar, wording, or meaning reason.
+6. Fix only non-formatting errors to create a natural, meaningful sentence
+7. Examples:
+   - "hi know i want seat of mine" → "hi i want my seat" (remove nonsensical "know")
+   - "what you think where is best" → "what do you think is the best" (fix question structure)
+   - "other groups you know" → "what other groups do you know" (add missing question word)
 
 Respond in JSON format:
 {{

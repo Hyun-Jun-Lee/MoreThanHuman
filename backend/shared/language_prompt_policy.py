@@ -46,7 +46,10 @@ ENGLISH_PROMPT_POLICY = TargetLanguagePromptPolicy(
     correction_priorities=(
         "Check tense, Subject-verb agreement, articles, prepositions, and word order.",
         "Check question formation with the right auxiliary, subject, and main verb order.",
-        "Check sentence completeness, missing words, spelling, punctuation, and natural spoken phrasing.",
+        "Check sentence completeness, missing words, word choice, and natural spoken phrasing.",
+        "Ignore uppercase/lowercase capitalization entirely because speech transcripts may not preserve it.",
+        "Ignore punctuation, contraction apostrophes, pure spelling differences, and sentence-boundary formatting.",
+        "Ignore fillers, hesitations, repeated words, and self-corrections unless they block meaning.",
         "Use the conversation context to distinguish natural elliptical answers from real errors.",
     ),
     topic_prep_priorities=(

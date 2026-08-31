@@ -19,6 +19,13 @@ def test_english_grammar_prompt_keeps_current_policy_shape():
     assert "question formation" in prompt
     assert "articles" in prompt
     assert "prepositions" in prompt
+    assert "Ignore uppercase/lowercase capitalization entirely" in prompt
+    assert "Ignore punctuation, contraction apostrophes, pure spelling differences" in prompt
+    assert "Ignore fillers, hesitations, repeated words, and self-corrections" in prompt
+    assert "Do not correct, mention, or create errors for uppercase/lowercase capitalization." in prompt
+    assert "Do not correct, mention, or create errors for transcript formatting artifacts:" in prompt
+    assert '"i" vs "I"' in prompt
+    assert "dont/don't" in prompt
 
 
 def test_korean_grammar_prompt_uses_korean_policy_and_feedback_language():
