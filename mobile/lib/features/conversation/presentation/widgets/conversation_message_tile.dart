@@ -269,13 +269,71 @@ class _CompletedGrammarFeedback extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!feedback.hasErrors) {
-      return NaturalFeedbackBadge(onTap: () {});
+      return const NaturalFeedbackBadge();
     }
 
-    return GrammarFeedbackCard(
-      suggestion: feedback.correctedText,
-      explanation: feedback.explanation,
-      errors: feedback.errors,
+    return _ExpandableGrammarFeedback(feedback: feedback);
+  }
+}
+
+class _ExpandableGrammarFeedback extends StatefulWidget {
+  const _ExpandableGrammarFeedback({required this.feedback});
+
+  final GrammarFeedback feedback;
+
+  @override
+  State<_ExpandableGrammarFeedback> createState() =>
+      _ExpandableGrammarFeedbackState();
+}
+
+class _ExpandableGrammarFeedbackState
+    extends State<_ExpandableGrammarFeedback> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppCopy copy = AppCopy.of(context);
+    final String tooltip = _expanded
+        ? copy.hideGrammarFeedbackLabel
+        : copy.showGrammarFeedbackLabel;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Tooltip(
+          message: tooltip,
+          child: Semantics(
+            button: true,
+            label: tooltip,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () {
+                setState(() => _expanded = !_expanded);
+              },
+              child: const SizedBox(
+                width: AppSize.touchTarget,
+                height: AppSize.touchTarget,
+                child: Center(
+                  child: Icon(
+                    Icons.error_outline_rounded,
+                    color: AppPalette.semanticError,
+                    size: AppSize.icon,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        if (_expanded) ...<Widget>[
+          const SizedBox(height: AppSpacing.xs),
+          GrammarFeedbackCard(
+            suggestion: widget.feedback.correctedText,
+            explanation: widget.feedback.explanation,
+            errors: widget.feedback.errors,
+          ),
+        ],
+      ],
     );
   }
 }

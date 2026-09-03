@@ -143,15 +143,17 @@ void main() {
     },
   );
 
-  testWidgets('NaturalFeedbackBadge reports taps', (WidgetTester tester) async {
-    int tapCount = 0;
-    await tester.pumpWidget(
-      _themedApp(NaturalFeedbackBadge(onTap: () => tapCount += 1)),
-    );
+  testWidgets('NaturalFeedbackBadge renders a green icon only', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(_themedApp(const NaturalFeedbackBadge()));
 
-    expect(find.text('LOOKS NATURAL'), findsOneWidget);
-    await tester.tap(find.byType(ActionChip));
-    expect(tapCount, 1);
+    expect(find.text('LOOKS NATURAL'), findsNothing);
+    expect(find.byType(ActionChip), findsNothing);
+    final Icon icon = tester.widget<Icon>(
+      find.byIcon(Icons.check_circle_rounded),
+    );
+    expect(icon.color, AppPalette.semanticSuccess);
   });
 
   testWidgets('ChatBubble applies speaker alignment and semantic colors', (

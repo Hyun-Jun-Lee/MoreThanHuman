@@ -8,7 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('shows completed no-error feedback as natural badge', (
+  testWidgets('shows completed no-error feedback as green icon only', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
@@ -25,10 +25,14 @@ void main() {
     );
 
     expect(find.text('That was fun.'), findsOneWidget);
-    expect(find.text('LOOKS NATURAL'), findsOneWidget);
+    expect(find.text('LOOKS NATURAL'), findsNothing);
+    final Icon icon = tester.widget<Icon>(
+      find.byIcon(Icons.check_circle_rounded),
+    );
+    expect(icon.color, AppPalette.semanticSuccess);
   });
 
-  testWidgets('shows completed error feedback as correction card', (
+  testWidgets('shows completed error feedback behind a red icon', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
@@ -44,8 +48,26 @@ void main() {
       ),
     );
 
+    final Icon collapsedIcon = tester.widget<Icon>(
+      find.byIcon(Icons.error_outline_rounded),
+    );
+    expect(collapsedIcon.color, AppPalette.semanticError);
+    expect(find.byType(IconButton), findsNothing);
+    expect(find.textContaining('I was surprised.'), findsNothing);
+    expect(find.text('Use the past participle after was.'), findsNothing);
+
+    await tester.tap(find.byTooltip('Show grammar feedback'));
+    await tester.pump();
+
     expect(find.textContaining('I was surprised.'), findsOneWidget);
     expect(find.text('Use the past participle after was.'), findsOneWidget);
+    expect(find.byTooltip('Hide grammar feedback'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Hide grammar feedback'));
+    await tester.pump();
+
+    expect(find.textContaining('I was surprised.'), findsNothing);
+    expect(find.text('Use the past participle after was.'), findsNothing);
   });
 
   testWidgets('shows and plays assistant audio response', (
