@@ -191,8 +191,16 @@ CRITICAL CORRECTION RULES:
 1. The corrected sentence must stay in Korean and preserve the user's intent.
 2. Check Korean-specific issues:
 {correction_priorities}
-3. Do not apply English grammar rules such as subject-verb agreement to Korean.
-4. Explain issues in {feedback_name}.
+3. Do not correct, mention, or create errors for Korean transcript formatting artifacts:
+   - spacing differences unless they change meaning
+   - punctuation, commas, periods, question marks, quotation marks, or sentence boundaries
+   - fillers, hesitations, repeated words, or self-corrections that do not block meaning
+   - pure spelling differences that may come from speech recognition
+4. Focus Korean corrections on particles, verb endings, tense/aspect, sentence-final endings,
+   honorific/formality level, natural Korean word order, and spoken phrasing.
+5. Do not apply English grammar rules such as subject-verb agreement or sentence completeness to Korean.
+   Omitted subjects, omitted objects, and short elliptical answers are natural when context is clear.
+6. Explain issues in {feedback_name}.
 
 Respond in JSON format:
 {{

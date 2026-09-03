@@ -23,10 +23,13 @@ KOREAN_PROMPT_POLICY = TargetLanguagePromptPolicy(
         "Use clear spacing, spelling, and natural spoken Korean phrasing.",
     ),
     correction_priorities=(
-        "Check Korean particles such as 은/는, 이/가, 을/를, 에/에서.",
+        "Check Korean particles such as 은/는, 이/가, 을/를, 에/에서, 로/으로.",
         "Check verb endings, tense/aspect markers, and sentence-final endings.",
         "Check honorific/formality level against the conversation context.",
-        "Check spacing, spelling, natural word order, and spoken Korean naturalness.",
+        "Check natural Korean word order and spoken phrasing.",
+        "Ignore spacing, punctuation, sentence-boundary formatting, and pure spelling differences unless they change meaning.",
+        "Ignore fillers, hesitations, repeated words, and self-corrections unless they block meaning.",
+        "Treat omitted subjects, omitted objects, and short elliptical answers as natural Korean when context is clear.",
     ),
     topic_prep_priorities=(
         "Steer practice toward concrete Korean situations where particles, endings, and honorific formality matter.",

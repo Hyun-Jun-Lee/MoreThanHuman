@@ -46,6 +46,11 @@ def test_korean_grammar_prompt_uses_korean_policy_and_feedback_language():
     assert "particles" in prompt
     assert "honorific" in prompt
     assert "spacing" in prompt
+    assert "로/으로" in prompt
+    assert "Ignore spacing, punctuation, sentence-boundary formatting" in prompt
+    assert "Do not correct, mention, or create errors for Korean transcript formatting artifacts:" in prompt
+    assert "fillers, hesitations, repeated words, or self-corrections" in prompt
+    assert "Omitted subjects, omitted objects, and short elliptical answers" in prompt
     assert "Explain issues in English" in prompt
 
 
