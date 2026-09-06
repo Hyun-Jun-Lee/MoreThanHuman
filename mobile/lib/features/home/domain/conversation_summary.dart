@@ -8,7 +8,6 @@ class ConversationSummary {
     required this.messageCount,
     required this.isActive,
     required this.updatedAt,
-    this.roleplayDifficulty,
   });
 
   factory ConversationSummary.fromJson(Object? json) {
@@ -48,10 +47,6 @@ class ConversationSummary {
         roleCharacter is String && roleCharacter.trim().isNotEmpty
         ? roleCharacter.trim()
         : null;
-    final Object? roleplayDifficulty = json['roleplay_difficulty'];
-    if (roleplayDifficulty != null && roleplayDifficulty is! String) {
-      throw const FormatException('Conversation payload is invalid.');
-    }
     return ConversationSummary(
       id: id,
       title:
@@ -63,7 +58,6 @@ class ConversationSummary {
       messageCount: messageCount,
       isActive: status == 'ACTIVE',
       updatedAt: updatedAt,
-      roleplayDifficulty: roleplayDifficulty as String?,
     );
   }
 
@@ -73,7 +67,6 @@ class ConversationSummary {
   final int messageCount;
   final bool isActive;
   final DateTime updatedAt;
-  final String? roleplayDifficulty;
 
   String get category =>
       kind == ConversationKind.roleplay ? 'Roleplay' : 'Free chat';

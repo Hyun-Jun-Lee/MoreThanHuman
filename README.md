@@ -271,13 +271,12 @@ include_audio_response=true
 ```json
 {
   "role_character": "a barista at a coffee shop",
-  "roleplay_difficulty": "NORMAL",
   "search_context": null,
   "include_audio_response": true
 }
 ```
 
-`roleplay_difficulty`는 `EASY`, `NORMAL`, `CHALLENGE` 중 하나예요. 생략하면 `NORMAL`로 처리돼요. `role_character`는 AI가 맡을 역할이나 상황 설명만 담고, 난이도별 진행 스타일은 서버가 prompt 생성 시점에 조합해요.
+`role_character`는 AI가 맡을 역할이나 연습할 상황 설명을 담아요.
 
 `include_audio_response=true`이면 시작 직후 AI 첫 응답도 `audio` 또는 `audio_error`를 포함한 멀티모달 응답으로 반환돼요. 모바일 v1은 AI 응답 자동 재생을 위해 free chat 시작, roleplay 시작, `/turn/` 이어가기 요청에 이 값을 항상 포함해요.
 

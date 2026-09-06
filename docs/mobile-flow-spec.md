@@ -15,7 +15,7 @@
 - Home에는 최근 대화 목록과 `대화 시작` 단일 CTA를 보여줘요.
 - `대화 시작`을 누르면 자유 대화와 롤플레이 중 선택해요.
 - 자유 대화는 `주제 입력 → 주제 준비 카드 → 방향 선택 → 첫 질문 선택 → 사용자 답변 → 대화 시작` 흐름을 사용해요.
-- 롤플레이는 `상황 카드 선택 → 난이도 선택 → 대화 시작`을 기본으로 하고, 원하는 상황이 없으면 custom 입력을 제공해요.
+- 롤플레이는 `상황 카드 선택 → 대화 시작`을 기본으로 하고, 원하는 상황이 없으면 custom 입력을 제공해요.
 - 문법 피드백은 메시지 바로 아래에 표시해요.
 
 ## 2. 전체 화면 목록
@@ -30,7 +30,7 @@
 | Topic Input | 자유 대화 주제 입력 | 없음 |
 | Topic Prep | 주제 준비 카드 확인 | `POST /api/search/topic-prep/` |
 | Free Chat Start | 첫 질문 선택 후 답변 | `POST /api/conversations/start/free-chat/` |
-| Roleplay Setup | 롤플레이 상황/난이도 선택 | 없음 |
+| Roleplay Setup | 롤플레이 상황 선택 | 없음 |
 | Conversation | 채팅, 문법 피드백 polling | `POST /api/conversations/{id}/message/`, `GET /api/grammar/message/{message_id}/` |
 | Settings | 계정, 로그아웃 | `GET /api/auth/me`, `POST /api/auth/logout` |
 
@@ -54,8 +54,7 @@ flowchart TD
   L --> M["Free Chat Start"]
   M --> N["Conversation"]
   J -->|Roleplay| O["Roleplay Setup"]
-  O --> P["Difficulty Select"]
-  P --> N
+  O --> N
   I --> Q["Recent Conversation"]
   Q --> N
   N --> R["Grammar Feedback Polling"]
@@ -372,7 +371,7 @@ flowchart TD
 
 **목적**
 
-- 사용자가 상황과 난이도를 고른 뒤 롤플레이 대화를 시작해요.
+- 사용자가 상황을 고른 뒤 롤플레이 대화를 시작해요.
 
 **Wireframe**
 
@@ -390,9 +389,6 @@ flowchart TD
 │ ┌─────────────────────┐ │
 │ │ Job interview       │ │
 │ └─────────────────────┘ │
-│                         │
-│ Choose difficulty       │
-│ [ Easy ][ Normal ][ Hard]│
 │                         │
 │ 원하는 상황이 없나요?    │
 │ [ 직접 입력하기 ]        │
@@ -412,10 +408,6 @@ flowchart TD
 │ │ 오사카 식당에서      │ │
 │ │ 예약 확인하기        │ │
 │ └─────────────────────┘ │
-│                         │
-│ Choose difficulty       │
-│ [ Easy ][ Normal ][ Hard]│
-│                         │
 │ [ Start Roleplay ]      │
 └─────────────────────────┘
 ```
@@ -430,16 +422,9 @@ flowchart TD
 - Friend conversation
 - Meeting opinion
 
-**난이도**
-
-- Easy: 짧고 쉬운 질문, 천천히 진행
-- Normal: 자연스러운 일반 대화
-- Challenge: 예상 밖 질문, 긴 문장 유도
-
 **동작**
 
-- preset 상황과 난이도를 조합해 `role_character`로 보내요.
-- custom 입력도 난이도를 선택한 뒤 `role_character`로 보내요.
+- preset 또는 custom 상황을 `role_character`로 보내요.
 - `POST /api/conversations/start/roleplay/` 성공 시 Conversation 화면으로 이동해요.
 
 ### 5.10 Conversation

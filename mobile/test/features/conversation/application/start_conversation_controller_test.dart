@@ -121,13 +121,9 @@ void main() {
 
     await container
         .read(startConversationControllerProvider.notifier)
-        .startRoleplay(
-          roleCharacter: 'A cafe barista.',
-          roleplayDifficulty: 'CHALLENGE',
-        );
+        .startRoleplay(roleCharacter: 'A cafe barista.');
 
     expect(repository.lastRoleCharacter, 'A cafe barista.');
-    expect(repository.lastRoleplayDifficulty, 'CHALLENGE');
     expect(repository.lastRoleplayIncludeAudio, isTrue);
   });
 
@@ -186,7 +182,6 @@ class _FakeConversationRepository
     implements ConversationRepository, CustomFocusConversationRepository {
   Map<String, String?>? lastFreeChatBody;
   String? lastRoleCharacter;
-  String? lastRoleplayDifficulty;
   String? lastAudioFilename;
   bool? lastFreeChatIncludeAudio;
   bool? lastFreeChatAudioIncludeAudio;
@@ -292,12 +287,10 @@ class _FakeConversationRepository
   @override
   Future<MultimodalConversationResponse> startRoleplay({
     required String roleCharacter,
-    String roleplayDifficulty = 'NORMAL',
     String? searchContext,
     bool includeAudioResponse = true,
   }) async {
     lastRoleCharacter = roleCharacter;
-    lastRoleplayDifficulty = roleplayDifficulty;
     lastRoleplayIncludeAudio = includeAudioResponse;
     return _response(ConversationType.rolePlaying);
   }

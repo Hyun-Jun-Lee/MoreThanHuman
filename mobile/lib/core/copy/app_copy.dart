@@ -327,8 +327,6 @@ class AppCopy {
   String get chooseSituationDescription => isKorean
       ? '연습할 현실 상황을 고르거나 직접 상황을 적어 보세요.'
       : 'Pick a real-world moment to practice, or write your own custom roleplay.';
-  String get chooseDifficultyLabel =>
-      isKorean ? '난이도 고르기' : 'Choose difficulty';
   String get differentSituationLabel =>
       isKorean ? '다른 상황을 원하나요?' : 'Want a different situation?';
   String get customRoleplayLabel => isKorean ? '직접 역할극 만들기' : 'CUSTOM ROLEPLAY';
@@ -346,33 +344,6 @@ class AppCopy {
   String get voiceInputTooltip => isKorean ? '음성 입력' : 'Voice input';
   String get cancelRecordingTooltip => isKorean ? '녹음 취소' : 'Cancel recording';
   String get sendMessageTooltip => isKorean ? '메시지 보내기' : 'Send message';
-  String roleplayDifficultyLabel(String value) {
-    return switch (value) {
-      'EASY' => isKorean ? '쉬움' : 'Easy',
-      'NORMAL' => isKorean ? '보통' : 'Normal',
-      'CHALLENGE' => isKorean ? '도전' : 'Challenge',
-      _ => value,
-    };
-  }
-
-  String roleplayDifficultyDescription(String value) {
-    return switch (value) {
-      'EASY' =>
-        isKorean
-            ? '짧은 문장과 천천히 진행되는 흐름으로 연습해요.'
-            : 'Short prompts, clear context, and a gentle pace.',
-      'NORMAL' =>
-        isKorean
-            ? '일상적인 속도와 자연스러운 추가 질문으로 대화해요.'
-            : 'Natural everyday pacing with useful follow-up questions.',
-      'CHALLENGE' =>
-        isKorean
-            ? '더 길고 정확한 답변이 필요한 질문에 도전해요.'
-            : 'Unexpected follow-ups that invite longer, more precise answers.',
-      _ => '',
-    };
-  }
-
   String pageLabel(int current, int count) =>
       isKorean ? '$count개 중 $current번째 페이지' : 'Page $current of $count';
   String sourceSemanticLabel(String title) =>

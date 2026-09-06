@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('starts with no situation and Normal difficulty', () {
+  test('starts with no situation selected', () {
     final ProviderContainer container = ProviderContainer();
     addTearDown(container.dispose);
 
@@ -13,7 +13,6 @@ void main() {
 
     expect(state.selectedScenario, isNull);
     expect(state.isCustomMode, isFalse);
-    expect(state.difficulty, RoleplayDifficulty.normal);
     expect(state.canStart, isFalse);
   });
 
@@ -62,26 +61,5 @@ void main() {
     expect(state.canStart, isTrue);
     expect(state.customValidationReason, isNull);
     expect(state.payload?.roleCharacter, contains('오사카 식당 예약 확인'));
-  });
-
-  test('difficulty changes are reflected in payload', () {
-    final ProviderContainer container = ProviderContainer();
-    addTearDown(container.dispose);
-    final RoleplaySetupController controller = container.read(
-      roleplaySetupControllerProvider.notifier,
-    );
-
-    controller.selectScenario(enRoleplayScenarios.first);
-    controller.selectDifficulty(RoleplayDifficulty.challenge);
-    final RoleplaySetupState state = container.read(
-      roleplaySetupControllerProvider,
-    );
-
-    expect(state.difficulty, RoleplayDifficulty.challenge);
-    expect(
-      state.payload?.roleCharacter,
-      enRoleplayScenarios.first.roleCharacter,
-    );
-    expect(state.payload?.roleplayDifficultyValue, 'CHALLENGE');
   });
 }

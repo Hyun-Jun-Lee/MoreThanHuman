@@ -130,7 +130,7 @@ void main() {
     expect(formData.files.single.value.contentType.toString(), 'audio/m4a');
   });
 
-  test('starts roleplay with separate role and difficulty fields', () async {
+  test('starts roleplay with a role field only', () async {
     final _ConversationHttpClientAdapter adapter =
         _ConversationHttpClientAdapter();
     final ApiConversationRepository repository = _repository(adapter);
@@ -138,14 +138,12 @@ void main() {
     final MultimodalConversationResponse response = await repository
         .startRoleplay(
           roleCharacter: 'a friendly cafe barista taking an order',
-          roleplayDifficulty: 'NORMAL',
         );
 
-    expect(response.roleplayDifficulty, 'NORMAL');
+    expect(response.conversationType, ConversationType.rolePlaying);
     expect(adapter.lastRequest?.uri.path, '/api/conversations/start/roleplay/');
     expect(adapter.lastRequest?.data, <String, Object?>{
       'role_character': 'a friendly cafe barista taking an order',
-      'roleplay_difficulty': 'NORMAL',
       'search_context': null,
       'include_audio_response': true,
     });
@@ -229,9 +227,6 @@ class _ConversationHttpClientAdapter implements HttpClientAdapter {
             : 'FREE_CHAT',
         'role_character': path.endsWith('/start/roleplay/')
             ? 'a friendly cafe barista taking an order'
-            : null,
-        'roleplay_difficulty': path.endsWith('/start/roleplay/')
-            ? 'NORMAL'
             : null,
         'response': 'Hello!',
         'grammar_feedback': null,

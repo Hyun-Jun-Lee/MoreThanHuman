@@ -66,44 +66,15 @@ void main() {
     );
   });
 
-  testWidgets('changing difficulty updates selected chip', (
+  testWidgets('does not show a manual difficulty selector', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(_app());
 
-    await tester.tap(find.text('CHALLENGE'));
-    await tester.pumpAndSettle();
-
-    expect(
-      find.text(
-        'Unexpected follow-ups that invite longer, more precise answers.',
-      ),
-      findsOneWidget,
-    );
-  });
-
-  testWidgets('difficulty selector stays above scenarios in one row', (
-    WidgetTester tester,
-  ) async {
-    await tester.pumpWidget(_app());
-
-    expect(find.text('CHOOSE DIFFICULTY'), findsOneWidget);
-    final double difficultyTop = tester
-        .getTopLeft(find.text('CHOOSE DIFFICULTY'))
-        .dy;
-    final double firstScenarioTop = tester
-        .getTopLeft(find.text('Cafe order'))
-        .dy;
-
-    expect(difficultyTop, lessThan(firstScenarioTop));
-    expect(
-      tester.getCenter(find.text('EASY')).dy,
-      closeTo(tester.getCenter(find.text('NORMAL')).dy, 0.1),
-    );
-    expect(
-      tester.getCenter(find.text('NORMAL')).dy,
-      closeTo(tester.getCenter(find.text('CHALLENGE')).dy, 0.1),
-    );
+    expect(find.text('CHOOSE DIFFICULTY'), findsNothing);
+    expect(find.text('EASY'), findsNothing);
+    expect(find.text('NORMAL'), findsNothing);
+    expect(find.text('CHALLENGE'), findsNothing);
   });
 
   testWidgets('custom input validates minimum length and enables start', (

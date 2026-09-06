@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from domains.auth.dependencies import get_current_user
-from domains.conversation.enums import ConversationType, RoleplayDifficulty
+from domains.conversation.enums import ConversationType
 from domains.conversation.router import get_conversation_service, router
 from domains.conversation.service import ConversationService
 from shared.language import LearningLanguageContext
@@ -112,45 +112,35 @@ def test_roleplay_prompt_uses_english_target_examples_without_teacher_frame():
     assert "Always communicate in English" in prompt
 
 
-def test_roleplay_prompt_includes_difficulty_guidance():
+def test_roleplay_prompt_omits_manual_difficulty_guidance():
     service = ConversationService(repository=None, grammar_repository=None)
 
-    easy_prompt = service.build_roleplay_prompt(
-        "a cafe barista",
-        roleplay_difficulty=RoleplayDifficulty.EASY,
-    )
-    challenge_prompt = service.build_roleplay_prompt(
-        "a cafe barista",
-        roleplay_difficulty=RoleplayDifficulty.CHALLENGE,
-    )
+    prompt = service.build_roleplay_prompt("a cafe barista")
 
-    assert "gentle pace" in easy_prompt
-    assert "unexpected follow-up questions" in challenge_prompt
+    assert "## Roleplay Difficulty:" not in prompt
+    assert "gentle pace" not in prompt
+    assert "unexpected follow-up questions" not in prompt
 
 
 @pytest.mark.asyncio
-async def test_start_roleplay_stores_role_and_difficulty_separately():
+async def test_start_roleplay_stores_role_without_manual_difficulty():
     repository = _FakeConversationRepository()
     service = _FakeConversationService(repository)
     role_character = "a friendly cafe barista taking an order"
 
-    response = await service.start_roleplay_conversation(
-        role_character,
-        user_id="user-1",
-        roleplay_difficulty=RoleplayDifficulty.NORMAL,
-    )
+    response = await service.start_roleplay_conversation(role_character, user_id="user-1")
 
     saved = repository.conversation
     assert saved.conversation_type == ConversationType.ROLE_PLAYING
     assert saved.role_character == role_character
-    assert saved.roleplay_difficulty == RoleplayDifficulty.NORMAL
     assert "keeps everyday pacing" not in saved.role_character
-    assert response.roleplay_difficulty == RoleplayDifficulty.NORMAL
-    assert "keeps everyday pacing" in service.generated_prompts[0]["system"]
+    assert not hasattr(saved, "roleplay_difficulty")
+    assert not hasattr(response, "roleplay_difficulty")
+    assert "keeps everyday pacing" not in service.generated_prompts[0]["system"]
 
 
 @pytest.mark.asyncio
-async def test_start_roleplay_defaults_difficulty_and_truncates_title():
+async def test_start_roleplay_truncates_title_without_manual_difficulty():
     repository = _FakeConversationRepository()
     service = _FakeConversationService(repository)
     role_character = "a realistic counterpart " * 20
@@ -158,7 +148,6 @@ async def test_start_roleplay_defaults_difficulty_and_truncates_title():
     await service.start_roleplay_conversation(role_character, user_id="user-1")
 
     saved = repository.conversation
-    assert saved.roleplay_difficulty == RoleplayDifficulty.NORMAL
     assert len(saved.title) <= 200
 
 

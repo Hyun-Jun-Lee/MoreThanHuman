@@ -323,7 +323,6 @@ class _FakeConversationRepository implements ConversationRepository {
   @override
   Future<MultimodalConversationResponse> startRoleplay({
     required String roleCharacter,
-    String roleplayDifficulty = 'NORMAL',
     String? searchContext,
     bool includeAudioResponse = true,
   }) {

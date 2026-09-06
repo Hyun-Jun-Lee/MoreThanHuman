@@ -8,7 +8,7 @@ import traceback
 from uuid import uuid4
 
 from config import get_model_for_provider, get_settings
-from domains.conversation.enums import ConversationStatus, ConversationType, MessageRole, RoleplayDifficulty
+from domains.conversation.enums import ConversationStatus, ConversationType, MessageRole
 from domains.conversation.models import ConversationModel, MessageModel
 from domains.conversation.repository import ConversationRepository
 from domains.conversation.schemas import (
@@ -184,7 +184,6 @@ class ConversationService:
         role_character: str,
         search_context: str | None = None,
         user_id: str = "",
-        roleplay_difficulty: RoleplayDifficulty | None = None,
         language_context: LearningLanguageContext | None = None,
     ) -> ConversationResponse:
         """
@@ -201,7 +200,6 @@ class ConversationService:
         try:
             # 1. Conversation 생성
             language_context = ensure_language_context(language_context)
-            roleplay_difficulty = self._resolve_roleplay_difficulty(roleplay_difficulty)
             title = self._roleplay_title(role_character)
 
             conversation = ConversationModel(
@@ -210,7 +208,6 @@ class ConversationService:
                 title=title,
                 conversation_type=ConversationType.ROLE_PLAYING,
                 role_character=role_character,
-                roleplay_difficulty=roleplay_difficulty,
                 native_language=language_context.native_language.value,
                 target_language=language_context.target_language.value,
                 feedback_language=language_context.feedback_language.value,
@@ -224,7 +221,6 @@ class ConversationService:
                 search_context,
                 ConversationType.ROLE_PLAYING,
                 role_character,
-                roleplay_difficulty=roleplay_difficulty,
                 language_context=language_context,
             )
 
@@ -232,7 +228,6 @@ class ConversationService:
             target_name = language_name(language_context.target_language)
             greeting_prompt = (
                 f"You are starting a role-play as '{role_character}'. "
-                f"Use this difficulty style: {self._roleplay_difficulty_instruction(roleplay_difficulty)}. "
                 f"Greet the user naturally in {target_name} and start the conversation "
                 "as this character would. Keep it short (1-2 sentences)."
             )
@@ -256,7 +251,6 @@ class ConversationService:
                 message_id=assistant_message.id,
                 conversation_type=ConversationType.ROLE_PLAYING,
                 role_character=role_character,
-                roleplay_difficulty=roleplay_difficulty,
                 language=language_context,
                 response=ai_response,
                 grammar_feedback=None,
@@ -302,7 +296,6 @@ class ConversationService:
                 None,  # search_context는 첫 대화에만 사용
                 conversation.conversation_type,
                 conversation.role_character,
-                roleplay_difficulty=conversation.roleplay_difficulty,
                 language_context=language_context,
             )
 
@@ -511,7 +504,6 @@ class ConversationService:
         search_context: str | None = None,
         conversation_type: ConversationType = ConversationType.FREE_CHAT,
         role_character: str | None = None,
-        roleplay_difficulty: RoleplayDifficulty | None = None,
         topic: str | None = None,
         conversation_direction: str | None = None,
         selected_question: str | None = None,
@@ -537,7 +529,6 @@ class ConversationService:
             return self.build_roleplay_prompt(
                 role_character,
                 search_context,
-                roleplay_difficulty=roleplay_difficulty,
                 language_context=language_context,
             )
         else:
@@ -554,7 +545,6 @@ class ConversationService:
         self,
         role_character: str,
         search_context: str | None = None,
-        roleplay_difficulty: RoleplayDifficulty | None = None,
         language_context: LearningLanguageContext | None = None,
     ) -> str:
         """롤플레이용 시스템 프롬프트"""
@@ -565,8 +555,6 @@ class ConversationService:
 
         scenario_examples = self._roleplay_scenario_examples(language_context)
         practice_priorities = format_practice_priorities(language_context.target_language)
-        difficulty = self._resolve_roleplay_difficulty(roleplay_difficulty)
-        difficulty_instruction = self._roleplay_difficulty_instruction(difficulty)
 
         base_prompt = f"""You are a {target_name} conversation practice partner playing the role of '{role_character}'.
 
@@ -583,10 +571,6 @@ class ConversationService:
         2. Use vocabulary and expressions appropriate for this role
         3. Lead the conversation immersively as if in a real situation
 
-        ## Roleplay Difficulty:
-        - Selected difficulty: {difficulty.value}
-        - Style: {difficulty_instruction}
-
         ## Conversation Rules:
         - Always communicate in {target_name}
         - Use {feedback_name} only for brief explanations when the learner needs help
@@ -602,20 +586,6 @@ class ConversationService:
             base_prompt += f"\n\n## Reference Information:\n{search_context}"
 
         return base_prompt
-
-    def _resolve_roleplay_difficulty(self, roleplay_difficulty: RoleplayDifficulty | None) -> RoleplayDifficulty:
-        """기존 클라이언트/데이터의 누락 값을 Normal로 보정"""
-        return roleplay_difficulty or RoleplayDifficulty.NORMAL
-
-    def _roleplay_difficulty_instruction(self, roleplay_difficulty: RoleplayDifficulty) -> str:
-        """롤플레이 난이도를 prompt 스타일 지침으로 변환"""
-        return {
-            RoleplayDifficulty.EASY: "uses short prompts, clear context, and a gentle pace",
-            RoleplayDifficulty.NORMAL: "keeps everyday pacing and asks useful follow-up questions",
-            RoleplayDifficulty.CHALLENGE: (
-                "asks unexpected follow-up questions and encourages longer, more precise answers"
-            ),
-        }[roleplay_difficulty]
 
     def _roleplay_title(self, role_character: str) -> str:
         """Roleplay title을 DB title 길이 안에 맞춤"""

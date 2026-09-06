@@ -49,7 +49,6 @@ database Schema {
     title: STRING?
     conversation_type: "FREE_CHAT" | "ROLE_PLAYING"
     role_character: STRING?
-    roleplay_difficulty: "EASY" | "NORMAL" | "CHALLENGE"?
     native_language: "ko" | "en" | "zh" = "ko"
     target_language: "ko" | "en" | "zh" = "en"
     feedback_language: "ko" | "en" | "zh" = "ko"
@@ -178,13 +177,11 @@ module Conversation {
 
   type StartRoleplayRequest {
     role_character: String
-    roleplay_difficulty?: "EASY" | "NORMAL" | "CHALLENGE" = "NORMAL"
     search_context?: String
     include_audio_response?: Boolean = false
   }
 
   `role_character`는 클라이언트가 선택한 preset/custom 상황 또는 AI가 맡을 역할이에요.
-  `roleplay_difficulty`는 난이도와 진행 스타일을 나타내며, 서버가 roleplay prompt 생성 시점에 `role_character`와 조합해요.
   클라이언트 preset과 서버 roleplay prompt examples는 conversation snapshot의 `target_language`를 기준으로 연습 상황을 고르고, `feedback_language`는 도움말·설명 언어로만 사용해요.
   Conversation prompt policy도 snapshot의 `target_language`를 따라요. 한국어 target은 조사, 어미, 높임/격식, 띄어쓰기, 자연스러운 어순과 구어 뉘앙스를 우선하고, 영어 target은 tense, articles, prepositions, question formation, sentence completeness, natural spoken phrasing을 우선해요.
 
@@ -220,7 +217,6 @@ module Conversation {
     title?: String
     conversation_type: "FREE_CHAT" | "ROLE_PLAYING"
     role_character?: String
-    roleplay_difficulty?: "EASY" | "NORMAL" | "CHALLENGE"
     language: LearningLanguageContext
     message_count: Integer
     status: "ACTIVE" | "COMPLETED"
@@ -242,7 +238,6 @@ module Conversation {
     message_id: UUID
     conversation_type: String
     role_character?: String
-    roleplay_difficulty?: "EASY" | "NORMAL" | "CHALLENGE"
     language: LearningLanguageContext
     response: String
     grammar_feedback?: GrammarFeedback
@@ -287,7 +282,7 @@ module Conversation {
 ```dsl
 TextStart      = POST /api/conversations/start/free-chat/  { first_message, include_audio_response }
 AudioStart     = POST /api/conversations/start/free-chat/  multipart { audio_file, include_audio_response }
-RoleplayStart  = POST /api/conversations/start/roleplay/   { role_character, roleplay_difficulty, include_audio_response }
+RoleplayStart  = POST /api/conversations/start/roleplay/   { role_character, include_audio_response }
 TextContinue   = POST /api/conversations/{id}/turn/        { text, include_audio_response }
 AudioContinue  = POST /api/conversations/{id}/turn/        multipart { audio_file, include_audio_response }
 ```

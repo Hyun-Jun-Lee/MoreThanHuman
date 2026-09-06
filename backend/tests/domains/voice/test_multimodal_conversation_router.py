@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from domains.auth.dependencies import get_current_user
-from domains.conversation.enums import ConversationType, RoleplayDifficulty
+from domains.conversation.enums import ConversationType
 from domains.conversation.router import (
     _enforce_voice_content_length_limit,
     get_conversation_service,
@@ -32,6 +32,7 @@ class FakeConversationService:
         topic=None,
         conversation_direction=None,
         selected_question=None,
+        custom_focus=None,
         language_context=None,
     ):
         self.started.append(
@@ -42,6 +43,7 @@ class FakeConversationService:
                 "topic": topic,
                 "conversation_direction": conversation_direction,
                 "selected_question": selected_question,
+                "custom_focus": custom_focus,
                 "language_context": language_context,
             }
         )
@@ -58,7 +60,6 @@ class FakeConversationService:
         role_character,
         search_context=None,
         user_id="",
-        roleplay_difficulty=RoleplayDifficulty.NORMAL,
         language_context=None,
     ):
         self.started.append(
@@ -66,7 +67,6 @@ class FakeConversationService:
                 "role_character": role_character,
                 "search_context": search_context,
                 "user_id": user_id,
-                "roleplay_difficulty": roleplay_difficulty,
                 "language_context": language_context,
             }
         )
@@ -75,7 +75,6 @@ class FakeConversationService:
             message_id=uuid4(),
             conversation_type=ConversationType.ROLE_PLAYING,
             role_character=role_character,
-            roleplay_difficulty=roleplay_difficulty,
             response="Welcome in. What would you like to practice?",
             grammar_feedback=None,
         )
@@ -312,7 +311,7 @@ def test_free_chat_start_keeps_existing_json_text_contract():
     assert conversation_service.started[0]["first_message"] == "Let's talk about food."
 
 
-def test_roleplay_start_returns_tts_audio_when_requested():
+def test_roleplay_start_ignores_legacy_difficulty_and_returns_tts_audio():
     conversation_service = FakeConversationService()
     voice_service = FakeVoiceService()
     client = TestClient(_conversation_app_with_overrides(conversation_service, voice_service))
@@ -329,16 +328,16 @@ def test_roleplay_start_returns_tts_audio_when_requested():
     assert response.status_code == 200
     data = response.json()["data"]
     assert data["conversation_type"] == "ROLE_PLAYING"
-    assert data["roleplay_difficulty"] == "CHALLENGE"
+    assert "roleplay_difficulty" not in data
     assert data["input_mode"] == "text"
     assert data["audio"]["base64"] == "YXVkaW8="
     assert data["audio_error"] is None
     assert conversation_service.started[0]["role_character"] == "A cafe customer who asks follow-ups."
-    assert conversation_service.started[0]["roleplay_difficulty"] == RoleplayDifficulty.CHALLENGE
+    assert "roleplay_difficulty" not in conversation_service.started[0]
     assert voice_service.synthesized == ["Welcome in. What would you like to practice?"]
 
 
-def test_roleplay_start_defaults_difficulty_to_normal():
+def test_roleplay_start_without_difficulty_returns_reduced_response():
     conversation_service = FakeConversationService()
     voice_service = FakeVoiceService()
     client = TestClient(_conversation_app_with_overrides(conversation_service, voice_service))
@@ -350,8 +349,8 @@ def test_roleplay_start_defaults_difficulty_to_normal():
 
     assert response.status_code == 200
     data = response.json()["data"]
-    assert data["roleplay_difficulty"] == "NORMAL"
-    assert conversation_service.started[0]["roleplay_difficulty"] == RoleplayDifficulty.NORMAL
+    assert "roleplay_difficulty" not in data
+    assert "roleplay_difficulty" not in conversation_service.started[0]
 
 
 def test_multimodal_routes_publish_request_body_contracts():
@@ -369,7 +368,7 @@ def test_multimodal_routes_publish_request_body_contracts():
     roleplay_schema = roleplay_body["content"]["application/json"]["schema"]
     roleplay_ref = roleplay_schema["$ref"].rsplit("/", 1)[-1]
     roleplay_properties = schema["components"]["schemas"][roleplay_ref]["properties"]
-    assert "roleplay_difficulty" in roleplay_properties
+    assert "roleplay_difficulty" not in roleplay_properties
     assert "application/json" in turn_body["content"]
     assert "multipart/form-data" in turn_body["content"]
 

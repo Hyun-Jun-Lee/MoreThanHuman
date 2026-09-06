@@ -151,7 +151,6 @@ class StartConversationController extends Notifier<StartConversationState> {
 
   Future<ConversationResponse?> startRoleplay({
     required String roleCharacter,
-    String roleplayDifficulty = 'NORMAL',
     String? searchContext,
   }) async {
     state = const StartConversationState(isStarting: true);
@@ -160,7 +159,6 @@ class StartConversationController extends Notifier<StartConversationState> {
           .read(conversationRepositoryProvider)
           .startRoleplay(
             roleCharacter: roleCharacter,
-            roleplayDifficulty: roleplayDifficulty,
             searchContext: searchContext,
             includeAudioResponse: true,
           );

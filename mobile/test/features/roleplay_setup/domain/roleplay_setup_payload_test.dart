@@ -32,42 +32,17 @@ void main() {
     );
   });
 
-  test(
-    'builds backend-ready role character and difficulty from a preset scenario',
-    () {
-      final RoleplaySetupPayload payload = RoleplaySetupPayload(
-        situation: PresetRoleplaySituation(enRoleplayScenarios.first),
-        difficulty: RoleplayDifficulty.normal,
-      );
-
-      expect(payload.isValid, isTrue);
-      expect(
-        payload.roleCharacter,
-        contains('a friendly cafe barista taking an order'),
-      );
-      expect(payload.roleCharacter, isNot(contains('everyday pacing')));
-      expect(payload.roleplayDifficultyValue, 'NORMAL');
-    },
-  );
-
-  test('maps easy difficulty to its API value', () {
+  test('builds backend-ready role character from a preset scenario', () {
     final RoleplaySetupPayload payload = RoleplaySetupPayload(
       situation: PresetRoleplaySituation(enRoleplayScenarios.first),
-      difficulty: RoleplayDifficulty.easy,
     );
 
-    expect(payload.roleCharacter, enRoleplayScenarios.first.roleCharacter);
-    expect(payload.roleplayDifficultyValue, 'EASY');
-  });
-
-  test('maps challenge difficulty to its API value', () {
-    final RoleplaySetupPayload payload = RoleplaySetupPayload(
-      situation: PresetRoleplaySituation(enRoleplayScenarios.first),
-      difficulty: RoleplayDifficulty.challenge,
+    expect(payload.isValid, isTrue);
+    expect(
+      payload.roleCharacter,
+      contains('a friendly cafe barista taking an order'),
     );
-
-    expect(payload.roleCharacter, enRoleplayScenarios.first.roleCharacter);
-    expect(payload.roleplayDifficultyValue, 'CHALLENGE');
+    expect(payload.roleCharacter, isNot(contains('everyday pacing')));
   });
 
   test('trims custom situations and validates minimum length', () {
@@ -86,7 +61,6 @@ void main() {
   test('custom roleplay treats learner role as the counterpart target', () {
     const RoleplaySetupPayload payload = RoleplaySetupPayload(
       situation: CustomRoleplaySituation("I'm a hotel guest asking for help"),
-      difficulty: RoleplayDifficulty.normal,
     );
 
     expect(payload.roleCharacter, contains('play the front desk staff member'));

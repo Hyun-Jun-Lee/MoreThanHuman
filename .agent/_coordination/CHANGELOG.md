@@ -1,5 +1,10 @@
 # CHANGELOG — 완료된 작업 기록
 
+## 2026-09-06
+
+- **Roleplay 수동 난이도 제거 구현**: 역할극 난이도 UI·모바일/백엔드 API·prompt·ORM·응답 모델을 제거하고 `conversations.roleplay_difficulty` 및 PostgreSQL enum 삭제 migration, 호환성·회귀 테스트와 문서·디자인 동기화를 추가
+- **Roleplay 수동 난이도 제거·DB 컬럼 삭제 구현 계획 작성**: 수동 난이도 UI/API/prompt/ORM을 제거하고, PostgreSQL enum을 포함한 destructive migration, code-first 배포 순서, 모바일·백엔드·문서 검증 범위를 확정
+
 ## 2026-09-03
 
 - **모바일 문법 피드백 아이콘 UI 수정**: 오류 없는 피드백은 초록 체크 아이콘만 표시하고, 오류 피드백은 빨간 느낌표 아이콘을 탭했을 때 상세 교정 카드가 열리도록 변경

@@ -77,10 +77,7 @@ class _RoleplaySetupScreenState extends ConsumerState<RoleplaySetupScreen> {
                   }
                   final ConversationResponse? response = await ref
                       .read(startConversationControllerProvider.notifier)
-                      .startRoleplay(
-                        roleCharacter: payload.roleCharacter,
-                        roleplayDifficulty: payload.roleplayDifficultyValue,
-                      );
+                      .startRoleplay(roleCharacter: payload.roleCharacter);
                   if (!context.mounted || response == null) {
                     return;
                   }
@@ -106,13 +103,6 @@ class _RoleplaySetupScreenState extends ConsumerState<RoleplaySetupScreen> {
             style: AppTypography.body.copyWith(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
-          ),
-          const SizedBox(height: AppSpacing.xl),
-          AppSectionLabel(copy.chooseDifficultyLabel),
-          const SizedBox(height: AppSpacing.md),
-          _RoleplayDifficultySelector(
-            selected: state.difficulty,
-            onSelected: controller.selectDifficulty,
           ),
           if (startState.failureReason != null) ...<Widget>[
             const SizedBox(height: AppSpacing.md),
@@ -163,53 +153,6 @@ class _RoleplaySetupScreenState extends ConsumerState<RoleplaySetupScreen> {
           const SizedBox(height: AppSpacing.sectionGap),
         ],
       ),
-    );
-  }
-}
-
-class _RoleplayDifficultySelector extends StatelessWidget {
-  const _RoleplayDifficultySelector({
-    required this.selected,
-    required this.onSelected,
-  });
-
-  final RoleplayDifficulty selected;
-  final ValueChanged<RoleplayDifficulty> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    final AppCopy copy = AppCopy.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Row(
-          children: <Widget>[
-            for (final RoleplayDifficulty difficulty
-                in RoleplayDifficulty.values) ...<Widget>[
-              Expanded(
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: AppSelectionChip(
-                    label: copy.roleplayDifficultyLabel(difficulty.apiValue),
-                    selected: selected == difficulty,
-                    onSelected: (_) => onSelected(difficulty),
-                  ),
-                ),
-              ),
-              if (difficulty != RoleplayDifficulty.values.last)
-                const SizedBox(width: AppSpacing.xs),
-            ],
-          ],
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        Text(
-          copy.roleplayDifficultyDescription(selected.apiValue),
-          style: AppTypography.bodySm.copyWith(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
-        ),
-      ],
     );
   }
 }
