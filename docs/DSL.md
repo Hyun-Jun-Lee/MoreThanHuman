@@ -19,6 +19,7 @@ system MoreThanHuman {
     Auth,
     Conversation,
     Grammar,
+    LanguageSnack,
     Search,
     LLM
   ]
@@ -74,6 +75,21 @@ database Schema {
     has_errors: BOOLEAN
     errors: JSON
     created_at: DATETIME
+  }
+
+  table language_snacks {
+    id: UUID PRIMARY KEY
+    category: STRING NOT NULL
+    left_label: STRING NOT NULL
+    left_word: STRING NOT NULL
+    right_label: STRING NOT NULL
+    right_word: STRING NOT NULL
+    meaning: STRING NOT NULL
+    example: STRING NOT NULL
+    published_at: DATETIME?
+    created_at: DATETIME
+    updated_at: DATETIME
+    INDEX (published_at, id)
   }
 }
 ```
@@ -146,7 +162,45 @@ module Auth {
 `PUT /api/auth/me/language-preferences`는 profile default만 갱신해요. 모바일 Account UX는 변경값이 새 대화부터 적용되고 기존 conversation은 생성 시점 snapshot을 유지한다고 안내해야 해요.
 `PUT /api/auth/me/app-locale`는 앱 chrome 표시 언어만 저장해요. 값이 없는 기존 profile은 기기 system locale을 따르며 학습 언어쌍과 기존 conversation snapshot은 바꾸지 않아요.
 
-## 5. Conversation 모듈
+## 5. Language Snack 모듈
+
+```dsl
+module LanguageSnack {
+  router LanguageSnackRouter {
+    GET  /api/language-snacks/ -> listPublishedLanguageSnacks
+    POST /api/language-snacks/ -> createLanguageSnack
+  }
+
+  type LanguageSnackCreate {
+    category: String(1..40)
+    left_label: String(1..48)
+    left_word: String(1..80)
+    right_label: String(1..48)
+    right_word: String(1..80)
+    meaning: String(1..160)
+    example: String(1..240)
+  }
+
+  type LanguageSnack {
+    id: UUID
+    category: String
+    left_label: String
+    left_word: String
+    right_label: String
+    right_word: String
+    meaning: String
+    example: String
+    published_at: DateTime
+    created_at: DateTime
+    updated_at: DateTime
+  }
+}
+```
+
+`GET /api/language-snacks/`는 Supabase Bearer 인증이 필요하고 발행된 공통 카드만 `SuccessResponse<List<LanguageSnack>>`로 반환해요. profile의 언어쌍은 조회 조건에 사용하지 않아요.
+`POST /api/language-snacks/`는 Bearer 인증 대신 `X-Operations-Key`가 서버의 `LANGUAGE_SNACKS_OPERATIONS_KEY`와 일치할 때만 HTTP `201`로 즉시 발행 카드를 생성해요. 운영 키가 비어 있거나 일치하지 않으면 `403`이고 Flutter에는 이 값을 전달하지 않아요.
+
+## 6. Conversation 모듈
 
 ```dsl
 module Conversation {
@@ -295,7 +349,7 @@ AudioContinue  = POST /api/conversations/{id}/turn/        multipart { audio_fil
 
 `GET /api/conversations/{id}/messages/`는 `created_at asc`로 정렬된 `PaginatedMessages`를 반환해요.
 
-## 6. Grammar 모듈
+## 7. Grammar 모듈
 
 ```dsl
 module Grammar {
@@ -333,7 +387,7 @@ module Grammar {
 
 `GET /api/grammar/message/{id}/`는 현재 사용자 소유 대화에 속한 message만 조회해요. `200`은 완료된 `GrammarFeedback`, `404`는 피드백 생성 전 pending·없는 message·타 사용자 message를 의미해요. 타 사용자 message도 `404`로 숨겨 ID 존재 여부를 노출하지 않아요. 인증 헤더가 없으면 현재 `HTTPBearer` 동작에 따라 `403`, 유효하지 않은 token은 `401`로 처리해요.
 
-## 7. Search 모듈
+## 8. Search 모듈
 
 ```dsl
 module Search {
@@ -469,7 +523,7 @@ module Search {
 
 ready Topic Prep card는 정확히 세 recommendation을 제공해요. `custom_focus`는 고정 direction enum에 추가하지 않고 free-chat handoff에 별도로 전달해요. directions 재생성은 현재 화면의 summary/source를 유지한 채 새로운 recommendation 세 개와 target-language first question만 반환해요.
 
-## 8. LLM 모듈
+## 9. LLM 모듈
 
 ```dsl
 module LLM {
@@ -502,7 +556,7 @@ module LLM {
 }
 ```
 
-## 9. 환경변수 계약
+## 10. 환경변수 계약
 
 ```dsl
 env {
@@ -533,6 +587,7 @@ env {
   SUPABASE_PUBLISHABLE_KEY: String
   SUPABASE_AUTH_VERIFY_MODE?: "remote" = "remote"
   SUPABASE_AUTH_TIMEOUT_SECONDS?: Float = 5
+  LANGUAGE_SNACKS_OPERATIONS_KEY?: String
   AUTO_CREATE_TABLES?: Boolean = false
 
   JWT_SECRET_KEY?: String
@@ -554,7 +609,7 @@ env {
 }
 ```
 
-## 10. 보안 규칙
+## 11. 보안 규칙
 
 - 모든 사용자 데이터 접근은 인증 사용자 기준으로 제한해요.
 - conversation/message 조회와 삭제는 `user_id` ownership을 검증해요.

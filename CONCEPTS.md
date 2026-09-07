@@ -26,6 +26,13 @@ Retry Guidance는 불완전한 출력을 성공 경험으로 포장하지 않고
 
 ## Conversation
 
+## Home Learning Surface
+
+### Language Snack
+Home에서 보여 주는 짧은 언어 지식 카드예요.
+
+v1에서는 모든 학습자에게 공통 콘텐츠를 보여 주며, 언어쌍별 번역·개인화·이미 본 카드 제외는 후속 기능으로 분리해요.
+
 ### Learning Language Context
 학습자의 `native_language`, `target_language`, `feedback_language`를 묶은 언어 계약이에요.
 

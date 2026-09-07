@@ -61,7 +61,10 @@ lib/
     │   ├── domain/           # 대화·메시지·문법 피드백 모델
     │   └── presentation/     # Conversation 화면과 widgets
     ├── home/
-    │   └── presentation/widgets/
+    │   ├── application/      # 최근 대화와 언어 스낵의 독립 상태
+    │   ├── data/             # Home, language snack API·캐시 repository
+    │   ├── domain/           # 최근 대화와 language snack 모델
+    │   └── presentation/     # Home 화면과 widgets
     ├── roleplay_setup/
     │   ├── application/      # roleplay 상황 선택 상태
     │   ├── domain/           # preset, role_character helper
@@ -122,6 +125,7 @@ assets/
 | `AppSelectionChip` | 대화 방향 등의 단일 선택 chip |
 | `AppSelectionCard` | 대화 방식·롤플레이 상황 등의 선택 카드 |
 | `RecentConversationCard` | 대화 타입 뱃지 없이 title·preview 중심으로 보여주는 pastel 최근 대화 카드 |
+| `LanguageSnackCarousel` | 공통 언어 지식을 5초 간격과 수동 탐색으로 표시하는 Home 전용 파스텔 카드 |
 | `ChatBubble` | 사용자·AI 역할별 정렬과 semantic color, 문단-aware 텍스트가 적용된 말풍선 |
 | `GrammarFeedbackCard` | 사용자 메시지 아래의 접기·펼치기 가능한 교정 문장과 설명 |
 | `TypingIndicator` | Reduce Motion 설정을 따르는 AI 응답 대기 표시 |
@@ -159,7 +163,7 @@ Splash → Onboarding(최초 1회) → Google Login → Home
 - Splash: 저장된 세션과 onboarding 완료 여부 확인
 - Onboarding: 기기 locale 기반 언어쌍 기본값을 보여주고 4장 소개 후 완료 상태와 pending 언어쌍을 secure storage에 저장
 - Login: Google Sign-In SDK의 `idToken`/`accessToken`으로 Supabase 세션 생성 후 `/auth/me` 조회
-- Home: 사용자 이름, 활성 언어쌍, 최근 대화 5개를 표시하고, 없으면 시작 제안을 표시
+- Home: 사용자 이름, 활성 언어쌍, 공통 언어 스낵, 최근 대화 5개를 표시하고, 없으면 시작 제안을 표시. 스낵 요청이 실패하면 마지막 성공 목록만 secure storage에서 복원하고, 캐시도 없으면 스낵 영역만 숨겨요.
 - Home Navigation: `Chat`은 새 대화 시작 sheet, `History`는 대화 목록 화면, `Profile`은 account sheet를 열어요.
 - Account: 우상단 프로필 아바타 또는 `Profile` 탭에서 이름/email, 활성 언어쌍 변경, `LOG OUT`을 표시해요. 언어쌍 변경은 새 대화부터 적용되고 기존 대화는 시작 시점 언어쌍을 유지한다고 안내하며, 저장 후 profile을 다시 hydration해 Home의 활성 언어쌍을 갱신해요. 로그아웃 시 앱 token 삭제·서버 revoke·Google sign out을 best-effort로 처리해요.
 - Free Chat: Home sheet에서 Topic Input → Topic Prep으로 이동한 뒤 첫 답변으로 대화를 시작

@@ -1,8 +1,13 @@
 export 'application/recent_conversations_controller.dart';
+export 'application/language_snacks_controller.dart';
 export 'data/api_home_repository.dart';
+export 'data/api_language_snack_repository.dart';
+export 'data/language_snack_cache.dart';
 export 'domain/conversation_summary.dart';
 export 'domain/conversation_start_type.dart';
 export 'domain/home_repository.dart';
+export 'domain/language_snack.dart';
+export 'domain/language_snack_repository.dart';
 export 'presentation/account_sheet.dart';
 export 'presentation/conversation_start_sheet.dart';
 export 'presentation/home_screen.dart';

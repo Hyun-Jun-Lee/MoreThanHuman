@@ -230,6 +230,20 @@ class AppCopy {
       isKorean ? '대화 시작하기' : 'START CONVERSATION';
   String get startConversationTooltip =>
       isKorean ? '대화 시작하기' : 'Start conversation';
+  String get languageSnackLabel => isKorean ? '오늘의 언어' : 'Language note';
+  String get previousLanguageSnackTooltip =>
+      isKorean ? '이전 언어 카드' : 'Previous language snack';
+  String get nextLanguageSnackTooltip =>
+      isKorean ? '다음 언어 카드' : 'Next language snack';
+  String languageSnackPageTooltip(int page) =>
+      isKorean ? '$page번째 언어 카드 보기' : 'Show language snack $page';
+  String languageSnackSemanticLabel({
+    required String leftLabel,
+    required String leftWord,
+    required String rightLabel,
+    required String rightWord,
+    required String meaning,
+  }) => '$leftLabel $leftWord. $rightLabel $rightWord. $meaning';
   String get recentLabel => isKorean ? '최근 대화' : 'Recent';
   String get loadingRecentConversations =>
       isKorean ? '최근 대화를 불러오는 중...' : 'Loading recent conversations...';

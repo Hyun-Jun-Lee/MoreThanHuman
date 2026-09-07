@@ -15,6 +15,8 @@ from domains.auth.models import ProfileModel  # noqa: F401 - 테이블 생성용
 from domains.auth.router import router as auth_router
 from domains.conversation.router import router as conversation_router
 from domains.grammar.router import router as grammar_router
+from domains.language_snacks.models import LanguageSnackModel  # noqa: F401 - 테이블 생성용 import
+from domains.language_snacks.router import router as language_snacks_router
 from domains.search.router import router as search_router
 from domains.web.router import router as web_router
 from shared.exceptions import AppException, AuthenticationException, NotFoundException
@@ -96,6 +98,7 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 app.include_router(auth_router)
 app.include_router(conversation_router)
 app.include_router(grammar_router)
+app.include_router(language_snacks_router)
 app.include_router(search_router)
 
 # Web 라우터 등록 (마지막에 등록하여 API 우선순위 보장)

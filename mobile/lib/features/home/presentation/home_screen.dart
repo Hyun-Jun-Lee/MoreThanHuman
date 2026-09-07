@@ -3,11 +3,14 @@ import 'package:curitalk/core/copy/copy.dart';
 import 'package:curitalk/core/widgets/widgets.dart';
 import 'package:curitalk/features/auth/auth.dart';
 import 'package:curitalk/features/conversation/conversation.dart';
+import 'package:curitalk/features/home/application/language_snacks_controller.dart';
 import 'package:curitalk/features/home/application/recent_conversations_controller.dart';
 import 'package:curitalk/features/home/domain/conversation_summary.dart';
 import 'package:curitalk/features/home/domain/conversation_start_type.dart';
+import 'package:curitalk/features/home/domain/language_snack.dart';
 import 'package:curitalk/features/home/presentation/account_sheet.dart';
 import 'package:curitalk/features/home/presentation/conversation_start_sheet.dart';
+import 'package:curitalk/features/home/presentation/widgets/language_snack_carousel.dart';
 import 'package:curitalk/features/home/presentation/widgets/recent_conversation_card.dart';
 import 'package:curitalk/features/language/language.dart';
 import 'package:curitalk/features/topic_prep/topic_prep.dart';
@@ -32,6 +35,9 @@ class HomeScreen extends ConsumerWidget {
     final UserProfile? user = ref.watch(authControllerProvider).value?.user;
     final AsyncValue<List<ConversationSummary>> recent = ref.watch(
       recentConversationsControllerProvider,
+    );
+    final AsyncValue<List<LanguageSnack>> languageSnacks = ref.watch(
+      languageSnacksControllerProvider,
     );
     final bool isRecentRefreshing = ref.watch(
       recentConversationsRefreshingProvider,
@@ -70,6 +76,21 @@ class HomeScreen extends ConsumerWidget {
             ),
             sliver: SliverList(
               delegate: SliverChildListDelegate(<Widget>[
+                languageSnacks.when(
+                  loading: () => const SizedBox.shrink(),
+                  error: (_, _) => const SizedBox.shrink(),
+                  data: (List<LanguageSnack> snacks) {
+                    if (snacks.isEmpty) {
+                      return const SizedBox.shrink();
+                    }
+                    return Column(
+                      children: <Widget>[
+                        LanguageSnackCarousel(snacks: snacks),
+                        const SizedBox(height: AppSpacing.sectionGap),
+                      ],
+                    );
+                  },
+                ),
                 recent.when(
                   loading: () => AppAsyncStateView.loading(
                     message: copy.loadingRecentConversations,

@@ -212,6 +212,43 @@ void main() {
     expect(find.text('START CONVERSATION'), findsOneWidget);
   });
 
+  testWidgets('language snacks stay above recent conversations', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      _homeApp(
+        conversations: _recentConversations(count: 1),
+        languageSnackRepository: _FakeLanguageSnackRepository(
+          snacks: <LanguageSnack>[_languageSnack],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('crisps'), findsOneWidget);
+    expect(find.text('Conversation 1'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('crisps')).dy,
+      lessThan(tester.getTopLeft(find.text('Conversation 1')).dy),
+    );
+  });
+
+  testWidgets('language snacks do not replace the empty start CTA', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      _homeApp(
+        languageSnackRepository: _FakeLanguageSnackRepository(
+          snacks: <LanguageSnack>[_languageSnack],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('crisps'), findsOneWidget);
+    expect(find.text('START CONVERSATION'), findsOneWidget);
+  });
+
   testWidgets('Recent conversations collapse to four and toggle open', (
     WidgetTester tester,
   ) async {
@@ -413,6 +450,8 @@ Widget _homeApp({
   VoidCallback? onHistorySelected,
   List<ConversationSummary> conversations = const <ConversationSummary>[],
   HomeRepository? homeRepository,
+  LanguageSnackRepository? languageSnackRepository,
+  LanguageSnackCache? languageSnackCache,
   ConversationRepository? conversationRepository,
 }) {
   final _MemoryTokenStorage effectiveTokenStorage =
@@ -441,6 +480,12 @@ Widget _homeApp({
       ),
       homeRepositoryProvider.overrideWithValue(
         homeRepository ?? _FakeHomeRepository(conversations: conversations),
+      ),
+      languageSnackRepositoryProvider.overrideWithValue(
+        languageSnackRepository ?? _FakeLanguageSnackRepository(),
+      ),
+      languageSnackCacheProvider.overrideWithValue(
+        languageSnackCache ?? _FakeLanguageSnackCache(),
       ),
       if (conversationRepository != null)
         conversationRepositoryProvider.overrideWithValue(
@@ -622,6 +667,27 @@ class _FakeHomeRepository implements HomeRepository {
   }
 }
 
+class _FakeLanguageSnackRepository implements LanguageSnackRepository {
+  const _FakeLanguageSnackRepository({
+    this.snacks = const <LanguageSnack>[],
+  });
+
+  final List<LanguageSnack> snacks;
+
+  @override
+  Future<List<LanguageSnack>> listPublished() async => snacks;
+}
+
+class _FakeLanguageSnackCache implements LanguageSnackCache {
+  const _FakeLanguageSnackCache();
+
+  @override
+  Future<List<LanguageSnack>?> read() async => null;
+
+  @override
+  Future<void> write(List<LanguageSnack> snacks) async {}
+}
+
 class _RefreshableHomeRepository implements HomeRepository {
   Completer<List<ConversationSummary>>? _refreshCompleter;
   int _callCount = 0;
@@ -750,6 +816,20 @@ List<ConversationSummary> _recentConversations({required int count}) {
     );
   });
 }
+
+final LanguageSnack _languageSnack = LanguageSnack.fromJson(<String, dynamic>{
+  'id': '550e8400-e29b-41d4-a716-446655440000',
+  'category': 'Vocabulary',
+  'left_label': 'British English',
+  'left_word': 'crisps',
+  'right_label': 'American English',
+  'right_word': 'chips',
+  'meaning': '둘 다 감자칩을 뜻해요.',
+  'example': 'Would you like a bag of crisps?',
+  'published_at': '2026-09-06T12:00:00Z',
+  'created_at': '2026-09-06T12:00:00Z',
+  'updated_at': '2026-09-06T12:00:00Z',
+});
 
 class _MemoryTokenStorage implements TokenStorage {
   _MemoryTokenStorage({this.tokens, this.deviceId});

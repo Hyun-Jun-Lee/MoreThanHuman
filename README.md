@@ -105,7 +105,7 @@ MoreThanHuman/
 │   ├── config.py           # 환경 설정
 │   ├── database.py         # SQLAlchemy DB 연결 및 세션 관리
 │   ├── shared/             # 공통 타입, 예외, 유틸리티
-│   └── domains/            # auth, conversation, grammar, llm, search, web
+│   └── domains/            # auth, conversation, grammar, language_snacks, llm, search, web
 └── mobile/
     ├── android/            # Android runner
     ├── ios/                # iOS runner
@@ -220,6 +220,31 @@ Supabase access token으로 검증된 현재 사용자 프로필을 반환해요
 
 ```json
 { "app_locale": "ko" }
+```
+
+## Language Snack API
+
+Home의 언어 스낵은 모든 인증 사용자에게 같은 발행 목록을 반환해요. 현재 사용자 언어쌍으로 콘텐츠를 선택하거나 번역하지 않아요.
+
+### `GET /api/language-snacks/`
+
+인증이 필요해요. `published_at`이 있는 카드만 최신 순서(`published_at DESC`, `id DESC`)로 공통 success envelope의 `data` 배열에 반환해요.
+
+### `POST /api/language-snacks/`
+
+운영자 전용 생성 API예요. Flutter 앱은 호출하지 않으며 `Authorization` 대신 서버 환경의 `LANGUAGE_SNACKS_OPERATIONS_KEY`와 일치하는 헤더가 필요해요.
+
+```http
+X-Operations-Key: <server-only-operations-key>
+```
+
+운영 키가 없거나 일치하지 않으면 `403`이고, 유효한 본문은 즉시 발행되어 `201`과 함께 반환돼요. 필수 값은 `category`, 두 레이블·표현, `meaning`, `example`이며 빈 문자열 또는 길이 제한 위반은 `422`예요.
+
+```bash
+curl -X POST http://localhost:8010/api/language-snacks/ \
+  -H 'Content-Type: application/json' \
+  -H 'X-Operations-Key: <server-only-operations-key>' \
+  -d '{"category":"Vocabulary","left_label":"British English","left_word":"crisps","right_label":"American English","right_word":"chips","meaning":"둘 다 감자칩을 뜻해요.","example":"Would you like a bag of crisps?"}'
 ```
 
 ## Conversation API
@@ -648,6 +673,7 @@ Query:
 | `SUPABASE_AUTH_TIMEOUT_SECONDS` | 아니오 | `5` | Supabase Auth 검증 요청 timeout |
 | `SWAGGER_TOKEN_ISSUER_ENABLED` | 아니오 | `false` | `ENV`가 dev가 아닐 때 Swagger token helper를 명시적으로 활성화 |
 | `SWAGGER_TOKEN_ISSUER_SECRET` | 운영 helper 활성화 시 | 없음 | dev 외 환경에서 `/api/auth/swagger/token` 요청 body의 `secret`과 비교할 shared secret |
+| `LANGUAGE_SNACKS_OPERATIONS_KEY` | 언어 스낵 생성 사용 시 | 없음 | `POST /api/language-snacks/`의 `X-Operations-Key`와 비교하는 서버 전용 secret. Flutter에 절대 포함하지 않음 |
 | `AUTO_CREATE_TABLES` | 아니오 | `false` | Alembic 대신 SQLAlchemy `create_all`을 실행할지 여부. 로컬 임시 실행 외에는 `false` 권장 |
 | `JWT_SECRET_KEY` | 레거시 도구 사용 시 | 없음 | 기존 로컬 JWT tooling을 임시 유지할 때만 사용 |
 | `ENV` | 아니오 | `prod` | 실행 환경. `dev`/`development`/`local`이면 개발 전용 API 활성화 |

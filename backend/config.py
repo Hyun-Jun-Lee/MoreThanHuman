@@ -54,6 +54,9 @@ class Settings(BaseSettings):
     swagger_token_issuer_secret: str | None = None
     auto_create_tables: bool = False
 
+    # Operations-only API Settings
+    language_snacks_operations_key: str | None = None
+
     # Google OAuth2
     google_client_id: str | None = None
     google_client_secret: str | None = None
