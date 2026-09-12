@@ -5,6 +5,54 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  for (final type in ['regional_variant', 'usage_contrast', 'homonym']) {
+    testWidgets('$type fits 320px and large text with twelve cards', (
+      tester,
+    ) async {
+      tester.view.reset();
+      tester.view.physicalSize = const Size(320, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final json = _snackJson(
+        id: 'long',
+        leftWord: 'crisps',
+        rightWord: 'chips',
+      );
+      if (type != 'regional_variant') {
+        json['content_type'] = type;
+        json['payload'] = {
+          'items': List.generate(
+            2,
+            (i) => {
+              'expression': i == 0 ? 'speak' : 'talk',
+              type == 'homonym' ? 'meaning' : 'usage':
+                  '표현의 의미와 사용 맥락을 설명하는 문장이에요. ' * 3,
+              'example': 'This is an example sentence for the expression. ' * 3,
+              'example_translation': '이 표현을 사용한 예문이에요. ' * 3,
+            },
+          ),
+        };
+      }
+      final snack = LanguageSnack.fromJson(json);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: MediaQuery(
+            data: const MediaQueryData(textScaler: TextScaler.linear(2)),
+            child: Scaffold(
+              body: SingleChildScrollView(
+                child: LanguageSnackCarousel(snacks: List.filled(12, snack)),
+              ),
+            ),
+          ),
+        ),
+      );
+      expect(find.text('1 / 12'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    });
+  }
+
   testWidgets(
     'shows card content, navigation controls, and advances after five seconds',
     (WidgetTester tester) async {
@@ -120,13 +168,17 @@ Map<String, dynamic> _snackJson({
   required String rightWord,
 }) => <String, dynamic>{
   'id': id,
-  'category': 'Vocabulary',
-  'left_label': 'British English',
-  'left_word': leftWord,
-  'right_label': 'American English',
-  'right_word': rightWord,
-  'meaning': '둘 다 감자칩을 뜻해요.',
-  'example': 'Would you like a bag of crisps?',
+  'content_type': 'regional_variant',
+  'schema_version': 1,
+  'content_language': 'en',
+  'explanation_language': 'ko',
+  'payload': {
+    'meaning': '둘 다 감자칩을 뜻해요.',
+    'items': [
+      {'label': 'British English', 'expression': leftWord},
+      {'label': 'American English', 'expression': rightWord},
+    ],
+  },
   'published_at': '2026-09-06T12:00:00Z',
   'created_at': '2026-09-06T12:00:00Z',
   'updated_at': '2026-09-06T12:00:00Z',

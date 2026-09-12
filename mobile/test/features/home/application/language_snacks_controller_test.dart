@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'package:curitalk/features/home/application/language_snack_language.dart';
 import 'package:curitalk/features/home/application/language_snacks_controller.dart';
 import 'package:curitalk/features/home/data/language_snack_cache.dart';
 import 'package:curitalk/features/home/data/api_language_snack_repository.dart';
@@ -7,6 +9,47 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'switching language ignores a late previous-language response',
+    () async {
+      var language = 'en';
+      final repository = _DeferredRepository();
+      final cache = _FakeLanguageSnackCache();
+      final container = ProviderContainer(
+        overrides: [
+          languageSnacksEnabledProvider.overrideWithValue(true),
+          languageSnackLanguageProvider.overrideWith((ref) => language),
+          languageSnackRepositoryProvider.overrideWithValue(repository),
+          languageSnackCacheProvider.overrideWithValue(cache),
+        ],
+      );
+      addTearDown(container.dispose);
+      final subscription = container.listen(
+        languageSnacksControllerProvider,
+        (_, next) {},
+      );
+      addTearDown(subscription.close);
+      await Future<void>.delayed(Duration.zero);
+      language = 'ko';
+      container.invalidate(languageSnackLanguageProvider);
+      await Future<void>.delayed(Duration.zero);
+      final korean = LanguageSnack.fromJson(
+        _snackJson('배')
+          ..['content_language'] = 'ko'
+          ..['explanation_language'] = 'en',
+      );
+      repository.requests[1].complete([korean]);
+      expect(await container.read(languageSnacksControllerProvider.future), [
+        korean,
+      ]);
+      repository.requests[0].complete([_snack]);
+      await Future<void>.delayed(Duration.zero);
+      expect(container.read(languageSnacksControllerProvider).value, [korean]);
+      expect(cache.written, [korean]);
+      expect(cache.writeCount, 1);
+    },
+  );
+
   test(
     'authenticated controller fetches snacks and replaces the cache',
     () async {
@@ -121,6 +164,16 @@ class _FakeLanguageSnackRepository implements LanguageSnackRepository {
   }
 }
 
+class _DeferredRepository implements LanguageSnackRepository {
+  final requests = <Completer<List<LanguageSnack>>>[];
+  @override
+  Future<List<LanguageSnack>> listPublished() {
+    final request = Completer<List<LanguageSnack>>();
+    requests.add(request);
+    return request.future;
+  }
+}
+
 class _FakeLanguageSnackCache implements LanguageSnackCache {
   _FakeLanguageSnackCache({this.stored, this.readError});
 
@@ -147,13 +200,17 @@ final LanguageSnack _cachedSnack = LanguageSnack.fromJson(_snackJson('flat'));
 
 Map<String, dynamic> _snackJson(String leftWord) => <String, dynamic>{
   'id': '550e8400-e29b-41d4-a716-446655440000',
-  'category': 'Vocabulary',
-  'left_label': 'British English',
-  'left_word': leftWord,
-  'right_label': 'American English',
-  'right_word': 'chips',
-  'meaning': '둘 다 감자칩을 뜻해요.',
-  'example': 'Would you like a bag of crisps?',
+  'content_type': 'regional_variant',
+  'schema_version': 1,
+  'content_language': 'en',
+  'explanation_language': 'ko',
+  'payload': {
+    'meaning': '둘 다 감자칩을 뜻해요.',
+    'items': [
+      {'label': 'British English', 'expression': leftWord},
+      {'label': 'American English', 'expression': 'chips'},
+    ],
+  },
   'published_at': '2026-09-06T12:00:00Z',
   'created_at': '2026-09-06T12:00:00Z',
   'updated_at': '2026-09-06T12:00:00Z',

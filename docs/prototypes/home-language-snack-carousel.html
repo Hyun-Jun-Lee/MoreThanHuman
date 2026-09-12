@@ -1,0 +1,664 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>Curitalk Home - Language Snack Mockup</title>
+    <style>
+      :root {
+        --canvas: #ffffff;
+        --surface-soft: #f3f4f6;
+        --hairline: #d1d5db;
+        --ink: #000000;
+        --ink-secondary: #4b5563;
+        --lime-soft: #e5f5d3;
+        --lilac: #e8e4f4;
+        --blue: #dbeafe;
+        --cream: #f6f4eb;
+        --pink: #fbdccd;
+        --radius-card: 24px;
+        --screen-padding: 24px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        min-height: 100dvh;
+        margin: 0;
+        color: var(--ink);
+        background: var(--surface-soft);
+        font-family: Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI",
+          sans-serif;
+      }
+
+      button {
+        font: inherit;
+      }
+
+      .app {
+        position: relative;
+        width: min(100%, 480px);
+        min-height: 100dvh;
+        margin: 0 auto;
+        padding-bottom: 156px;
+        overflow: hidden;
+        background: var(--canvas);
+      }
+
+      .topbar {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: calc(20px + env(safe-area-inset-top)) var(--screen-padding) 16px;
+      }
+
+      .wordmark {
+        flex: 1;
+        font-size: 24px;
+        font-weight: 800;
+        letter-spacing: 0;
+      }
+
+      .language-pair {
+        padding: 8px 12px;
+        border-radius: 9999px;
+        color: var(--ink-secondary);
+        background: var(--surface-soft);
+        font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.7px;
+      }
+
+      .avatar {
+        display: grid;
+        width: 36px;
+        height: 36px;
+        padding: 0;
+        place-items: center;
+        border: 0;
+        border-radius: 50%;
+        color: var(--ink);
+        background: var(--pink);
+        font-size: 14px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      main {
+        padding: 32px var(--screen-padding) 0;
+      }
+
+      .section-label {
+        margin: 0 0 16px;
+        font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 1.2px;
+        text-transform: uppercase;
+      }
+
+      .language-card {
+        position: relative;
+        min-height: 278px;
+        padding: 24px;
+        overflow: hidden;
+        border-radius: var(--radius-card);
+        background: var(--lilac);
+      }
+
+      .card-topline {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .card-kicker {
+        margin: 0;
+        font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 1.2px;
+        text-transform: uppercase;
+      }
+
+      .slide-number {
+        margin: 0;
+        color: var(--ink-secondary);
+        font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12px;
+        letter-spacing: 0.7px;
+      }
+
+      .term-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1fr);
+        align-items: end;
+        gap: 8px;
+        margin-top: 26px;
+      }
+
+      .term {
+        min-width: 0;
+      }
+
+      .term:last-child {
+        text-align: right;
+      }
+
+      .country {
+        display: block;
+        margin-bottom: 7px;
+        color: var(--ink-secondary);
+        font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.7px;
+      }
+
+      .word {
+        display: block;
+        overflow-wrap: anywhere;
+        font-size: 30px;
+        font-weight: 700;
+        letter-spacing: 0;
+        line-height: 1.15;
+      }
+
+      .equation {
+        padding-bottom: 2px;
+        text-align: center;
+        font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 20px;
+        font-weight: 600;
+        line-height: 1;
+      }
+
+      .meaning {
+        min-height: 46px;
+        margin: 20px 0 0;
+        font-size: 16px;
+        line-height: 1.45;
+      }
+
+      .example {
+        margin: 8px 0 0;
+        color: var(--ink-secondary);
+        font-size: 14px;
+        line-height: 1.45;
+      }
+
+      .card-footer {
+        position: absolute;
+        right: 24px;
+        bottom: 20px;
+        left: 24px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .pager {
+        display: flex;
+        flex: 1;
+        gap: 6px;
+      }
+
+      .pager-dot {
+        position: relative;
+        width: 100%;
+        height: 5px;
+        padding: 0;
+        overflow: hidden;
+        border: 0;
+        border-radius: 9999px;
+        background: rgb(0 0 0 / 16%);
+        cursor: pointer;
+      }
+
+      .pager-dot::after {
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: 0;
+        border-radius: inherit;
+        background: var(--ink);
+        content: "";
+      }
+
+      .pager-dot.is-complete::after {
+        width: 100%;
+      }
+
+      .pager-dot.is-active::after {
+        animation: advance 5s linear forwards;
+      }
+
+      .language-card.is-paused .pager-dot.is-active::after {
+        animation-play-state: paused;
+      }
+
+      .pager-dot:focus-visible,
+      .control-button:focus-visible,
+      .avatar:focus-visible,
+      .nav-item:focus-visible,
+      .fab:focus-visible {
+        outline: 2px solid var(--ink);
+        outline-offset: 3px;
+      }
+
+      .control-button {
+        display: grid;
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        place-items: center;
+        border: 1px solid rgb(0 0 0 / 20%);
+        border-radius: 50%;
+        color: var(--ink);
+        background: transparent;
+        font-size: 19px;
+        line-height: 1;
+        cursor: pointer;
+      }
+
+      .control-button:active,
+      .avatar:active,
+      .nav-item:active,
+      .fab:active {
+        transform: scale(0.98);
+      }
+
+      .recent {
+        margin-top: 48px;
+      }
+
+      .recent-list {
+        display: grid;
+        gap: 16px;
+      }
+
+      .conversation-card {
+        min-height: 128px;
+        padding: 24px;
+        border-radius: var(--radius-card);
+      }
+
+      .conversation-card.lime {
+        background: var(--lime-soft);
+      }
+
+      .conversation-card.blue {
+        background: var(--blue);
+      }
+
+      .conversation-category {
+        margin: 0 0 10px;
+        color: var(--ink-secondary);
+        font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 1.2px;
+      }
+
+      .conversation-title {
+        margin: 0;
+        font-size: 20px;
+        font-weight: 700;
+        line-height: 1.25;
+      }
+
+      .conversation-preview {
+        margin: 7px 0 0;
+        color: var(--ink-secondary);
+        font-size: 14px;
+        line-height: 1.45;
+      }
+
+      .fab {
+        position: fixed;
+        z-index: 2;
+        bottom: 54px;
+        left: 50%;
+        display: grid;
+        width: 52px;
+        height: 52px;
+        padding: 0;
+        place-items: center;
+        border: 0;
+        border-radius: 50%;
+        color: var(--canvas);
+        background: var(--ink);
+        font-size: 30px;
+        font-weight: 300;
+        line-height: 1;
+        cursor: pointer;
+        transform: translateX(-50%);
+      }
+
+      .bottom-nav {
+        position: fixed;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        display: flex;
+        justify-content: center;
+        height: calc(72px + env(safe-area-inset-bottom));
+        padding-bottom: env(safe-area-inset-bottom);
+        border-top: 1px solid var(--hairline);
+        background: rgb(255 255 255 / 96%);
+      }
+
+      .bottom-nav-inner {
+        display: grid;
+        width: min(100%, 480px);
+        grid-template-columns: repeat(4, 1fr);
+        padding: 7px 20px 0;
+      }
+
+      .nav-item {
+        display: grid;
+        align-content: start;
+        justify-items: center;
+        gap: 2px;
+        padding: 3px 0;
+        border: 0;
+        color: var(--ink-secondary);
+        background: transparent;
+        cursor: pointer;
+      }
+
+      .nav-item.is-active {
+        color: var(--ink);
+      }
+
+      .nav-icon {
+        height: 28px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 22px;
+        line-height: 1;
+      }
+
+      .nav-label {
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 1.2;
+      }
+
+      @keyframes advance {
+        from {
+          width: 0;
+        }
+
+        to {
+          width: 100%;
+        }
+      }
+
+      @media (min-width: 481px) {
+        .app {
+          box-shadow: 0 0 0 1px var(--hairline);
+        }
+
+        .bottom-nav {
+          background: transparent;
+          border-top: 0;
+          pointer-events: none;
+        }
+
+        .bottom-nav-inner,
+        .fab {
+          pointer-events: auto;
+        }
+
+        .bottom-nav-inner {
+          background: rgb(255 255 255 / 96%);
+          border-top: 1px solid var(--hairline);
+        }
+      }
+
+      @media (max-width: 360px) {
+        .topbar,
+        main {
+          padding-right: 16px;
+          padding-left: 16px;
+        }
+
+        .word {
+          font-size: 26px;
+        }
+
+        .language-card {
+          min-height: 288px;
+          padding: 20px;
+        }
+
+        .card-footer {
+          right: 20px;
+          left: 20px;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          scroll-behavior: auto !important;
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.01ms !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <div class="wordmark">CURITALK</div>
+        <span class="language-pair">KOR - ENG</span>
+        <button class="avatar" type="button" aria-label="프로필 열기">H</button>
+      </header>
+
+      <main>
+        <section aria-labelledby="language-note-title">
+          <h1 class="section-label" id="language-note-title">오늘의 언어 노트</h1>
+          <article class="language-card" id="language-card" aria-roledescription="carousel">
+            <div class="card-topline">
+              <p class="card-kicker">English, two ways</p>
+              <p class="slide-number" id="slide-number">1 / 4</p>
+            </div>
+
+            <div id="slide-content" aria-live="off"></div>
+
+            <div class="card-footer">
+              <div class="pager" id="pager" aria-label="언어 노트 슬라이드"></div>
+              <button class="control-button" id="previous-slide" type="button" aria-label="이전 언어 노트" title="이전 언어 노트">&#8249;</button>
+              <button class="control-button" id="next-slide" type="button" aria-label="다음 언어 노트" title="다음 언어 노트">&#8250;</button>
+            </div>
+          </article>
+        </section>
+
+        <section class="recent" aria-labelledby="recent-title">
+          <h2 class="section-label" id="recent-title">최근 대화</h2>
+          <div class="recent-list">
+            <article class="conversation-card lime">
+              <p class="conversation-category">NEWS</p>
+              <h3 class="conversation-title">이번 주 AI 뉴스</h3>
+              <p class="conversation-preview">방금 전 대화했어요</p>
+            </article>
+            <article class="conversation-card blue">
+              <p class="conversation-category">TRAVEL</p>
+              <h3 class="conversation-title">오사카 맛집 여행</h3>
+              <p class="conversation-preview">12개의 메시지를 주고받았어요</p>
+            </article>
+          </div>
+        </section>
+      </main>
+
+      <button class="fab" type="button" aria-label="대화 시작하기" title="대화 시작하기">+</button>
+    </div>
+
+    <nav class="bottom-nav" aria-label="주요 탐색">
+      <div class="bottom-nav-inner">
+        <button class="nav-item is-active" type="button" aria-current="page">
+          <span class="nav-icon" aria-hidden="true">⌂</span>
+          <span class="nav-label">홈</span>
+        </button>
+        <button class="nav-item" type="button">
+          <span class="nav-icon" aria-hidden="true">□</span>
+          <span class="nav-label">대화</span>
+        </button>
+        <button class="nav-item" type="button">
+          <span class="nav-icon" aria-hidden="true">↶</span>
+          <span class="nav-label">기록</span>
+        </button>
+        <button class="nav-item" type="button">
+          <span class="nav-icon" aria-hidden="true">○</span>
+          <span class="nav-label">프로필</span>
+        </button>
+      </div>
+    </nav>
+
+    <script>
+      const slides = [
+        {
+          leftLabel: "UK ENGLISH",
+          leftWord: "crisps",
+          rightLabel: "US ENGLISH",
+          rightWord: "chips",
+          meaning: "얇고 바삭한 감자 과자",
+          example: "영국에서 chips는 보통 감자튀김을 말해요.",
+        },
+        {
+          leftLabel: "UK ENGLISH",
+          leftWord: "lift",
+          rightLabel: "US ENGLISH",
+          rightWord: "elevator",
+          meaning: "층과 층 사이를 오가는 승강기",
+          example: "Take the lift to the third floor.",
+        },
+        {
+          leftLabel: "UK ENGLISH",
+          leftWord: "holiday",
+          rightLabel: "US ENGLISH",
+          rightWord: "vacation",
+          meaning: "일상에서 벗어나 쉬는 여행 또는 휴가",
+          example: "We're going on holiday next week.",
+        },
+        {
+          leftLabel: "UK ENGLISH",
+          leftWord: "rubbish",
+          rightLabel: "US ENGLISH",
+          rightWord: "trash",
+          meaning: "버리거나 쓸모없는 물건",
+          example: "Could you take out the rubbish?",
+        },
+      ];
+
+      const duration = 5000;
+      const card = document.querySelector("#language-card");
+      const slideContent = document.querySelector("#slide-content");
+      const pager = document.querySelector("#pager");
+      const slideNumber = document.querySelector("#slide-number");
+      const previousButton = document.querySelector("#previous-slide");
+      const nextButton = document.querySelector("#next-slide");
+      const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+      let currentIndex = 0;
+      let timer;
+      let paused = reducedMotion.matches;
+
+      function render() {
+        const slide = slides[currentIndex];
+        slideContent.innerHTML = `
+          <div class="term-grid">
+            <div class="term">
+              <span class="country">${slide.leftLabel}</span>
+              <strong class="word">${slide.leftWord}</strong>
+            </div>
+            <span class="equation" aria-hidden="true">=</span>
+            <div class="term">
+              <span class="country">${slide.rightLabel}</span>
+              <strong class="word">${slide.rightWord}</strong>
+            </div>
+          </div>
+          <p class="meaning">${slide.meaning}</p>
+          <p class="example">${slide.example}</p>
+        `;
+        slideNumber.textContent = `${currentIndex + 1} / ${slides.length}`;
+        pager.innerHTML = slides
+          .map(
+            (_, index) => `
+              <button
+                class="pager-dot${index < currentIndex ? " is-complete" : ""}${index === currentIndex ? " is-active" : ""}"
+                type="button"
+                aria-label="${index + 1}번째 언어 노트 보기"
+                aria-current="${index === currentIndex ? "true" : "false"}"
+              ></button>
+            `,
+          )
+          .join("");
+        pager.querySelectorAll("button").forEach((button, index) => {
+          button.addEventListener("click", () => selectSlide(index));
+        });
+        card.classList.toggle("is-paused", paused);
+      }
+
+      function stopTimer() {
+        window.clearInterval(timer);
+      }
+
+      function startTimer() {
+        stopTimer();
+        if (!paused) {
+          timer = window.setInterval(() => selectSlide(currentIndex + 1), duration);
+        }
+      }
+
+      function selectSlide(index) {
+        currentIndex = (index + slides.length) % slides.length;
+        render();
+        startTimer();
+      }
+
+      function pause() {
+        if (reducedMotion.matches) return;
+        paused = true;
+        stopTimer();
+        card.classList.add("is-paused");
+      }
+
+      function resume() {
+        if (reducedMotion.matches || document.hidden) return;
+        paused = false;
+        card.classList.remove("is-paused");
+        render();
+        startTimer();
+      }
+
+      previousButton.addEventListener("click", () => selectSlide(currentIndex - 1));
+      nextButton.addEventListener("click", () => selectSlide(currentIndex + 1));
+      card.addEventListener("mouseenter", pause);
+      card.addEventListener("mouseleave", resume);
+      card.addEventListener("focusin", pause);
+      card.addEventListener("focusout", () => {
+        window.setTimeout(() => {
+          if (!card.contains(document.activeElement)) resume();
+        }, 0);
+      });
+      document.addEventListener("visibilitychange", () => {
+        if (document.hidden) pause();
+        else resume();
+      });
+      reducedMotion.addEventListener("change", (event) => {
+        paused = event.matches;
+        render();
+        startTimer();
+      });
+
+      render();
+      startTimer();
+    </script>
+  </body>
+</html>

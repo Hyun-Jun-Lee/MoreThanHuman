@@ -1,6 +1,6 @@
 # MoreThanHuman Backend DSL
 
-> 최종 갱신: 2026-07-20 · 범위: FastAPI 백엔드 API + Flutter 모바일 연동
+> 최종 갱신: 2026-09-12 · 범위: FastAPI 백엔드 API + Flutter 모바일 연동
 
 사용자 클라이언트는 `mobile/`의 Flutter 기반 모바일 앱으로 개발해요. 이 문서는 모바일 앱이 연동할 백엔드 도메인, 데이터 모델, API 계약을 정의해요.
 
@@ -79,17 +79,34 @@ database Schema {
 
   table language_snacks {
     id: UUID PRIMARY KEY
-    category: STRING NOT NULL
-    left_label: STRING NOT NULL
-    left_word: STRING NOT NULL
-    right_label: STRING NOT NULL
-    right_word: STRING NOT NULL
-    meaning: STRING NOT NULL
-    example: STRING NOT NULL
+    content_type: regional_variant | usage_contrast | homonym
+    schema_version: INTEGER
+    content_language: en | ko
+    explanation_language: en | ko
+    identity: JSONB NOT NULL
+    identity_version: INTEGER
+    knowledge_key: STRING(64) UNIQUE NOT NULL
+    knowledge_summary: TEXT NOT NULL
+    payload: JSONB?
+    status: reserved | draft | published | archived
+    origin: manual | scheduled
+    generation_run_id: UUID? FOREIGN KEY -> language_snack_generation_runs(id)
+    generation_metadata: JSONB NOT NULL
     published_at: DATETIME?
     created_at: DATETIME
     updated_at: DATETIME
-    INDEX (published_at, id)
+    INDEX (content_language, status, published_at, id)
+  }
+
+  table language_snack_generation_runs {
+    id: UUID PRIMARY KEY
+    run_key: STRING(160) UNIQUE NOT NULL
+    content_language: en | ko
+    status: running | succeeded | partial | failed
+    target_per_type: INTEGER
+    metrics: JSONB NOT NULL
+    started_at: DATETIME
+    finished_at: DATETIME?
   }
 }
 ```
@@ -164,32 +181,64 @@ module Auth {
 
 ## 5. Language Snack 모듈
 
+> v2 · 2026-09-12: 고정 좌우 필드 대신 세 유형 JSONB와 학습 언어별 feed를 제공해요.
+
 ```dsl
 module LanguageSnack {
-  router LanguageSnackRouter {
-    GET  /api/language-snacks/ -> listPublishedLanguageSnacks
-    POST /api/language-snacks/ -> createLanguageSnack
-  }
+  GET   /api/v2/language-snacks/?limit=12 -> SuccessResponse<List<LanguageSnack>>
+  POST  /api/v2/language-snacks/ -> SuccessResponse<LanguageSnack> [201]
+  PATCH /api/v2/language-snacks/{id}/status/ { status: "archived" }
+        -> SuccessResponse<{ id: UUID, status: "archived" }>
+  GET   /api/language-snacks/ -> SuccessResponse<[]> [legacy]
+  POST  /api/language-snacks/ -> 410 [legacy]
 
   type LanguageSnackCreate {
-    category: String(1..40)
-    left_label: String(1..48)
-    left_word: String(1..80)
-    right_label: String(1..48)
-    right_word: String(1..80)
+    content_type: "regional_variant" | "usage_contrast" | "homonym"
+    schema_version: 1 = 1
+    content_language: "en" | "ko"
+    explanation_language: "en" | "ko"
+    identity: KnowledgeIdentity
+    knowledge_summary: String(1..240)
+    payload: RegionalPayload | UsagePayload | HomonymPayload
+  }
+
+  type KnowledgeIdentity {
+    relation: "regional_equivalent" | "usage_difference" | "same_sound"
+    entries: exactly 2 * {
+      language: "en" | "ko"
+      expression: String(1..80)
+      sense: String(1..160)
+      variety?: String(1..80)
+    }
+    contrast?: String(1..160)
+    pronunciation?: String(1..80)
+    pronunciation_standard?: String(1..80)
+  }
+
+  type RegionalPayload {
     meaning: String(1..160)
-    example: String(1..240)
+    items: exactly 2 * { label: String(1..48), expression: String(1..80) }
+  }
+  type UsagePayload {
+    items: exactly 2 * {
+      expression: String(1..80), usage: String(1..160)
+      example: String(1..240), example_translation?: String(1..240)
+    }
+  }
+  type HomonymPayload {
+    items: exactly 2 * {
+      expression: String(1..80), meaning: String(1..160)
+      example: String(1..240), example_translation?: String(1..240)
+    }
   }
 
   type LanguageSnack {
     id: UUID
-    category: String
-    left_label: String
-    left_word: String
-    right_label: String
-    right_word: String
-    meaning: String
-    example: String
+    content_type: "regional_variant" | "usage_contrast" | "homonym"
+    schema_version: 1
+    content_language: "en" | "ko"
+    explanation_language: "en" | "ko"
+    payload: RegionalPayload | UsagePayload | HomonymPayload
     published_at: DateTime
     created_at: DateTime
     updated_at: DateTime
@@ -197,8 +246,17 @@ module LanguageSnack {
 }
 ```
 
-`GET /api/language-snacks/`는 Supabase Bearer 인증이 필요하고 발행된 공통 카드만 `SuccessResponse<List<LanguageSnack>>`로 반환해요. profile의 언어쌍은 조회 조건에 사용하지 않아요.
-`POST /api/language-snacks/`는 Bearer 인증 대신 `X-Operations-Key`가 서버의 `LANGUAGE_SNACKS_OPERATIONS_KEY`와 일치할 때만 HTTP `201`로 즉시 발행 카드를 생성해요. 운영 키가 비어 있거나 일치하지 않으면 `403`이고 Flutter에는 이 값을 전달하지 않아요.
+GET은 Supabase Bearer 인증 후 profile.target_language와 content_language가 같은 published 카드만 `published_at DESC, id DESC`로 반환해요. limit은 1..30, 기본 12이며 클라이언트 언어 query로 프로필을 우회하지 않아요. identity·knowledge_key·생성 메타데이터는 공개 응답에서 제외해요.
+
+POST/PATCH는 서버 `LANGUAGE_SNACKS_OPERATIONS_KEY`와 일치하는 `X-Operations-Key`가 필요해요. 일반 Bearer는 운영 권한을 대신하지 않아요. 키 미설정·불일치 403, 중복 지식 409, 입력/품질 오류와 불확실 판정 422, LLM 장애·잠금 충돌·예산 초과 503, 없는 항목 보관 404예요.
+
+content_type과 relation은 위 나열 순서대로 대응해요. 모든 entry.language는 content_language와 같아야 하며 regional은 각 variety, usage는 contrast, homonym은 pronunciation과 pronunciation_standard가 필수예요. 영어 동음은 미국 영어, 한국어는 현대 표준어 기준으로 생성·검증하고 발음이 다른 동형이의어는 제외해요. payload의 두 expression은 identity의 expression과 순서 무관하게 같아야 해요. 필수 문자열은 양끝 공백을 제거하며 공백만 있는 값·미지정 필드·미지원 버전은 거부해요.
+
+현재 explanation_language는 content_language의 반대 지원 언어로 고정돼요(`en -> ko`, `ko -> en`). expression·example은 학습 언어, label·meaning·usage·example_translation은 설명 언어예요. 이는 앱 표시 언어나 언어쌍 ID가 아닌 콘텐츠 메타데이터예요.
+
+운영 POST와 주간 생성은 같은 중복 검사와 PostgreSQL 전용 세션 잠금을 사용해요. 전체 payload가 아닌 정규화 identity를 SHA-256으로 해시하고 UNIQUE로 보호해요. 의미 중복 검사는 같은 언어의 모든 유형·상태 이력을 LLM에 전달해 new만 허용해요. 생성 후보를 reserved로 먼저 저장하고 본문·품질 검증 후 published로 전환해요. draft는 후속 편집용으로 예약된 상태이며 현재 자동 발행 경로에서 별도로 저장하지 않아요. archived도 중복 이력에 남고 즉시 오프라인 캐시 회수는 하지 않아요. LLM의 의미·품질 판단은 오류가 남을 수 있어요.
+
+구버전 GET은 인증된 빈 목록, 구버전 POST는 운영 키 확인 후 410을 반환해요. 새 앱은 미지원 type/schema_version을 건너뛰고 알려진 유형의 손상된 응답에는 마지막 성공 캐시를 사용해요.
 
 ## 6. Conversation 모듈
 

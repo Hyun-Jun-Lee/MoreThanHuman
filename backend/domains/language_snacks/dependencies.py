@@ -1,4 +1,5 @@
 """Language snack 라우트 의존성."""
+
 import secrets
 from typing import Annotated
 
@@ -6,7 +7,6 @@ from fastapi import Depends, Header, HTTPException, status
 from sqlalchemy.orm import Session
 
 from config import get_settings
-from database import get_db
 from domains.language_snacks.repository import LanguageSnackRepository
 from domains.language_snacks.service import LanguageSnackService
 
@@ -23,12 +23,18 @@ def get_language_snack_operations_key() -> str | None:
 
 def require_language_snack_operations_key(
     operations_key: str | None = Header(default=None, alias="X-Operations-Key"),
-    configured_key: Annotated[str | None, Depends(get_language_snack_operations_key)] = None,
+    configured_key: Annotated[
+        str | None, Depends(get_language_snack_operations_key)
+    ] = None,
 ) -> None:
     """생성 API를 서버의 운영 키로만 보호한다."""
     configured_key = (configured_key or "").strip()
     supplied_key = (operations_key or "").strip()
-    if not configured_key or not supplied_key or not secrets.compare_digest(supplied_key, configured_key):
+    if (
+        not configured_key
+        or not supplied_key
+        or not secrets.compare_digest(supplied_key, configured_key)
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Valid operations key is required.",

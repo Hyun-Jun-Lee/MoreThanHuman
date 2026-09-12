@@ -146,19 +146,21 @@ class _LanguageSnackCarouselState extends State<LanguageSnackCarousel>
         const SizedBox(height: AppSpacing.lg),
         Semantics(
           container: true,
-          label: copy.languageSnackSemanticLabel(
-            leftLabel: snack.leftLabel,
-            leftWord: snack.leftWord,
-            rightLabel: snack.rightLabel,
-            rightWord: snack.rightWord,
-            meaning: snack.meaning,
-          ),
+          label: snack.semanticLabel,
+          excludeSemantics: true,
           child: AnimatedSwitcher(
             duration: transitionDuration,
-            child: _LanguageSnackCard(
+            child: IndexedStack(
               key: ValueKey<String>(snack.id),
-              snack: snack,
-              color: _colors[_currentIndex % _colors.length],
+              index: _currentIndex,
+              // 가장 긴 카드 높이를 유지해 자동 전환 시 최근 대화가 움직이지 않아요.
+              children: List.generate(
+                widget.snacks.length,
+                (index) => _LanguageSnackCard(
+                  snack: widget.snacks[index],
+                  color: _colors[index % _colors.length],
+                ),
+              ),
             ),
           ),
         ),
@@ -174,29 +176,39 @@ class _LanguageSnackCarouselState extends State<LanguageSnackCarousel>
                   icon: const Icon(Icons.arrow_back_rounded),
                 ),
                 Expanded(
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: List<Widget>.generate(widget.snacks.length, (
-                      int index,
-                    ) {
-                      final bool isSelected = index == _currentIndex;
-                      return IconButton(
-                        tooltip: copy.languageSnackPageTooltip(index + 1),
-                        onPressed: () => _selectSnack(index),
-                        constraints: const BoxConstraints.tightFor(
-                          width: AppSize.touchTarget,
-                          height: AppSize.touchTarget,
+                  child: widget.snacks.length > 4
+                      ? Center(
+                          child: Text(
+                            '${_currentIndex + 1} / ${widget.snacks.length}',
+                            style: AppTypography.captionMono,
+                          ),
+                        )
+                      : Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: List<Widget>.generate(
+                            widget.snacks.length,
+                            (int index) {
+                              final bool isSelected = index == _currentIndex;
+                              return IconButton(
+                                tooltip: copy.languageSnackPageTooltip(
+                                  index + 1,
+                                ),
+                                onPressed: () => _selectSnack(index),
+                                constraints: const BoxConstraints.tightFor(
+                                  width: AppSize.touchTarget,
+                                  height: AppSize.touchTarget,
+                                ),
+                                icon: Icon(
+                                  Icons.circle,
+                                  size: isSelected ? 10 : 7,
+                                  color: isSelected
+                                      ? Theme.of(context).colorScheme.onSurface
+                                      : Theme.of(context).colorScheme.outline,
+                                ),
+                              );
+                            },
+                          ),
                         ),
-                        icon: Icon(
-                          Icons.circle,
-                          size: isSelected ? 10 : 7,
-                          color: isSelected
-                              ? Theme.of(context).colorScheme.onSurface
-                              : Theme.of(context).colorScheme.outline,
-                        ),
-                      );
-                    }),
-                  ),
                 ),
                 IconButton(
                   tooltip: copy.nextLanguageSnackTooltip,
@@ -213,102 +225,91 @@ class _LanguageSnackCarouselState extends State<LanguageSnackCarousel>
 }
 
 class _LanguageSnackCard extends StatelessWidget {
-  const _LanguageSnackCard({
-    required this.snack,
-    required this.color,
-    super.key,
-  });
-
+  const _LanguageSnackCard({required this.snack, required this.color});
   final LanguageSnack snack;
   final Color color;
 
   @override
   Widget build(BuildContext context) {
-    final Color foreground = Theme.of(context).colorScheme.onSurface;
     return AppColorBlockCard(
       color: color,
-      child: SizedBox(
-        width: double.infinity,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Text(
-              snack.category.toUpperCase(),
-              style: AppTypography.captionMono.copyWith(color: foreground),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            Row(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final stacked =
+              snack.contentType != 'regional_variant' ||
+              constraints.maxWidth < 300 ||
+              MediaQuery.textScalerOf(context).scale(16) > 21;
+          final expressions = snack.items
+              .map((item) => _Expression(item: item))
+              .toList();
+          return SizedBox(
+            width: double.infinity,
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Expanded(
-                  child: _Expression(
-                    label: snack.leftLabel,
-                    word: snack.leftWord,
-                  ),
+              children: [
+                Text(
+                  AppCopy.of(context).languageSnackTypeLabel(snack.contentType),
+                  style: AppTypography.captionMono,
                 ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: _Expression(
-                    label: snack.rightLabel,
-                    word: snack.rightWord,
+                const SizedBox(height: AppSpacing.md),
+                if (stacked)
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      expressions[0],
+                      const SizedBox(height: AppSpacing.lg),
+                      expressions[1],
+                    ],
+                  )
+                else
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: expressions[0]),
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(child: expressions[1]),
+                    ],
                   ),
-                ),
+                if (snack.meaning != null) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  const Divider(height: 1),
+                  const SizedBox(height: AppSpacing.md),
+                  Text(snack.meaning!, style: AppTypography.bodySm),
+                ],
               ],
             ),
-            const SizedBox(height: AppSpacing.md),
-            Divider(color: foreground.withValues(alpha: 0.16), height: 1),
-            const SizedBox(height: AppSpacing.md),
-            Text(
-              snack.meaning,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: AppTypography.bodySm.copyWith(color: foreground),
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              snack.example,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: AppTypography.bodySm.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                fontStyle: FontStyle.italic,
-              ),
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
 }
 
 class _Expression extends StatelessWidget {
-  const _Expression({required this.label, required this.word});
-
-  final String label;
-  final String word;
+  const _Expression({required this.item});
+  final SnackExpression item;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Text(
-          label.toUpperCase(),
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: AppTypography.captionMono.copyWith(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
+      children: [
+        if (item.label != null)
+          Text(item.label!, style: AppTypography.captionMono),
+        Text(item.expression, style: AppTypography.headlineMd),
+        if (item.usage != null || item.meaning != null) ...[
+          const SizedBox(height: AppSpacing.xs),
+          Text((item.usage ?? item.meaning)!, style: AppTypography.bodySm),
+        ],
+        if (item.example != null) ...[
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            item.example!,
+            style: AppTypography.bodySm.copyWith(fontStyle: FontStyle.italic),
           ),
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        Text(
-          word,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: AppTypography.headlineMd.copyWith(
-            color: Theme.of(context).colorScheme.onSurface,
-          ),
-        ),
+        ],
+        if (item.exampleTranslation != null)
+          Text(item.exampleTranslation!, style: AppTypography.bodySm),
       ],
     );
   }

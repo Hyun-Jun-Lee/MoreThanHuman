@@ -668,9 +668,7 @@ class _FakeHomeRepository implements HomeRepository {
 }
 
 class _FakeLanguageSnackRepository implements LanguageSnackRepository {
-  const _FakeLanguageSnackRepository({
-    this.snacks = const <LanguageSnack>[],
-  });
+  const _FakeLanguageSnackRepository({this.snacks = const <LanguageSnack>[]});
 
   final List<LanguageSnack> snacks;
 
@@ -819,13 +817,17 @@ List<ConversationSummary> _recentConversations({required int count}) {
 
 final LanguageSnack _languageSnack = LanguageSnack.fromJson(<String, dynamic>{
   'id': '550e8400-e29b-41d4-a716-446655440000',
-  'category': 'Vocabulary',
-  'left_label': 'British English',
-  'left_word': 'crisps',
-  'right_label': 'American English',
-  'right_word': 'chips',
-  'meaning': '둘 다 감자칩을 뜻해요.',
-  'example': 'Would you like a bag of crisps?',
+  'content_type': 'regional_variant',
+  'schema_version': 1,
+  'content_language': 'en',
+  'explanation_language': 'ko',
+  'payload': {
+    'meaning': '둘 다 감자칩을 뜻해요.',
+    'items': [
+      {'label': 'British English', 'expression': 'crisps'},
+      {'label': 'American English', 'expression': 'chips'},
+    ],
+  },
   'published_at': '2026-09-06T12:00:00Z',
   'created_at': '2026-09-06T12:00:00Z',
   'updated_at': '2026-09-06T12:00:00Z',

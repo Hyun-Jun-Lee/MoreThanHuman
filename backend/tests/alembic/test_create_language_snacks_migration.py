@@ -23,7 +23,7 @@ def test_language_snacks_table_and_index_are_reversible(tmp_path):
     database_url = f"sqlite:///{database_path}"
 
     _run_alembic(database_url, "upgrade", "20260906_0001")
-    _run_alembic(database_url, "upgrade", "head")
+    _run_alembic(database_url, "upgrade", "20260906_0002")
 
     with sqlite3.connect(database_path) as connection:
         columns = {

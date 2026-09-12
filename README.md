@@ -224,28 +224,70 @@ Supabase access token으로 검증된 현재 사용자 프로필을 반환해요
 
 ## Language Snack API
 
-Home의 언어 스낵은 모든 인증 사용자에게 같은 발행 목록을 반환해요. 현재 사용자 언어쌍으로 콘텐츠를 선택하거나 번역하지 않아요.
+> v2 · 2026-09-12: JSONB 세 유형, 학습 언어별 조회, 주간 생성 작업 추가
 
-### `GET /api/language-snacks/`
+Home은 profile의 `target_language`와 같은 `content_language`의 발행 카드만 조회해요. 영어 콘텐츠의 설명은 한국어, 한국어 콘텐츠의 설명은 영어예요. 앱 표시 언어와는 별개이며 현재 런타임 번역은 하지 않아요.
 
-인증이 필요해요. `published_at`이 있는 카드만 최신 순서(`published_at DESC`, `id DESC`)로 공통 success envelope의 `data` 배열에 반환해요.
+| 메서드·경로 | 인증 | 동작 |
+|---|---|---|
+| GET `/api/v2/language-snacks/?limit=12` | Supabase Bearer | published만 최신순, 기본 12개·최대 30개 |
+| POST `/api/v2/language-snacks/` | X-Operations-Key | 지식 중복 검사·LLM 검증 후 201 자동 발행 |
+| PATCH `/api/v2/language-snacks/{id}/status/` | X-Operations-Key | `{"status":"archived"}`로 발행 취소 |
+| GET `/api/language-snacks/` | Supabase Bearer | 구버전 앱 호환용 빈 목록 |
+| POST `/api/language-snacks/` | X-Operations-Key | 410, v2로 전환 필요 |
 
-### `POST /api/language-snacks/`
-
-운영자 전용 생성 API예요. Flutter 앱은 호출하지 않으며 `Authorization` 대신 서버 환경의 `LANGUAGE_SNACKS_OPERATIONS_KEY`와 일치하는 헤더가 필요해요.
-
-```http
-X-Operations-Key: <server-only-operations-key>
-```
-
-운영 키가 없거나 일치하지 않으면 `403`이고, 유효한 본문은 즉시 발행되어 `201`과 함께 반환돼요. 필수 값은 `category`, 두 레이블·표현, `meaning`, `example`이며 빈 문자열 또는 길이 제한 위반은 `422`예요.
+운영 키는 서버의 `LANGUAGE_SNACKS_OPERATIONS_KEY`와 비교해요. 미설정·불일치는 403이며 Flutter에 포함하지 않아요. 중복은 409, 구조·품질·불확실한 중복 판단은 422, 생성 잠금·LLM·예산 문제는 503이에요. POST도 LLM 사용량이 발생해요. 세 유형의 전체 계약은 [DSL](docs/DSL.md#5-language-snack-모듈)에 있어요.
 
 ```bash
-curl -X POST http://localhost:8010/api/language-snacks/ \
+curl -X POST http://localhost:8010/api/v2/language-snacks/ \
   -H 'Content-Type: application/json' \
   -H 'X-Operations-Key: <server-only-operations-key>' \
-  -d '{"category":"Vocabulary","left_label":"British English","left_word":"crisps","right_label":"American English","right_word":"chips","meaning":"둘 다 감자칩을 뜻해요.","example":"Would you like a bag of crisps?"}'
+  -d '{
+    "content_type":"regional_variant",
+    "schema_version":1,
+    "content_language":"en",
+    "explanation_language":"ko",
+    "identity":{
+      "relation":"regional_equivalent",
+      "entries":[
+        {"language":"en","variety":"GB","expression":"crisps","sense":"potato_snack"},
+        {"language":"en","variety":"US","expression":"chips","sense":"potato_snack"}
+      ]
+    },
+    "knowledge_summary":"British crisps and American chips refer to thin fried potato snacks.",
+    "payload":{
+      "meaning":"둘 다 얇게 썰어 튀긴 감자칩을 뜻해요.",
+      "items":[{"label":"영국","expression":"crisps"},{"label":"미국","expression":"chips"}]
+    }
+  }'
 ```
+
+### 주간 생성 운영
+
+월요일 05:00 Asia/Seoul에 영어·한국어 각각 유형별 3개, 총 18개를 목표로 생성해요. 실패·중복·예산 초과 시 목표보다 적게 발행할 수 있어요. 모든 상태의 기존 지식 요약을 LLM에 전달하고 동일 identity 해시의 UNIQUE 제약과 의미 중복 검사를 함께 적용해요. 의미상 중복이나 내용 오류가 완전히 사라진다는 보장은 없어요.
+
+1. 기존 스낵 쓰기·cron을 중지하고 필요한 백업을 확보해요. API 이미지를 빌드해 재시작하면 기존 compose command가 Alembic을 실행해요. **revision `20260912_0001`은 기존 스낵을 모두 삭제하고 테이블을 교체해요.** 다른 도메인 데이터는 보존해요.
+2. `LANGUAGE_SNACKS_LOCK_DATABASE_URL`은 API와 **같은 DB**의 direct 또는 session pooling URL로 설정해요. `DATABASE_URL` 자체가 direct/session 연결이면 생략할 수 있어요. transaction pooling URL로 session advisory lock을 사용하면 안 돼요. API와 job에 같은 설정을 사용해요.
+3. 배포 후 아래 후보 미리보기·초기 생성을 수동 확인해요. **dry-run도 LLM을 호출하지만 DB에는 저장하지 않아요.** 실제 발행 표본에서 세 유형·두 언어의 정확성을 확인해요.
+4. [cron 예시](deploy/cron/language-snacks.cron.example)의 저장소·로그 경로, Docker PATH, cron 데몬 시간대를 확인한 뒤 서버 사용자 crontab에 등록해요. 예시는 UTC 일요일 20시이며 KST 데몬에서는 월요일 05시를 사용해요. 이 저장소 변경만으로 cron이 설치되지는 않아요.
+
+```bash
+docker compose up -d --build --force-recreate --no-deps api
+/bin/sh deploy/scripts/generate-language-snacks.sh --language en --dry-run
+/bin/sh deploy/scripts/generate-language-snacks.sh --run-key initial-v2
+```
+
+작업은 API 이미지의 별도 `snack-generator` 컨테이너에서 실행하며 migration과 웹 서버를 실행하지 않아요. `CURITALK_ENV_FILE`을 사용하는 서버는 cron에도 같은 절대 경로를 지정해야 해요.
+
+- 실행 키를 생략하면 가장 최근 월요일 05시 슬롯의 `weekly:YYYY-MM-DD:{en|ko}`를 사용해요. 같은 키·언어·수량 재실행은 같은 run을 재개하고 성공한 run에는 추가 생성하지 않아요. 수동 키에도 언어 suffix가 자동으로 붙어요.
+- `--language en|ko|all`, `--per-type 1..6`을 지원해요. 같은 실행 키에서 목표 수량을 바꾸면 409에 해당하는 오류로 종료해요. 지난 주 누락분을 다음 주에 자동 누적하지 않아요.
+- 예약을 먼저 재개하고 후보 라운드는 run당 최대 3회, 본문 생성은 예약당 최대 2회예요. API 일시 오류는 호출당 한 번 재시도해요. 호출·보수적 토큰 예산은 재실행에도 누적하고 시간 제한은 언어별 실행 시도에 적용해요. 예산을 다 쓴 run은 같은 설정에서 계속 재시도해도 진행하지 않아요.
+- stdout JSON에서 언어별 상태·발행 수·중복/불확실 판정 수·호출/토큰 사용량·오류 코드를 확인해요. `partial`/`failed`는 exit 1, 실행 중 잠금 충돌은 `skipped`예요. 로그 회전과 실패 알림은 서버 운영 도구에서 설정해요.
+- `history_budget_exceeded`는 이력을 자르지 않고 중단해요. 모델 컨텍스트·비용을 검토해 상한을 조정하거나 후속 검색 기반 설계를 적용해요.
+- 잘못된 발행은 PATCH로 보관해요. archived identity는 재생성하지 않으며 오프라인 캐시를 즉시 회수하지는 못해요. 수동 POST의 검증 실패도 identity를 보관하므로 같은 지식을 다시 등록할 수 없어요.
+- 롤백은 생성 작업을 중지하고 API를 정지한 뒤 **새 이미지로** `alembic downgrade 20260906_0002`를 실행하고 v1 이미지를 복원해요. downgrade도 모든 v2 스낵·생성 이력을 삭제하며 예전 스낵은 복원하지 않아요. 필요하면 사전 백업을 별도로 복원해요.
+
+구버전 앱은 정상 온라인 조회 후 스낵이 숨겨지고, 새 앱은 언어별 v2 캐시를 사용해요. 구버전 앱의 이미 저장된 오프라인 카드는 원격 삭제할 수 없어요.
 
 ## Conversation API
 
@@ -673,7 +715,15 @@ Query:
 | `SUPABASE_AUTH_TIMEOUT_SECONDS` | 아니오 | `5` | Supabase Auth 검증 요청 timeout |
 | `SWAGGER_TOKEN_ISSUER_ENABLED` | 아니오 | `false` | `ENV`가 dev가 아닐 때 Swagger token helper를 명시적으로 활성화 |
 | `SWAGGER_TOKEN_ISSUER_SECRET` | 운영 helper 활성화 시 | 없음 | dev 외 환경에서 `/api/auth/swagger/token` 요청 body의 `secret`과 비교할 shared secret |
-| `LANGUAGE_SNACKS_OPERATIONS_KEY` | 언어 스낵 생성 사용 시 | 없음 | `POST /api/language-snacks/`의 `X-Operations-Key`와 비교하는 서버 전용 secret. Flutter에 절대 포함하지 않음 |
+| `LANGUAGE_SNACKS_OPERATIONS_KEY` | 운영 API 사용 시 | 없음 | v2 POST/PATCH의 X-Operations-Key와 비교. Flutter에 포함 금지. CLI는 DB 직접 접근 |
+| `LANGUAGE_SNACKS_PROVIDER` | 아니오 | LLM_PROVIDER | 스낵 생성·중복/품질 검사 provider |
+| `LANGUAGE_SNACKS_MODEL` | 아니오 | 해당 provider 기본 모델 | 스낵 전용 모델 override |
+| `LANGUAGE_SNACKS_LOCK_DATABASE_URL` | transaction pooling 사용 시 | DATABASE_URL | 같은 DB의 direct/session 연결. API와 job에서 동일하게 사용 |
+| `LANGUAGE_SNACKS_PER_TYPE` | 아니오 | 3 | 언어별 유형별 목표 수량, 1..6 |
+| `LANGUAGE_SNACKS_MAX_CALLS` | 아니오 | 100 | 언어별 run의 누적 LLM 호출 상한 |
+| `LANGUAGE_SNACKS_MAX_TOKENS` | 아니오 | 250000 | 입력 UTF-8 바이트+출력 최대 토큰을 누적한 보수적 예산, 금액 상한이 아님 |
+| `LANGUAGE_SNACKS_HISTORY_BYTES` | 아니오 | 40000 | 전체 지식 이력 UTF-8 바이트 상한 |
+| `LANGUAGE_SNACKS_RUN_SECONDS` | 아니오 | 600 | 언어별 실행 시도 시간 상한(초), 각 LLM 요청은 최대 65초 |
 | `AUTO_CREATE_TABLES` | 아니오 | `false` | Alembic 대신 SQLAlchemy `create_all`을 실행할지 여부. 로컬 임시 실행 외에는 `false` 권장 |
 | `JWT_SECRET_KEY` | 레거시 도구 사용 시 | 없음 | 기존 로컬 JWT tooling을 임시 유지할 때만 사용 |
 | `ENV` | 아니오 | `prod` | 실행 환경. `dev`/`development`/`local`이면 개발 전용 API 활성화 |

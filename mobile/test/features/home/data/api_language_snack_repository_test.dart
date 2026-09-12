@@ -25,8 +25,8 @@ void main() {
 
       final snacks = await repository.listPublished();
 
-      expect(snacks.single.leftWord, 'crisps');
-      expect(adapter.lastRequest?.uri.path, '/api/language-snacks/');
+      expect(snacks.single.items[0].expression, 'crisps');
+      expect(adapter.lastRequest?.uri.path, '/api/v2/language-snacks/');
       expect(
         adapter.lastRequest?.headers['Authorization'],
         'Bearer access-token',
@@ -108,13 +108,17 @@ class _MemoryTokenStorage implements TokenStorage {
 
 Map<String, dynamic> _snackJson() => <String, dynamic>{
   'id': '550e8400-e29b-41d4-a716-446655440000',
-  'category': 'Vocabulary',
-  'left_label': 'British English',
-  'left_word': 'crisps',
-  'right_label': 'American English',
-  'right_word': 'chips',
-  'meaning': '둘 다 감자칩을 뜻해요.',
-  'example': 'Would you like a bag of crisps?',
+  'content_type': 'regional_variant',
+  'schema_version': 1,
+  'content_language': 'en',
+  'explanation_language': 'ko',
+  'payload': {
+    'meaning': '둘 다 감자칩을 뜻해요.',
+    'items': [
+      {'label': 'British English', 'expression': 'crisps'},
+      {'label': 'American English', 'expression': 'chips'},
+    ],
+  },
   'published_at': '2026-09-06T12:00:00Z',
   'created_at': '2026-09-06T12:00:00Z',
   'updated_at': '2026-09-06T12:00:00Z',

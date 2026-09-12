@@ -306,6 +306,14 @@ Color block 자체에는 그림자를 추가하지 않아요. focus와 pressed �
 - 제목은 headline-md, 미리보기는 body
 - 그림자 없이 색상과 여백으로 구분
 
+**Language Snack Card (v2, 2026-09-12)**
+
+- Home의 최근 대화 위에 기존 Color Block Card와 section label을 사용해요.
+- 지역별 표현은 넓은 화면에서 두 열, 작은 화면·큰 글자 설정에서는 세로 배치해요. 용법 차이·동음이의어는 표현별 설명과 예문을 세로로 표시해요.
+- 표현은 headline-md, 설명·예문은 body-sm을 사용하며 내용을 잘라내지 않아요. 현재 목록의 가장 긴 카드 높이를 유지해 자동 전환 시 하단 콘텐츠가 움직이지 않게 해요.
+- 기본 5초 자동 전환이며 수동 탐색·포커스·앱 비활성·reduce motion 정책을 유지해요. 이전/다음은 툴팁이 있는 화살표, 4개 이하는 페이지 점, 그 이상은 현재/전체 숫자 표시를 사용해요.
+- 설명 언어는 앱 chrome과 분리하고 학습 대상 콘텐츠의 explanation_language를 따라요.
+
 ### 8.3 Conversation
 
 - 사용자 메시지: inverse-canvas 배경 + inverse-ink

@@ -25,6 +25,18 @@ services:
       retries: 3
       start_period: 30s
 
+  snack-generator:
+    image: curitalk-api:latest
+    profiles: ["jobs"]
+    env_file:
+      - ${CURITALK_ENV_FILE:-.env}
+    environment:
+      ENV: prod
+      DEBUG: "false"
+      AUTO_CREATE_TABLES: "false"
+    command: ["python", "-m", "scripts.generate_language_snacks"]
+    restart: "no"
+
   nginx:
     image: nginx:1.27-alpine
     depends_on:

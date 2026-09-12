@@ -1,31 +1,120 @@
-"""Language snack 데이터 접근 계층."""
+"""지식 이력과 생성 상태의 짧은 트랜잭션."""
+
+from contextlib import contextmanager
+from uuid import uuid4
+
 from sqlalchemy import desc
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from domains.language_snacks.models import LanguageSnackModel
+from domains.language_snacks.identity import canonical_identity, knowledge_key
+from domains.language_snacks.lock import SnackError, mutation_lock
+from domains.language_snacks.models import LanguageSnackModel, LanguageSnackRunModel
 
 
 class LanguageSnackRepository:
-    """언어 스낵 저장소."""
-
     def __init__(self, db: Session):
         self.db = db
+        self.db.expire_on_commit = False
+        self.guard = None
 
-    def save(self, snack: LanguageSnackModel) -> LanguageSnackModel:
-        """새 언어 스낵을 저장한다."""
-        self.db.add(snack)
-        self.db.commit()
-        self.db.refresh(snack)
-        return snack
+    @contextmanager
+    def locked(self):
+        with mutation_lock(self.db.get_bind()) as guard:
+            self.guard = guard
+            try:
+                yield
+            finally:
+                self.guard = None
 
-    def list_published(self) -> list[LanguageSnackModel]:
-        """발행된 스낵만 최신 순서와 안정적인 보조 정렬로 반환한다."""
+    def save(self, row):
+        if self.guard:
+            self.guard.check()
+        self.db.add(row)
+        try:
+            self.db.commit()
+        except IntegrityError:
+            self.db.rollback()
+            raise SnackError("duplicate_knowledge", 409) from None
+        return row
+
+    def list_published(self, language: str, limit: int = 12):
         return (
             self.db.query(LanguageSnackModel)
-            .filter(LanguageSnackModel.published_at.isnot(None))
-            .order_by(
-                desc(LanguageSnackModel.published_at),
-                desc(LanguageSnackModel.id),
+            .filter(
+                LanguageSnackModel.content_language == language,
+                LanguageSnackModel.status == "published",
             )
+            .order_by(
+                desc(LanguageSnackModel.published_at), desc(LanguageSnackModel.id)
+            )
+            .limit(limit)
             .all()
         )
+
+    def history(self, language):
+        rows = (
+            self.db.query(
+                LanguageSnackModel.id,
+                LanguageSnackModel.identity,
+                LanguageSnackModel.knowledge_summary,
+            )
+            .filter(LanguageSnackModel.content_language == language)
+            .order_by(LanguageSnackModel.id)
+            .all()
+        )
+        result = [
+            {
+                "id": row.id,
+                "identity": row.identity,
+                "knowledge_summary": row.knowledge_summary,
+            }
+            for row in rows
+        ]
+        self.db.commit()
+        return result
+
+    def reserve(self, candidate, run_id=None, origin="scheduled"):
+        identity = canonical_identity(candidate.identity.model_dump(exclude_none=True))
+        return self.save(
+            LanguageSnackModel(
+                id=str(uuid4()),
+                content_type=candidate.content_type,
+                content_language=candidate.content_language,
+                explanation_language="ko"
+                if candidate.content_language == "en"
+                else "en",
+                identity=identity,
+                knowledge_key=knowledge_key(identity),
+                knowledge_summary=candidate.knowledge_summary,
+                generation_run_id=run_id,
+                origin=origin,
+                status="reserved",
+                generation_metadata={},
+            )
+        )
+
+    def run(self, key, language, target):
+        row = self.db.query(LanguageSnackRunModel).filter_by(run_key=key).first()
+        self.db.commit()
+        if row:
+            if row.content_language != language or row.target_per_type != target:
+                raise SnackError("run_configuration_changed", 409)
+            return row
+        return self.save(
+            LanguageSnackRunModel(
+                id=str(uuid4()),
+                run_key=key,
+                content_language=language,
+                target_per_type=target,
+                status="running",
+                metrics={},
+            )
+        )
+
+    def run_snacks(self, run_id):
+        rows = (
+            self.db.query(LanguageSnackModel).filter_by(generation_run_id=run_id).all()
+        )
+        self.db.commit()
+        return rows

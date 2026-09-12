@@ -231,6 +231,12 @@ class AppCopy {
   String get startConversationTooltip =>
       isKorean ? '대화 시작하기' : 'Start conversation';
   String get languageSnackLabel => isKorean ? '오늘의 언어' : 'Language note';
+  String languageSnackTypeLabel(String type) => switch (type) {
+    'regional_variant' => isKorean ? '지역마다 다른 표현' : 'Regional expressions',
+    'usage_contrast' => isKorean ? '비슷하지만 다른 쓰임' : 'Usage differences',
+    'homonym' => isKorean ? '같은 소리, 다른 뜻' : 'Same sound, different meanings',
+    _ => languageSnackLabel,
+  };
   String get previousLanguageSnackTooltip =>
       isKorean ? '이전 언어 카드' : 'Previous language snack';
   String get nextLanguageSnackTooltip =>

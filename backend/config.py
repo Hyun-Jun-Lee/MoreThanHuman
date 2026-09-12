@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Literal
 
 from pydantic_settings import BaseSettings
+from pydantic import Field
 from shared.exceptions import AppException
 
 
@@ -56,6 +57,14 @@ class Settings(BaseSettings):
 
     # Operations-only API Settings
     language_snacks_operations_key: str | None = None
+    language_snacks_provider: str | None = None
+    language_snacks_model: str | None = None
+    language_snacks_lock_database_url: str | None = None
+    language_snacks_per_type: int = Field(3, ge=1, le=6)
+    language_snacks_max_calls: int = Field(100, ge=1)
+    language_snacks_max_tokens: int = Field(250000, ge=1)
+    language_snacks_history_bytes: int = Field(40000, ge=1)
+    language_snacks_run_seconds: int = Field(600, ge=1)
 
     # Google OAuth2
     google_client_id: str | None = None

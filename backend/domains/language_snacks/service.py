@@ -1,33 +1,42 @@
-"""Language snack 도메인 서비스."""
-from datetime import datetime
-from uuid import uuid4
+"""운영 API와 주기적 생성이 공유하는 생성 검증."""
 
-from domains.language_snacks.models import LanguageSnackModel
+from domains.language_snacks.lock import SnackError
+from domains.language_snacks.models import LanguageSnackModel, utcnow
 from domains.language_snacks.repository import LanguageSnackRepository
-from domains.language_snacks.schemas import LanguageSnackCreate
+from domains.language_snacks.schemas import Candidate, LanguageSnackCreate
 
 
 class LanguageSnackService:
-    """언어 스낵의 발행 및 조회 규칙을 담당한다."""
-
     def __init__(self, repository: LanguageSnackRepository):
         self.repository = repository
 
-    def create(self, request: LanguageSnackCreate) -> LanguageSnackModel:
-        """검증된 콘텐츠를 즉시 발행한다."""
-        snack = LanguageSnackModel(
-            id=str(uuid4()),
-            category=request.category,
-            left_label=request.left_label,
-            left_word=request.left_word,
-            right_label=request.right_label,
-            right_word=request.right_word,
-            meaning=request.meaning,
-            example=request.example,
-            published_at=datetime.utcnow(),
-        )
-        return self.repository.save(snack)
+    async def create(self, request: LanguageSnackCreate, generator):
+        with self.repository.locked():
+            candidate = Candidate.model_validate(
+                request.model_dump(include=set(Candidate.model_fields))
+            )
+            await generator.ensure_new(candidate)
+            row = self.repository.reserve(candidate, origin="manual")
+            try:
+                await generator.verify(request)
+                return self.publish(row, request, generator.metadata())
+            except Exception:
+                row.status = "archived"
+                row.generation_metadata = {"error": "manual_validation_failed"}
+                self.repository.save(row)
+                raise
 
-    def list_published(self) -> list[LanguageSnackModel]:
-        """사용자 언어 설정과 무관한 공통 발행 목록을 조회한다."""
-        return self.repository.list_published()
+    def publish(self, row, request, metadata):
+        row.payload = request.payload
+        row.status = "published"
+        row.published_at = utcnow()
+        row.generation_metadata = metadata
+        return self.repository.save(row)
+
+    def archive(self, snack_id):
+        row = self.repository.db.get(LanguageSnackModel, str(snack_id))
+        if row is None:
+            raise SnackError("snack_not_found", 404)
+        row.status = "archived"
+        self.repository.save(row)
+        return {"id": row.id, "status": row.status}

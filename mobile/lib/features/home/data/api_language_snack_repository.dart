@@ -12,13 +12,14 @@ class ApiLanguageSnackRepository implements LanguageSnackRepository {
   Future<List<LanguageSnack>> listPublished() async {
     final ApiResponse<List<LanguageSnack>> response = await apiClient
         .get<List<LanguageSnack>>(
-          'language-snacks/',
+          'v2/language-snacks/',
           decodeData: (Object? json) {
             if (json is! List) {
               throw const FormatException('Language snack list is invalid.');
             }
             return json
                 .cast<Object?>()
+                .where(LanguageSnack.isSupported)
                 .map(LanguageSnack.fromJson)
                 .toList(growable: false);
           },

@@ -1,7 +1,13 @@
 # CHANGELOG — 완료된 작업 기록
 
+## 2026-09-12
+
+- **언어 스낵 v2 구현**: JSONB 세 유형·학습 언어별 조회, identity 중복 방지·LLM 검증·재개 가능한 주간 생성 CLI, PostgreSQL advisory lock, 운영 API, Flutter 언어별 캐시·5초 카드 전환과 배포 문서를 반영. 운영 DB 변경·LLM 실제 생성·cron 등록은 미실행
+- **언어 스낵 JSONB·정기 생성 계획 초안 작성**: 세 유형 payload, 핵심 지식 중복 검사, 월요일 05시 생성·자동 발행, 학습 언어별 조회·캐시, backend/frontend 단계와 미확정 운영 질문을 [계획](../../docs/plans/2026-09-12-2219-feat-language-snack-generation-plan.md)에 정리
+
 ## 2026-09-06
 
+- **Home 언어 스낵 API·캐러셀 구현**: 공통 발행 카드의 생성·조회 API와 운영 키 보호, Alembic migration, Flutter 마지막 성공 캐시, 5초 자동 전환·수동 탐색·접근성 상태, 문서와 회귀 테스트를 추가
 - **Roleplay 수동 난이도 제거 구현**: 역할극 난이도 UI·모바일/백엔드 API·prompt·ORM·응답 모델을 제거하고 `conversations.roleplay_difficulty` 및 PostgreSQL enum 삭제 migration, 호환성·회귀 테스트와 문서·디자인 동기화를 추가
 - **Roleplay 수동 난이도 제거·DB 컬럼 삭제 구현 계획 작성**: 수동 난이도 UI/API/prompt/ORM을 제거하고, PostgreSQL enum을 포함한 destructive migration, code-first 배포 순서, 모바일·백엔드·문서 검증 범위를 확정
 

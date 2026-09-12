@@ -1,49 +1,26 @@
 # Language Snacks API Contract
 
-> Status: ACTIVE · Updated: 2026-09-06
+> Status: ACTIVE · Version: 2 · Updated: 2026-09-12
+
+외부 계약의 단일 기준은 [DSL Language Snack 모듈](../../docs/DSL.md#5-language-snack-모듈)이에요. 실행·배포·환경변수는 [README](../../README.md#language-snack-api), 내부 상태·중복 검사는 [아키텍처](../architecture.md)를 참고해요.
 
 ## Scope
 
-- Home에 표시하는 언어 스낵은 사용자 언어쌍과 무관한 공통 발행 콘텐츠예요.
-- v1 콘텐츠는 하나의 편집 언어로 관리하며, 번역·언어쌍별 variant·사용자별 추천은 포함하지 않아요.
-- 생성은 운영 환경에서만 수행하며 Flutter 학습자 클라이언트에는 운영 키나 생성 UI를 두지 않아요.
+- content_language는 학습 대상 언어, explanation_language는 설명 언어예요. 현재 영어 학습은 한국어 설명, 한국어 학습은 영어 설명을 제공해요.
+- JSONB payload는 regional_variant, usage_contrast, homonym이며 schema_version은 1이에요. identity와 knowledge_key는 표시 데이터와 분리하며 학습자 API에 노출하지 않아요.
+- GET v2는 Bearer profile.target_language 기준 published 최신 12개(최대 30개)를 반환해요.
+- POST/PATCH v2는 서버 운영 키로 보호하며 일반 학습자 앱에는 생성 기능·키를 넣지 않아요.
+- 정규화 identity UNIQUE와 전체 이력 기반 LLM 중복 검사, 자동 품질 검증을 통과해야 발행해요. 의미 중복 방지에 통계적 오차가 남아요.
+- 구 API는 GET 빈 목록 / POST 410을 반환해요. 마이그레이션 시 기존 스낵 데이터는 모두 삭제해요.
 
-## `GET /api/language-snacks/`
+## Client
 
-- `Authorization: Bearer <supabase_access_token>`이 필요해요.
-- `published_at`이 있는 항목만 `published_at DESC, id DESC` 순서로 반환해요.
-- 응답은 `SuccessResponse<List<LanguageSnack>>` envelope예요.
+- 학습 언어 변경 시 즉시 재조회하고 언어별 캐시 키를 분리해요. 실패 시 해당 언어의 마지막 성공 목록만 사용해요.
+- Home 재진입·앱 복귀 후 5분 이상 경과했다면 재조회하며 슬라이드 타이머는 네트워크를 호출하지 않아요.
+- 알려지지 않은 type/schema_version은 건너뛰고 손상된 기존 유형은 응답 실패로 취급해요.
+- 오프라인에 이미 저장된 발행 취소 카드를 서버에서 즉시 삭제할 수는 없어요.
 
-## `POST /api/language-snacks/`
+## Change Log
 
-- `X-Operations-Key: <LANGUAGE_SNACKS_OPERATIONS_KEY>`가 필요해요.
-- 일반 Bearer 토큰은 이 생성 권한을 대신하지 않아요.
-- 서버에 `LANGUAGE_SNACKS_OPERATIONS_KEY`가 설정되지 않았거나 값이 다르면 `403`을 반환하고 row를 만들지 않아요.
-- 성공하면 HTTP `201`과 즉시 발행된 `SuccessResponse<LanguageSnack>`을 반환해요.
-
-```json
-{
-  "category": "Vocabulary",
-  "left_label": "British English",
-  "left_word": "crisps",
-  "right_label": "American English",
-  "right_word": "chips",
-  "meaning": "둘 다 감자칩을 뜻해요.",
-  "example": "Would you like a bag of crisps?"
-}
-```
-
-## `LanguageSnack`
-
-| 필드 | 설명 |
-|------|------|
-| `id` | UUID 식별자 |
-| `category` | 카드 분류 |
-| `left_label`, `right_label` | 두 표현의 맥락 레이블 |
-| `left_word`, `right_word` | 비교할 표현 |
-| `meaning` | 짧은 설명 |
-| `example` | 예문 |
-| `published_at` | 학습자 목록에 노출되는 발행 시각 |
-| `created_at`, `updated_at` | 서버 기록 시각 |
-
-필수 문자열은 공백만 허용하지 않으며, 길이 제한을 넘으면 `422`로 거절해요.
+- 2026-09-12: v1 공통 목록에서 v2 세 유형·학습 언어별 feed·예약 및 주간 생성 계약으로 전환.
+- 2026-09-06: 운영 생성 API와 공통 Home 카드 v1 도입.

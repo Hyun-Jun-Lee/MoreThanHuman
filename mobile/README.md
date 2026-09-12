@@ -163,7 +163,9 @@ Splash → Onboarding(최초 1회) → Google Login → Home
 - Splash: 저장된 세션과 onboarding 완료 여부 확인
 - Onboarding: 기기 locale 기반 언어쌍 기본값을 보여주고 4장 소개 후 완료 상태와 pending 언어쌍을 secure storage에 저장
 - Login: Google Sign-In SDK의 `idToken`/`accessToken`으로 Supabase 세션 생성 후 `/auth/me` 조회
-- Home: 사용자 이름, 활성 언어쌍, 공통 언어 스낵, 최근 대화 5개를 표시하고, 없으면 시작 제안을 표시. 스낵 요청이 실패하면 마지막 성공 목록만 secure storage에서 복원하고, 캐시도 없으면 스낵 영역만 숨겨요.
+- Home: 사용자 이름, 활성 언어쌍, 학습 언어별 스낵, 최근 대화 5개와 시작 제안을 표시해요. 스낵은 v2 API의 지역별 표현·용법 차이·동음이의어 최신 12개를 5초 간격으로 전환해요.
+- 스낵 v2 (2026-09-12): target_language 변경 시 즉시 재조회하고 이전 응답을 버려요. API 실패 시 `curitalk.language_snacks.v2.{target_language}.{explanation_language}`의 마지막 성공 목록을 사용하며 캐시가 없으면 영역만 숨겨요. Home 재진입·앱 복귀 시 5분 기준으로 갱신해요.
+- 설명은 영어 학습자에게 한국어, 한국어 학습자에게 영어로 제공하며 앱 chrome locale과 분리해요. 미지원 유형·버전은 건너뛰고 알려진 유형의 손상된 응답은 캐시로 복원해요. 운영 키나 생성 기능은 앱에 포함하지 않아요.
 - Home Navigation: `Chat`은 새 대화 시작 sheet, `History`는 대화 목록 화면, `Profile`은 account sheet를 열어요.
 - Account: 우상단 프로필 아바타 또는 `Profile` 탭에서 이름/email, 활성 언어쌍 변경, `LOG OUT`을 표시해요. 언어쌍 변경은 새 대화부터 적용되고 기존 대화는 시작 시점 언어쌍을 유지한다고 안내하며, 저장 후 profile을 다시 hydration해 Home의 활성 언어쌍을 갱신해요. 로그아웃 시 앱 token 삭제·서버 revoke·Google sign out을 best-effort로 처리해요.
 - Free Chat: Home sheet에서 Topic Input → Topic Prep으로 이동한 뒤 첫 답변으로 대화를 시작
