@@ -243,6 +243,8 @@ Conversation 화면은 Free Chat 시작, Roleplay 시작, Home 최근 대화 진
 
 SSE 기반 실시간 피드백, waveform 표시, 50개 이후 pagination은 후속 작업으로 남겨요. 실제 기기 QA에서는 microphone permission denied, 녹음 cancel, stop/upload, assistant audio playback, playback failure를 확인해요.
 
+## 실행 설정
+
 Google Sign-In 실행 시 다음 `dart-define`을 사용할 수 있어요.
 
 ```bash

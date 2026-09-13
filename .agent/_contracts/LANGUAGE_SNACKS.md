@@ -1,8 +1,8 @@
 # Language Snacks API Contract
 
-> Status: ACTIVE · Version: 2 · Updated: 2026-09-12
+> Status: ACTIVE · Version: 2 · Updated: 2026-09-13
 
-외부 계약의 단일 기준은 [DSL Language Snack 모듈](../../docs/DSL.md#5-language-snack-모듈)이에요. 실행·배포·환경변수는 [README](../../README.md#language-snack-api), 내부 상태·중복 검사는 [아키텍처](../architecture.md)를 참고해요.
+외부 계약의 단일 기준은 [DSL Language Snack 모듈](../../docs/DSL.md#5-language-snack-모듈)이에요. CLI는 [README](../../README.md#스낵-콘텐츠-생성), 배포는 [운영 가이드](../../docs/OPERATIONS.md#언어-스낵-운영), 설정은 [환경변수](../../docs/ENVIRONMENT.md), 내부 상태·중복 검사는 [아키텍처](../architecture.md)를 참고해요.
 
 ## Scope
 
@@ -21,6 +21,8 @@
 - 오프라인에 이미 저장된 발행 취소 카드를 서버에서 즉시 삭제할 수는 없어요.
 
 ## Change Log
+
+- 2026-09-13: 계약 변경 없이 실행·환경변수·운영 문서 링크를 분리.
 
 - 2026-09-12: v1 공통 목록에서 v2 세 유형·학습 언어별 feed·예약 및 주간 생성 계약으로 전환.
 - 2026-09-06: 운영 생성 API와 공통 Home 카드 v1 도입.

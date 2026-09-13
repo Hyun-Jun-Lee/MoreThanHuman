@@ -16,7 +16,7 @@
 3. `.agent/architecture.md` (시스템 아키텍처·스택·데이터 플로우)
 4. `.agent/_coordination/STATE.md` (현재 진행 중인 작업)
 5. `.agent/_contracts/` (인터페이스 계약)
-6. `README.md` (프로젝트 상세 — API 레퍼런스, 환경변수, 실행법)
+6. `README.md` (서비스 소개·실행 방법·CLI, 상세 문서 진입점)
 7. `docs/DSL.md` (도메인 DSL 명세)
 
 **스코프 루트**: `.agent/`
@@ -83,12 +83,13 @@
 
 | 기능 | 표면 목록 |
 |------|----------|
-| API 엔드포인트 | `README.md` · `docs/DSL.md` · `backend/domains/*/router.py` |
-| 환경변수 | `.env.example` · `README.md` · `backend/config.py` |
+| API 엔드포인트 | `docs/DSL.md` · `backend/domains/*/router.py` |
+| 환경변수 | `.env.example` · `docs/ENVIRONMENT.md` · `backend/config.py` |
+| 실행·CLI·배포 | `README.md` · `docs/OPERATIONS.md` · 해당 스크립트/Compose 설정 |
 
 **5.9** agent-time 추정: 페이스 모드 Proactive 5\~6× 적용. 실행 중심 작업은 모드 상단, 디버깅은 중간, 연구/전략은 \~1× (인간 검토가 율속). `.agent/_lessons/`의 `estimation` 태그로 ±30%+ delta만 기록·보정.
 
-**5.10** 문서 구조 원칙: 핵심 문서는 `README.md`(실행·환경변수·사용 예시), `docs/DSL.md`(외부 API 계약), `.agent/architecture.md`(내부 구조) 세 축으로 유지해요. API 계약은 `docs/DSL.md`, 환경변수 설명은 `README.md`, 내부 구현 구조는 `.agent/architecture.md`를 단일 기준으로 삼아요.
+**5.10** 문서 구조 원칙: `README.md`는 서비스 소개·실행 방법·CLI와 상세 문서 링크만 간결하게 유지해요. API 계약은 `docs/DSL.md`, 환경변수 설명은 `docs/ENVIRONMENT.md`, 배포·cron·복구는 `docs/OPERATIONS.md`, 내부 구조는 `.agent/architecture.md`를 단일 기준으로 삼아요. README에 상세 계약·설정 전체 표를 중복하지 않으며 실행에 영향을 주는 변경만 요약 반영해요.
 
 **5.11** 임시 문서 정리: `PLAN_*.md`, 피드백 메모 같은 임시 문서는 구현 전 의사결정용으로만 쓰고, 반영이 끝나면 핵심 문서에 흡수한 뒤 삭제 또는 아카이브해요.
 
@@ -121,7 +122,9 @@
 
 | 문서 | 경로 | 설명 |
 |------|------|------|
-| 프로젝트 README | `README.md` | API 레퍼런스, 환경변수, 실행법 |
+| 프로젝트 README | `README.md` | 서비스 소개·실행법·CLI·상세 문서 진입점 |
+| 환경변수 | `docs/ENVIRONMENT.md` | 전체 설정·필수 여부·기본값 |
+| 운영 가이드 | `docs/OPERATIONS.md` | 배포·주간 작업·장애 대응·복구 |
 | DSL 명세 | `docs/DSL.md` | 도메인별 상세 스펙 |
 | 모바일 UX 메모 | `docs/UX_FEEDBACK.md` | Flutter 앱 UX 방향 |
 | 아키텍처 | `.agent/architecture.md` | 시스템 아키텍처 상세 |

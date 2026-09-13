@@ -2,8 +2,9 @@
 
 ## 2026-09-13
 
-- **AsyncClient 연결 풀 v1**: 워커별 AI·인증 풀과 전체 provider 주입, CLI 재사용, 문법 task 추적·종료 및 별도 DB session을 적용. 최대/유휴 연결·만료·종료 대기 설정과 [계측 문서](../../../docs/VOICE_LATENCY.md)를 동기화. 실제 localhost 연결 재사용 포함 29개 신규 테스트·전체 175개 통과(3 skip). 유료 API 지연 실험·운영 배포는 미실행
-- **음성 대화 지연 계측**: 서버 auth·STT·LLM·TTS·응답과 앱 녹음 종료·HTTP·첫 재생에 trace별 print 로그 추가. [반복 실험·연결 풀 검토](../../../docs/VOICE_LATENCY.md)와 [스트리밍 설계 제안](../../../docs/VOICE_STREAMING.md) 작성. 백엔드 146개·Flutter 232개 통과, 최종 관련 Flutter 19개 재검증·정적 분석 통과. 실제 API 10회 실험과 연결 풀·스트리밍 구현은 미실행
+- **AsyncClient 연결 풀 v1**: 워커별 AI·인증 풀과 전체 provider 주입, CLI 재사용, 문법 task 추적·종료 및 별도 DB session을 적용. 최대/유휴 연결·만료·종료 대기 설정과 [계측 문서](../../docs/VOICE_LATENCY.md)를 동기화. 실제 localhost 연결 재사용 포함 29개 신규 테스트·전체 175개 통과(3 skip). 유료 API 지연 실험·운영 배포는 미실행
+- **음성 대화 지연 계측**: 서버 auth·STT·LLM·TTS·응답과 앱 녹음 종료·HTTP·첫 재생에 trace별 print 로그 추가. [반복 실험·연결 풀 검토](../../docs/VOICE_LATENCY.md)와 [스트리밍 설계 제안](../../docs/VOICE_STREAMING.md) 작성. 백엔드 146개·Flutter 232개 통과, 최종 관련 Flutter 19개 재검증·정적 분석 통과. 실제 API 10회 실험과 연결 풀·스트리밍 구현은 미실행
+- **README 간소화**: 소개·준비·실행·CLI·문서 링크 중심으로 788줄을 139줄로 축소. 환경변수는 [ENVIRONMENT.md](../../docs/ENVIRONMENT.md), 배포·cron·복구는 [OPERATIONS.md](../../docs/OPERATIONS.md)로 이관하고 DSL·협업 규칙·관련 링크를 동기화. 내부 링크 40개, shell 블록 12개, Settings 필드 58개 문서 포함 여부 검증. 다른 진행 작업의 README 추가는 상세 설명 대신 문서 링크 중심으로 유지
 
 ## 2026-09-12
 

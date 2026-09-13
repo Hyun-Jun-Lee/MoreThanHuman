@@ -262,6 +262,34 @@ content_type과 relation은 위 나열 순서대로 대응해요. 모든 entry.l
 
 구버전 GET은 인증된 빈 목록, 구버전 POST는 운영 키 확인 후 410을 반환해요. 새 앱은 미지원 type/schema_version을 건너뛰고 알려진 유형의 손상된 응답에는 마지막 성공 캐시를 사용해요.
 
+### 운영 생성 예시
+
+운영 키를 실제 값으로 치환해 호출해요. 이 API는 LLM 사용량이 발생하고 검증 통과 시 즉시 발행해요. 배포·예약·재실행 절차는 [운영 가이드](OPERATIONS.md#언어-스낵-운영)에 있어요.
+
+```bash
+curl -X POST http://localhost:8010/api/v2/language-snacks/ \
+  -H 'Content-Type: application/json' \
+  -H 'X-Operations-Key: <server-only-operations-key>' \
+  -d '{
+    "content_type":"regional_variant",
+    "schema_version":1,
+    "content_language":"en",
+    "explanation_language":"ko",
+    "identity":{
+      "relation":"regional_equivalent",
+      "entries":[
+        {"language":"en","variety":"GB","expression":"crisps","sense":"potato_snack"},
+        {"language":"en","variety":"US","expression":"chips","sense":"potato_snack"}
+      ]
+    },
+    "knowledge_summary":"British crisps and American chips refer to thin fried potato snacks.",
+    "payload":{
+      "meaning":"둘 다 얇게 썰어 튀긴 감자칩을 뜻해요.",
+      "items":[{"label":"영국","expression":"crisps"},{"label":"미국","expression":"chips"}]
+    }
+  }'
+```
+
 ## 6. Conversation 모듈
 
 ```dsl
@@ -411,6 +439,12 @@ AudioContinue  = POST /api/conversations/{id}/turn/        multipart { audio_fil
 
 `GET /api/conversations/{id}/messages/`는 `created_at asc`로 정렬된 `PaginatedMessages`를 반환해요.
 
+두 목록 API의 query는 `limit=50`(1..100), `offset=0`(0 이상)이 기본값이에요.
+
+`PUT /api/conversations/{id}/title/`은 `{"title":"Coffee Shop Roleplay"}`로 제목을 변경해요. `DELETE /api/conversations/{id}/`는 현재 사용자 소유 대화·메시지·문법 피드백을 복구 없이 삭제하고, 다른 사용자의 ID는 404로 처리해요.
+
+SSE는 `/api/conversations/messages/{id}/grammar-feedback/stream?token=<access_token>`으로 인증해요. URL에 토큰이 포함되므로 로그·공유에 주의하고 모바일에서는 기존 polling 경로를 우선 사용해요.
+
 ## 7. Grammar 모듈
 
 ```dsl
@@ -448,6 +482,8 @@ module Grammar {
 ```
 
 `GET /api/grammar/message/{id}/`는 현재 사용자 소유 대화에 속한 message만 조회해요. `200`은 완료된 `GrammarFeedback`, `404`는 피드백 생성 전 pending·없는 message·타 사용자 message를 의미해요. 타 사용자 message도 `404`로 숨겨 ID 존재 여부를 노출하지 않아요. 인증 헤더가 없으면 현재 `HTTPBearer` 동작에 따라 `403`, 유효하지 않은 token은 `401`로 처리해요.
+
+독립 검사 요청 `POST /api/grammar/check/`는 `{"text":"I want go home."}` 형태예요. 통계 조회의 선택 query `time_range`는 `7d`, `30d`, `90d`, `all` 등의 기간을 사용해요.
 
 ## 8. Search 모듈
 
@@ -620,60 +656,7 @@ module LLM {
 
 ## 10. 환경변수 계약
 
-```dsl
-env {
-  DATABASE_URL?: String
-  OPENROUTER_API_KEY: String
-  OPENAI_API_KEY?: String
-  LLM_PROVIDER?: "openrouter" | "ollama" = "openrouter"
-  OLLAMA_BASE_URL?: String
-  OPENROUTER_MODEL?: String
-  OLLAMA_MODEL?: String
-
-  GRAMMAR_MODEL_PROVIDER?: "openrouter" | "ollama" = "openrouter"
-  GRAMMAR_OPENROUTER_MODEL?: String
-  GRAMMAR_OLLAMA_MODEL?: String
-
-  STT_PROVIDER?: "openrouter" | "openai" = "openrouter"
-  STT_MODEL?: String = "openai/gpt-4o-mini-transcribe"
-  TTS_PROVIDER?: "openrouter" | "openai" = "openrouter"
-  TTS_MODEL?: String = "microsoft/mai-voice-2-flash"
-  TTS_VOICE?: String = "en-US-Harper:MAI-Voice-2-Flash"
-  TTS_RESPONSE_FORMAT?: "mp3" | "opus" | "aac" | "flac" | "wav" | "pcm" = "mp3"
-  TTS_MAX_INPUT_CHARS?: Integer = 4000
-  TTS_MAX_OUTPUT_MB?: Integer = 5
-  VOICE_MAX_UPLOAD_MB?: Integer = 10
-  VOICE_PROVIDER_TIMEOUT_SECONDS?: Float = 60
-
-  SUPABASE_URL: String
-  SUPABASE_PUBLISHABLE_KEY: String
-  SUPABASE_AUTH_VERIFY_MODE?: "remote" = "remote"
-  SUPABASE_AUTH_TIMEOUT_SECONDS?: Float = 5
-  LANGUAGE_SNACKS_OPERATIONS_KEY?: String
-  AUTO_CREATE_TABLES?: Boolean = false
-
-  JWT_SECRET_KEY?: String
-
-  DEBUG?: Boolean
-  CORS_ORIGINS?: List<String>
-  HTTP_MAX_CONNECTIONS?: Integer = 100
-  HTTP_MAX_KEEPALIVE_CONNECTIONS?: Integer = 20
-  HTTP_KEEPALIVE_EXPIRY_SECONDS?: Float = 30
-  BACKGROUND_SHUTDOWN_GRACE_SECONDS?: Float = 5
-  MAX_TOKENS?: Integer
-  TEMPERATURE?: Float
-  SEARCH_SUMMARY_MAX_TOKENS?: Integer
-  SEARCH_QUERY_ANALYSIS_MAX_TOKENS?: Integer
-  SEARCH_QUALITY_JUDGE_MAX_TOKENS?: Integer
-  SEARCH_REGION?: String
-  SEARCH_SAFESEARCH?: String
-  SEARCH_RECENT_TIMELIMIT?: String
-  SEARCH_BACKEND?: String
-  SEARCH_MAX_RESULTS?: Integer
-  SEARCH_MIN_RELEVANT_RESULTS?: Integer
-  MAX_HISTORY_TURNS?: Integer
-}
-```
+환경변수의 필수 여부·기본값·설명은 [환경변수 문서](ENVIRONMENT.md)에서 관리해요. 시작용 예시는 [.env.example](../.env.example), 구현 기준은 [Settings](../backend/config.py)예요. 실행·CLI는 [README](../README.md), 배포·복구는 [운영 가이드](OPERATIONS.md)를 참고해요.
 
 ## 11. 보안 규칙
 
@@ -683,3 +666,15 @@ env {
 - Flutter 앱은 OpenRouter/OpenAI secret이나 Supabase service role key를 직접 보유하지 않아요.
 - Flutter 앱은 Google Sign-In SDK로 받은 `id_token`과 Google `access_token`으로 Supabase 세션을 생성하고, FastAPI에는 Supabase `access_token`만 전달해요.
 - 외부 LLM/검색 실패는 `ExternalAPIException` 계열로 감싸 응답해요.
+
+## 12. Health Check
+
+`GET /health`는 인증 없이 다음 응답을 반환해요. 현재 database 값은 고정 문자열이며 실제 DB 연결 검사가 아니에요.
+
+```json
+{"status":"healthy","database":"connected","version":"1.0.0"}
+```
+
+## 문서 변경 기록
+
+- 2026-09-13: README의 상세 API 안내를 통합하고 환경변수 상세는 ENVIRONMENT.md로 분리했어요. API 동작 자체는 변경하지 않았어요.
