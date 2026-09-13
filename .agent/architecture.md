@@ -1,6 +1,6 @@
 # 시스템 아키텍처
 
-> 프로젝트: MoreThanHuman (Convia) · 버전: 0.1.0 · 최종 갱신: 2026-09-12
+> 프로젝트: MoreThanHuman (Convia) · 버전: 0.1.2 · 최종 갱신: 2026-09-13
 
 ---
 
@@ -114,6 +114,10 @@ domains/{name}/
 
 ## 3. 데이터 플로우
 
+### 음성 대화 지연 진단 v1
+
+`shared/latency.py`의 ASGI middleware는 대화 시작·이어 말하기 POST에 요청별 ContextVar를 설정해 인증 전부터 최종 body 전송까지 측정해요. auth·voice·conversation 서비스의 span은 같은 trace로 `print()` JSON 한 줄씩 출력해요. Flutter는 recorder 종료 때 시작한 Stopwatch를 요청과 로컬 오디오 객체까지 전달해 첫 playing 이벤트를 기록해요. JSON 본문은 유지되며 provider는 아래 외부 HTTP 풀 v1을 재사용해요. [계측·실험·연결 풀 적용](../docs/VOICE_LATENCY.md)과 [향후 스트리밍 제안](../docs/VOICE_STREAMING.md)을 참조해요.
+
 ### 인증
 
 ```text
@@ -208,6 +212,16 @@ domains/{name}/
 ---
 
 ## 4. 외부 의존성
+
+### 외부 HTTP 연결 풀 v1 — 구현 결정 (2026-09-13)
+
+FastAPI lifespan에서 워커의 이벤트 루프별 AI용·Supabase 인증용 `httpx.AsyncClient`를 각각 만들고 dependency → service → provider로 명시적으로 전달해요. provider는 빌린 client를 닫지 않아요. 스낵 CLI도 자신의 이벤트 루프에서 같은 생성 함수를 사용해 실행 전체에 하나의 AI client를 소유해요. HTTP client 생성 시에는 실제 API를 호출하지 않아요.
+
+초기 한도는 풀마다 최대 연결 100개·유휴 연결 20개·유휴 만료 30초이며 환경변수로 조절해요. OpenRouter LLM 30초, Ollama 60초, 음성·인증의 기존 timeout은 요청별로 유지해요. HTTP/2·자동 재시도·provider 변경은 추가하지 않아요. 요청별 인증 헤더를 사용하고 upstream 쿠키 저장을 차단해 사용자 상태가 공유되지 않도록 해요.
+
+백그라운드 문법 task는 워커별 registry가 추적해요. 종료 시 최대 5초(설정 가능) 동안 기다린 뒤 남은 task를 cancel하고 await한 후 HTTP client를 닫아요. 문법 저장에는 요청용 DB session 대신 task가 소유한 별도 session을 사용해요. 종료 중 취소된 문법 피드백은 저장되지 않을 수 있으며 재시작 후 자동 재개하는 작업 큐는 이번 범위에 포함하지 않아요.
+
+검증은 실제 localhost HTTP/1.1 연결 재사용, 동시 요청·인증 헤더/쿠키 분리, timeout·오류 유지, 종료 순서, CLI와 provider 주입 경로를 포함해요. 외부 유료 API 호출과 운영 배포는 수행하지 않아요.
 
 | 서비스 | 용도 | 실패 시 |
 |--------|------|---------|

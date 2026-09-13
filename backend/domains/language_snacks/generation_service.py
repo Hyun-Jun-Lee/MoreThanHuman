@@ -27,11 +27,11 @@ from shared.exceptions import ExternalAPIException, RateLimitException
 
 
 class SnackGenerator:
-    def __init__(self, repository, provider=None, settings=None):
+    def __init__(self, repository, provider=None, settings=None, *, http_client=None):
         self.repository = repository
         self.settings = settings or get_settings()
         self.provider = provider or LLMProviderFactory.create_provider(
-            self.settings.language_snacks_provider
+            self.settings.language_snacks_provider, http_client=http_client
         )
         self.model = self.settings.language_snacks_model or get_model_for_provider(
             self.settings.language_snacks_provider

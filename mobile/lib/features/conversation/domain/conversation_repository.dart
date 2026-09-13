@@ -1,3 +1,4 @@
+import 'package:curitalk/core/diagnostics/latency_trace.dart';
 import 'package:curitalk/features/conversation/domain/conversation_models.dart';
 
 class ConversationAudioFile {
@@ -5,11 +6,13 @@ class ConversationAudioFile {
     required this.bytes,
     required this.filename,
     required this.contentType,
+    this.latencyTrace,
   });
 
   final List<int> bytes;
   final String filename;
   final String contentType;
+  final LatencyTrace? latencyTrace;
 }
 
 abstract interface class ConversationRepository {

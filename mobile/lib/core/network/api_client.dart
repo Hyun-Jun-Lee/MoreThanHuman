@@ -1,4 +1,5 @@
 import 'package:curitalk/core/config/app_config.dart';
+import 'package:curitalk/core/diagnostics/latency_trace.dart';
 import 'package:curitalk/core/network/api_exception.dart';
 import 'package:curitalk/core/network/api_response.dart';
 import 'package:curitalk/core/network/auth_session_coordinator.dart';
@@ -66,6 +67,7 @@ class ApiClient {
     String? contentType,
     bool requiresAuth = true,
     CancelToken? cancelToken,
+    LatencyTrace? latencyTrace,
   }) {
     return request<T>(
       path,
@@ -76,6 +78,7 @@ class ApiClient {
       contentType: contentType,
       requiresAuth: requiresAuth,
       cancelToken: cancelToken,
+      latencyTrace: latencyTrace,
     );
   }
 
@@ -88,7 +91,18 @@ class ApiClient {
     String? contentType,
     bool requiresAuth = true,
     CancelToken? cancelToken,
+    LatencyTrace? latencyTrace,
   }) async {
+    final bool isConversationTurn =
+        method == 'POST' &&
+        RegExp(
+          r'^conversations/(?:start/(?:free-chat|roleplay)|[^/]+/(?:turn|message))/?$',
+        ).hasMatch(_normalizePath(path));
+    final LatencyTrace? trace = isConversationTurn
+        ? (latencyTrace ?? LatencyTrace()).claimRequest()
+        : null;
+    final int started = trace?.elapsedMicroseconds ?? 0;
+    String latencyStatus = 'error';
     try {
       final Response<Object?> response = await dio.request<Object?>(
         _normalizePath(path),
@@ -98,12 +112,22 @@ class ApiClient {
         options: Options(
           method: method,
           contentType: contentType,
+          headers: trace == null
+              ? null
+              : <String, Object>{'X-Request-ID': trace.id},
           extra: <String, Object?>{
             AuthTokenInterceptor.requiresAuthKey: requiresAuth,
           },
         ),
       );
-      return ApiResponse<T>.fromJson(response.data, decodeData);
+      trace?.mark('http_response', startedAtMicroseconds: started);
+      final ApiResponse<T> parsed = trace == null
+          ? ApiResponse<T>.fromJson(response.data, decodeData)
+          : trace.duringDecode(
+              () => ApiResponse<T>.fromJson(response.data, decodeData),
+            );
+      latencyStatus = 'ok';
+      return parsed;
     } on DioException catch (error) {
       throw ApiException.fromDio(error);
     } on ApiException {
@@ -113,6 +137,12 @@ class ApiClient {
         kind: ApiErrorKind.invalidResponse,
         message: 'The server response could not be parsed.',
         cause: error,
+      );
+    } finally {
+      trace?.mark(
+        'http_total',
+        status: latencyStatus,
+        startedAtMicroseconds: started,
       );
     }
   }

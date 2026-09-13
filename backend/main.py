@@ -20,6 +20,9 @@ from domains.language_snacks.router import router as language_snacks_router
 from domains.search.router import router as search_router
 from domains.web.router import router as web_router
 from shared.exceptions import AppException, AuthenticationException, NotFoundException
+from shared.latency import LatencyMiddleware
+from shared.background_tasks import BackgroundTaskRegistry
+from shared.http_clients import http_clients
 
 settings = get_settings()
 
@@ -36,10 +39,16 @@ async def lifespan(_app: FastAPI):
         print("✅ Database migrations are managed by Alembic")
     print(f"✅ Application started in {'DEBUG' if settings.debug else 'PRODUCTION'} mode")
 
-    yield
-
-    # Shutdown
-    print("👋 Application shutting down")
+    async with http_clients(settings) as clients:
+        _app.state.http_clients = clients
+        tasks = BackgroundTaskRegistry()
+        _app.state.background_tasks = tasks
+        try:
+            yield
+        finally:
+            # 문법 작업이 공유 client를 사용하는 동안 먼저 닫지 않아요.
+            await tasks.aclose(grace_seconds=settings.background_shutdown_grace_seconds)
+            print("👋 Application shutting down")
 
 
 # FastAPI 앱 생성
@@ -59,6 +68,7 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=["*"],
 )
+app.add_middleware(LatencyMiddleware)
 
 
 # Exception Handlers

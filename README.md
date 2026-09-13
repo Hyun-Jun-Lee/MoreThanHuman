@@ -729,6 +729,10 @@ Query:
 | `ENV` | 아니오 | `prod` | 실행 환경. `dev`/`development`/`local`이면 개발 전용 API 활성화 |
 | `DEBUG` | 아니오 | `false` | 디버그 모드 |
 | `CORS_ORIGINS` | 아니오 | `[]` | CORS 허용 origin 목록 |
+| `HTTP_MAX_CONNECTIONS` | 아니오 | `100` | 워커 내 각 외부 HTTP 풀의 최대 연결 수. 1 이상 |
+| `HTTP_MAX_KEEPALIVE_CONNECTIONS` | 아니오 | `20` | 각 풀의 최대 유휴 연결 수. 0 이상이고 MAX_CONNECTIONS 이하 |
+| `HTTP_KEEPALIVE_EXPIRY_SECONDS` | 아니오 | `30` | 재사용할 유휴 연결의 만료 시간(초). 유한한 양수 |
+| `BACKGROUND_SHUTDOWN_GRACE_SECONDS` | 아니오 | `5` | 종료 시 문법 task 완료 대기 시간(초). 이후 취소하고 정리 완료를 기다림. 유한한 0 이상 |
 | `MAX_TOKENS` | 아니오 | `4000` | LLM 최대 토큰 |
 | `TEMPERATURE` | 아니오 | `0.7` | LLM temperature |
 | `STT_PROVIDER` | 아니오 | `openrouter` | STT provider. `openrouter` 또는 `openai` |
@@ -786,3 +790,9 @@ API, 환경변수, 도메인 계약이 바뀌면 같은 작업 단위에서 아�
 - 문법 통계
 - OpenRouter/Ollama LLM provider 추상화
 - ddgs 검색 + query analysis + LLM source judge + LLM 요약
+
+## 음성 응답 성능 문서
+
+- [지연 계측·10회 실험·연결 풀 v1](docs/VOICE_LATENCY.md)
+- [HTTP 연결 풀 설정](docs/ENVIRONMENT.md)
+- [향후 음성 스트리밍 설계](docs/VOICE_STREAMING.md)

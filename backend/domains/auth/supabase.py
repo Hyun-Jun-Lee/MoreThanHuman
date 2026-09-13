@@ -13,6 +13,9 @@ from shared.exceptions import AuthenticationException
 class SupabaseAuthVerifier:
     """Supabase Auth 서버를 통해 access token을 검증해요."""
 
+    def __init__(self, http_client: httpx.AsyncClient):
+        self.http_client = http_client
+
     async def verify_access_token(self, token: str) -> SupabaseUserClaims:
         """Bearer token 검증 후 앱 프로필 claim으로 변환"""
         normalized_token = token.strip()
@@ -29,14 +32,14 @@ class SupabaseAuthVerifier:
     async def _fetch_user(self, token: str) -> dict[str, Any]:
         settings = get_settings()
         try:
-            async with httpx.AsyncClient(timeout=settings.supabase_auth_timeout_seconds) as client:
-                response = await client.get(
-                    f"{settings.supabase_auth_url}/user",
-                    headers={
-                        "apikey": settings.required_supabase_publishable_key,
-                        "Authorization": f"Bearer {token}",
-                    },
-                )
+            response = await self.http_client.get(
+                f"{settings.supabase_auth_url}/user",
+                timeout=settings.supabase_auth_timeout_seconds,
+                headers={
+                    "apikey": settings.required_supabase_publishable_key,
+                    "Authorization": f"Bearer {token}",
+                },
+            )
         except httpx.HTTPError as exc:
             raise AuthenticationException("Supabase token verification failed") from exc
 

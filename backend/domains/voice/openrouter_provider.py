@@ -17,7 +17,8 @@ logger = logging.getLogger(__name__)
 class OpenRouterVoiceProvider(VoiceProvider):
     """OpenRouter STT/TTS API Provider"""
 
-    def __init__(self):
+    def __init__(self, http_client: httpx.AsyncClient):
+        self.http_client = http_client
         self.api_key = settings.openrouter_api_key
         self.transcriptions_url = "https://openrouter.ai/api/v1/audio/transcriptions"
         self.speech_url = "https://openrouter.ai/api/v1/audio/speech"
@@ -42,100 +43,98 @@ class OpenRouterVoiceProvider(VoiceProvider):
         files = {"file": (filename, audio_bytes, content_type)}
         data = {"model": settings.stt_model}
 
-        async with httpx.AsyncClient() as client:
-            try:
-                response = await client.post(
-                    self.transcriptions_url,
-                    headers=self._headers(),
-                    files=files,
-                    data=data,
-                    timeout=settings.voice_provider_timeout_seconds,
+        try:
+            response = await self.http_client.post(
+                self.transcriptions_url,
+                headers=self._headers(),
+                files=files,
+                data=data,
+                timeout=settings.voice_provider_timeout_seconds,
+            )
+            response.raise_for_status()
+            payload = response.json()
+            return VoiceTranscriptionResult(text=str(payload.get("text", "")))
+        except httpx.HTTPStatusError as e:
+            status_code = e.response.status_code if e.response is not None else None
+            response_body = e.response.text[:500] if e.response is not None else ""
+            response_headers = e.response.headers if e.response is not None else {}
+            request_id = response_headers.get("x-request-id") or response_headers.get(
+                "x-generation-id"
+            )
+            logger.warning(
+                "OpenRouter STT request failed status_code=%s model=%s filename=%r "
+                "content_type=%s byte_length=%s request_id=%s response_body=%r",
+                status_code,
+                settings.stt_model,
+                filename,
+                content_type,
+                len(audio_bytes),
+                request_id,
+                response_body,
+            )
+            if status_code == 429:
+                raise RateLimitException(
+                    "STT provider rate limit reached. Please try again later.",
+                    details={"provider": self.get_provider_name()},
                 )
-                response.raise_for_status()
-                payload = response.json()
-                return VoiceTranscriptionResult(text=str(payload.get("text", "")))
-            except httpx.HTTPStatusError as e:
-                status_code = e.response.status_code if e.response is not None else None
-                response_body = e.response.text[:500] if e.response is not None else ""
-                response_headers = e.response.headers if e.response is not None else {}
-                request_id = response_headers.get("x-request-id") or response_headers.get(
-                    "x-generation-id"
-                )
-                logger.warning(
-                    "OpenRouter STT request failed status_code=%s model=%s filename=%r "
-                    "content_type=%s byte_length=%s request_id=%s response_body=%r",
-                    status_code,
-                    settings.stt_model,
-                    filename,
-                    content_type,
-                    len(audio_bytes),
-                    request_id,
-                    response_body,
-                )
-                if status_code == 429:
-                    raise RateLimitException(
-                        "STT provider rate limit reached. Please try again later.",
-                        details={"provider": self.get_provider_name()},
-                    )
-                raise ExternalAPIException(
-                    "OpenRouter transcription failed.",
-                    details={
-                        "provider": self.get_provider_name(),
-                        "status_code": status_code,
-                        "response_body": response_body,
-                    },
-                )
-            except httpx.HTTPError as e:
-                raise ExternalAPIException(
-                    "OpenRouter transcription failed.",
-                    details={"provider": self.get_provider_name(), "error_type": type(e).__name__},
-                )
+            raise ExternalAPIException(
+                "OpenRouter transcription failed.",
+                details={
+                    "provider": self.get_provider_name(),
+                    "status_code": status_code,
+                    "response_body": response_body,
+                },
+            )
+        except httpx.HTTPError as e:
+            raise ExternalAPIException(
+                "OpenRouter transcription failed.",
+                details={"provider": self.get_provider_name(), "error_type": type(e).__name__},
+            )
 
     async def synthesize_speech(self, *, text: str) -> VoiceSynthesisResult:
         """OpenRouter TTS API 호출"""
-        async with httpx.AsyncClient() as client:
-            try:
-                response = await client.post(
-                    self.speech_url,
-                    headers={**self._headers(), "Content-Type": "application/json"},
-                    json={
-                        "model": settings.tts_model,
-                        "voice": settings.tts_voice,
-                        "input": text,
-                        "response_format": settings.tts_response_format,
-                    },
-                    timeout=settings.voice_provider_timeout_seconds,
+        try:
+            response = await self.http_client.post(
+                self.speech_url,
+                headers={**self._headers(), "Content-Type": "application/json"},
+                json={
+                    "model": settings.tts_model,
+                    "voice": settings.tts_voice,
+                    "input": text,
+                    "response_format": settings.tts_response_format,
+                },
+                timeout=settings.voice_provider_timeout_seconds,
+            )
+            response.raise_for_status()
+            return VoiceSynthesisResult(
+                audio_bytes=response.content,
+                content_type=response.headers.get(
+                    "content-type",
+                    f"audio/{settings.tts_response_format}",
+                ),
+                format=settings.tts_response_format,
+            )
+        except httpx.HTTPStatusError as e:
+            status_code = e.response.status_code if e.response is not None else None
+            if status_code == 429:
+                raise RateLimitException(
+                    "TTS provider rate limit reached. Please try again later.",
+                    details={"provider": self.get_provider_name()},
                 )
-                response.raise_for_status()
-                return VoiceSynthesisResult(
-                    audio_bytes=response.content,
-                    content_type=response.headers.get(
-                        "content-type",
-                        f"audio/{settings.tts_response_format}",
-                    ),
-                    format=settings.tts_response_format,
-                )
-            except httpx.HTTPStatusError as e:
-                status_code = e.response.status_code if e.response is not None else None
-                if status_code == 429:
-                    raise RateLimitException(
-                        "TTS provider rate limit reached. Please try again later.",
-                        details={"provider": self.get_provider_name()},
-                    )
-                response_body = e.response.text[:500] if e.response is not None else ""
-                raise ExternalAPIException(
-                    "OpenRouter speech synthesis failed.",
-                    details={
-                        "provider": self.get_provider_name(),
-                        "status_code": status_code,
-                        "response_body": response_body,
-                    },
-                )
-            except httpx.HTTPError as e:
-                raise ExternalAPIException(
-                    "OpenRouter speech synthesis failed.",
-                    details={"provider": self.get_provider_name(), "error_type": type(e).__name__},
-                )
+            response_body = e.response.text[:500] if e.response is not None else ""
+            raise ExternalAPIException(
+                "OpenRouter speech synthesis failed.",
+                details={
+                    "provider": self.get_provider_name(),
+                    "status_code": status_code,
+                    "response_body": response_body,
+                },
+            )
+        except httpx.HTTPError as e:
+            raise ExternalAPIException(
+                "OpenRouter speech synthesis failed.",
+                details={"provider": self.get_provider_name(), "error_type": type(e).__name__},
+            )
 
     def get_provider_name(self) -> str:
         """Provider 이름 반환"""

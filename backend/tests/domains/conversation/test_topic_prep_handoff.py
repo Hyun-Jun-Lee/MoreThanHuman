@@ -9,10 +9,12 @@ from domains.conversation.enums import ConversationType
 from domains.conversation.router import get_conversation_service, router
 from domains.conversation.service import ConversationService
 from shared.language import LearningLanguageContext
+from shared.http_clients import get_ai_http_client
 
 
 def _conversation_app_with_overrides(service) -> FastAPI:
     app = FastAPI()
+    app.dependency_overrides[get_ai_http_client] = lambda: None
     app.include_router(router)
     app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(
         id="user-1",
@@ -27,7 +29,7 @@ def _conversation_app_with_overrides(service) -> FastAPI:
 
 
 def test_free_chat_prompt_includes_topic_prep_handoff_context():
-    service = ConversationService(repository=None, grammar_repository=None)
+    service = ConversationService(repository=None)
 
     prompt = service.build_free_chat_prompt(
         search_context="The Dodgers won with a late home run.",
@@ -44,7 +46,7 @@ def test_free_chat_prompt_includes_topic_prep_handoff_context():
 
 
 def test_free_chat_prompt_prioritizes_natural_conversation_over_unsolicited_teaching():
-    service = ConversationService(repository=None, grammar_repository=None)
+    service = ConversationService(repository=None)
 
     prompt = service.build_free_chat_prompt(search_context=None)
 
@@ -56,7 +58,7 @@ def test_free_chat_prompt_prioritizes_natural_conversation_over_unsolicited_teac
 
 
 def test_free_chat_prompt_can_target_korean_with_english_feedback():
-    service = ConversationService(repository=None, grammar_repository=None)
+    service = ConversationService(repository=None)
     context = LearningLanguageContext(
         native_language="en",
         target_language="ko",
@@ -73,7 +75,7 @@ def test_free_chat_prompt_can_target_korean_with_english_feedback():
 
 
 def test_free_chat_prompt_includes_english_target_policy_by_default():
-    service = ConversationService(repository=None, grammar_repository=None)
+    service = ConversationService(repository=None)
 
     prompt = service.build_free_chat_prompt(search_context=None)
 
@@ -83,7 +85,7 @@ def test_free_chat_prompt_includes_english_target_policy_by_default():
 
 
 def test_roleplay_prompt_uses_korean_target_examples():
-    service = ConversationService(repository=None, grammar_repository=None)
+    service = ConversationService(repository=None)
     context = LearningLanguageContext(
         native_language="en",
         target_language="ko",
@@ -103,7 +105,7 @@ def test_roleplay_prompt_uses_korean_target_examples():
 
 
 def test_roleplay_prompt_uses_english_target_examples_without_teacher_frame():
-    service = ConversationService(repository=None, grammar_repository=None)
+    service = ConversationService(repository=None)
 
     prompt = service.build_roleplay_prompt("a hotel front desk staff member")
 
@@ -113,7 +115,7 @@ def test_roleplay_prompt_uses_english_target_examples_without_teacher_frame():
 
 
 def test_roleplay_prompt_omits_manual_difficulty_guidance():
-    service = ConversationService(repository=None, grammar_repository=None)
+    service = ConversationService(repository=None)
 
     prompt = service.build_roleplay_prompt("a cafe barista")
 
@@ -195,7 +197,7 @@ class _FakeConversationRepository:
 
 class _FakeConversationService(ConversationService):
     def __init__(self, repository):
-        super().__init__(repository=repository, grammar_repository=None)
+        super().__init__(repository=repository)
         self.generated_prompts = []
 
     async def generate_response(self, system_prompt, messages, user_message):

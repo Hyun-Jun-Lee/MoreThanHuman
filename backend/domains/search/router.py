@@ -1,6 +1,8 @@
 """
 Search API Router
 """
+import httpx
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
@@ -16,6 +18,7 @@ from domains.search.schemas import (
     TopicPrepResult,
 )
 from domains.search.service import SearchService
+from shared.http_clients import get_ai_http_client
 from shared.exceptions import AppException
 from shared.language import ensure_language_context
 from shared.types import SuccessResponse
@@ -31,9 +34,9 @@ class SearchRequest(BaseModel):
 
 
 # Dependency
-def get_search_service() -> SearchService:
+def get_search_service(http_client: httpx.AsyncClient = Depends(get_ai_http_client)) -> SearchService:
     """SearchService 의존성"""
-    return SearchService()
+    return SearchService(http_client=http_client)
 
 
 # Endpoints

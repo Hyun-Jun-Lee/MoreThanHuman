@@ -2,12 +2,14 @@
 Conversation Service Layer
 비즈니스 로직 및 도메인 규칙
 """
-import asyncio
 import logging
 import traceback
 from uuid import uuid4
 
+import httpx
+
 from config import get_model_for_provider, get_settings
+from database import SessionLocal
 from domains.conversation.enums import ConversationStatus, ConversationType, MessageRole
 from domains.conversation.models import ConversationModel, MessageModel
 from domains.conversation.repository import ConversationRepository
@@ -31,6 +33,8 @@ from shared.language import (
     language_name,
 )
 from shared.language_prompt_policy import format_practice_priorities
+from shared.latency import latency_span
+from shared.background_tasks import BackgroundTaskRegistry
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -40,9 +44,16 @@ ROLEPLAY_TITLE_MAX_LENGTH = 200
 class ConversationService:
     """대화 서비스"""
 
-    def __init__(self, repository: ConversationRepository, grammar_repository: GrammarRepository):
+    def __init__(
+        self,
+        repository: ConversationRepository,
+        *,
+        http_client: httpx.AsyncClient | None = None,
+        background_tasks: BackgroundTaskRegistry | None = None,
+    ):
         self.repository = repository
-        self.grammar_service = GrammarService(grammar_repository)
+        self.http_client = http_client
+        self.background_tasks = background_tasks
 
     async def process_grammar_feedback_background(
         self,
@@ -60,15 +71,18 @@ class ConversationService:
             previous_ai_message: 이전 AI 메시지 (맥락용)
         """
         try:
-            # 문법 체크 실행
-            feedback = await self.grammar_service.check_grammar(
+            # LLM 대기 중 요청의 DB session을 공유하지 않아요.
+            grammar_service = GrammarService(None, http_client=self.http_client)
+            feedback = await grammar_service.check_grammar(
                 user_message,
                 previous_ai_message,
                 language_context=ensure_language_context(language_context),
             )
 
-            # DB에 저장
-            await self.grammar_service.save_feedback(user_message_id, feedback)
+            # 저장할 때만 task가 소유한 별도 session을 열고 닫아요.
+            with SessionLocal() as db:
+                grammar_service = GrammarService(GrammarRepository(db), http_client=self.http_client)
+                await grammar_service.save_feedback(user_message_id, feedback)
 
             logger.info(f"Grammar feedback saved for message {user_message_id}")
         except Exception as e:
@@ -100,6 +114,8 @@ class ConversationService:
         Returns:
             대화 응답
         """
+        if self.background_tasks is None:
+            raise RuntimeError("Conversation turns require an app-owned background task registry")
         try:
             # 1. Conversation 생성
             language_context = ensure_language_context(language_context)
@@ -156,7 +172,7 @@ class ConversationService:
             self.repository.update_message_count(conversation.id, user_id, 2)
 
             # 7. 백그라운드에서 문법 체크 실행 (첫 메시지이므로 이전 AI 메시지 없음)
-            asyncio.create_task(
+            self.background_tasks.start(
                 self.process_grammar_feedback_background(
                     user_message.id,
                     first_message,
@@ -271,6 +287,8 @@ class ConversationService:
         Returns:
             메시지 응답
         """
+        if self.background_tasks is None:
+            raise RuntimeError("Conversation turns require an app-owned background task registry")
         try:
             # 1. 대화 조회
             conversation = self.repository.find_by_id(conversation_id, user_id)
@@ -324,7 +342,7 @@ class ConversationService:
             self.repository.update_message_count(conversation.id, user_id, new_count)
 
             # 10. 백그라운드에서 문법 체크 실행 (응답 반환에 영향 없음)
-            asyncio.create_task(
+            self.background_tasks.start(
                 self.process_grammar_feedback_background(
                     user_msg.id,
                     user_message,
@@ -477,7 +495,7 @@ class ConversationService:
             ExternalAPIException: LLM API 호출 실패
         """
         # Create provider
-        provider = LLMProviderFactory.create_provider()
+        provider = LLMProviderFactory.create_provider(http_client=self.http_client)
 
         # Build message list
         messages = [
@@ -495,7 +513,15 @@ class ConversationService:
         )
 
         # Call provider
-        response = await provider.chat_completion(request)
+        with latency_span(
+            "llm", model=request.model, input_chars=sum(len(msg.content) for msg in messages)
+        ) as timing:
+            response = await provider.chat_completion(request)
+            timing["output_chars"] = len(response.content)
+            for key in ("prompt_tokens", "completion_tokens"):
+                value = (response.usage or {}).get(key)
+                if isinstance(value, int):
+                    timing[key] = value
         return response.content
 
     # Helper 함수

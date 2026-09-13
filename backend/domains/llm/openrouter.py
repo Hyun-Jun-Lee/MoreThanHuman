@@ -14,7 +14,8 @@ settings = get_settings()
 class OpenRouterProvider(LLMProvider):
     """OpenRouter API Provider"""
 
-    def __init__(self):
+    def __init__(self, http_client: httpx.AsyncClient):
+        self.http_client = http_client
         self.api_key = settings.openrouter_api_key
         self.base_url = "https://openrouter.ai/api/v1/chat/completions"
 
@@ -35,44 +36,43 @@ class OpenRouterProvider(LLMProvider):
         # Convert LLMMessage to dict format
         messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
 
-        async with httpx.AsyncClient() as client:
-            try:
-                response = await client.post(
-                    self.base_url,
-                    headers={
-                        "Authorization": f"Bearer {self.api_key}",
-                        "HTTP-Referer": "https://github.com/MoreThanHuman",
-                        "Content-Type": "application/json",
-                    },
-                    json={
-                        "model": request.model,
-                        "messages": messages,
-                        "max_tokens": request.max_tokens,
-                        "temperature": request.temperature,
-                        **(request.extra_params or {}),
-                    },
-                    timeout=30.0,
-                )
-                response.raise_for_status()
-                data = response.json()
+        try:
+            response = await self.http_client.post(
+                self.base_url,
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "HTTP-Referer": "https://github.com/MoreThanHuman",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": request.model,
+                    "messages": messages,
+                    "max_tokens": request.max_tokens,
+                    "temperature": request.temperature,
+                    **(request.extra_params or {}),
+                },
+                timeout=30.0,
+            )
+            response.raise_for_status()
+            data = response.json()
 
-                return LLMResponse(
-                    content=data["choices"][0]["message"]["content"],
-                    model=data.get("model"),
-                    usage=data.get("usage"),
+            return LLMResponse(
+                content=data["choices"][0]["message"]["content"],
+                model=data.get("model"),
+                usage=data.get("usage"),
+            )
+        except httpx.HTTPStatusError as e:
+            response_body = e.response.text[:500] if e.response is not None else ""
+            if e.response.status_code == 429:
+                raise RateLimitException(
+                    "무료 모델의 사용 한도에 도달했습니다. 잠시 후 다시 시도해주세요.",
+                    details={"retry_after": "1-2 minutes"},
                 )
-            except httpx.HTTPStatusError as e:
-                response_body = e.response.text[:500] if e.response is not None else ""
-                if e.response.status_code == 429:
-                    raise RateLimitException(
-                        "무료 모델의 사용 한도에 도달했습니다. 잠시 후 다시 시도해주세요.",
-                        details={"retry_after": "1-2 minutes"},
-                    )
-                raise ExternalAPIException(
-                    f"OpenRouter API call failed: status={e.response.status_code}, body={response_body}"
-                )
-            except httpx.HTTPError as e:
-                raise ExternalAPIException(f"OpenRouter API call failed: {str(e)}")
+            raise ExternalAPIException(
+                f"OpenRouter API call failed: status={e.response.status_code}, body={response_body}"
+            )
+        except httpx.HTTPError as e:
+            raise ExternalAPIException(f"OpenRouter API call failed: {str(e)}")
 
     def validate_config(self) -> bool:
         """OpenRouter 설정 검증"""

@@ -37,7 +37,6 @@ def make_response(status_code: int = 200, *, json_data=None, content: bytes = b"
 @pytest.mark.asyncio
 async def test_openrouter_transcribe_audio_uses_multipart_request(monkeypatch):
     fake_client = FakeAsyncClient(make_response(json_data={"text": "Hello there."}))
-    monkeypatch.setattr(openrouter_provider_module.httpx, "AsyncClient", lambda: fake_client)
     monkeypatch.setattr(openrouter_provider_module.settings, "openrouter_api_key", "test-key")
     monkeypatch.setattr(
         openrouter_provider_module.settings,
@@ -45,7 +44,7 @@ async def test_openrouter_transcribe_audio_uses_multipart_request(monkeypatch):
         "openai/gpt-4o-mini-transcribe",
     )
 
-    result = await OpenRouterVoiceProvider().transcribe_audio(
+    result = await OpenRouterVoiceProvider(fake_client).transcribe_audio(
         filename="speech.webm",
         content_type="audio/webm",
         audio_bytes=b"audio-bytes",
@@ -66,13 +65,12 @@ async def test_openrouter_synthesize_speech_uses_audio_speech_endpoint(monkeypat
             headers={"content-type": "audio/mpeg"},
         )
     )
-    monkeypatch.setattr(openrouter_provider_module.httpx, "AsyncClient", lambda: fake_client)
     monkeypatch.setattr(openrouter_provider_module.settings, "openrouter_api_key", "test-key")
     monkeypatch.setattr(openrouter_provider_module.settings, "tts_model", "microsoft/mai-voice-2-flash")
     monkeypatch.setattr(openrouter_provider_module.settings, "tts_voice", "en-US-Harper:MAI-Voice-2-Flash")
     monkeypatch.setattr(openrouter_provider_module.settings, "tts_response_format", "mp3")
 
-    result = await OpenRouterVoiceProvider().synthesize_speech(text="Welcome back.")
+    result = await OpenRouterVoiceProvider(fake_client).synthesize_speech(text="Welcome back.")
 
     assert result.audio_bytes == b"mp3-bytes"
     assert result.content_type == "audio/mpeg"
@@ -89,11 +87,10 @@ async def test_openrouter_synthesize_speech_uses_audio_speech_endpoint(monkeypat
 @pytest.mark.asyncio
 async def test_openrouter_transcribe_audio_maps_rate_limit(monkeypatch):
     fake_client = FakeAsyncClient(make_response(429, json_data={"error": "rate limited"}))
-    monkeypatch.setattr(openrouter_provider_module.httpx, "AsyncClient", lambda: fake_client)
     monkeypatch.setattr(openrouter_provider_module.settings, "openrouter_api_key", "test-key")
 
     with pytest.raises(RateLimitException, match="rate limit"):
-        await OpenRouterVoiceProvider().transcribe_audio(
+        await OpenRouterVoiceProvider(fake_client).transcribe_audio(
             filename="speech.webm",
             content_type="audio/webm",
             audio_bytes=b"audio-bytes",
@@ -109,7 +106,6 @@ async def test_openrouter_transcribe_audio_logs_response_details_on_http_error(m
             headers={"x-generation-id": "generation-123"},
         )
     )
-    monkeypatch.setattr(openrouter_provider_module.httpx, "AsyncClient", lambda: fake_client)
     monkeypatch.setattr(openrouter_provider_module.settings, "openrouter_api_key", "test-key")
     monkeypatch.setattr(
         openrouter_provider_module.settings,
@@ -119,7 +115,7 @@ async def test_openrouter_transcribe_audio_logs_response_details_on_http_error(m
 
     with caplog.at_level(logging.WARNING, logger="domains.voice.openrouter_provider"):
         with pytest.raises(ExternalAPIException, match="OpenRouter transcription failed"):
-            await OpenRouterVoiceProvider().transcribe_audio(
+            await OpenRouterVoiceProvider(fake_client).transcribe_audio(
                 filename="speech.webm",
                 content_type="audio/webm",
                 audio_bytes=b"audio-bytes",
@@ -137,7 +133,8 @@ async def test_openrouter_transcribe_audio_logs_response_details_on_http_error(m
 
 @pytest.mark.asyncio
 async def test_openrouter_provider_requires_api_key(monkeypatch):
+    fake_client = FakeAsyncClient(make_response())
     monkeypatch.setattr(openrouter_provider_module.settings, "openrouter_api_key", "")
 
     with pytest.raises(AppException, match="OPENROUTER_API_KEY"):
-        await OpenRouterVoiceProvider().synthesize_speech(text="Hello.")
+        await OpenRouterVoiceProvider(fake_client).synthesize_speech(text="Hello.")

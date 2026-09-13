@@ -1,8 +1,12 @@
 # MoreThanHuman Backend DSL
 
-> 최종 갱신: 2026-09-12 · 범위: FastAPI 백엔드 API + Flutter 모바일 연동
+> 최종 갱신: 2026-09-13 · 범위: FastAPI 백엔드 API + Flutter 모바일 연동
 
 사용자 클라이언트는 `mobile/`의 Flutter 기반 모바일 앱으로 개발해요. 이 문서는 모바일 앱이 연동할 백엔드 도메인, 데이터 모델, API 계약을 정의해요.
+
+### 대화 진단 헤더 v1 (2026-09-13)
+
+`POST /api/conversations/start/free-chat/`, `/start/roleplay/`, `/{id}/turn/`, `/{id}/message/`에 `X-Request-ID`를 선택적으로 전달할 수 있어요. 값은 소문자 16진수 32자리예요. 누락·형식 불일치 시 서버가 새 값을 만들며 같은 응답 헤더로 반환해요. 로그 연결용이며 인증·멱등성을 제공하지 않아요. JSON 본문·오류 정책은 유지돼요. ASGI 밖에서 처리되는 예외/프록시 응답에는 헤더가 없을 수 있어요. 지표와 실험 절차는 [음성 지연 문서](VOICE_LATENCY.md), 미구현 제안은 [스트리밍 설계](VOICE_STREAMING.md)에 있어요.
 
 ## 1. 시스템
 
@@ -652,6 +656,10 @@ env {
 
   DEBUG?: Boolean
   CORS_ORIGINS?: List<String>
+  HTTP_MAX_CONNECTIONS?: Integer = 100
+  HTTP_MAX_KEEPALIVE_CONNECTIONS?: Integer = 20
+  HTTP_KEEPALIVE_EXPIRY_SECONDS?: Float = 30
+  BACKGROUND_SHUTDOWN_GRACE_SECONDS?: Float = 5
   MAX_TOKENS?: Integer
   TEMPERATURE?: Float
   SEARCH_SUMMARY_MAX_TOKENS?: Integer

@@ -3,6 +3,8 @@
 from typing import Annotated
 from uuid import UUID
 
+import httpx
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
@@ -20,13 +22,17 @@ from domains.language_snacks.schemas import (
     LanguageSnack,
     LanguageSnackCreate,
 )
+from shared.http_clients import get_ai_http_client
 from shared.types import SuccessResponse
 
 router = APIRouter(tags=["language snacks"])
 
 
-def get_snack_generator(db: Annotated[Session, Depends(get_db)]):
-    return SnackGenerator(get_language_snack_service(db).repository)
+def get_snack_generator(
+    db: Annotated[Session, Depends(get_db)],
+    http_client: Annotated[httpx.AsyncClient, Depends(get_ai_http_client)],
+):
+    return SnackGenerator(get_language_snack_service(db).repository, http_client=http_client)
 
 
 @router.get("/api/language-snacks/", response_model=SuccessResponse[list])

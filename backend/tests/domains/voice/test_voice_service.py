@@ -1,5 +1,6 @@
 import logging
 
+import httpx
 import pytest
 
 from domains.voice.schemas import VoiceSynthesisResult, VoiceTranscriptionResult
@@ -76,20 +77,26 @@ async def test_text_input_does_not_require_voice_provider_configuration(monkeypa
     assert text == "Hello"
 
 
-def test_create_provider_supports_openrouter(monkeypatch):
+@pytest.mark.asyncio
+async def test_create_provider_supports_openrouter(monkeypatch):
     monkeypatch.setattr(voice_service_module.settings, "stt_provider", "openrouter")
     monkeypatch.setattr(voice_service_module.settings, "tts_provider", "openrouter")
 
-    provider = VoiceService().provider
+    async with httpx.AsyncClient() as client:
+        provider = VoiceService(http_client=client).provider
+        assert provider.http_client is client
 
     assert isinstance(provider, OpenRouterVoiceProvider)
 
 
-def test_create_provider_still_supports_openai(monkeypatch):
+@pytest.mark.asyncio
+async def test_create_provider_still_supports_openai(monkeypatch):
     monkeypatch.setattr(voice_service_module.settings, "stt_provider", "openai")
     monkeypatch.setattr(voice_service_module.settings, "tts_provider", "openai")
 
-    provider = VoiceService().provider
+    async with httpx.AsyncClient() as client:
+        provider = VoiceService(http_client=client).provider
+        assert provider.http_client is client
 
     assert isinstance(provider, OpenAIVoiceProvider)
 

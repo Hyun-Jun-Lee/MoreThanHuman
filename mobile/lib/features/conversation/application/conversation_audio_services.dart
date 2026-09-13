@@ -5,6 +5,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:audioplayers/audioplayers.dart';
+import 'package:curitalk/core/diagnostics/latency_trace.dart';
 import 'package:curitalk/features/conversation/domain/conversation_models.dart';
 import 'package:curitalk/features/conversation/domain/conversation_repository.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -193,6 +194,8 @@ class RecordConversationAudioRecorder implements ConversationAudioRecorder {
 
   @override
   Future<ConversationAudioFile> stop() async {
+    final LatencyTrace trace = LatencyTrace(origin: 'recording_stop');
+    String latencyStatus = 'error';
     String resolvedPath = '';
     try {
       final String? path = await _backend.stop();
@@ -215,10 +218,12 @@ class RecordConversationAudioRecorder implements ConversationAudioRecorder {
           reason: ConversationAudioExceptionReason.emptyRecording,
         );
       }
+      latencyStatus = 'ok';
       return ConversationAudioFile(
         bytes: bytes,
         filename: fileStore.basename(resolvedPath),
         contentType: _output.contentType,
+        latencyTrace: trace,
       );
     } on ConversationAudioException {
       rethrow;
@@ -233,6 +238,7 @@ class RecordConversationAudioRecorder implements ConversationAudioRecorder {
         _currentPath = null;
         await fileStore.deleteIfExists(resolvedPath);
       }
+      trace.mark('recording_ready', status: latencyStatus);
     }
   }
 
@@ -278,9 +284,13 @@ class AudioplayersConversationAudioPlayer implements ConversationAudioPlayer {
 
   @override
   Future<void> play(VoiceAudioResponse audio) async {
+    final LatencyTrace? trace = audio.latencyTrace;
+    StreamSubscription<PlayerState>? latencySubscription;
     try {
       await stop();
+      final int decodeStarted = trace?.elapsedMicroseconds ?? 0;
       final Uint8List bytes = base64Decode(audio.base64);
+      trace?.mark('audio_decode', startedAtMicroseconds: decodeStarted);
       final Completer<void> completed = Completer<void>();
       _activeCompletion = completed;
       _activeCompletionSubscription = _player.onPlayerComplete.listen((_) {
@@ -289,6 +299,16 @@ class AudioplayersConversationAudioPlayer implements ConversationAudioPlayer {
         }
       });
       try {
+        final int requestedAt = trace?.elapsedMicroseconds ?? 0;
+        trace?.mark('playback_requested');
+        latencySubscription = _player.onPlayerStateChanged.listen((
+          PlayerState state,
+        ) {
+          if (state == PlayerState.playing &&
+              identical(_activeCompletion, completed)) {
+            trace?.markFirstPlayback(requestedAt);
+          }
+        });
         await _player.play(BytesSource(bytes, mimeType: audio.contentType));
         await completed.future;
       } finally {
@@ -301,13 +321,17 @@ class AudioplayersConversationAudioPlayer implements ConversationAudioPlayer {
         }
       }
     } on ConversationAudioException {
+      trace?.mark('playback_error', status: 'error');
       rethrow;
     } on Object catch (error) {
+      trace?.mark('playback_error', status: 'error');
       throw ConversationAudioException(
         'Could not play audio response.',
         reason: ConversationAudioExceptionReason.playbackFailed,
         cause: error,
       );
+    } finally {
+      await latencySubscription?.cancel();
     }
   }
 

@@ -5,6 +5,8 @@ import json
 from typing import Protocol
 from uuid import uuid4
 
+import httpx
+
 from config import get_grammar_model_config, get_settings
 from domains.grammar.models import GrammarFeedbackModel
 from domains.grammar.repository import GrammarRepository
@@ -37,9 +39,12 @@ class GrammarService:
         self,
         repository: GrammarRepository,
         message_ownership_repository: MessageOwnershipRepository | None = None,
+        *,
+        http_client: httpx.AsyncClient | None = None,
     ):
         self.repository = repository
         self.message_ownership_repository = message_ownership_repository
+        self.http_client = http_client
 
     async def check_grammar(
         self,
@@ -136,7 +141,7 @@ class GrammarService:
         grammar_provider, grammar_model = get_grammar_model_config()
 
         # Create provider with grammar-specific settings
-        provider = LLMProviderFactory.create_provider(grammar_provider)
+        provider = LLMProviderFactory.create_provider(grammar_provider, http_client=self.http_client)
 
         # Build prompt
         language_context = ensure_language_context(language_context)

@@ -5,6 +5,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from database import Base, get_db
+from shared.http_clients import get_auth_http_client
 from domains.auth.dependencies import get_supabase_auth_verifier
 from domains.auth.router import router
 from domains.auth.service import SupabaseUserClaims
@@ -43,6 +44,8 @@ def _client(verifier: FakeVerifier) -> TestClient:
             session.close()
 
     app = FastAPI()
+    # verifier는 fake이며 이 테스트는 HTTP 호출 없이 profile 저장만 검증해요.
+    app.dependency_overrides[get_auth_http_client] = lambda: None
     app.include_router(router)
     app.dependency_overrides[get_db] = override_db
     app.dependency_overrides[get_supabase_auth_verifier] = lambda: verifier

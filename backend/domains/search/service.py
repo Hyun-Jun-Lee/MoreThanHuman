@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
+import httpx
 from pydantic import BaseModel, ValidationError
 
 from config import get_model_for_provider, get_settings
@@ -83,7 +84,11 @@ class PreparedSearchResult:
 class SearchService:
     """검색 서비스"""
 
-    def __init__(self, search_provider: DuckDuckGoSearchProvider | None = None):
+    def __init__(
+        self, search_provider: DuckDuckGoSearchProvider | None = None,
+        *, http_client: httpx.AsyncClient | None = None,
+    ):
+        self.http_client = http_client
         self.settings = get_settings()
         self.search_provider = search_provider or DuckDuckGoSearchProvider(self.settings)
 
@@ -201,7 +206,7 @@ class SearchService:
         source_text = self._format_topic_prep_sources(prepared.sources)
         target_name = language_name(language_context.target_language)
         display_name = language_name(display_language)
-        provider = LLMProviderFactory.create_provider()
+        provider = LLMProviderFactory.create_provider(http_client=self.http_client)
         response = await provider.chat_completion(
             LLMRequest(
                 messages=[
@@ -257,7 +262,7 @@ class SearchService:
         target_name = language_name(language_context.target_language)
         display_name = language_name(display_language)
         directions = ", ".join(direction.value for direction in ConversationDirection)
-        provider = LLMProviderFactory.create_provider()
+        provider = LLMProviderFactory.create_provider(http_client=self.http_client)
         response = await provider.chat_completion(
             LLMRequest(
                 messages=[
@@ -390,7 +395,7 @@ class SearchService:
         language_context = ensure_language_context(language_context)
         target_name = language_name(language_context.target_language)
         native_name = language_name(language_context.native_language)
-        provider = LLMProviderFactory.create_provider()
+        provider = LLMProviderFactory.create_provider(http_client=self.http_client)
         started_at = time.perf_counter()
         request = LLMRequest(
             messages=[
@@ -504,7 +509,7 @@ class SearchService:
         source_text = self._format_numbered_sources(sources)
         analysis_text = self._format_query_analysis_for_judge(analysis)
         try:
-            provider = LLMProviderFactory.create_provider()
+            provider = LLMProviderFactory.create_provider(http_client=self.http_client)
             started_at = time.perf_counter()
             request = LLMRequest(
                 messages=[
@@ -900,7 +905,7 @@ class SearchService:
         current_date, timezone = current_search_context()
 
         try:
-            provider = LLMProviderFactory.create_provider()
+            provider = LLMProviderFactory.create_provider(http_client=self.http_client)
             started_at = time.perf_counter()
             request = LLMRequest(
                 messages=[
@@ -977,7 +982,7 @@ class SearchService:
         current_date, timezone = current_search_context()
 
         try:
-            provider = LLMProviderFactory.create_provider()
+            provider = LLMProviderFactory.create_provider(http_client=self.http_client)
             request = LLMRequest(
                 messages=[
                     LLMMessage(

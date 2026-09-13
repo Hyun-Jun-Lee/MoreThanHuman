@@ -2,13 +2,47 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:curitalk/core/diagnostics/latency_trace.dart';
 import 'package:curitalk/core/network/network.dart';
+import 'package:curitalk/features/conversation/domain/conversation_models.dart';
 import 'package:curitalk/features/auth/auth.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'turn trace reaches audio playback data without changing its JSON',
+    () async {
+      final ApiClient client = ApiClient(
+        Dio(BaseOptions(baseUrl: 'https://example.com/api/')),
+      );
+      final _FakeHttpClientAdapter adapter = _FakeHttpClientAdapter(
+        response: <String, dynamic>{
+          'success': true,
+          'data': <String, dynamic>{
+            'content_type': 'audio/mpeg',
+            'base64': 'YQ==',
+            'format': 'mp3',
+          },
+        },
+      );
+      client.dio.httpClientAdapter = adapter;
+      addTearDown(client.close);
+      final LatencyTrace trace = LatencyTrace(origin: 'recording_stop');
+      final ApiResponse<VoiceAudioResponse> response = await client
+          .post<VoiceAudioResponse>(
+            'conversations/id/turn/',
+            decodeData: VoiceAudioResponse.fromJson,
+            latencyTrace: trace,
+          );
+      expect(adapter.lastRequest?.headers['X-Request-ID'], trace.id);
+      expect(response.data.latencyTrace, same(trace));
+      expect(response.data.base64, 'YQ==');
+      expect(LatencyTrace.current, isNull);
+    },
+  );
+
   test(
     'core providers create the API client with Supabase session providers',
     () {

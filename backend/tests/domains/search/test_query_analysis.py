@@ -61,7 +61,7 @@ async def test_llm_query_analyzer_prompt_includes_current_date_and_timezone(monk
             captured["request"] = request
             return FakeResponse()
 
-    monkeypatch.setattr("domains.search.service.LLMProviderFactory.create_provider", lambda: FakeProvider())
+    monkeypatch.setattr("domains.search.service.LLMProviderFactory.create_provider", lambda **kwargs: FakeProvider())
 
     data = await SearchService()._generate_llm_query_analysis("최근 롯데 자이언츠 경기", "2026-06-04", "Asia/Seoul")
 

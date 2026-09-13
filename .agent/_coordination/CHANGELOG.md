@@ -1,5 +1,10 @@
 # CHANGELOG — 완료된 작업 기록
 
+## 2026-09-13
+
+- **AsyncClient 연결 풀 v1**: 워커별 AI·인증 풀과 전체 provider 주입, CLI 재사용, 문법 task 추적·종료 및 별도 DB session을 적용. 최대/유휴 연결·만료·종료 대기 설정과 [계측 문서](../../../docs/VOICE_LATENCY.md)를 동기화. 실제 localhost 연결 재사용 포함 29개 신규 테스트·전체 175개 통과(3 skip). 유료 API 지연 실험·운영 배포는 미실행
+- **음성 대화 지연 계측**: 서버 auth·STT·LLM·TTS·응답과 앱 녹음 종료·HTTP·첫 재생에 trace별 print 로그 추가. [반복 실험·연결 풀 검토](../../../docs/VOICE_LATENCY.md)와 [스트리밍 설계 제안](../../../docs/VOICE_STREAMING.md) 작성. 백엔드 146개·Flutter 232개 통과, 최종 관련 Flutter 19개 재검증·정적 분석 통과. 실제 API 10회 실험과 연결 풀·스트리밍 구현은 미실행
+
 ## 2026-09-12
 
 - **언어 스낵 v2 구현**: JSONB 세 유형·학습 언어별 조회, identity 중복 방지·LLM 검증·재개 가능한 주간 생성 CLI, PostgreSQL advisory lock, 운영 API, Flutter 언어별 캐시·5초 카드 전환과 배포 문서를 반영. 운영 DB 변경·LLM 실제 생성·cron 등록은 미실행

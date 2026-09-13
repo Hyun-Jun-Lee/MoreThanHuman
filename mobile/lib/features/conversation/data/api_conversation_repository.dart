@@ -63,6 +63,7 @@ class ApiConversationRepository
         .post<MultimodalConversationResponse>(
           'conversations/start/free-chat/',
           data: formData,
+          latencyTrace: audioFile.latencyTrace,
           contentType: Headers.multipartFormDataContentType,
           decodeData: MultimodalConversationResponse.fromJson,
         );
@@ -153,6 +154,7 @@ class ApiConversationRepository
         .post<MultimodalMessageResponse>(
           'conversations/$conversationId/turn/',
           data: formData,
+          latencyTrace: audioFile.latencyTrace,
           contentType: Headers.multipartFormDataContentType,
           decodeData: MultimodalMessageResponse.fromJson,
         );
@@ -218,6 +220,7 @@ class ApiConversationRepository
         .post<MultimodalConversationResponse>(
           'conversations/start/free-chat/',
           data: formData,
+          latencyTrace: audioFile.latencyTrace,
           contentType: Headers.multipartFormDataContentType,
           decodeData: MultimodalConversationResponse.fromJson,
         );

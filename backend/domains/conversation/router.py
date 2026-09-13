@@ -1,12 +1,16 @@
 """
 Conversation API Router
 HTTP 요청/응답 처리
+
+진단 v1 (2026-09-13): 시작·turn·message POST의 선택 X-Request-ID 헤더는
+LatencyMiddleware에서 처리해요. JSON 계약은 유지하며 상세는 docs/DSL.md를 참조해요.
 """
 import asyncio
 import json
 import logging
 from uuid import UUID
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
@@ -43,6 +47,8 @@ from shared.exceptions import (
     ValidationException,
 )
 from shared.types import ErrorResponse, SuccessResponse
+from shared.background_tasks import BackgroundTaskRegistry, get_background_tasks
+from shared.http_clients import get_ai_http_client
 
 logger = logging.getLogger(__name__)
 
@@ -136,18 +142,19 @@ TURN_REQUEST_BODY_OPENAPI = {
 
 
 # Dependency
-def get_conversation_service(db: Session = Depends(get_db)) -> ConversationService:
+def get_conversation_service(
+    db: Session = Depends(get_db),
+    http_client: httpx.AsyncClient = Depends(get_ai_http_client),
+    background_tasks: BackgroundTaskRegistry = Depends(get_background_tasks),
+) -> ConversationService:
     """Conversation Service 의존성"""
-    from domains.grammar.repository import GrammarRepository
-
     repository = ConversationRepository(db)
-    grammar_repository = GrammarRepository(db)
-    return ConversationService(repository, grammar_repository)
+    return ConversationService(repository, http_client=http_client, background_tasks=background_tasks)
 
 
-def get_voice_service() -> VoiceService:
+def get_voice_service(http_client: httpx.AsyncClient = Depends(get_ai_http_client)) -> VoiceService:
     """Voice Service 의존성"""
-    return VoiceService()
+    return VoiceService(http_client=http_client)
 
 
 def _parse_bool_form_value(value: object, *, default: bool = False) -> bool:

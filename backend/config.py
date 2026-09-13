@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Literal
 
 from pydantic_settings import BaseSettings
-from pydantic import Field
+from pydantic import Field, model_validator
 from shared.exceptions import AppException
 
 
@@ -24,6 +24,18 @@ class Settings(BaseSettings):
     env: str = "prod"
     debug: bool = False
     cors_origins: list[str] = []
+
+    # 외부 HTTP 풀별 한도 (AI·인증은 각각 별도 풀)
+    http_max_connections: int = Field(100, ge=1)
+    http_max_keepalive_connections: int = Field(20, ge=0)
+    http_keepalive_expiry_seconds: float = Field(30.0, gt=0, allow_inf_nan=False)
+    background_shutdown_grace_seconds: float = Field(5.0, ge=0, allow_inf_nan=False)
+
+    @model_validator(mode="after")
+    def validate_http_pool_limits(self) -> "Settings":
+        if self.http_max_keepalive_connections > self.http_max_connections:
+            raise ValueError("HTTP_MAX_KEEPALIVE_CONNECTIONS must not exceed HTTP_MAX_CONNECTIONS")
+        return self
 
     # LLM Provider Settings
     llm_provider: str = "openrouter"

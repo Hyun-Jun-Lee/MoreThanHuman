@@ -134,7 +134,7 @@ async def test_quality_judge_prompt_includes_current_date_and_timezone(monkeypat
             captured["request"] = request
             return FakeResponse()
 
-    monkeypatch.setattr("domains.search.service.LLMProviderFactory.create_provider", lambda: FakeProvider())
+    monkeypatch.setattr("domains.search.service.LLMProviderFactory.create_provider", lambda **kwargs: FakeProvider())
 
     accepted_sources, quality = await service._judge_search_quality(
         "최근 애플 발표",
@@ -258,7 +258,7 @@ async def test_quality_judge_retries_without_structured_output_when_provider_rej
                 raise ExternalAPIException("response_format json_schema is not supported")
             return FakeResponse()
 
-    monkeypatch.setattr("domains.search.service.LLMProviderFactory.create_provider", lambda: FakeProvider())
+    monkeypatch.setattr("domains.search.service.LLMProviderFactory.create_provider", lambda **kwargs: FakeProvider())
 
     accepted_sources, quality = await service._judge_search_quality(
         "최근 애플 발표",

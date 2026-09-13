@@ -1,6 +1,8 @@
 """
 Grammar API Router
 """
+import httpx
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -12,6 +14,7 @@ from domains.conversation.repository import ConversationRepository
 from domains.grammar.repository import GrammarRepository
 from domains.grammar.schemas import GrammarFeedback, GrammarStats
 from domains.grammar.service import GrammarService
+from shared.http_clients import get_ai_http_client
 from shared.exceptions import AppException, NotFoundException, RateLimitException
 from shared.types import SuccessResponse
 
@@ -26,11 +29,14 @@ class CheckGrammarRequest(BaseModel):
 
 
 # Dependency
-def get_grammar_service(db: Session = Depends(get_db)) -> GrammarService:
+def get_grammar_service(
+    db: Session = Depends(get_db),
+    http_client: httpx.AsyncClient = Depends(get_ai_http_client),
+) -> GrammarService:
     """Grammar Service 의존성"""
     repository = GrammarRepository(db)
     conversation_repository = ConversationRepository(db)
-    return GrammarService(repository, conversation_repository)
+    return GrammarService(repository, conversation_repository, http_client=http_client)
 
 
 # Endpoints

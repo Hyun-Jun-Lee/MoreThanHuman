@@ -1,3 +1,4 @@
+import 'package:curitalk/core/diagnostics/latency_trace.dart';
 import 'package:curitalk/features/conversation/domain/grammar_feedback.dart';
 
 enum ConversationType {
@@ -69,6 +70,7 @@ class VoiceAudioResponse {
     required this.contentType,
     required this.base64,
     required this.format,
+    this.latencyTrace,
   });
 
   factory VoiceAudioResponse.fromJson(Object? json) {
@@ -92,12 +94,16 @@ class VoiceAudioResponse {
       contentType: contentType,
       base64: base64,
       format: format,
+      latencyTrace: LatencyTrace.current,
     );
   }
 
   final String contentType;
   final String base64;
   final String format;
+
+  /// 서버 JSON과 무관한 진단 정보로, 자동 재생까지 같은 시계를 전달해요.
+  final LatencyTrace? latencyTrace;
 }
 
 class VoiceAudioError {

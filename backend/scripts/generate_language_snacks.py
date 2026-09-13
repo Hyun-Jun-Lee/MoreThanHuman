@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from config import get_settings
+from shared.http_clients import create_http_client
 from database import SessionLocal
 from domains.language_snacks.generation_service import SnackGenerator
 from domains.language_snacks.lock import SnackError
@@ -27,27 +28,28 @@ def weekly_slot(now=None):
 
 async def run(args):
     results = []
-    for language in ("en", "ko") if args.language == "all" else (args.language,):
-        with SessionLocal() as db:
-            try:
-                generator = SnackGenerator(LanguageSnackRepository(db))
-                result = await generator.generate(
-                    f"{args.run_key or 'weekly:' + weekly_slot()}:{language}",
-                    language,
-                    args.per_type,
-                    args.dry_run,
-                )
-            except SnackError as error:
-                result = {
-                    "status": "skipped"
-                    if error.code == "generation_busy"
-                    else "failed",
-                    "error": error.code,
-                }
-            except Exception:  # noqa: BLE001 - CLI 로그에 provider 원문을 노출하지 않아요.
-                # provider 예외의 body에는 비밀 값이나 원문이 포함될 수 있어요.
-                result = {"status": "failed", "error": "generation_unavailable"}
-            results.append({"language": language, **result})
+    async with create_http_client(get_settings()) as http_client:
+        for language in ("en", "ko") if args.language == "all" else (args.language,):
+            with SessionLocal() as db:
+                try:
+                    generator = SnackGenerator(LanguageSnackRepository(db), http_client=http_client)
+                    result = await generator.generate(
+                        f"{args.run_key or 'weekly:' + weekly_slot()}:{language}",
+                        language,
+                        args.per_type,
+                        args.dry_run,
+                    )
+                except SnackError as error:
+                    result = {
+                        "status": "skipped"
+                        if error.code == "generation_busy"
+                        else "failed",
+                        "error": error.code,
+                    }
+                except Exception:  # noqa: BLE001 - CLI 로그에 provider 원문을 노출하지 않아요.
+                    # provider 예외의 body에는 비밀 값이나 원문이 포함될 수 있어요.
+                    result = {"status": "failed", "error": "generation_unavailable"}
+                results.append({"language": language, **result})
     print(json.dumps(results, ensure_ascii=False))
     return 1 if any(item["status"] in ("failed", "partial") for item in results) else 0
 

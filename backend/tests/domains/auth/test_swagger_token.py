@@ -7,7 +7,6 @@ from domains.auth.dependencies import get_auth_service
 from domains.auth.router import router
 from domains.auth.schemas import TokenResponse
 from domains.auth.service import AuthService
-import domains.auth.service as auth_service_module
 from shared.exceptions import AuthenticationException
 
 
@@ -149,8 +148,8 @@ class _FakeAsyncClient:
     async def __aexit__(self, exc_type, exc, tb):
         return False
 
-    async def post(self, url: str, *, headers: dict, json: dict):
-        self.requests.append({"url": url, "headers": headers, "json": json})
+    async def post(self, url: str, *, headers: dict, json: dict, timeout: float):
+        self.requests.append({"url": url, "headers": headers, "json": json, "timeout": timeout})
         return self.response
 
 
@@ -171,13 +170,8 @@ async def test_swagger_token_service_calls_supabase_password_grant(monkeypatch):
             },
         )
     )
-    monkeypatch.setattr(
-        auth_service_module.httpx,
-        "AsyncClient",
-        lambda *, timeout: fake_client,
-    )
 
-    token = await AuthService(repository=None).issue_swagger_token(
+    token = await AuthService(repository=None, http_client=fake_client).issue_swagger_token(
         email="learner@example.com",
         password="password",
     )
@@ -188,6 +182,7 @@ async def test_swagger_token_service_calls_supabase_password_grant(monkeypatch):
     assert fake_client.requests == [
         {
             "url": "https://project.supabase.co/auth/v1/token?grant_type=password",
+            "timeout": get_settings().supabase_auth_timeout_seconds,
             "headers": {
                 "apikey": "publishable-key",
                 "Content-Type": "application/json",
@@ -204,14 +199,9 @@ async def test_swagger_token_service_rejects_bad_supabase_credentials(monkeypatc
     get_settings.cache_clear()
 
     fake_client = _FakeAsyncClient(_FakeResponse(400, {"error": "invalid_grant"}))
-    monkeypatch.setattr(
-        auth_service_module.httpx,
-        "AsyncClient",
-        lambda *, timeout: fake_client,
-    )
 
     with pytest.raises(AuthenticationException, match="Invalid Supabase email/password"):
-        await AuthService(repository=None).issue_swagger_token(
+        await AuthService(repository=None, http_client=fake_client).issue_swagger_token(
             email="learner@example.com",
             password="wrong-password",
         )
@@ -224,14 +214,9 @@ async def test_swagger_token_service_rejects_invalid_supabase_response(monkeypat
     get_settings.cache_clear()
 
     fake_client = _FakeAsyncClient(_FakeResponse(200, json_error=ValueError("bad json")))
-    monkeypatch.setattr(
-        auth_service_module.httpx,
-        "AsyncClient",
-        lambda *, timeout: fake_client,
-    )
 
     with pytest.raises(AuthenticationException, match="Invalid Supabase token response"):
-        await AuthService(repository=None).issue_swagger_token(
+        await AuthService(repository=None, http_client=fake_client).issue_swagger_token(
             email="learner@example.com",
             password="password",
         )

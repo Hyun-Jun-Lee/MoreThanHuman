@@ -34,7 +34,8 @@ class SupabaseUserClaims:
 class AuthService:
     """인증 서비스"""
 
-    def __init__(self, repository: AuthRepository):
+    def __init__(self, repository: AuthRepository, *, http_client: httpx.AsyncClient | None = None):
+        self.http_client = http_client
         self.repository = repository
 
     def get_or_create_profile_from_claims(self, claims: SupabaseUserClaims) -> ProfileModel:
@@ -55,16 +56,18 @@ class AuthService:
     async def issue_swagger_token(self, *, email: str, password: str) -> TokenResponse:
         """Swagger 테스트용 Supabase access token 발급"""
         settings = get_settings()
+        if self.http_client is None:
+            raise RuntimeError("Token issuance requires an app-owned HTTP client")
         try:
-            async with httpx.AsyncClient(timeout=settings.supabase_auth_timeout_seconds) as client:
-                response = await client.post(
-                    f"{settings.supabase_auth_url}/token?grant_type=password",
-                    headers={
-                        "apikey": settings.required_supabase_publishable_key,
-                        "Content-Type": "application/json",
-                    },
-                    json={"email": email, "password": password},
-                )
+            response = await self.http_client.post(
+                f"{settings.supabase_auth_url}/token?grant_type=password",
+                timeout=settings.supabase_auth_timeout_seconds,
+                headers={
+                    "apikey": settings.required_supabase_publishable_key,
+                    "Content-Type": "application/json",
+                },
+                json={"email": email, "password": password},
+            )
         except httpx.HTTPError as exc:
             raise AuthenticationException("Supabase token issuance failed") from exc
 
