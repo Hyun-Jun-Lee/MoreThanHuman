@@ -1,6 +1,6 @@
 # 시스템 아키텍처
 
-> 프로젝트: MoreThanHuman (Convia) · 버전: 0.1.2 · 최종 갱신: 2026-09-13
+> 프로젝트: MoreThanHuman (Convia) · 버전: 0.1.3 · 최종 갱신: 2026-09-18
 
 ---
 
@@ -86,7 +86,9 @@ mobile/
 
 Flutter API 요청은 `ApiClient → AuthTokenInterceptor → TokenRefreshInterceptor → Dio` 순서로 실행돼요. 응답은 공통 envelope parser를 거쳐 feature decoder로 전달해요. Supabase SDK가 access/refresh session을 관리하고, `AuthTokenInterceptor`는 현재 Supabase access token을 `Authorization: Bearer` 헤더로 주입해요. 여러 요청이 동시에 `401`을 받아도 Supabase refresh는 하나만 공유하며, 새 access token으로 각 요청을 한 번만 재시도해요.
 
-Home의 `language_snacks`는 최근 대화와 독립된 학습 콘텐츠 흐름이에요. v2 feed는 profile.target_language와 content_language가 같은 published 최신 12개를 반환해요. Flutter는 학습 언어 변경 시 즉시 다시 조회하고, Home 재진입·앱 복귀 시 마지막 성공 조회가 5분 이상 지났으면 갱신해요. API 실패에는 언어·설명 언어별 secure storage 캐시만 사용하고 캐시가 없으면 해당 영역만 숨겨요. 이전 언어의 지연 응답은 버리며 5초 슬라이드 타이머는 네트워크를 호출하지 않아요.
+Home의 `language_snacks`는 최근 대화와 독립된 학습 콘텐츠 흐름이에요. v2 feed는 profile.target_language와 content_language가 같은 published 카드 12개를 반환해요. 기본은 최신순이며 Home은 `order=random`으로 전체 발행 목록에서 추출해요. Flutter는 학습 언어 변경 시 즉시 다시 조회하고, Home 재진입·앱 복귀 시 마지막 성공 조회가 5분 이상 지났으면 갱신해요. API 실패에는 언어·설명 언어별 secure storage 캐시를 사용하고 캐시·당일 스냅샷이 모두 없으면 해당 영역만 숨겨요. 이전 언어의 지연 응답은 버려요.
+
+토마토 스낵 v2.1(2026-09-19)은 `DailySnackBasketController`가 사용자 ID·학습 언어·기기 로컬 날짜별 12개 스냅샷과 소비 횟수를 저장해요. `SnackTomatoBasket`은 투명 바구니 4단계·토마토 5단계 이미지를 사용해 토마토 3개를 각 4입 먹고 `LanguageSnackContent` 팝업을 열어요. 4·8·12번째 팝업을 닫으면 남은 2·1·0개 바구니로 돌아가며 다음 토마토는 다시 눌러 꺼내요. 복원 시 완료 경계는 바구니, 진행 중이면 먹던 토마토를 표시하며 별도 저장 필드는 추가하지 않아요. 12개 소진 후에는 빈 바구니에서 재시작해도 추가 터치를 막고, `LanguageSnackHomeSection`의 현지 자정 타이머·앱 복귀 검사로 다음 날짜에 재구성해요. 열린 팝업·애니메이션은 종료 후 갱신해요. 발행 목록이 12개 미만이면 중복 ID를 제거한 목록을 한 번씩 순회한 뒤 반복 배치해요. 당일 피드 재조회는 이미 정한 묶음을 바꾸지 않으며 진행은 기기 간 동기화하지 않아요. 기존 5초 자동 슬라이드는 Home에서 제거했어요.
 
 스낵 v2(2026-09-12)는 세 유형의 `payload`와 지식 `identity`를 JSONB로 저장해요. identity는 NFC·공백 정규화, 객체 키·entry 순서 정렬 후 SHA-256을 계산해 UNIQUE로 보호하며 대소문자·sense는 보존해요. LLM은 같은 content_language의 모든 상태·유형 요약 이력을 보고 별도로 의미 중복을 판정해요. reserved를 먼저 저장하고 본문 구조·품질 검증 후 published로 전환하며 재시도 소진이나 운영 취소는 archived로 남겨 재생성하지 않아요. draft는 향후 편집용 상태로 현재 경로에서는 따로 저장하지 않아요.
 

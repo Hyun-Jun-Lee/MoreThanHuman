@@ -13,6 +13,7 @@ class ApiLanguageSnackRepository implements LanguageSnackRepository {
     final ApiResponse<List<LanguageSnack>> response = await apiClient
         .get<List<LanguageSnack>>(
           'v2/language-snacks/',
+          queryParameters: {'order': 'random', 'limit': 12},
           decodeData: (Object? json) {
             if (json is! List) {
               throw const FormatException('Language snack list is invalid.');

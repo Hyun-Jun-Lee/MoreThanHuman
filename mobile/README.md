@@ -125,7 +125,8 @@ assets/
 | `AppSelectionChip` | 대화 방향 등의 단일 선택 chip |
 | `AppSelectionCard` | 대화 방식·롤플레이 상황 등의 선택 카드 |
 | `RecentConversationCard` | 대화 타입 뱃지 없이 title·preview 중심으로 보여주는 pastel 최근 대화 카드 |
-| `LanguageSnackCarousel` | 공통 언어 지식을 5초 간격과 수동 탐색으로 표시하는 Home 전용 파스텔 카드 |
+| `SnackTomatoBasket` | 바구니와 3개 토마토의 4입 단계·팝업·당일 소진 상태 |
+| `LanguageSnackContent` | 지역별 표현·용법 차이·동음이의어의 공통 표시 본문 |
 | `ChatBubble` | 사용자·AI 역할별 정렬과 semantic color, 문단-aware 텍스트가 적용된 말풍선 |
 | `GrammarFeedbackCard` | 사용자 메시지 아래의 접기·펼치기 가능한 교정 문장과 설명 |
 | `TypingIndicator` | Reduce Motion 설정을 따르는 AI 응답 대기 표시 |
@@ -163,8 +164,9 @@ Splash → Onboarding(최초 1회) → Google Login → Home
 - Splash: 저장된 세션과 onboarding 완료 여부 확인
 - Onboarding: 기기 locale 기반 언어쌍 기본값을 보여주고 4장 소개 후 완료 상태와 pending 언어쌍을 secure storage에 저장
 - Login: Google Sign-In SDK의 `idToken`/`accessToken`으로 Supabase 세션 생성 후 `/auth/me` 조회
-- Home: 사용자 이름, 활성 언어쌍, 학습 언어별 스낵, 최근 대화 5개와 시작 제안을 표시해요. 스낵은 v2 API의 지역별 표현·용법 차이·동음이의어 최신 12개를 5초 간격으로 전환해요.
+- Home: 사용자 이름, 활성 언어쌍, 학습 언어별 스낵, 최근 대화 5개와 시작 제안을 표시해요. 스낵은 바구니에서 꺼낸 토마토 3개를 각각 4입 먹으며 팝업으로 읽어요. 5초 자동 전환은 사용하지 않아요.
 - 스낵 v2 (2026-09-12): target_language 변경 시 즉시 재조회하고 이전 응답을 버려요. API 실패 시 `curitalk.language_snacks.v2.{target_language}.{explanation_language}`의 마지막 성공 목록을 사용하며 캐시가 없으면 영역만 숨겨요. Home 재진입·앱 복귀 시 5분 기준으로 갱신해요.
+- 토마토 스낵 v2.1 (2026-09-19): `order=random&limit=12`로 전체 발행 콘텐츠에서 무작위 추출해요. 당일 묶음·순서·진행은 사용자와 학습 언어별 기기 저장소에 유지하며, 4입마다 팝업을 닫으면 2·1·0개가 남은 바구니로 돌아가요. 다음 토마토는 바구니를 눌러 꺼내고, 12개를 모두 보면 빈 바구니를 현지 자정까지 유지해요. 자정 또는 앱 복귀 시 새 묶음을 구성하고, 열린 팝업·애니메이션이 있으면 종료 후 갱신해요. 12개 미만이면 있는 목록을 반복해요. 기기 간 진행 동기화나 서버 이용 제한은 없어요. 원본 `snack_content_tomato/`의 PNG 9장은 `mobile/assets/images/snack_tomato/`에 복사해 번들링했으며 원본 변경 시 앱 에셋도 함께 갱신해야 해요.
 - 설명은 영어 학습자에게 한국어, 한국어 학습자에게 영어로 제공하며 앱 chrome locale과 분리해요. 미지원 유형·버전은 건너뛰고 알려진 유형의 손상된 응답은 캐시로 복원해요. 운영 키나 생성 기능은 앱에 포함하지 않아요.
 - Home Navigation: `Chat`은 새 대화 시작 sheet, `History`는 대화 목록 화면, `Profile`은 account sheet를 열어요.
 - Account: 우상단 프로필 아바타 또는 `Profile` 탭에서 이름/email, 활성 언어쌍 변경, `LOG OUT`을 표시해요. 언어쌍 변경은 새 대화부터 적용되고 기존 대화는 시작 시점 언어쌍을 유지한다고 안내하며, 저장 후 profile을 다시 hydration해 Home의 활성 언어쌍을 갱신해요. 로그아웃 시 앱 token 삭제·서버 revoke·Google sign out을 best-effort로 처리해요.

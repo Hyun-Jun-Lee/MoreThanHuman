@@ -1,10 +1,9 @@
 """인증된 언어별 조회와 운영 전용 스낵 관리."""
 
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 import httpx
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
@@ -32,7 +31,9 @@ def get_snack_generator(
     db: Annotated[Session, Depends(get_db)],
     http_client: Annotated[httpx.AsyncClient, Depends(get_ai_http_client)],
 ):
-    return SnackGenerator(get_language_snack_service(db).repository, http_client=http_client)
+    return SnackGenerator(
+        get_language_snack_service(db).repository, http_client=http_client
+    )
 
 
 @router.get("/api/language-snacks/", response_model=SuccessResponse[list])
@@ -55,10 +56,11 @@ def list_language_snacks(
     user: Annotated[ProfileModel, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
     limit: int = Query(12, ge=1, le=30),
+    order: Literal["latest", "random"] = Query("latest"),
 ):
     return SuccessResponse(
         data=get_language_snack_service(db).repository.list_published(
-            user.target_language, limit
+            user.target_language, limit, order=order
         )
     )
 

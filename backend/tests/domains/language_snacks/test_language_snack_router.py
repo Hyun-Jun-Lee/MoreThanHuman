@@ -90,3 +90,18 @@ def test_real_bearer_boundary():
     app = FastAPI()
     app.include_router(router)
     assert TestClient(app).get("/api/v2/language-snacks/").status_code == 403
+
+
+def test_random_order_is_validated_and_forwarded(client, repository, monkeypatch):
+    http, _ = client
+    calls = []
+    monkeypatch.setattr(
+        type(repository),
+        "list_published",
+        lambda self, language, limit, **kwargs: (
+            calls.append((language, limit, kwargs)) or []
+        ),
+    )
+    assert http.get("/api/v2/language-snacks/?order=random&limit=12").status_code == 200
+    assert calls == [("en", 12, {"order": "random"})]
+    assert http.get("/api/v2/language-snacks/?order=invalid").status_code == 422

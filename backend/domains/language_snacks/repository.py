@@ -3,7 +3,7 @@
 from contextlib import contextmanager
 from uuid import uuid4
 
-from sqlalchemy import desc
+from sqlalchemy import desc, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -38,16 +38,19 @@ class LanguageSnackRepository:
             raise SnackError("duplicate_knowledge", 409) from None
         return row
 
-    def list_published(self, language: str, limit: int = 12):
+    def list_published(self, language: str, limit: int = 12, *, order: str = "latest"):
+        ordering = (
+            (func.random(),)
+            if order == "random"
+            else (desc(LanguageSnackModel.published_at), desc(LanguageSnackModel.id))
+        )
         return (
             self.db.query(LanguageSnackModel)
             .filter(
                 LanguageSnackModel.content_language == language,
                 LanguageSnackModel.status == "published",
             )
-            .order_by(
-                desc(LanguageSnackModel.published_at), desc(LanguageSnackModel.id)
-            )
+            .order_by(*ordering)
             .limit(limit)
             .all()
         )

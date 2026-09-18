@@ -68,6 +68,9 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
+  assets:
+    - assets/images/snack_tomato/
+
   fonts:
     - family: Pretendard
       fonts:

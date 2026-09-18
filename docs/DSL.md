@@ -185,11 +185,11 @@ module Auth {
 
 ## 5. Language Snack 모듈
 
-> v2 · 2026-09-12: 고정 좌우 필드 대신 세 유형 JSONB와 학습 언어별 feed를 제공해요.
+> v2.1 · 2026-09-18: 세 유형 JSONB·학습 언어별 feed에 전체 발행 콘텐츠 무작위 조회를 추가해요.
 
 ```dsl
 module LanguageSnack {
-  GET   /api/v2/language-snacks/?limit=12 -> SuccessResponse<List<LanguageSnack>>
+  GET   /api/v2/language-snacks/?limit=12&order=latest -> SuccessResponse<List<LanguageSnack>>
   POST  /api/v2/language-snacks/ -> SuccessResponse<LanguageSnack> [201]
   PATCH /api/v2/language-snacks/{id}/status/ { status: "archived" }
         -> SuccessResponse<{ id: UUID, status: "archived" }>
@@ -250,7 +250,9 @@ module LanguageSnack {
 }
 ```
 
-GET은 Supabase Bearer 인증 후 profile.target_language와 content_language가 같은 published 카드만 `published_at DESC, id DESC`로 반환해요. limit은 1..30, 기본 12이며 클라이언트 언어 query로 프로필을 우회하지 않아요. identity·knowledge_key·생성 메타데이터는 공개 응답에서 제외해요.
+GET은 Supabase Bearer 인증 후 profile.target_language와 content_language가 같은 published 카드만 반환해요. `order=latest`(기본)는 `published_at DESC, id DESC`, `order=random`은 해당 언어의 전체 발행 목록에서 중복 없이 무작위 추출해요. limit은 1..30, 기본 12이며 다른 order 값은 422예요. 클라이언트 언어 query로 프로필을 우회하지 않아요. identity·knowledge_key·생성 메타데이터는 공개 응답에서 제외해요.
+
+Home 토마토 UI v2(2026-09-18)는 `order=random&limit=12`로 하루 묶음을 구성해요. 토마토 3개에 각각 4개 콘텐츠를 연결하고, 전체 열람 후에는 기기 현지 자정까지 소진 상태를 유지해요. API 자체는 날짜별 결과를 고정하지 않으며 앱이 사용자·언어·기기 로컬 날짜별 스냅샷을 저장해요. API 단일 응답의 서로 다른 ID 추출에는 seed가 필요하지 않아요. 12개 미만일 때의 반복·캐시·진행 복원 정책은 [클라이언트 계약](../.agent/_contracts/LANGUAGE_SNACKS.md#토마토-상호작용-v1-2026-09-18-구현-결정)을 따라요.
 
 POST/PATCH는 서버 `LANGUAGE_SNACKS_OPERATIONS_KEY`와 일치하는 `X-Operations-Key`가 필요해요. 일반 Bearer는 운영 권한을 대신하지 않아요. 키 미설정·불일치 403, 중복 지식 409, 입력/품질 오류와 불확실 판정 422, LLM 장애·잠금 충돌·예산 초과 503, 없는 항목 보관 404예요.
 

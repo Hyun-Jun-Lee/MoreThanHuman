@@ -1,0 +1,108 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:curitalk/core/storage/storage.dart';
+import 'package:curitalk/features/auth/auth.dart';
+import 'package:curitalk/features/home/application/language_snack_language.dart';
+import 'package:curitalk/features/home/application/language_snacks_controller.dart';
+import 'package:curitalk/features/home/domain/daily_snack_basket.dart';
+import 'package:curitalk/features/home/domain/language_snack.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+final snackClockProvider = Provider<DateTime Function()>((ref) => DateTime.now);
+final snackUserIdProvider = Provider<String?>(
+  (ref) => ref.watch(authControllerProvider).value?.user?.id,
+);
+
+class DailySnackBasketController extends AsyncNotifier<DailySnackBasket?> {
+  Future<void> _writes = Future.value();
+  late String _key;
+  late SecureStorageBackend _storage;
+
+  @override
+  Future<DailySnackBasket?> build() async {
+    final userId = ref.watch(snackUserIdProvider);
+    final language = ref.watch(languageSnackLanguageProvider);
+    _storage = ref.watch(secureStorageBackendProvider);
+    final storage = _storage;
+    final now = ref.watch(snackClockProvider);
+    if (userId == null) return null;
+    final key =
+        'curitalk.snack_basket.v1.${Uri.encodeComponent(userId)}.$language';
+    _key = key;
+    bool active = true;
+    bool previousDay = false;
+    ref.onDispose(() => active = false);
+    await _writes;
+    try {
+      final raw = await storage.read(key);
+      if (raw != null) {
+        final restored = DailySnackBasket.fromJson(jsonDecode(raw), language);
+        if (restored.day == DailySnackBasket.dayOf(now())) {
+          return restored;
+        }
+        previousDay = true;
+      }
+    } on Object {
+      // 저장소 오류나 이전 형식은 현재 피드 사용을 막지 않아요.
+    }
+    if (!active) return null;
+    if (previousDay) {
+      // 자정 직전 받은 목록도 새 날짜에는 다시 추첨해요.
+      ref.invalidate(languageSnacksControllerProvider);
+    } else {
+      ref.read(languageSnacksControllerProvider.notifier).refreshIfStale();
+    }
+    final source = await ref.read(languageSnacksControllerProvider.future);
+    if (!active) return null;
+    final basket = DailySnackBasket.create(
+      source.where((snack) => snack.contentLanguage == language).toList(),
+      now(),
+    );
+    if (basket != null) _persist(basket);
+    return basket;
+  }
+
+  void ensureToday() {
+    if (state.isLoading) return;
+    final basket = state.value;
+    if (basket == null ||
+        basket.day != DailySnackBasket.dayOf(ref.read(snackClockProvider)())) {
+      ref.invalidateSelf();
+    }
+  }
+
+  LanguageSnack? takeBite() {
+    if (state.isLoading) return null;
+    final basket = state.value;
+    if (basket == null ||
+        basket.isFinished ||
+        basket.day != DailySnackBasket.dayOf(ref.read(snackClockProvider)())) {
+      ensureToday();
+      return null;
+    }
+    final snack = basket.snacks[basket.consumed];
+    final next = basket.withConsumed(basket.consumed + 1);
+    state = AsyncData(next);
+    _persist(next);
+    return snack;
+  }
+
+  void _persist(DailySnackBasket basket) {
+    final key = _key;
+    final storage = _storage;
+    final encoded = jsonEncode(basket.toJson());
+    _writes = _writes.then((_) async {
+      try {
+        await storage.write(key, encoded);
+      } on Object {
+        // 진행은 메모리에서 유지하며 저장 실패를 학습 실패로 처리하지 않아요.
+      }
+    });
+  }
+}
+
+final dailySnackBasketProvider =
+    AsyncNotifierProvider<DailySnackBasketController, DailySnackBasket?>(
+      DailySnackBasketController.new,
+    );

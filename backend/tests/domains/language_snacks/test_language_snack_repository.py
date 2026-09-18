@@ -31,6 +31,51 @@ def test_reservations_are_hidden_and_archived_keys_stay_unique(repository, sampl
         repository.reserve(candidate(sample))
 
 
+def test_random_samples_all_published_rows_with_language_and_status_filter(
+    repository, sample
+):
+    from datetime import timedelta
+
+    from sqlalchemy import event
+
+    from domains.language_snacks.models import LanguageSnackModel
+
+    for i in range(35):
+        repository.save(
+            LanguageSnackModel(
+                id=f"sample-{i}",
+                content_type="regional_variant",
+                content_language="ko" if i == 33 else "en",
+                explanation_language="en" if i == 33 else "ko",
+                identity=sample["identity"],
+                knowledge_key=f"{i:064x}",
+                knowledge_summary="sample",
+                payload=sample["payload"],
+                origin="manual",
+                status="archived" if i == 34 else "published",
+                published_at=utcnow() + timedelta(seconds=i),
+            )
+        )
+    statements = []
+    engine = repository.db.get_bind()
+
+    def capture(conn, cursor, statement, parameters, context, executemany):
+        statements.append(statement)
+
+    event.listen(engine, "before_cursor_execute", capture)
+    try:
+        rows = repository.list_published("en", 12, order="random")
+    finally:
+        event.remove(engine, "before_cursor_execute", capture)
+    assert len(rows) == len({row.id for row in rows}) == 12
+    assert all(
+        row.content_language == "en" and row.status == "published" for row in rows
+    )
+    assert "ORDER BY random()" in statements[0]
+    all_rows = repository.list_published("en", 40, order="random")
+    assert {row.id for row in all_rows} == {f"sample-{i}" for i in range(33)}
+
+
 def test_key_ignores_order_and_whitespace_but_preserves_sense_and_language(sample):
     original = sample["identity"]
     changed = deepcopy(original)

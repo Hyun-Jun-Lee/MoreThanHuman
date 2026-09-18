@@ -10,6 +10,7 @@ import 'package:curitalk/features/onboarding/onboarding.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import '../snack_test_fixtures.dart';
 
 void main() {
   testWidgets('removes hamburger and opens account sheet from profile avatar', (
@@ -225,10 +226,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('crisps'), findsOneWidget);
+    expect(find.byKey(const ValueKey('snack-tomato-touch')), findsOneWidget);
     expect(find.text('Conversation 1'), findsOneWidget);
     expect(
-      tester.getTopLeft(find.text('crisps')).dy,
+      tester.getTopLeft(find.byKey(const ValueKey('snack-tomato-touch'))).dy,
       lessThan(tester.getTopLeft(find.text('Conversation 1')).dy),
     );
   });
@@ -245,7 +246,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('crisps'), findsOneWidget);
+    expect(find.byKey(const ValueKey('snack-tomato-touch')), findsOneWidget);
     expect(find.text('START CONVERSATION'), findsOneWidget);
   });
 
@@ -458,6 +459,7 @@ Widget _homeApp({
       tokenStorage ?? _MemoryTokenStorage(tokens: _tokens, deviceId: _deviceId);
   return ProviderScope(
     overrides: [
+      secureStorageBackendProvider.overrideWithValue(MemorySnackStorage()),
       tokenStorageProvider.overrideWithValue(effectiveTokenStorage),
       installationIdServiceProvider.overrideWithValue(
         InstallationIdService(
