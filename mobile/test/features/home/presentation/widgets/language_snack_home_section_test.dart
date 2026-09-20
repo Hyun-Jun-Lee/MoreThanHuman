@@ -17,6 +17,98 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../snack_test_fixtures.dart';
 
 void main() {
+  testWidgets('debug reset is available after all twelve snacks are consumed', (
+    tester,
+  ) async {
+    final storage = MemorySnackStorage();
+    storage.values['curitalk.snack_basket.v1.user.en'] = jsonEncode(
+      DailySnackBasket(
+        day: '2026-09-19',
+        snacks: List.generate(12, testSnack),
+        consumed: 12,
+      ).toJson(),
+    );
+    await tester.pumpWidget(_app(storage, () => DateTime(2026, 9, 19)));
+    await tester.pumpAndSettle();
+    expect(find.text('12 / 12'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('reset-snack-basket')));
+    await tester.pumpAndSettle();
+    expect(find.text('0 / 12'), findsOneWidget);
+    expect(find.text('Refills at midnight'), findsNothing);
+    final touch = find.byKey(const ValueKey('snack-tomato-touch'));
+    await tester.tap(touch);
+    await tester.pumpAndSettle();
+    await tester.tap(touch);
+    await tester.pumpAndSettle();
+    expect(find.byType(Dialog), findsOneWidget);
+    expect(find.text('1 / 12'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('close-snack')));
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(const SizedBox());
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'debug reset refills locally and closes a partially eaten tomato',
+    (tester) async {
+      final storage = MemorySnackStorage();
+      final resets = MemoryBasketResetRepository();
+      storage.values['curitalk.snack_basket.v1.user.en'] = jsonEncode(
+        DailySnackBasket(
+          day: '2026-09-19',
+          snacks: List.generate(12, testSnack),
+          consumed: 5,
+          resetId: 'already-applied',
+        ).toJson(),
+      );
+      await tester.pumpWidget(
+        _app(storage, () => DateTime(2026, 9, 19), resets: resets),
+      );
+      await tester.pumpAndSettle();
+      final calls = resets.calls;
+      final reset = find.byKey(const ValueKey('reset-snack-basket'));
+      expect(find.byTooltip('Reset basket (test)'), findsOneWidget);
+      await tester.tap(reset);
+      await tester.pumpAndSettle();
+      expect(find.text('0 / 12'), findsOneWidget);
+      expect(find.byKey(const ValueKey('tomato-stage-basket')), findsOneWidget);
+      expect(resets.calls, calls);
+      final stored = DailySnackBasket.fromJson(
+        jsonDecode(storage.values['curitalk.snack_basket.v1.user.en']!),
+        'en',
+      );
+      expect(stored.consumed, 0);
+      expect(stored.resetId, 'already-applied');
+      expect(
+        stored.snacks.map((s) => s.id),
+        List.generate(12, testSnack).map((s) => s.id),
+      );
+      final touch = find.byKey(const ValueKey('snack-tomato-touch'));
+      await tester.tap(touch);
+      await tester.pump();
+      expect(tester.widget<IconButton>(reset).onPressed, isNull);
+      await tester.pumpAndSettle();
+      expect(tester.widget<IconButton>(reset).onPressed, isNotNull);
+      await tester.tap(touch);
+      await tester.pumpAndSettle();
+      expect(find.byType(Dialog), findsOneWidget);
+      expect(tester.widget<IconButton>(reset).onPressed, isNull);
+      await tester.tap(find.byKey(const ValueKey('close-snack')));
+      await tester.pumpAndSettle();
+      await tester.tap(reset);
+      await tester.pumpAndSettle();
+      expect(find.text('0 / 12'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpWidget(
+        _app(storage, () => DateTime(2026, 9, 19), resets: resets),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('0 / 12'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('startup reset refills a persisted exhausted basket', (
     tester,
   ) async {

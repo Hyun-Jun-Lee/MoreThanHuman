@@ -85,6 +85,37 @@ void main() {
   );
 
   test(
+    'local reset preserves server marker and rejects active interactions',
+    () async {
+      final c = create();
+      addTearDown(c.dispose);
+      final controller = c.read(dailySnackBasketProvider.notifier);
+      expect(controller.resetForTesting(), isFalse);
+      await c.read(dailySnackBasketProvider.future);
+      resets.value = const SnackBasketReset(
+        language: 'en',
+        resetId: 'server-1',
+      );
+      await controller.refreshReset();
+      for (var i = 0; i < 12; i++) {
+        controller.takeBite();
+      }
+      controller.setInteractionActive(true);
+      expect(controller.resetForTesting(), isFalse);
+      expect(c.read(dailySnackBasketProvider).value!.consumed, 12);
+      controller.setInteractionActive(false);
+      final calls = resets.calls;
+      expect(controller.resetForTesting(), isTrue);
+      expect(resets.calls, calls);
+      expect(c.read(dailySnackBasketProvider).value!.consumed, 0);
+      expect(c.read(dailySnackBasketProvider).value!.resetId, 'server-1');
+      controller.takeBite();
+      await controller.refreshReset();
+      expect(c.read(dailySnackBasketProvider).value!.consumed, 1);
+    },
+  );
+
+  test(
     'reset waits for interaction; network failure and wrong language retain progress',
     () async {
       final c = create();

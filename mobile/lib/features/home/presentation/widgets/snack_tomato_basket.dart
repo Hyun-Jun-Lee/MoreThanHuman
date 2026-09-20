@@ -5,6 +5,7 @@ import 'package:curitalk/core/copy/copy.dart';
 import 'package:curitalk/features/home/domain/daily_snack_basket.dart';
 import 'package:curitalk/features/home/domain/language_snack.dart';
 import 'package:curitalk/features/home/presentation/widgets/language_snack_content.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 class SnackTomatoBasket extends StatefulWidget {
@@ -12,12 +13,14 @@ class SnackTomatoBasket extends StatefulWidget {
     required this.basket,
     required this.onBite,
     this.onInteractionChanged,
+    this.onResetForTesting,
     super.key,
   });
 
   final DailySnackBasket basket;
   final LanguageSnack? Function() onBite;
   final ValueChanged<bool>? onInteractionChanged;
+  final VoidCallback? onResetForTesting;
 
   static const assetRoot = 'assets/images/snack_tomato/';
   static const stages = [
@@ -190,9 +193,21 @@ class _SnackTomatoBasketState extends State<SnackTomatoBasket>
       children: [
         Align(
           alignment: Alignment.centerRight,
-          child: Text(
-            '$consumed / 12',
-            style: AppTypography.captionMono.copyWith(letterSpacing: 0),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (kDebugMode && widget.onResetForTesting != null)
+                IconButton(
+                  key: const ValueKey('reset-snack-basket'),
+                  tooltip: copy.resetSnackBasketTooltip,
+                  onPressed: _busy ? null : widget.onResetForTesting,
+                  icon: const Icon(Icons.restart_alt, size: 20),
+                ),
+              Text(
+                '$consumed / 12',
+                style: AppTypography.captionMono.copyWith(letterSpacing: 0),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: AppSpacing.md),

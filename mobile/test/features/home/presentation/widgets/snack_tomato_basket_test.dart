@@ -26,6 +26,27 @@ void main() {
     }
   });
   for (final width in [320.0, 390.0, 768.0]) {
+    testWidgets('debug reset control fits at $width with large text', (
+      tester,
+    ) async {
+      tester.view.physicalSize = Size(width, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final harness = _Harness();
+      await tester.pumpWidget(
+        harness.app(textScale: 2, onResetForTesting: () {}),
+      );
+      await tester.pumpAndSettle();
+      final reset = find.byKey(const ValueKey('reset-snack-basket'));
+      expect(reset, findsOneWidget);
+      expect(
+        tester.getRect(reset).right,
+        lessThanOrEqualTo(tester.getRect(find.text('0 / 12')).left),
+      );
+      expect(tester.takeException(), isNull);
+      await _capture(tester, 'debug-reset-${width.toInt()}');
+    });
+
     testWidgets('pickup moves and grows without spending a bite at $width', (
       tester,
     ) async {
@@ -331,6 +352,7 @@ double _pickupOffset(WidgetTester tester) => tester
     .entry(1, 3);
 
 void _expectBasket(WidgetTester tester, int remaining) {
+  expect(find.byKey(const ValueKey('reset-snack-basket')), findsNothing);
   expect(find.text('LANGUAGE NOTE'), findsNothing);
   expect(find.text('오늘의 언어'), findsNothing);
   expect(find.byIcon(Icons.check_circle), findsNothing);
@@ -355,47 +377,51 @@ class _Harness {
   final List<bool> interactions = [];
   bool visible = true;
   late StateSetter setState;
-  Widget app({double textScale = 1, bool reducedMotion = false}) =>
-      RepaintBoundary(
-        key: const ValueKey('capture-screen'),
-        child: MaterialApp(
-          theme: AppTheme.light,
-          builder: (context, child) => MediaQuery(
-            data: MediaQuery.of(context).copyWith(
-              textScaler: TextScaler.linear(textScale),
-              disableAnimations: reducedMotion,
-            ),
-            child: child!,
-          ),
-          home: Scaffold(
-            body: StatefulBuilder(
-              builder: (context, update) {
-                setState = update;
-                return SingleChildScrollView(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: visible
-                        ? SnackTomatoBasket(
-                            basket: basket,
-                            onInteractionChanged: interactions.add,
-                            onBite: () {
-                              final snack = basket.snacks[basket.consumed];
-                              update(
-                                () => basket = basket.withConsumed(
-                                  basket.consumed + 1,
-                                ),
-                              );
-                              return snack;
-                            },
-                          )
-                        : const SizedBox.shrink(),
-                  ),
-                );
-              },
-            ),
-          ),
+  Widget app({
+    double textScale = 1,
+    bool reducedMotion = false,
+    VoidCallback? onResetForTesting,
+  }) => RepaintBoundary(
+    key: const ValueKey('capture-screen'),
+    child: MaterialApp(
+      theme: AppTheme.light,
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context).copyWith(
+          textScaler: TextScaler.linear(textScale),
+          disableAnimations: reducedMotion,
         ),
-      );
+        child: child!,
+      ),
+      home: Scaffold(
+        body: StatefulBuilder(
+          builder: (context, update) {
+            setState = update;
+            return SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: visible
+                    ? SnackTomatoBasket(
+                        basket: basket,
+                        onInteractionChanged: interactions.add,
+                        onResetForTesting: onResetForTesting,
+                        onBite: () {
+                          final snack = basket.snacks[basket.consumed];
+                          update(
+                            () => basket = basket.withConsumed(
+                              basket.consumed + 1,
+                            ),
+                          );
+                          return snack;
+                        },
+                      )
+                    : const SizedBox.shrink(),
+              ),
+            );
+          },
+        ),
+      ),
+    ),
+  );
 }
 
 Future<List<int>?> _pixelAt(WidgetTester tester, Offset globalPoint) =>

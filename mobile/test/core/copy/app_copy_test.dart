@@ -4,6 +4,16 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('AppCopy', () {
+    test('localizes the debug basket reset tooltip', () {
+      expect(
+        AppCopy.forLocale(const Locale('ko')).resetSnackBasketTooltip,
+        '바구니 리셋 (테스트용)',
+      );
+      expect(
+        AppCopy.forLocale(const Locale('en')).resetSnackBasketTooltip,
+        'Reset basket (test)',
+      );
+    });
     test('uses Korean only for Korean system locales', () {
       expect(AppCopy.resolveLocaleCode(const Locale('ko')), 'ko');
       expect(AppCopy.resolveLocaleCode(const Locale('ko', 'KR')), 'ko');
@@ -25,19 +35,22 @@ void main() {
       expect(korean.languageName('fr'), 'fr');
     });
 
-    test('builds system-locale pair framing without changing language codes', () {
-      expect(
-        AppCopy.forLocale(const Locale('ko')).languagePairDescription(
-          nativeCode: 'en',
-          targetCode: 'ko',
-          feedbackCode: 'en',
-        ),
-        '대화: 한국어 · 피드백: 영어',
-      );
-      expect(
-        AppCopy.forLocale(const Locale('en')).firstAnswerHint('ko'),
-        'Type your first answer in Korean...',
-      );
-    });
+    test(
+      'builds system-locale pair framing without changing language codes',
+      () {
+        expect(
+          AppCopy.forLocale(const Locale('ko')).languagePairDescription(
+            nativeCode: 'en',
+            targetCode: 'ko',
+            feedbackCode: 'en',
+          ),
+          '대화: 한국어 · 피드백: 영어',
+        );
+        expect(
+          AppCopy.forLocale(const Locale('en')).firstAnswerHint('ko'),
+          'Type your first answer in Korean...',
+        );
+      },
+    );
   });
 }

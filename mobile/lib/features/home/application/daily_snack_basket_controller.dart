@@ -8,6 +8,7 @@ import 'package:curitalk/features/home/application/language_snacks_controller.da
 import 'package:curitalk/features/home/data/snack_basket_reset_repository.dart';
 import 'package:curitalk/features/home/domain/daily_snack_basket.dart';
 import 'package:curitalk/features/home/domain/language_snack.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final snackClockProvider = Provider<DateTime Function()>((ref) => DateTime.now);
@@ -111,6 +112,20 @@ class DailySnackBasketController extends AsyncNotifier<DailySnackBasket?> {
   void setInteractionActive(bool active) {
     _interacting = active;
     if (!active) _applyPendingReset();
+  }
+
+  bool resetForTesting() {
+    if (!kDebugMode || _interacting || state.isLoading) return false;
+    final basket = state.value;
+    if (basket == null) return false;
+    if (basket.day != DailySnackBasket.dayOf(ref.read(snackClockProvider)())) {
+      ensureToday();
+      return false;
+    }
+    final next = basket.withConsumed(0);
+    state = AsyncData(next);
+    _persist(next);
+    return true;
   }
 
   void _applyPendingReset() {

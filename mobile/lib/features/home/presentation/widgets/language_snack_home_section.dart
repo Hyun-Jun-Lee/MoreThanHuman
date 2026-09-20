@@ -4,6 +4,7 @@ import 'package:curitalk/features/home/application/language_snack_language.dart'
 import 'package:curitalk/features/home/application/language_snacks_controller.dart';
 import 'package:curitalk/features/home/application/daily_snack_basket_controller.dart';
 import 'package:curitalk/features/home/presentation/widgets/snack_tomato_basket.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -20,6 +21,13 @@ class _LanguageSnackHomeSectionState
   Timer? _midnightTimer;
   bool _interacting = false;
   String? _scope;
+  int _localResetVersion = 0;
+
+  void _resetForTesting() {
+    if (ref.read(dailySnackBasketProvider.notifier).resetForTesting()) {
+      setState(() => _localResetVersion++);
+    }
+  }
 
   void _checkDay() {
     if (!mounted || _interacting) return;
@@ -99,10 +107,13 @@ class _LanguageSnackHomeSectionState
     return Column(
       children: [
         SnackTomatoBasket(
-          key: ValueKey('$userId.$language.${basket.day}.${basket.resetId}'),
+          key: ValueKey(
+            '$userId.$language.${basket.day}.${basket.resetId}.$_localResetVersion',
+          ),
           basket: basket,
           onBite: () => ref.read(dailySnackBasketProvider.notifier).takeBite(),
           onInteractionChanged: _interactionChanged,
+          onResetForTesting: kDebugMode ? _resetForTesting : null,
         ),
         const SizedBox(height: AppSpacing.sectionGap),
       ],

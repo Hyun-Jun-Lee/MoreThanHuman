@@ -236,6 +236,8 @@ class AppCopy {
       ? '$number번째 토마토, $remaining입 남음'
       : 'Tomato $number, $remaining bites left';
   String get snackBasketTooltip => isKorean ? '바구니 보기' : 'View basket';
+  String get resetSnackBasketTooltip =>
+      isKorean ? '바구니 리셋 (테스트용)' : 'Reset basket (test)';
   String get snackBasketFinished =>
       isKorean ? '오늘의 스낵을 모두 봤어요' : 'All done for today';
   String get snackBasketNextDay =>
