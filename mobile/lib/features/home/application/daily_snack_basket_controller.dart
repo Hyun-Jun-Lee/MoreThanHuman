@@ -5,6 +5,7 @@ import 'package:curitalk/core/storage/storage.dart';
 import 'package:curitalk/features/auth/auth.dart';
 import 'package:curitalk/features/home/application/language_snack_language.dart';
 import 'package:curitalk/features/home/application/language_snacks_controller.dart';
+import 'package:curitalk/features/home/data/snack_basket_reset_repository.dart';
 import 'package:curitalk/features/home/domain/daily_snack_basket.dart';
 import 'package:curitalk/features/home/domain/language_snack.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -18,9 +19,17 @@ class DailySnackBasketController extends AsyncNotifier<DailySnackBasket?> {
   Future<void> _writes = Future.value();
   late String _key;
   late SecureStorageBackend _storage;
+  int _generation = 0;
+  int? _checkingGeneration;
+  bool _interacting = false;
+  String? _pendingResetId;
 
   @override
   Future<DailySnackBasket?> build() async {
+    _generation++;
+    _pendingResetId = null;
+    _interacting = false;
+    ref.onDispose(() => _generation++);
     final userId = ref.watch(snackUserIdProvider);
     final language = ref.watch(languageSnackLanguageProvider);
     _storage = ref.watch(secureStorageBackendProvider);
@@ -32,12 +41,14 @@ class DailySnackBasketController extends AsyncNotifier<DailySnackBasket?> {
     _key = key;
     bool active = true;
     bool previousDay = false;
+    String? resetId;
     ref.onDispose(() => active = false);
     await _writes;
     try {
       final raw = await storage.read(key);
       if (raw != null) {
         final restored = DailySnackBasket.fromJson(jsonDecode(raw), language);
+        resetId = restored.resetId;
         if (restored.day == DailySnackBasket.dayOf(now())) {
           return restored;
         }
@@ -58,6 +69,7 @@ class DailySnackBasketController extends AsyncNotifier<DailySnackBasket?> {
     final basket = DailySnackBasket.create(
       source.where((snack) => snack.contentLanguage == language).toList(),
       now(),
+      resetId: resetId,
     );
     if (basket != null) _persist(basket);
     return basket;
@@ -70,6 +82,47 @@ class DailySnackBasketController extends AsyncNotifier<DailySnackBasket?> {
         basket.day != DailySnackBasket.dayOf(ref.read(snackClockProvider)())) {
       ref.invalidateSelf();
     }
+  }
+
+  Future<void> refreshReset() async {
+    final generation = _generation;
+    if (_checkingGeneration == generation ||
+        ref.read(snackUserIdProvider) == null) {
+      return;
+    }
+    _checkingGeneration = generation;
+    try {
+      if (state.isLoading) await future;
+      if (generation != _generation) return;
+      final language = ref.read(languageSnackLanguageProvider);
+      final marker = await ref.read(snackBasketResetRepositoryProvider).read();
+      if (generation != _generation || marker.language != language) return;
+      if (marker.resetId != null && marker.resetId != state.value?.resetId) {
+        _pendingResetId = marker.resetId;
+        _applyPendingReset();
+      }
+    } on Object {
+      // 오프라인·구 서버·인증 오류에는 저장된 진행을 그대로 유지해요.
+    } finally {
+      if (_checkingGeneration == generation) _checkingGeneration = null;
+    }
+  }
+
+  void setInteractionActive(bool active) {
+    _interacting = active;
+    if (!active) _applyPendingReset();
+  }
+
+  void _applyPendingReset() {
+    final resetId = _pendingResetId;
+    if (_interacting || state.isLoading || resetId == null) return;
+    final basket = state.value;
+    if (basket == null) return;
+    _pendingResetId = null;
+    if (resetId == basket.resetId) return;
+    final next = basket.reset(resetId);
+    state = AsyncData(next);
+    _persist(next);
   }
 
   LanguageSnack? takeBite() {

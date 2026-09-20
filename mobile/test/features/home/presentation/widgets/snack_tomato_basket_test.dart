@@ -25,6 +25,90 @@ void main() {
           .load();
     }
   });
+  for (final width in [320.0, 390.0, 768.0]) {
+    testWidgets('pickup moves and grows without spending a bite at $width', (
+      tester,
+    ) async {
+      tester.view.physicalSize = Size(width, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final harness = _Harness();
+      await tester.pumpWidget(harness.app());
+      await tester.pumpAndSettle();
+      await _capture(tester, 'pickup-before-${width.toInt()}');
+      final bounds = tester.getRect(_touch);
+      await tester.tap(_touch);
+      await tester.pump();
+      expect(find.byKey(const ValueKey('tomato-pickup')), findsOneWidget);
+      final initialScale = _pickupScale(tester);
+      final initialOffset = _pickupOffset(tester);
+      expect(initialScale, closeTo(.42, .001));
+      expect(tester.widget<InkWell>(_touch).onTap, isNull);
+      await tester.tap(_touch);
+      await tester.pump(const Duration(milliseconds: 80));
+      expect(_pickupScale(tester), greaterThan(initialScale));
+      expect(_pickupOffset(tester), lessThan(initialOffset));
+      await _capture(tester, 'pickup-080-${width.toInt()}', settle: false);
+      await tester.pump(const Duration(milliseconds: 120));
+      expect(_pickupScale(tester), greaterThan(1));
+      expect(tester.getRect(_touch), bounds);
+      expect(harness.interactions, [true]);
+      expect(harness.basket.consumed, 0);
+      expect(find.byType(Dialog), findsNothing);
+      await _capture(tester, 'pickup-200-${width.toInt()}', settle: false);
+      await tester.pump(const Duration(milliseconds: 120));
+      await _capture(tester, 'pickup-320-${width.toInt()}', settle: false);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('tomato-pickup')), findsNothing);
+      expect(find.byKey(const ValueKey('tomato-stage-0')), findsOneWidget);
+      expect(tester.widget<InkWell>(_touch).onTap, isNotNull);
+      expect(harness.interactions, [true, false]);
+      expect(harness.basket.consumed, 0);
+      expect(tester.getRect(_touch), bounds);
+      await _capture(tester, 'pickup-finished-${width.toInt()}');
+      await tester.tap(_touch);
+      await tester.pumpAndSettle();
+      expect(harness.basket.consumed, 1);
+      expect(find.byType(Dialog), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('reduced motion opens immediately without a pickup transition', (
+    tester,
+  ) async {
+    final harness = _Harness();
+    await tester.pumpWidget(harness.app(reducedMotion: true));
+    await tester.pumpAndSettle();
+    await tester.tap(_touch);
+    await tester.pump();
+    expect(find.byKey(const ValueKey('tomato-pickup')), findsNothing);
+    expect(find.byKey(const ValueKey('tomato-stage-0')), findsOneWidget);
+    expect(tester.widget<InkWell>(_touch).onTap, isNotNull);
+    expect(harness.basket.consumed, 0);
+    expect(find.byType(Dialog), findsNothing);
+  });
+
+  testWidgets('leaving during pickup cancels it without spending a bite', (
+    tester,
+  ) async {
+    final harness = _Harness();
+    await tester.pumpWidget(harness.app());
+    await tester.pumpAndSettle();
+    await tester.tap(_touch);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.byKey(const ValueKey('tomato-pickup')), findsOneWidget);
+    harness.setState(() => harness.visible = false);
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(harness.basket.consumed, 0);
+    expect(find.byType(Dialog), findsNothing);
+    harness.setState(() => harness.visible = true);
+    await tester.pumpAndSettle();
+    _expectBasket(tester, 3);
+  });
+
   for (final opened in [false, true]) {
     testWidgets('touch background stays unchanged (opened: $opened)', (
       tester,
@@ -131,8 +215,10 @@ void main() {
     await tester.tap(find.byIcon(Icons.shopping_basket_outlined));
     await tester.pumpAndSettle();
     _expectBasket(tester, 2);
-    expect(find.byIcon(Icons.check_circle), findsOneWidget);
-    expect(find.byIcon(Icons.circle_outlined), findsNWidgets(2));
+    expect(find.byIcon(Icons.check_circle), findsNothing);
+    expect(find.byIcon(Icons.circle_outlined), findsNothing);
+    expect(find.text('Language note'), findsNothing);
+    expect(find.text('오늘의 언어'), findsNothing);
     await tester.tap(_touch);
     await tester.pumpAndSettle();
     expect(harness.basket.consumed, 5);
@@ -234,7 +320,21 @@ void main() {
 final _touch = find.byKey(const ValueKey('snack-tomato-touch'));
 final _close = find.byKey(const ValueKey('close-snack'));
 
+double _pickupScale(WidgetTester tester) => tester
+    .widget<Transform>(find.byKey(const ValueKey('tomato-pickup-scale')))
+    .transform
+    .entry(0, 0);
+
+double _pickupOffset(WidgetTester tester) => tester
+    .widget<Transform>(find.byKey(const ValueKey('tomato-pickup-offset')))
+    .transform
+    .entry(1, 3);
+
 void _expectBasket(WidgetTester tester, int remaining) {
+  expect(find.text('LANGUAGE NOTE'), findsNothing);
+  expect(find.text('오늘의 언어'), findsNothing);
+  expect(find.byIcon(Icons.check_circle), findsNothing);
+  expect(find.byIcon(Icons.circle_outlined), findsNothing);
   final finder = find.byKey(const ValueKey('tomato-stage-basket'));
   expect(finder, findsOneWidget);
   final provider = tester.widget<Image>(finder).image as ResizeImage;
@@ -252,6 +352,7 @@ class _Harness {
         snacks: snacks ?? List.generate(12, testSnack),
       );
   DailySnackBasket basket;
+  final List<bool> interactions = [];
   bool visible = true;
   late StateSetter setState;
   Widget app({double textScale = 1, bool reducedMotion = false}) =>
@@ -276,6 +377,7 @@ class _Harness {
                     child: visible
                         ? SnackTomatoBasket(
                             basket: basket,
+                            onInteractionChanged: interactions.add,
                             onBite: () {
                               final snack = basket.snacks[basket.consumed];
                               update(
@@ -310,7 +412,11 @@ Future<List<int>?> _pixelAt(WidgetTester tester, Offset globalPoint) =>
       return pixel;
     });
 
-Future<void> _capture(WidgetTester tester, String name) async {
+Future<void> _capture(
+  WidgetTester tester,
+  String name, {
+  bool settle = true,
+}) async {
   final directory = Platform.environment['SNACK_CAPTURE_DIR'];
   if (directory == null) return;
   final context = tester.element(find.byType(SnackTomatoBasket));
@@ -328,7 +434,11 @@ Future<void> _capture(WidgetTester tester, String name) async {
       );
     }
   });
-  await tester.pumpAndSettle();
+  if (settle) {
+    await tester.pumpAndSettle();
+  } else {
+    await tester.pump();
+  }
   expect(tester.widget<RawImage>(find.byType(RawImage).first).image, isNotNull);
   final target = tester.renderObject<RenderRepaintBoundary>(
     find.byKey(const ValueKey('capture-screen')),

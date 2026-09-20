@@ -26,6 +26,21 @@ def json_type():
     return JSON(none_as_null=True).with_variant(JSONB(none_as_null=True), "postgresql")
 
 
+class LanguageSnackBasketResetModel(Base):
+    __tablename__ = "language_snack_basket_resets"
+    __table_args__ = (
+        CheckConstraint(
+            "content_language IN ('en','ko')", name="ck_snack_basket_reset_language"
+        ),
+    )
+    user_id = Column(
+        String(36), ForeignKey("profiles.id", ondelete="CASCADE"), primary_key=True
+    )
+    content_language = Column(String(8), primary_key=True)
+    reset_id = Column(String(36), nullable=False)
+    reset_at = Column(DateTime(timezone=True), nullable=False)
+
+
 class LanguageSnackRunModel(Base):
     __tablename__ = "language_snack_generation_runs"
     id = Column(String(36), primary_key=True)

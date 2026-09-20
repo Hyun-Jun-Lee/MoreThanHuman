@@ -185,11 +185,14 @@ module Auth {
 
 ## 5. Language Snack 모듈
 
-> v2.1 · 2026-09-18: 세 유형 JSONB·학습 언어별 feed에 전체 발행 콘텐츠 무작위 조회를 추가해요.
+> v2.2 · 2026-09-19: 학습 언어별 무작위 feed와 사용자별 운영 바구니 리셋 기록을 제공해요.
 
 ```dsl
 module LanguageSnack {
   GET   /api/v2/language-snacks/?limit=12&order=latest -> SuccessResponse<List<LanguageSnack>>
+  GET   /api/v2/language-snacks/basket-reset/ -> SuccessResponse<BasketResetState> [Bearer]
+  POST  /api/v2/language-snacks/basket-reset/ { user_id: UUID, content_language: "en" | "ko" }
+        -> SuccessResponse<BasketResetState> [X-Operations-Key]
   POST  /api/v2/language-snacks/ -> SuccessResponse<LanguageSnack> [201]
   PATCH /api/v2/language-snacks/{id}/status/ { status: "archived" }
         -> SuccessResponse<{ id: UUID, status: "archived" }>
@@ -263,6 +266,12 @@ content_type과 relation은 위 나열 순서대로 대응해요. 모든 entry.l
 운영 POST와 주간 생성은 같은 중복 검사와 PostgreSQL 전용 세션 잠금을 사용해요. 전체 payload가 아닌 정규화 identity를 SHA-256으로 해시하고 UNIQUE로 보호해요. 의미 중복 검사는 같은 언어의 모든 유형·상태 이력을 LLM에 전달해 new만 허용해요. 생성 후보를 reserved로 먼저 저장하고 본문·품질 검증 후 published로 전환해요. draft는 후속 편집용으로 예약된 상태이며 현재 자동 발행 경로에서 별도로 저장하지 않아요. archived도 중복 이력에 남고 즉시 오프라인 캐시 회수는 하지 않아요. LLM의 의미·품질 판단은 오류가 남을 수 있어요.
 
 구버전 GET은 인증된 빈 목록, 구버전 POST는 운영 키 확인 후 410을 반환해요. 새 앱은 미지원 type/schema_version을 건너뛰고 알려진 유형의 손상된 응답에는 마지막 성공 캐시를 사용해요.
+
+### 바구니 리셋
+
+`BasketResetState`는 `{content_language: "en"|"ko", reset_id: UUID|null, reset_at: DateTime|null}`예요. GET은 Bearer 사용자의 현재 학습 언어만 조회하며 기록이 없으면 ID·시간이 null이에요. 응답은 `Cache-Control: no-store`예요. POST는 `X-Operations-Key`로 지정 사용자의 지정 언어에 새 UUID를 저장하고 200을 반환해요. 키 미설정·불일치 403, 없는 사용자 404, 잘못된 UUID·언어·추가 필드 422예요. UUID는 호출마다 바뀌며 사용자·언어별 최신 기록 하나만 보관해요.
+
+리셋 API는 LLM 호출·콘텐츠 삭제·일일 카드 재추첨을 하지 않아요. 앱은 시작·Home 진입·복귀 시 GET하고 새 ID를 발견하면 기존 당일 묶음의 소비 횟수를 0으로 초기화해요. 팝업·애니메이션 중에는 종료 후 적용하며 적용한 ID를 로컬에 함께 저장해 재시작·다음 날짜에도 같은 리셋을 중복 적용하지 않아요. 오프라인이면 기존 진행을 유지하고 다음 복귀에 재시도해요. 각 기기의 소비 횟수 자체를 동기화하는 API는 아니에요. 운영 방법은 [테스트용 바구니 리셋](OPERATIONS.md#테스트용-바구니-리셋)을 참고해요.
 
 ### 운영 생성 예시
 

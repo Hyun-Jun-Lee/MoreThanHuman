@@ -79,6 +79,27 @@ docker compose up -d --build --force-recreate --no-deps api
 
 구버전 앱은 정상 온라인 조회 후 스낵이 숨겨지고, 새 앱은 언어별 v2 캐시를 사용해요. 구버전 앱의 이미 저장된 오프라인 카드는 원격 삭제할 수 없어요.
 
+### 테스트용 바구니 리셋
+
+2026-09-19 v1: `POST /api/v2/language-snacks/basket-reset/`은 운영자만 사용하는 테스트·지원용 리셋이에요. 사용자 진행은 기기에 있고 서버에는 최신 리셋 ID만 저장해요.
+
+1. 신규 revision `20260919_0001`을 `uv run alembic upgrade head`로 적용하고 변경된 API·앱을 배포해요. 이 revision은 `language_snack_basket_resets` 테이블만 추가하며 기존 사용자·스낵은 삭제하지 않아요. 아직 v2 이전 DB라면 먼저 적용되는 `20260912_0001`의 데이터 삭제 경고도 확인해야 해요.
+2. Swagger에서 대상 사용자의 Bearer로 `GET /api/auth/me`를 호출해 사용자 `id`를 확인해요.
+3. `POST /api/v2/language-snacks/basket-reset/`의 `X-Operations-Key`에 서버 `LANGUAGE_SNACKS_OPERATIONS_KEY`를 입력하고 아래 body를 보내요. `content_language`는 영어 학습 `en`, 한국어 학습 `ko`예요.
+
+```json
+{
+  "user_id": "대상 사용자의 UUID",
+  "content_language": "en"
+}
+```
+
+4. 200 응답의 `reset_id`를 확인하고 앱을 백그라운드로 보냈다가 Home으로 복귀해요. 앱 시작·Home 재진입에도 확인하며 같은 카드 12개를 유지하고 바구니에 토마토 3개가 복원돼요. 팝업·애니메이션 중이라면 종료 후 적용돼요.
+
+GET은 일반 Bearer로 조회하며 운영 키를 앱에 넣지 않아요. 다른 기기는 각자 다음 조회 성공 때 반영돼요. 오프라인·구 앱에서는 즉시 반영되지 않으며, POST 성공 자체가 앱 리셋 완료를 뜻하지는 않아요. 테스트를 다시 시작하려면 POST를 다시 호출해요. 리셋 ID는 자정 이후에도 로컬에 유지되므로 같은 요청이 다음 날 소비를 초기화하지 않아요. DB 리셋 기록만 롤백할 때는 API 중지 후 `alembic downgrade 20260912_0001`로 새 테이블만 제거할 수 있어요.
+
 ## 변경 기록
+
+- 2026-09-19: 바구니 리셋 API·추가 테이블 마이그레이션·앱 복귀 확인·구버전/오프라인 제한을 추가했어요.
 
 - 2026-09-13: README의 Swagger·스낵 배포/복구 절차를 이관하고 Docker의 DB·포트·초기 nginx 전제를 명시했어요.

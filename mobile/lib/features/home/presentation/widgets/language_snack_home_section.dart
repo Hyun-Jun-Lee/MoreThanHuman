@@ -32,7 +32,14 @@ class _LanguageSnackHomeSectionState
 
   void _interactionChanged(bool active) {
     _interacting = active;
+    ref.read(dailySnackBasketProvider.notifier).setInteractionActive(active);
     if (!active) _checkDay();
+  }
+
+  void _refreshBasket() {
+    if (!mounted) return;
+    _checkDay();
+    unawaited(ref.read(dailySnackBasketProvider.notifier).refreshReset());
   }
 
   @override
@@ -42,7 +49,7 @@ class _LanguageSnackHomeSectionState
     scheduleMicrotask(() {
       if (mounted) {
         ref.read(languageSnacksControllerProvider.notifier).refreshIfStale();
-        _checkDay();
+        _refreshBasket();
       }
     });
   }
@@ -51,7 +58,7 @@ class _LanguageSnackHomeSectionState
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       ref.read(languageSnacksControllerProvider.notifier).refreshIfStale();
-      _checkDay();
+      _refreshBasket();
     } else {
       _midnightTimer?.cancel();
     }
@@ -72,7 +79,7 @@ class _LanguageSnackHomeSectionState
     if (_scope != scope) {
       _scope = scope;
       _interacting = false;
-      scheduleMicrotask(_checkDay);
+      scheduleMicrotask(_refreshBasket);
     }
     ref.listen(languageSnacksControllerProvider, (_, next) {
       if (!next.isLoading &&
@@ -92,7 +99,7 @@ class _LanguageSnackHomeSectionState
     return Column(
       children: [
         SnackTomatoBasket(
-          key: ValueKey('$userId.$language.${basket.day}'),
+          key: ValueKey('$userId.$language.${basket.day}.${basket.resetId}'),
           basket: basket,
           onBite: () => ref.read(dailySnackBasketProvider.notifier).takeBite(),
           onInteractionChanged: _interactionChanged,

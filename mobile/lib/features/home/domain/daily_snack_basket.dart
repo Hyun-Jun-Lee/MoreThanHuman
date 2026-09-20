@@ -7,6 +7,7 @@ class DailySnackBasket {
     required this.day,
     required List<LanguageSnack> snacks,
     this.consumed = 0,
+    this.resetId,
   }) : snacks = List.unmodifiable(snacks);
 
   static const tomatoCount = 3;
@@ -16,6 +17,7 @@ class DailySnackBasket {
   final String day;
   final List<LanguageSnack> snacks;
   final int consumed;
+  final String? resetId;
   bool get isFinished => consumed == capacity;
 
   static String dayOf(DateTime now) =>
@@ -25,22 +27,32 @@ class DailySnackBasket {
     List<LanguageSnack> source,
     DateTime now, {
     Random? random,
+    String? resetId,
   }) {
     final unique = {for (final snack in source) snack.id: snack}.values.toList()
       ..shuffle(random);
     if (unique.isEmpty) return null;
     return DailySnackBasket(
       day: dayOf(now),
+      resetId: resetId,
       snacks: List.generate(capacity, (i) => unique[i % unique.length]),
     );
   }
 
-  DailySnackBasket withConsumed(int value) =>
-      DailySnackBasket(day: day, snacks: snacks, consumed: value);
+  DailySnackBasket withConsumed(int value) => DailySnackBasket(
+    day: day,
+    snacks: snacks,
+    consumed: value,
+    resetId: resetId,
+  );
+
+  DailySnackBasket reset(String id) =>
+      DailySnackBasket(day: day, snacks: snacks, resetId: id);
 
   Map<String, dynamic> toJson() => {
     'day': day,
     'consumed': consumed,
+    'reset_id': resetId,
     'snacks': snacks.map((snack) => snack.toJson()).toList(),
   };
 
@@ -48,7 +60,8 @@ class DailySnackBasket {
     if (json is! Map<String, dynamic> ||
         json['day'] is! String ||
         json['consumed'] is! int ||
-        json['snacks'] is! List) {
+        json['snacks'] is! List ||
+        (json['reset_id'] != null && json['reset_id'] is! String)) {
       throw const FormatException('Invalid daily snack basket.');
     }
     final consumed = json['consumed'] as int;
@@ -65,6 +78,7 @@ class DailySnackBasket {
       day: json['day'] as String,
       snacks: snacks,
       consumed: consumed,
+      resetId: json['reset_id'] as String?,
     );
   }
 }

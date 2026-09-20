@@ -4,6 +4,8 @@ import 'package:curitalk/features/home/application/language_snack_language.dart'
 import 'package:curitalk/features/home/application/language_snacks_controller.dart';
 import 'package:curitalk/features/home/data/api_language_snack_repository.dart';
 import 'package:curitalk/features/home/data/language_snack_cache.dart';
+import 'package:curitalk/features/home/data/snack_basket_reset_repository.dart';
+import 'dart:async';
 import 'package:curitalk/features/home/domain/language_snack.dart';
 import 'package:curitalk/features/home/domain/language_snack_repository.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,11 +15,13 @@ import '../snack_test_fixtures.dart';
 void main() {
   late MemorySnackStorage storage;
   late _Repository repository;
+  late MemoryBasketResetRepository resets;
   late DateTime now;
   late String user;
   late String language;
   ProviderContainer create() => ProviderContainer(
     overrides: [
+      snackBasketResetRepositoryProvider.overrideWithValue(resets),
       snackClockProvider.overrideWithValue(() => now),
       snackUserIdProvider.overrideWith((ref) => user),
       languageSnackLanguageProvider.overrideWith((ref) => language),
@@ -35,9 +39,92 @@ void main() {
   setUp(() {
     storage = MemorySnackStorage();
     repository = _Repository();
+    resets = MemoryBasketResetRepository();
     now = DateTime(2026, 9, 18);
     user = 'user-1';
     language = 'en';
+  });
+
+  test(
+    'server reset applies once, survives restart and next-day refill',
+    () async {
+      final c = create();
+      addTearDown(c.dispose);
+      final first = (await c.read(dailySnackBasketProvider.future))!;
+      final controller = c.read(dailySnackBasketProvider.notifier);
+      for (var i = 0; i < 12; i++) {
+        controller.takeBite();
+      }
+      resets.value = const SnackBasketReset(language: 'en', resetId: 'reset-1');
+      await controller.refreshReset();
+      expect(c.read(dailySnackBasketProvider).value!.consumed, 0);
+      expect(
+        c.read(dailySnackBasketProvider).value!.snacks.map((s) => s.id),
+        first.snacks.map((s) => s.id),
+      );
+      controller.takeBite();
+      await controller.refreshReset();
+      expect(c.read(dailySnackBasketProvider).value!.consumed, 1);
+      await Future<void>.delayed(Duration.zero);
+      final restarted = create();
+      addTearDown(restarted.dispose);
+      await restarted.read(dailySnackBasketProvider.future);
+      await restarted.read(dailySnackBasketProvider.notifier).refreshReset();
+      expect(restarted.read(dailySnackBasketProvider).value!.consumed, 1);
+      now = DateTime(2026, 9, 19);
+      restarted.read(dailySnackBasketProvider.notifier).ensureToday();
+      await restarted.read(dailySnackBasketProvider.future);
+      restarted.read(dailySnackBasketProvider.notifier).takeBite();
+      await restarted.read(dailySnackBasketProvider.notifier).refreshReset();
+      expect(restarted.read(dailySnackBasketProvider).value!.consumed, 1);
+      expect(
+        restarted.read(dailySnackBasketProvider).value!.resetId,
+        'reset-1',
+      );
+    },
+  );
+
+  test(
+    'reset waits for interaction; network failure and wrong language retain progress',
+    () async {
+      final c = create();
+      addTearDown(c.dispose);
+      await c.read(dailySnackBasketProvider.future);
+      final controller = c.read(dailySnackBasketProvider.notifier);
+      controller.takeBite();
+      resets.fail = true;
+      await controller.refreshReset();
+      expect(c.read(dailySnackBasketProvider).value!.consumed, 1);
+      resets.fail = false;
+      resets.value = const SnackBasketReset(language: 'ko', resetId: 'wrong');
+      await controller.refreshReset();
+      expect(c.read(dailySnackBasketProvider).value!.consumed, 1);
+      controller.setInteractionActive(true);
+      resets.value = const SnackBasketReset(language: 'en', resetId: 'new');
+      await controller.refreshReset();
+      expect(c.read(dailySnackBasketProvider).value!.consumed, 1);
+      controller.setInteractionActive(false);
+      expect(c.read(dailySnackBasketProvider).value!.consumed, 0);
+    },
+  );
+
+  test('late reset response cannot reset a different account', () async {
+    final c = create();
+    addTearDown(c.dispose);
+    await c.read(dailySnackBasketProvider.future);
+    final pending = Completer<SnackBasketReset>();
+    resets.pending = pending.future;
+    final request = c.read(dailySnackBasketProvider.notifier).refreshReset();
+    user = 'user-2';
+    c.invalidate(snackUserIdProvider);
+    await c.read(dailySnackBasketProvider.future);
+    c.read(dailySnackBasketProvider.notifier).takeBite();
+    pending.complete(
+      const SnackBasketReset(language: 'en', resetId: 'old-user'),
+    );
+    await request;
+    expect(c.read(dailySnackBasketProvider).value!.consumed, 1);
+    expect(c.read(dailySnackBasketProvider).value!.resetId, isNull);
   });
 
   test(

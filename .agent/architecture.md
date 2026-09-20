@@ -1,6 +1,6 @@
 # 시스템 아키텍처
 
-> 프로젝트: MoreThanHuman (Convia) · 버전: 0.1.3 · 최종 갱신: 2026-09-18
+> 프로젝트: MoreThanHuman (Convia) · 버전: 0.1.4 · 최종 갱신: 2026-09-19
 
 ---
 
@@ -97,6 +97,8 @@ Home의 `language_snacks`는 최근 대화와 독립된 학습 콘텐츠 흐름�
 운영 POST·PATCH와 CLI 쓰기는 같은 PostgreSQL session advisory lock을 획득해 직렬화해요. 전용 direct/session 연결에 잠금을 유지하고 LLM 대기 중 ORM 트랜잭션은 열어두지 않아요. 잠금 연결을 잃으면 추가 저장을 중지해요. SQLite 잠금은 단일 프로세스 개발용이에요. 전체 이력 크기를 넘으면 과거 항목을 생략하지 않고 중단하며 LLM 의미·품질 판정에는 오차가 남아요. API는 구버전 GET에 빈 목록, 구버전 POST에 410을 제공해요. 상세 외부 계약은 [DSL](../docs/DSL.md), 파괴적 migration·cron 설치·롤백은 [운영 가이드](../docs/OPERATIONS.md), 환경변수는 [환경 설정](../docs/ENVIRONMENT.md)이 기준이에요. [README](../README.md)는 실행·CLI 진입점으로 유지해요.
 
 Flutter 앱 시작은 `Splash → Onboarding(최초 1회) → Google Login → Home` 순서예요. `go_router`가 onboarding 완료 상태와 Riverpod 인증 상태를 함께 관찰하며, 인증 복원 중에는 Splash를 유지하고 로그인 성공 또는 세션 만료 시 Home/Login으로 redirect해요. `AppCopy`는 system locale이 `ko`일 때 한국어, 그 밖에는 영어로 app chrome·접근성 label·클라이언트 오류를 표시하고 학습 언어 context를 바꾸지 않아요. Onboarding은 기기 locale로 `ko -> en`, `en -> ko` 기본값을 고르고, 중국어가 포함된 언어쌍은 화면에 표시하되 선택은 막아요. 사용자가 현재 선택 가능한 지원 언어쌍(`ko -> en`, `en -> ko`) 중 하나를 확정하면 pending language context를 secure storage에 저장해요. 인증이 생기면 `authControllerProvider`가 `PUT /api/auth/me/language-preferences`로 pending 값을 서버에 동기화하고 `/api/auth/me`로 profile language를 hydration한 뒤 Home을 표시해요. Home은 활성 언어쌍과 `/api/conversations/?limit=5&offset=0` 최근 대화 loaded/empty/error 상태를 표시해요. Account sheet의 언어쌍 설정은 profile default만 갱신하며 새 대화부터 적용되고 기존 conversation은 snapshot을 유지한다고 안내해요. Free Chat 선택 시 `Topic Input → Topic Prep`으로 이어져 `POST /api/search/topic-prep/`의 ready/low-quality/error 상태를 보여주고, 첫 답변 제출 후 `POST /api/conversations/start/free-chat/`로 Conversation 화면에 진입해요. Topic Input 정적 예시 검색어는 system locale이 아니라 native language로 고르고 그대로 검색 요청에 보내요. Roleplay 선택 시 `Roleplay Setup`에서 target language에 맞는 preset/custom 상황을 고르고 `role_character`로 `POST /api/conversations/start/roleplay/`를 호출해 같은 Conversation 화면에 진입해요. Topic Prep과 Roleplay 콘텐츠 선택은 target language를 따르고, retry guidance나 짧은 설명은 feedback language를 따르는 정책을 유지해요. Backend LLM prompt policy도 같은 원칙을 써서 target language가 conversation, roleplay, grammar, Topic Prep의 연습·교정 기준을 정하고 feedback language는 설명·retry 안내 언어만 정해요. 이 정책은 STT/TTS나 provider/model routing을 변경하지 않아요. Home 최근 대화 카드도 `/conversation/:conversationId`로 이동해 기존 메시지를 이어가요.
+
+바구니 운영 리셋 v1(2026-09-19)은 `language_snack_basket_resets`에 `(user_id, content_language)`별 최신 UUID·시간만 upsert해요. POST는 운영 키로, GET은 본인 Bearer로 보호해요. 앱은 Home 진입·복귀 때 별도 GET으로 확인하고 일일 스냅샷의 `reset_id`와 다르면 같은 카드 묶음의 소비를 0으로 초기화해요. 요청 중 계정·언어가 바뀌면 응답을 버리고, 팝업·애니메이션 중에는 적용을 미뤄요. 로컬에 ID를 함께 저장해 재실행·자정에도 재적용하지 않으며 네트워크 실패는 기존 진행에 영향을 주지 않아요. 소비 횟수의 기기 간 동기화는 아니에요.
 
 도메인은 기본적으로 아래 계층을 따라요:
 

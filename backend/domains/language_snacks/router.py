@@ -4,12 +4,17 @@ from typing import Annotated, Literal
 from uuid import UUID
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
 from database import get_db
 from domains.auth.dependencies import get_current_user
 from domains.auth.models import ProfileModel
+from domains.language_snacks.basket_reset import (
+    BasketResetRepository,
+    BasketResetRequest,
+    BasketResetState,
+)
 from domains.language_snacks.dependencies import (
     get_language_snack_service,
     require_language_snack_operations_key,
@@ -62,6 +67,39 @@ def list_language_snacks(
         data=get_language_snack_service(db).repository.list_published(
             user.target_language, limit, order=order
         )
+    )
+
+
+@router.post(
+    "/api/v2/language-snacks/basket-reset/",
+    response_model=SuccessResponse[BasketResetState],
+    dependencies=[Depends(require_language_snack_operations_key)],
+)
+def reset_snack_basket(
+    request: BasketResetRequest, db: Annotated[Session, Depends(get_db)]
+):
+    if db.get(ProfileModel, str(request.user_id)) is None:
+        raise HTTPException(404, "User not found.")
+    return SuccessResponse(
+        data=BasketResetRepository(db).reset(
+            str(request.user_id), request.content_language
+        )
+    )
+
+
+@router.get(
+    "/api/v2/language-snacks/basket-reset/",
+    response_model=SuccessResponse[BasketResetState],
+)
+def read_snack_basket_reset(
+    response: Response,
+    user: Annotated[ProfileModel, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    response.headers["Cache-Control"] = "no-store"
+    marker = BasketResetRepository(db).read(str(user.id), user.target_language)
+    return SuccessResponse(
+        data=marker or BasketResetState(content_language=user.target_language)
     )
 
 

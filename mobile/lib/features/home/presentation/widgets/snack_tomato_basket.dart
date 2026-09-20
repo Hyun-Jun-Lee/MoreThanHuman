@@ -2,7 +2,6 @@ import 'dart:math' as math;
 
 import 'package:curitalk/app/theme/tokens/tokens.dart';
 import 'package:curitalk/core/copy/copy.dart';
-import 'package:curitalk/core/widgets/widgets.dart';
 import 'package:curitalk/features/home/domain/daily_snack_basket.dart';
 import 'package:curitalk/features/home/domain/language_snack.dart';
 import 'package:curitalk/features/home/presentation/widgets/language_snack_content.dart';
@@ -48,6 +47,7 @@ class _SnackTomatoBasketState extends State<SnackTomatoBasket>
   late bool _opened =
       widget.basket.consumed % DailySnackBasket.bitesPerTomato != 0;
   bool _busy = false;
+  bool _opening = false;
   bool _precached = false;
   int? _displayBites;
   int? _displayTomato;
@@ -88,14 +88,43 @@ class _SnackTomatoBasketState extends State<SnackTomatoBasket>
     super.dispose();
   }
 
+  Future<void> _openTomato() async {
+    if (MediaQuery.disableAnimationsOf(context)) {
+      setState(() => _opened = true);
+      return;
+    }
+    _motion.duration = const Duration(milliseconds: 400);
+    setState(() {
+      _opening = true;
+      _busy = true;
+    });
+    widget.onInteractionChanged?.call(true);
+    try {
+      await _motion.forward(from: 0).orCancel;
+      if (mounted) _opened = true;
+    } on TickerCanceled {
+      // 화면을 떠나면 꺼내기도 취소하며 소비 횟수는 바꾸지 않아요.
+    } finally {
+      if (mounted) {
+        _motion.reset();
+        setState(() {
+          _opening = false;
+          _busy = false;
+        });
+        widget.onInteractionChanged?.call(false);
+      }
+    }
+  }
+
   Future<void> _bite() async {
     if (_busy || widget.basket.isFinished) return;
     if (!_opened) {
-      setState(() => _opened = true);
+      await _openTomato();
       return;
     }
     final consumed = widget.basket.consumed;
     if (consumed >= DailySnackBasket.capacity) return;
+    _motion.duration = const Duration(milliseconds: 360);
     setState(() {
       _busy = true;
       _displayBites = consumed % DailySnackBasket.bitesPerTomato;
@@ -159,14 +188,12 @@ class _SnackTomatoBasketState extends State<SnackTomatoBasket>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          children: [
-            Expanded(child: AppSectionLabel(copy.languageSnackLabel)),
-            Text(
-              '$consumed / 12',
-              style: AppTypography.captionMono.copyWith(letterSpacing: 0),
-            ),
-          ],
+        Align(
+          alignment: Alignment.centerRight,
+          child: Text(
+            '$consumed / 12',
+            style: AppTypography.captionMono.copyWith(letterSpacing: 0),
+          ),
         ),
         const SizedBox(height: AppSpacing.md),
         Material(
@@ -236,6 +263,14 @@ class _SnackTomatoBasketState extends State<SnackTomatoBasket>
                           animation: _motion,
                           builder: (context, _) {
                             final t = _motion.value;
+                            if (_opening) {
+                              return _TomatoPickup(
+                                key: const ValueKey('tomato-pickup'),
+                                progress: t,
+                                basketAsset: basketAsset,
+                                tomatoAsset: SnackTomatoBasket.stages[bites],
+                              );
+                            }
                             final scale = t < .35
                                 ? 1 - .08 * (t / .35)
                                 : .92 +
@@ -269,33 +304,7 @@ class _SnackTomatoBasketState extends State<SnackTomatoBasket>
                   ),
                 ),
               ),
-              SizedBox(
-                height: 36,
-                child: _opened
-                    ? null
-                    : ExcludeSemantics(
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: List.generate(
-                            DailySnackBasket.tomatoCount,
-                            (index) => Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 5,
-                              ),
-                              child: Icon(
-                                index <
-                                        consumed ~/
-                                            DailySnackBasket.bitesPerTomato
-                                    ? Icons.check_circle
-                                    : Icons.circle_outlined,
-                                size: 10,
-                                color: ink,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-              ),
+              const SizedBox(height: AppSpacing.md),
               if (finished && !_busy)
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
@@ -317,6 +326,66 @@ class _SnackTomatoBasketState extends State<SnackTomatoBasket>
                   ),
                 ),
             ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TomatoPickup extends StatelessWidget {
+  const _TomatoPickup({
+    required this.progress,
+    required this.basketAsset,
+    required this.tomatoAsset,
+    super.key,
+  });
+
+  final double progress;
+  final String basketAsset;
+  final String tomatoAsset;
+
+  @override
+  Widget build(BuildContext context) {
+    final travel = Curves.easeOutCubic.transform(progress);
+    final scale = .42 + .58 * Curves.easeOutBack.transform(progress);
+    return Stack(
+      fit: StackFit.expand,
+      clipBehavior: Clip.none,
+      children: [
+        Opacity(
+          opacity:
+              1 -
+              const Interval(0, .7, curve: Curves.easeOut).transform(progress),
+          child: Transform.translate(
+            offset: Offset(0, 12 * travel),
+            child: Image.asset(
+              '${SnackTomatoBasket.assetRoot}$basketAsset',
+              fit: BoxFit.contain,
+              cacheWidth: 768,
+              excludeFromSemantics: true,
+            ),
+          ),
+        ),
+        Opacity(
+          opacity: const Interval(
+            0,
+            .18,
+            curve: Curves.easeOut,
+          ).transform(progress),
+          child: Transform.translate(
+            key: const ValueKey('tomato-pickup-offset'),
+            offset: Offset(24 * (1 - travel), 30 * (1 - travel)),
+            child: Transform.scale(
+              key: const ValueKey('tomato-pickup-scale'),
+              scale: scale,
+              child: Image.asset(
+                '${SnackTomatoBasket.assetRoot}$tomatoAsset',
+                fit: BoxFit.contain,
+                cacheWidth: 768,
+                excludeFromSemantics: true,
+              ),
+            ),
           ),
         ),
       ],

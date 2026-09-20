@@ -1,5 +1,21 @@
 import 'package:curitalk/core/storage/storage.dart';
 import 'package:curitalk/features/home/domain/language_snack.dart';
+import 'package:curitalk/features/home/data/snack_basket_reset_repository.dart';
+
+class MemoryBasketResetRepository implements SnackBasketResetRepository {
+  SnackBasketReset value = const SnackBasketReset(language: 'en');
+  bool fail = false;
+  int calls = 0;
+  Future<SnackBasketReset>? pending;
+
+  @override
+  Future<SnackBasketReset> read() async {
+    calls++;
+    if (fail) throw StateError('offline');
+    if (pending != null) return pending!;
+    return value;
+  }
+}
 
 LanguageSnack testSnack(
   int index, {

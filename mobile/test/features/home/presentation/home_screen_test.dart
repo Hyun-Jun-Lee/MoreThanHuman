@@ -11,6 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../snack_test_fixtures.dart';
+import 'package:curitalk/features/home/data/snack_basket_reset_repository.dart';
 
 void main() {
   testWidgets('removes hamburger and opens account sheet from profile avatar', (
@@ -459,6 +460,9 @@ Widget _homeApp({
       tokenStorage ?? _MemoryTokenStorage(tokens: _tokens, deviceId: _deviceId);
   return ProviderScope(
     overrides: [
+      snackBasketResetRepositoryProvider.overrideWithValue(
+        MemoryBasketResetRepository(),
+      ),
       secureStorageBackendProvider.overrideWithValue(MemorySnackStorage()),
       tokenStorageProvider.overrideWithValue(effectiveTokenStorage),
       installationIdServiceProvider.overrideWithValue(

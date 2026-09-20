@@ -4,10 +4,60 @@ import 'dart:typed_data';
 import 'package:curitalk/core/network/network.dart';
 import 'package:curitalk/core/storage/storage.dart';
 import 'package:curitalk/features/home/data/api_language_snack_repository.dart';
+import 'package:curitalk/features/home/data/snack_basket_reset_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:dio/dio.dart';
 
 void main() {
+  test(
+    'reset state uses Bearer authentication without operations credentials',
+    () async {
+      final client = ApiClient.create(
+        tokenStorage: const _MemoryTokenStorage('access-token'),
+        baseUrl: 'https://example.com/api/',
+      );
+      final adapter = _LanguageSnackHttpClientAdapter(
+        data: {'content_language': 'en', 'reset_id': 'server-reset-id'},
+      );
+      client.dio.httpClientAdapter = adapter;
+      addTearDown(client.close);
+      final marker = await ApiSnackBasketResetRepository(client).read();
+      expect(marker.resetId, 'server-reset-id');
+      expect(marker.language, 'en');
+      expect(
+        adapter.lastRequest?.uri.path,
+        '/api/v2/language-snacks/basket-reset/',
+      );
+      expect(
+        adapter.lastRequest?.headers['Authorization'],
+        'Bearer access-token',
+      );
+      expect(
+        adapter.lastRequest?.headers.containsKey('X-Operations-Key'),
+        isFalse,
+      );
+    },
+  );
+
+  test('reset state accepts no record and rejects malformed records', () {
+    expect(
+      SnackBasketReset.fromJson({
+        'content_language': 'en',
+        'reset_id': null,
+      }).resetId,
+      isNull,
+    );
+    for (final data in [
+      null,
+      {},
+      {'content_language': 'ko'},
+      {'content_language': 'zh', 'reset_id': null},
+      {'content_language': 'en', 'reset_id': 1},
+    ]) {
+      expect(() => SnackBasketReset.fromJson(data), throwsFormatException);
+    }
+  });
+
   test(
     'repository requests published snacks through the authenticated API client',
     () async {
