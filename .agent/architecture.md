@@ -1,6 +1,6 @@
 # 시스템 아키텍처
 
-> 프로젝트: MoreThanHuman (Convia) · 버전: 0.1.4 · 최종 갱신: 2026-09-19
+> 프로젝트: MoreThanHuman (Convia) · 버전: 0.1.6 · 최종 갱신: 2026-09-22
 
 ---
 
@@ -151,6 +151,8 @@ domains/{name}/
 언어 선호는 profile 기본값(`native_language`, `target_language`, `feedback_language`)으로 저장하고, 기존 값이 없으면 `ko -> en`과 feedback `ko`로 보정해요.
 
 ### 대화
+
+대화 재진입 v1.1 (2026-09-22): Flutter는 기존 시간순 offset API의 첫 응답에서 total_count를 확인하고, 40개 초과 시 마지막 40개를 추가 조회해 최초 화면에 표시해요. ConversationState.oldestOffset으로 이전 구간을 40개씩 조회하며, 실패 시 표시 중인 메시지를 유지해 재시도해요. 이전 구간 로딩과 전송은 동시에 실행하지 않아요. 화면은 reverse 목록·역순 위젯 배열과 진입별 ScrollController(keepScrollOffset: false)로 최신 위치에서 시작하고, 과거 열람·교정 카드 확장 때 강제 이동하지 않아요. 대화 provider의 기존 캐시·음성 상태는 유지하며 재진입 시 다른 기기의 변경을 자동 조회하지는 않아요. 서버 API 계약은 변경하지 않아요.
 
 ```text
 [사용자] → POST /api/conversations/start/{free-chat|roleplay}/

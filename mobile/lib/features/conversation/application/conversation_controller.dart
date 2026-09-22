@@ -17,6 +17,9 @@ class ConversationState {
     this.failureReason,
     this.assistantAudioStatus,
     this.autoPlayAudioMessageIds = const <String>{},
+    this.oldestOffset = 0,
+    this.isLoadingOlder = false,
+    this.olderMessagesFailed = false,
   });
 
   const ConversationState.empty()
@@ -26,7 +29,10 @@ class ConversationState {
       failedAudioFile = null,
       failureReason = null,
       assistantAudioStatus = null,
-      autoPlayAudioMessageIds = const <String>{};
+      autoPlayAudioMessageIds = const <String>{},
+      oldestOffset = 0,
+      isLoadingOlder = false,
+      olderMessagesFailed = false;
 
   final List<ConversationMessage> messages;
   final bool isSending;
@@ -35,6 +41,11 @@ class ConversationState {
   final ConversationSendFailureReason? failureReason;
   final AssistantAudioStatus? assistantAudioStatus;
   final Set<String> autoPlayAudioMessageIds;
+  final int oldestOffset;
+  final bool isLoadingOlder;
+  final bool olderMessagesFailed;
+
+  bool get hasOlderMessages => oldestOffset > 0;
 
   ConversationState copyWith({
     List<ConversationMessage>? messages,
@@ -47,6 +58,9 @@ class ConversationState {
     AssistantAudioStatus? assistantAudioStatus,
     bool clearAssistantAudioStatus = false,
     Set<String>? autoPlayAudioMessageIds,
+    int? oldestOffset,
+    bool? isLoadingOlder,
+    bool? olderMessagesFailed,
   }) {
     return ConversationState(
       messages: messages ?? this.messages,
@@ -63,6 +77,9 @@ class ConversationState {
           : assistantAudioStatus ?? this.assistantAudioStatus,
       autoPlayAudioMessageIds:
           autoPlayAudioMessageIds ?? this.autoPlayAudioMessageIds,
+      oldestOffset: oldestOffset ?? this.oldestOffset,
+      isLoadingOlder: isLoadingOlder ?? this.isLoadingOlder,
+      olderMessagesFailed: olderMessagesFailed ?? this.olderMessagesFailed,
     );
   }
 }
@@ -71,12 +88,28 @@ class ConversationController extends AsyncNotifier<ConversationState> {
   ConversationController(this.conversationId);
 
   final String conversationId;
+  static const int _pageSize = 40;
+
+  Future<PaginatedMessages> _loadLatestPage(
+    ConversationRepository repository,
+  ) async {
+    final PaginatedMessages first = await repository.listMessages(
+      conversationId,
+      limit: _pageSize,
+    );
+    if (first.pagination.totalCount <= _pageSize) return first;
+    return repository.listMessages(
+      conversationId,
+      limit: _pageSize,
+      offset: first.pagination.totalCount - _pageSize,
+    );
+  }
 
   @override
   Future<ConversationState> build() async {
-    final PaginatedMessages page = await ref
-        .watch(conversationRepositoryProvider)
-        .listMessages(conversationId);
+    final PaginatedMessages page = await _loadLatestPage(
+      ref.watch(conversationRepositoryProvider),
+    );
     final InitialAssistantAudio? initialAudio = ref.read(
       initialAssistantAudioProvider(conversationId),
     );
@@ -96,6 +129,7 @@ class ConversationController extends AsyncNotifier<ConversationState> {
     }
     return ConversationState(
       messages: messages,
+      oldestOffset: page.pagination.offset,
       autoPlayAudioMessageIds: initialAutoPlayMessageId == null
           ? const <String>{}
           : <String>{initialAutoPlayMessageId},
@@ -149,18 +183,79 @@ class ConversationController extends AsyncNotifier<ConversationState> {
   }
 
   Future<void> reload() async {
-    final ConversationState previous =
-        state.value ?? const ConversationState.empty();
-    state = AsyncData<ConversationState>(
-      previous.copyWith(failureReason: null),
-    );
+    if (state.isLoading ||
+        state.value?.isSending == true ||
+        state.value?.isLoadingOlder == true) {
+      return;
+    }
+    state = const AsyncLoading<ConversationState>();
     final AsyncValue<ConversationState> next = await AsyncValue.guard(() async {
+      final PaginatedMessages page = await _loadLatestPage(
+        ref.read(conversationRepositoryProvider),
+      );
+      return ConversationState(
+        messages: page.results,
+        oldestOffset: page.pagination.offset,
+      );
+    });
+    if (ref.mounted) state = next;
+  }
+
+  Future<void> loadOlderMessages() async {
+    final ConversationState? previous = state.value;
+    if (previous == null ||
+        !previous.hasOlderMessages ||
+        previous.isLoadingOlder ||
+        previous.isSending) {
+      return;
+    }
+    final int offset = (previous.oldestOffset - _pageSize).clamp(
+      0,
+      previous.oldestOffset,
+    );
+    state = AsyncData(
+      previous.copyWith(
+        isLoadingOlder: true,
+        olderMessagesFailed: false,
+        failureReason: previous.failureReason,
+      ),
+    );
+    try {
       final PaginatedMessages page = await ref
           .read(conversationRepositoryProvider)
-          .listMessages(conversationId);
-      return ConversationState(messages: page.results);
-    });
-    state = next;
+          .listMessages(
+            conversationId,
+            limit: previous.oldestOffset - offset,
+            offset: offset,
+          );
+      if (!ref.mounted) return;
+      if (page.results.isEmpty) throw StateError('Empty history page');
+      final ConversationState current = state.requireValue;
+      final Set<String> existingIds = current.messages.map((m) => m.id).toSet();
+      state = AsyncData(
+        current.copyWith(
+          messages: [
+            ...page.results.where(
+              (message) => !existingIds.contains(message.id),
+            ),
+            ...current.messages,
+          ],
+          oldestOffset: offset,
+          isLoadingOlder: false,
+          failureReason: current.failureReason,
+        ),
+      );
+    } on Object {
+      if (!ref.mounted) return;
+      final ConversationState current = state.requireValue;
+      state = AsyncData(
+        current.copyWith(
+          isLoadingOlder: false,
+          olderMessagesFailed: true,
+          failureReason: current.failureReason,
+        ),
+      );
+    }
   }
 
   Future<void> send(String message) async {
@@ -168,7 +263,9 @@ class ConversationController extends AsyncNotifier<ConversationState> {
     if (normalized.isEmpty) {
       return;
     }
-    if (state.value?.isSending == true) {
+    if (!state.hasValue ||
+        state.value?.isSending == true ||
+        state.value?.isLoadingOlder == true) {
       return;
     }
 
@@ -249,7 +346,10 @@ class ConversationController extends AsyncNotifier<ConversationState> {
   }
 
   Future<void> sendAudio(ConversationAudioFile audioFile) async {
-    if (audioFile.bytes.isEmpty || state.value?.isSending == true) {
+    if (audioFile.bytes.isEmpty ||
+        !state.hasValue ||
+        state.value?.isSending == true ||
+        state.value?.isLoadingOlder == true) {
       return;
     }
 

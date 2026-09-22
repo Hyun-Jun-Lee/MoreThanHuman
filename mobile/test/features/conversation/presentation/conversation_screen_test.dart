@@ -7,6 +7,99 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
 void main() {
+  testWidgets(
+    'reentering a long conversation shows newest message without restoring old scroll',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final router = _router();
+      addTearDown(router.dispose);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            conversationRepositoryProvider.overrideWithValue(
+              _LongConversationRepository(),
+            ),
+            conversationAudioRecorderProvider.overrideWithValue(
+              _FakeConversationAudioRecorder(),
+            ),
+          ],
+          child: MaterialApp.router(
+            theme: AppTheme.light,
+            routerConfig: router,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final latest = find.text('Message 119');
+      expect(latest.hitTestable(), findsOneWidget);
+      expect(find.text('Message 80').hitTestable(), findsNothing);
+      await tester.drag(find.byType(ListView), const Offset(0, 500));
+      await tester.pumpAndSettle();
+      final position = tester
+          .state<ScrollableState>(find.byType(Scrollable).first)
+          .position;
+      expect(position.pixels, greaterThan(0));
+      final oldOffset = position.pixels;
+      // 입력으로 다시 빌드돼도 과거 대화의 열람 위치를 유지해요.
+      await tester.enterText(find.byType(TextField), 'Draft');
+      await tester.pump();
+      expect(position.pixels, oldOffset);
+      position.jumpTo(0);
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.byTooltip('Show grammar feedback'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(find.byTooltip('Show grammar feedback'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('SHOW MORE'));
+      await tester.tap(find.text('SHOW MORE'));
+      await tester.pumpAndSettle();
+      expect(find.text('SHOW LESS').hitTestable(), findsOneWidget);
+      expect(position.pixels, greaterThan(0));
+      expect(latest.hitTestable(), findsNothing);
+      router.go(AppRoute.home);
+      await tester.pumpAndSettle();
+      router.push(AppRoute.conversationPath('conversation-id'));
+      await tester.pumpAndSettle();
+      expect(latest.hitTestable(), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.text('Load earlier messages'),
+        600,
+        scrollable: find.byType(Scrollable).first,
+        maxScrolls: 30,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Voice input'));
+      await tester.pump();
+      expect(find.byTooltip('Stop recording'), findsOneWidget);
+      expect(
+        tester
+            .widget<TextButton>(
+              find.widgetWithText(TextButton, 'Load earlier messages'),
+            )
+            .onPressed,
+        isNull,
+      );
+      await tester.tap(find.byTooltip('Cancel recording'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Load earlier messages'));
+      await tester.pumpAndSettle();
+      expect(latest.hitTestable(), findsNothing);
+      await tester.scrollUntilVisible(
+        find.text('Message 40'),
+        600,
+        scrollable: find.byType(Scrollable).first,
+        maxScrolls: 30,
+      );
+      expect(find.text('Message 40').hitTestable(), findsOneWidget);
+    },
+  );
+
   testWidgets('explicit back button returns to Home when stack is empty', (
     WidgetTester tester,
   ) async {
@@ -509,4 +602,53 @@ class _FakeConversationAudioPlayer implements ConversationAudioPlayer {
 
   @override
   Future<void> dispose() async {}
+}
+
+class _LongConversationRepository extends _FakeConversationRepository {
+  @override
+  Future<PaginatedMessages> listMessages(
+    String conversationId, {
+    int limit = 50,
+    int offset = 0,
+  }) async {
+    return PaginatedMessages(
+      results: List.generate(
+        120,
+        (i) => ConversationMessage(
+          id: 'message-$i',
+          conversationId: conversationId,
+          role: i == 110
+              ? ConversationMessageRole.user
+              : ConversationMessageRole.assistant,
+          grammarFeedback: i == 110
+              ? GrammarFeedback(
+                  id: 'feedback-110',
+                  messageId: 'message-110',
+                  originalText: 'Message 110',
+                  correctedText:
+                      'I was surprised by the result of the conversation yesterday.',
+                  hasErrors: true,
+                  errors: const [
+                    GrammarError(
+                      original: 'surprise',
+                      corrected: 'surprised',
+                      explanation:
+                          'Use the adjective to describe how you felt about the result.',
+                    ),
+                  ],
+                  createdAt: DateTime.utc(2026, 9, 22),
+                )
+              : null,
+          content: 'Message $i',
+          createdAt: DateTime.utc(2026, 9, 22, 0, i),
+        ),
+      ).skip(offset).take(limit).toList(),
+      pagination: Pagination(
+        limit: limit,
+        offset: offset,
+        totalCount: 120,
+        hasMore: offset + limit < 120,
+      ),
+    );
+  }
 }

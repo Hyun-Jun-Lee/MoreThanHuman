@@ -228,11 +228,13 @@ Start Roleplay를 누르면 선택 결과를 백엔드 계약에 맞는 `role_ch
 
 ## Conversation 흐름
 
+대화 재진입 v1.1 (2026-09-22): 메시지는 시간순으로 유지하면서 목록을 아래쪽 기준으로 배치해 진입할 때 최신 메시지가 보여요. 최초 조회의 전체 개수가 40개를 넘으면 기존 offset API로 마지막 40개를 추가 조회한 뒤 표시하고, 상단의 이전 메시지 불러오기로 앞선 구간을 40개씩 이어서 읽어요. 이전 구간 로딩 중에는 중복 조회와 전송을 잠깐 막고, 실패 시 현재 메시지를 유지한 채 재시도할 수 있어요. 화면 재진입 시 스크롤 위치는 복원하지 않으며 화면 안에서 과거 내용을 읽거나 교정 카드를 펼칠 때 강제로 최신 위치로 이동하지 않아요. 기존 대화 상태·음성 캐시는 유지하며 다른 기기의 변경을 재진입 때 자동 동기화하는 기능은 포함하지 않아요.
+
 Conversation 화면은 Free Chat 시작, Roleplay 시작, Home 최근 대화 진입이 합류하는 대화 화면이에요. 상단에는 명시적인 뒤로가기 버튼을 두고, navigation stack이 없을 때는 Home으로 이동해요.
 
 | 동작 | API |
 |------|-----|
-| 기존 메시지 로드 | `GET /api/conversations/{conversation_id}/messages/?limit=50&offset=0` |
+| 기존 메시지 로드 | `GET /api/conversations/{conversation_id}/messages/?limit=40&offset=0` |
 | 텍스트 turn 전송 | `POST /api/conversations/{conversation_id}/turn/` JSON |
 | 음성 turn 전송 | `POST /api/conversations/{conversation_id}/turn/` multipart |
 | 문법 피드백 조회 | `GET /api/grammar/message/{message_id}/` |
@@ -245,7 +247,7 @@ Conversation 화면은 Free Chat 시작, Roleplay 시작, Home 최근 대화 진
 
 사용자 메시지의 문법 피드백은 2초 간격으로 최대 30초 polling해요. `404`는 pending으로 보고 계속 기다리며, `200`이면 `has_errors=false`는 `NaturalFeedbackBadge`, `has_errors=true`는 `GrammarFeedbackCard`로 표시해요. 문법 피드백의 교정 문장과 설명도 서버 원문은 유지하고 화면 표시 단계에서 문장 단위 줄바꿈과 누락된 공백을 보정해요. 빈 줄로 나뉜 텍스트는 문단 간격을 두고 표시하며, 1줄을 넘는 피드백은 기본 접힘 상태에서 `SHOW MORE`/`SHOW LESS`로 확장할 수 있어요. 설명 텍스트는 gray 계열을 유지하고 피드백 카드는 일반 AI 말풍선과 다른 semantic color를 사용해요. 30초 동안 준비되지 않으면 timeout 안내를 표시해요.
 
-SSE 기반 실시간 피드백, waveform 표시, 50개 이후 pagination은 후속 작업으로 남겨요. 실제 기기 QA에서는 microphone permission denied, 녹음 cancel, stop/upload, assistant audio playback, playback failure를 확인해요.
+SSE 기반 실시간 피드백과 waveform 표시는 후속 작업으로 남겨요. 메시지는 최신 40개부터 조회하며 이전 구간을 40개씩 추가 조회할 수 있어요. 실제 기기 QA에서는 microphone permission denied, 녹음 cancel, stop/upload, assistant audio playback, playback failure를 확인해요.
 
 ## 실행 설정
 

@@ -181,6 +181,11 @@ class AppCopy {
   String get connectionRetryMessage => isKorean
       ? '연결을 확인하고 다시 시도해 주세요.'
       : 'Check your connection and try again.';
+  String get loadOlderMessagesLabel =>
+      isKorean ? '이전 메시지 불러오기' : 'Load earlier messages';
+  String get loadOlderMessagesFailed => isKorean
+      ? '이전 메시지를 불러오지 못했어요. 다시 시도해 주세요.'
+      : 'Earlier messages could not be loaded. Please try again.';
   String get noMessagesTitle => isKorean ? '아직 메시지가 없어요.' : 'No messages yet.';
   String get noMessagesMessage => isKorean
       ? '첫 답변을 보내며 대화를 시작해 보세요.'

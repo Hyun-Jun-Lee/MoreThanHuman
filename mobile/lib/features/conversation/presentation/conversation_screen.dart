@@ -65,7 +65,9 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
       bottomNavigationBar: AppBottomActionBar(
         child: ChatComposer(
           controller: _composerController,
-          enabled: conversation.hasValue,
+          enabled:
+              conversation.hasValue &&
+              conversation.value?.isLoadingOlder != true,
           isSending: isSending,
           isRecording: _voiceInput.phase == _VoiceInputPhase.recording,
           isVoiceBusy: _voiceInput.isBusy,
@@ -92,9 +94,11 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
               .reload(),
         ),
         data: (ConversationState state) => _ConversationMessageList(
+          key: ValueKey(widget.conversationId),
           conversationId: widget.conversationId,
           state: state,
           voiceFailureReason: _voiceInput.failureReason,
+          canLoadOlder: !_voiceInput.isRecordingActive && !_voiceInput.isBusy,
         ),
       ),
     );
@@ -298,19 +302,44 @@ class _VoiceInputState {
   }
 }
 
-class _ConversationMessageList extends ConsumerWidget {
+class _ConversationMessageList extends ConsumerStatefulWidget {
   const _ConversationMessageList({
     required this.conversationId,
     required this.state,
+    required this.canLoadOlder,
     this.voiceFailureReason,
+    super.key,
   });
 
   final String conversationId;
   final ConversationState state;
+  final bool canLoadOlder;
   final ConversationAudioExceptionReason? voiceFailureReason;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_ConversationMessageList> createState() =>
+      _ConversationMessageListState();
+}
+
+class _ConversationMessageListState
+    extends ConsumerState<_ConversationMessageList> {
+  final ScrollController _scrollController = ScrollController(
+    keepScrollOffset: false,
+  );
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ConversationState state = widget.state;
+    final String conversationId = widget.conversationId;
+    final ConversationAudioExceptionReason? voiceFailureReason =
+        widget.voiceFailureReason;
+    final AppCopy copy = AppCopy.of(context);
     if (state.messages.isEmpty &&
         state.failedMessage == null &&
         state.failedAudioFile == null &&
@@ -325,6 +354,26 @@ class _ConversationMessageList extends ConsumerWidget {
 
     final List<Widget> children = <Widget>[
       const SizedBox(height: AppSpacing.lg),
+      if (state.hasOlderMessages) ...<Widget>[
+        if (state.olderMessagesFailed)
+          Text(copy.loadOlderMessagesFailed, textAlign: TextAlign.center),
+        TextButton(
+          onPressed:
+              state.isLoadingOlder || state.isSending || !widget.canLoadOlder
+              ? null
+              : () => ref
+                    .read(
+                      conversationControllerProvider(conversationId).notifier,
+                    )
+                    .loadOlderMessages(),
+          child: Text(
+            state.isLoadingOlder
+                ? copy.loadingMessages
+                : copy.loadOlderMessagesLabel,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+      ],
       for (final ConversationMessage message in state.messages) ...<Widget>[
         ConversationMessageTile(
           key: ValueKey(message.id),
@@ -370,7 +419,7 @@ class _ConversationMessageList extends ConsumerWidget {
         AppColorBlockCard(
           color: AppPalette.blockPink,
           child: Text(
-            AppCopy.of(context).failureMessage(voiceFailureReason!.name),
+            AppCopy.of(context).failureMessage(voiceFailureReason.name),
             style: AppTypography.bodySm,
           ),
         ),
@@ -379,9 +428,13 @@ class _ConversationMessageList extends ConsumerWidget {
       const SizedBox(height: AppSpacing.xl),
     ];
 
-    return ListView(children: children);
+    // 아래쪽을 스크롤 원점으로 삼아 높이 계산 후 점프 없이 최신 대화를 보여줘요.
+    return ListView(
+      controller: _scrollController,
+      reverse: true,
+      children: children.reversed.toList(growable: false),
+    );
   }
-
 }
 
 class _SendFailureCard extends StatelessWidget {
