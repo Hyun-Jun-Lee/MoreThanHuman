@@ -1,3 +1,7 @@
+import 'dart:async';
+import 'package:curitalk/app/navigation/main_shell.dart';
+import 'package:curitalk/features/profile/presentation/profile_screen.dart';
+import 'package:curitalk/features/history/application/conversation_history_controller.dart';
 import 'package:curitalk/features/auth/auth.dart';
 import 'package:curitalk/features/conversation/conversation.dart';
 import 'package:curitalk/features/history/history.dart';
@@ -5,7 +9,7 @@ import 'package:curitalk/features/home/home.dart';
 import 'package:curitalk/features/onboarding/onboarding.dart';
 import 'package:curitalk/features/roleplay_setup/roleplay_setup.dart';
 import 'package:curitalk/features/topic_prep/topic_prep.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -15,6 +19,7 @@ abstract final class AppRoute {
   static const String login = '/login';
   static const String home = '/home';
   static const String history = '/history';
+  static const String profile = '/profile';
   static const String topicInput = '/topic-input';
   static const String topicPrep = '/topic-prep';
   static const String roleplaySetup = '/roleplay-setup';
@@ -79,43 +84,44 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
         path: AppRoute.login,
         builder: (context, state) => const LoginScreen(),
       ),
-      GoRoute(
-        path: AppRoute.home,
-        builder: (context, state) {
-          return HomeScreen(
-            onConversationSelected: (String conversationId) {
-              context.push(AppRoute.conversationPath(conversationId));
-            },
-            onHistorySelected: () {
-              context.push(AppRoute.history);
-            },
-            onStartTypeSelected: (ConversationStartType type) {
-              if (type == ConversationStartType.freeChat) {
-                context.push(AppRoute.topicInput);
-              } else if (type == ConversationStartType.roleplay) {
-                context.push(AppRoute.roleplaySetup);
-              }
-            },
-          );
-        },
-      ),
-      GoRoute(
-        path: AppRoute.history,
-        builder: (context, state) {
-          return HistoryScreen(
-            onHomeSelected: () => context.go(AppRoute.home),
-            onConversationSelected: (String conversationId) {
-              context.push(AppRoute.conversationPath(conversationId));
-            },
-            onStartTypeSelected: (ConversationStartType type) {
-              if (type == ConversationStartType.freeChat) {
-                context.push(AppRoute.topicInput);
-              } else if (type == ConversationStartType.roleplay) {
-                context.push(AppRoute.roleplaySetup);
-              }
-            },
-          );
-        },
+      StatefulShellRoute.indexedStack(
+        builder: (context, state, shell) => MainShell(navigationShell: shell),
+        branches: [
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: AppRoute.home,
+                builder: (context, state) => HomeScreen(
+                  onConversationSelected: (id) =>
+                      context.push(AppRoute.conversationPath(id)),
+                  onHistorySelected: () => context.go(AppRoute.history),
+                  onProfileSelected: () => context.go(AppRoute.profile),
+                  onStartTypeSelected: (type) => _startFlow(context, type),
+                ),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: AppRoute.history,
+                builder: (context, state) => HistoryScreen(
+                  onConversationSelected: (id) =>
+                      context.push(AppRoute.conversationPath(id)),
+                  onStartTypeSelected: (type) => _startFlow(context, type),
+                ),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: AppRoute.profile,
+                builder: (_, _) => const ProfileScreen(),
+              ),
+            ],
+          ),
+        ],
       ),
       GoRoute(
         path: AppRoute.topicInput,
@@ -146,7 +152,12 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
           if (conversationId == null || conversationId.trim().isEmpty) {
             return const HomeScreen();
           }
-          return ConversationScreen(conversationId: conversationId);
+          return PopScope(
+            onPopInvokedWithResult: (didPop, _) {
+              if (didPop && ref.mounted) _refreshLists(ref);
+            },
+            child: ConversationScreen(conversationId: conversationId),
+          );
         },
       ),
     ],
@@ -163,4 +174,48 @@ class _RouterRefreshNotifier extends ChangeNotifier {
     ref.listen(authControllerProvider, (_, _) => notifyListeners());
     ref.listen(onboardingControllerProvider, (_, _) => notifyListeners());
   }
+}
+
+void _refreshLists(Ref ref) {
+  ref.invalidate(recentConversationsControllerProvider);
+  ref.invalidate(conversationHistoryControllerProvider);
+}
+
+Future<void> _startFlow(
+  BuildContext context,
+  ConversationStartType type,
+) async {
+  await context.push(
+    type == ConversationStartType.freeChat
+        ? AppRoute.topicInput
+        : AppRoute.roleplaySetup,
+  );
+}
+
+/// 완료된 준비 경로만 비우고 출발 탭 위에 대화를 올려요.
+void openStartedConversation(BuildContext context, String conversationId) {
+  final router = GoRouter.of(context);
+  while (router.canPop()) {
+    final path =
+        router.routerDelegate.currentConfiguration.last.matchedLocation;
+    if (!{
+      AppRoute.topicInput,
+      AppRoute.topicPrep,
+      AppRoute.roleplaySetup,
+    }.contains(path)) {
+      break;
+    }
+    router.pop();
+  }
+  final location =
+      router.routerDelegate.currentConfiguration.last.matchedLocation;
+  if ({
+    AppRoute.topicInput,
+    AppRoute.topicPrep,
+    AppRoute.roleplaySetup,
+  }.contains(location)) {
+    // 직접 준비 화면을 연 경우에도 돌아갈 목적지를 구성해요.
+    router.go(AppRoute.home);
+  }
+  unawaited(router.push(AppRoute.conversationPath(conversationId)));
 }

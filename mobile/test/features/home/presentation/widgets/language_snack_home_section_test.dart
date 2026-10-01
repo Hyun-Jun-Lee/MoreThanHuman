@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:curitalk/core/widgets/main_tab_scope.dart';
 import 'package:curitalk/app/theme/app_theme.dart';
 import 'package:curitalk/core/storage/storage.dart';
 import 'package:curitalk/features/home/application/daily_snack_basket_controller.dart';
@@ -17,6 +18,34 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../snack_test_fixtures.dart';
 
 void main() {
+  testWidgets('leaving Home during a bite cancels consumption and popup', (
+    tester,
+  ) async {
+    final activeTab = ValueNotifier(0);
+    addTearDown(activeTab.dispose);
+    await tester.pumpWidget(
+      _app(
+        MemorySnackStorage(),
+        () => DateTime(2026, 9, 19),
+        activeTab: activeTab,
+      ),
+    );
+    await tester.pumpAndSettle();
+    final touch = find.byKey(const ValueKey('snack-tomato-touch'));
+    await tester.tap(touch);
+    await tester.pumpAndSettle();
+    await tester.tap(touch);
+    await tester.pump(const Duration(milliseconds: 100));
+    activeTab.value = -1;
+    await tester.pumpAndSettle();
+    expect(find.byType(Dialog), findsNothing);
+    expect(find.text('0 / 12'), findsOneWidget);
+    activeTab.value = 0;
+    await tester.pumpAndSettle();
+    expect(find.byType(Dialog), findsNothing);
+    expect(find.text('0 / 12'), findsOneWidget);
+  });
+
   testWidgets('debug reset is available after all twelve snacks are consumed', (
     tester,
   ) async {
@@ -280,6 +309,7 @@ Widget _app(
   MemorySnackStorage storage,
   DateTime Function() clock, {
   MemoryBasketResetRepository? resets,
+  ValueNotifier<int>? activeTab,
 }) => ProviderScope(
   overrides: [
     snackBasketResetRepositoryProvider.overrideWithValue(
@@ -297,9 +327,20 @@ Widget _app(
   ],
   child: MaterialApp(
     theme: AppTheme.light,
-    home: const Scaffold(
-      body: SingleChildScrollView(child: LanguageSnackHomeSection()),
-    ),
+    home: activeTab == null
+        ? const Scaffold(
+            body: SingleChildScrollView(child: LanguageSnackHomeSection()),
+          )
+        : ValueListenableBuilder<int>(
+            valueListenable: activeTab,
+            builder: (_, index, _) => MainTabScope(
+              index: index,
+              controllers: const [],
+              child: const Scaffold(
+                body: SingleChildScrollView(child: LanguageSnackHomeSection()),
+              ),
+            ),
+          ),
   ),
 );
 

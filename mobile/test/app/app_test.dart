@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'package:curitalk/app/router/app_router.dart';
+import 'package:curitalk/features/history/data/conversation_history_repository.dart';
 
 import 'package:curitalk/app/app.dart';
 import 'package:curitalk/core/storage/storage.dart';
@@ -74,7 +76,8 @@ void main() {
     expect(supabaseAuth.hasSession, isTrue);
     expect(supabaseAuth.lastIdToken, 'google-id-token');
 
-    await tester.tap(find.text('START CONVERSATION').first);
+    await tester.ensureVisible(find.text('New conversation'));
+    await tester.tap(find.text('New conversation'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Free Chat'));
     await tester.pumpAndSettle();
@@ -178,7 +181,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('START CONVERSATION').first);
+    await tester.ensureVisible(find.text('New conversation'));
+    await tester.tap(find.text('New conversation'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Roleplay'));
     await tester.pumpAndSettle();
@@ -205,7 +209,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('History'));
+    await tester.tap(find.text('Conversations').last);
     await tester.pumpAndSettle();
 
     expect(find.text('No conversations yet.'), findsOneWidget);
@@ -243,6 +247,63 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets(
+    'avatar opens Profile and profile refresh and locale save keep the tab',
+    (tester) async {
+      await tester.pumpWidget(
+        _appScope(
+          tokenStorage: _MemoryTokenStorage(
+            tokens: _tokens,
+            deviceId: _deviceId,
+          ),
+          onboardingStorage: _MemoryOnboardingStorage(true),
+          authRepository: _FakeAuthRepository(),
+          supabaseAuth: _FakeSupabaseAuthService(hasSession: true),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('L'));
+      await tester.pumpAndSettle();
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(CuritalkApp)),
+      );
+      expect(
+        container
+            .read(appRouterProvider)
+            .routeInformationProvider
+            .value
+            .uri
+            .path,
+        AppRoute.profile,
+      );
+      await container.read(authControllerProvider.notifier).refreshProfile();
+      await tester.pumpAndSettle();
+      expect(
+        container
+            .read(appRouterProvider)
+            .routeInformationProvider
+            .value
+            .uri
+            .path,
+        AppRoute.profile,
+      );
+      await tester.tap(find.text('KOREAN'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Change'));
+      await tester.pumpAndSettle();
+      expect(find.text('내 정보'), findsNWidgets(2));
+      expect(
+        container
+            .read(appRouterProvider)
+            .routeInformationProvider
+            .value
+            .uri
+            .path,
+        AppRoute.profile,
+      );
+    },
+  );
 
   testWidgets('login unexpected error copy follows Korean system locale', (
     WidgetTester tester,
@@ -313,6 +374,9 @@ ProviderScope _appScope({
       supabaseAuthServiceProvider.overrideWithValue(
         supabaseAuth ?? _FakeSupabaseAuthService(),
       ),
+      conversationHistoryRepositoryProvider.overrideWithValue(
+        const _FakeHistoryRepository(),
+      ),
       homeRepositoryProvider.overrideWithValue(const _FakeHomeRepository()),
       topicPrepRepositoryProvider.overrideWithValue(
         const _FakeTopicPrepRepository(),
@@ -343,9 +407,13 @@ class _FakeGoogleIdentityService implements GoogleIdentityService {
   Future<void> signOut() async {}
 }
 
-class _FakeAuthRepository implements AuthRepository {
+class _FakeAuthRepository implements AuthRepository, AppLocaleRepository {
+  UserProfile user = _user;
   @override
-  Future<UserProfile> getCurrentUser() async => _user;
+  Future<UserProfile> getCurrentUser() async => user;
+  @override
+  Future<UserProfile> updateAppLocale(String appLocale) async =>
+      user = user.copyWith(appLocale: appLocale);
 }
 
 class _FakeSupabaseAuthService implements SupabaseAuthService {
@@ -486,4 +554,11 @@ class _MemoryTokenStorage implements TokenStorage {
   Future<void> writeTokens(AuthTokens tokens) async {
     this.tokens = tokens;
   }
+}
+
+class _FakeHistoryRepository implements ConversationHistoryRepository {
+  const _FakeHistoryRepository();
+  @override
+  Future<ConversationPage> list({int offset = 0, int limit = 20}) async =>
+      const ConversationPage(items: [], nextOffset: 0, hasMore: false);
 }

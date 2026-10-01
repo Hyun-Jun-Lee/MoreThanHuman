@@ -100,13 +100,13 @@ void main() {
     },
   );
 
-  testWidgets('explicit back button returns to Home when stack is empty', (
+  testWidgets('explicit back button returns to Conversations when stack is empty', (
     WidgetTester tester,
   ) async {
     final GoRouter router = GoRouter(
       initialLocation: AppRoute.conversationPath('conversation-id'),
       routes: <RouteBase>[
-        GoRoute(path: AppRoute.home, builder: (_, _) => const Text('Home')),
+        GoRoute(path: AppRoute.history, builder: (_, _) => const Text('Conversations')),
         GoRoute(
           path: '${AppRoute.conversation}/:conversationId',
           builder: (_, GoRouterState state) {
@@ -131,10 +131,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Hello!'), findsOneWidget);
-    await tester.tap(find.byTooltip('Back to home'));
+    await tester.tap(find.byTooltip('Back'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Home'), findsOneWidget);
+    expect(find.text('Conversations'), findsOneWidget);
   });
 
   testWidgets('voice input records and sends audio turn', (

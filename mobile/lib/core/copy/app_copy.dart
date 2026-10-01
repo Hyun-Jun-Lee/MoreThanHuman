@@ -159,6 +159,7 @@ class AppCopy {
   }
 
   String get retryLabel => isKorean ? '다시 시도' : 'Retry';
+  String get backLabel => isKorean ? '뒤로' : 'Back';
   String get backToHomeLabel => isKorean ? '홈으로 돌아가기' : 'Back to home';
   String get conversationTitle => isKorean ? '대화' : 'Conversation';
   String get deleteConversationTooltip =>
@@ -216,7 +217,16 @@ class AppCopy {
   String get homeLabel => isKorean ? '홈' : 'Home';
   String get chatLabel => isKorean ? '대화' : 'Chat';
   String get historyLabel => isKorean ? '기록' : 'History';
-  String get profileLabel => isKorean ? '프로필' : 'Profile';
+  String get profileLabel => isKorean ? '내 정보' : 'Profile';
+  String get conversationOptionsLabel =>
+      isKorean ? '대화 옵션' : 'Conversation options';
+  String get conversationsLabel => isKorean ? '대화' : 'Conversations';
+  String get newConversationLabel => isKorean ? '새 대화' : 'New conversation';
+  String get viewAllConversationsLabel => isKorean ? '전체 보기' : 'View all';
+  String get loadMoreConversationsLabel =>
+      isKorean ? '이전 대화 더 보기' : 'Load more conversations';
+  String get moreConversationsFailed =>
+      isKorean ? '이전 대화를 불러오지 못했어요.' : 'Could not load more conversations.';
   String get appLanguageSectionLabel => isKorean ? '앱 언어' : 'App language';
   String get appLanguageKoreanLabel => isKorean ? '한국어' : 'Korean';
   String get appLanguageEnglishLabel => isKorean ? '영어' : 'English';

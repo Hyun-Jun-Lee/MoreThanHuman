@@ -107,10 +107,10 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('Chat'));
+    await tester.tap(find.text('Conversations'));
 
-    expect(selectedDestination, MainNavigationDestination.chat);
-    expect(find.byType(NavigationDestination), findsNWidgets(4));
+    expect(selectedDestination, MainNavigationDestination.history);
+    expect(find.byType(NavigationDestination), findsNWidgets(3));
   });
 
   testWidgets('shared chrome follows the Korean system locale', (

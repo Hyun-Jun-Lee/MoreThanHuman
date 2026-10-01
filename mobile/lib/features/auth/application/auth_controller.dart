@@ -51,6 +51,15 @@ class AuthController extends AsyncNotifier<AuthSession> {
     state = await AsyncValue.guard(_restoreSession);
   }
 
+  /// 설정 저장 뒤에는 현재 탭을 유지하며 프로필만 갱신해요.
+  Future<void> refreshProfile() async {
+    final userId = state.value?.user?.id;
+    final restored = await _restoreSession();
+    if (ref.mounted && state.value?.user?.id == userId) {
+      state = AsyncData<AuthSession>(restored);
+    }
+  }
+
   Future<void> signInWithGoogleTokens(GoogleIdentityTokens tokens) async {
     if (tokens.idToken.trim().isEmpty || tokens.accessToken.trim().isEmpty) {
       throw ArgumentError.value(tokens, 'tokens', 'Must not be empty.');

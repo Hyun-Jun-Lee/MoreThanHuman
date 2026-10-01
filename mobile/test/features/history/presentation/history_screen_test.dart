@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:curitalk/features/history/data/conversation_history_repository.dart';
 
 import 'package:curitalk/app/theme/app_theme.dart';
 import 'package:curitalk/core/storage/storage.dart';
@@ -77,35 +78,19 @@ void main() {
     expect(find.text('Osaka food trip'), findsOneWidget);
   });
 
-  testWidgets('bottom navigation opens chat sheet and account sheet', (
-    WidgetTester tester,
-  ) async {
+  testWidgets('header plus opens the shared start sheet', (tester) async {
     ConversationStartType? selectedType;
-    int homeTapCount = 0;
-
     await tester.pumpWidget(
-      _historyApp(
-        onHomeSelected: () => homeTapCount += 1,
-        onStartTypeSelected: (ConversationStartType type) {
-          selectedType = type;
-        },
-      ),
+      _historyApp(onStartTypeSelected: (type) => selectedType = type),
     );
     await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Home'));
-    expect(homeTapCount, 1);
-
-    await tester.tap(find.text('Chat'));
+    expect(find.byType(NavigationBar), findsNothing);
+    await tester.tap(find.byTooltip('New conversation'));
     await tester.pumpAndSettle();
-    expect(find.text('Start a conversation'), findsOneWidget);
+    expect(find.text('Free Chat'), findsOneWidget);
     await tester.tap(find.text('Roleplay'));
     await tester.pumpAndSettle();
     expect(selectedType, ConversationStartType.roleplay);
-
-    await tester.tap(find.text('Profile'));
-    await tester.pumpAndSettle();
-    expect(find.text('ACCOUNT'), findsOneWidget);
   });
 }
 
@@ -135,7 +120,6 @@ final ConversationSummary _conversation = ConversationSummary(
 Widget _historyApp({
   _FakeHomeRepository? homeRepository,
   List<ConversationSummary> conversations = const <ConversationSummary>[],
-  VoidCallback? onHomeSelected,
   ValueChanged<ConversationStartType>? onStartTypeSelected,
   ValueChanged<String>? onConversationSelected,
 }) {
@@ -157,7 +141,7 @@ Widget _historyApp({
       supabaseAuthServiceProvider.overrideWithValue(
         _FakeSupabaseAuthService(hasSession: true),
       ),
-      homeRepositoryProvider.overrideWithValue(
+      conversationHistoryRepositoryProvider.overrideWithValue(
         homeRepository ?? _FakeHomeRepository(conversations: conversations),
       ),
     ],
@@ -165,7 +149,6 @@ Widget _historyApp({
       theme: AppTheme.light,
       locale: const Locale('en'),
       home: HistoryScreen(
-        onHomeSelected: onHomeSelected,
         onStartTypeSelected: onStartTypeSelected,
         onConversationSelected: onConversationSelected,
       ),
@@ -270,7 +253,7 @@ class _FakeSupabaseAuthService implements SupabaseAuthService {
   }
 }
 
-class _FakeHomeRepository implements HomeRepository {
+class _FakeHomeRepository implements ConversationHistoryRepository {
   _FakeHomeRepository({
     this.conversations = const <ConversationSummary>[],
     this.errorOnce = false,
@@ -283,18 +266,15 @@ class _FakeHomeRepository implements HomeRepository {
   int requestCount = 0;
 
   @override
-  Future<List<ConversationSummary>> listRecentConversations({int limit = 5}) {
+  Future<ConversationPage> list({int offset = 0, int limit = 20}) async {
     requestCount += 1;
-    if (pending) {
-      return Future<List<ConversationSummary>>.delayed(
-        const Duration(days: 1),
-        () => conversations,
-      );
-    }
-    if (errorOnce && requestCount == 1) {
-      throw StateError('offline');
-    }
-    return Future<List<ConversationSummary>>.value(conversations);
+    if (pending) return Completer<ConversationPage>().future;
+    if (errorOnce && requestCount == 1) throw StateError('offline');
+    return ConversationPage(
+      items: conversations,
+      nextOffset: conversations.length,
+      hasMore: false,
+    );
   }
 }
 

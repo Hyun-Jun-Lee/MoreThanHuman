@@ -212,6 +212,7 @@ Widget _app({
   final GoRouter router = GoRouter(
     initialLocation: initialLocation,
     routes: <RouteBase>[
+      GoRoute(path: AppRoute.home, builder: (_, _) => const Text("Home")),
       GoRoute(
         path: AppRoute.topicInput,
         builder: (_, GoRouterState state) {

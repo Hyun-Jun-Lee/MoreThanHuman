@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:curitalk/features/profile/presentation/profile_screen.dart';
 
 import 'package:curitalk/app/theme/app_theme.dart';
 import 'package:curitalk/core/storage/storage.dart';
@@ -14,16 +15,27 @@ import '../snack_test_fixtures.dart';
 import 'package:curitalk/features/home/data/snack_basket_reset_repository.dart';
 
 void main() {
-  testWidgets('removes hamburger and opens account sheet from profile avatar', (
+  testWidgets('home delegates navigation to the shared three-tab shell', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _homeApp(conversations: _recentConversations(count: 5)),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(NavigationBar), findsNothing);
+    expect(find.byType(FloatingActionButton), findsNothing);
+    expect(find.text('Conversation 3'), findsNothing);
+    await tester.scrollUntilVisible(find.text('New conversation'), 300);
+    expect(find.text('New conversation'), findsOneWidget);
+  });
+
+  testWidgets('profile displays account and language settings', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(_homeApp());
+    await tester.pumpWidget(_homeApp(profile: true));
     await tester.pumpAndSettle();
 
     expect(find.byIcon(Icons.menu_rounded), findsNothing);
-
-    await tester.tap(find.text('L'));
-    await tester.pumpAndSettle();
 
     expect(find.text('ACCOUNT'), findsOneWidget);
     expect(find.text('CANCEL'), findsNothing);
@@ -38,7 +50,7 @@ void main() {
     );
   });
 
-  testWidgets('language pair confirmation refreshes Home active pair', (
+  testWidgets('language pair confirmation keeps Profile open', (
     WidgetTester tester,
   ) async {
     final _FakeLanguagePreferencesRepository languageRepository =
@@ -49,16 +61,13 @@ void main() {
 
     await tester.pumpWidget(
       _homeApp(
+        profile: true,
         authRepository: authRepository,
         languagePreferencesRepository: languageRepository,
       ),
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('KR -> EN'), findsOneWidget);
-
-    await tester.tap(find.text('L'));
-    await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('English -> Korean'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('English -> Korean'));
@@ -67,7 +76,7 @@ void main() {
     await tester.tap(find.text('Change'));
     await tester.pumpAndSettle();
 
-    expect(find.text('EN -> KR'), findsOneWidget);
+    expect(find.text('Profile'), findsOneWidget);
     expect(
       languageRepository.currentLanguage.targetLanguage,
       LearningLanguageCode.ko,
@@ -79,6 +88,7 @@ void main() {
   ) async {
     await tester.pumpWidget(
       _homeApp(
+        profile: true,
         languagePreferencesRepository: _FakeLanguagePreferencesRepository(
           throwOnUpdate: true,
         ),
@@ -86,8 +96,6 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('L'));
-    await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('English -> Korean'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('English -> Korean'));
@@ -110,12 +118,13 @@ void main() {
     final _FakeLanguagePreferencesRepository languageRepository =
         _FakeLanguagePreferencesRepository();
     await tester.pumpWidget(
-      _homeApp(languagePreferencesRepository: languageRepository),
+      _homeApp(
+        profile: true,
+        languagePreferencesRepository: languageRepository,
+      ),
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('L'));
-    await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('English -> Korean'));
     await tester.tap(find.text('English -> Korean'));
     await tester.pumpAndSettle();
@@ -133,11 +142,11 @@ void main() {
     WidgetTester tester,
   ) async {
     final _FakeAuthRepository authRepository = _FakeAuthRepository();
-    await tester.pumpWidget(_homeApp(authRepository: authRepository));
+    await tester.pumpWidget(
+      _homeApp(profile: true, authRepository: authRepository),
+    );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('L'));
-    await tester.pumpAndSettle();
     await tester.tap(find.text('KOREAN'));
     await tester.pumpAndSettle();
 
@@ -146,32 +155,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(authRepository.appLocale, 'ko');
-    expect(find.text('ACCOUNT'), findsNothing);
-  });
-
-  testWidgets('Chat tab opens start conversation sheet', (
-    WidgetTester tester,
-  ) async {
-    ConversationStartType? selectedType;
-
-    await tester.pumpWidget(
-      _homeApp(
-        onStartTypeSelected: (ConversationStartType type) {
-          selectedType = type;
-        },
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Chat'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Free Chat'), findsOneWidget);
-
-    await tester.tap(find.text('Free Chat'));
-    await tester.pumpAndSettle();
-
-    expect(selectedType, ConversationStartType.freeChat);
+    expect(find.text('ACCOUNT'), findsOneWidget);
   });
 
   testWidgets('Home add button opens start conversation sheet', (
@@ -188,12 +172,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final Finder addButton = find.byTooltip('Start conversation');
-    final Offset addButtonCenter = tester.getCenter(addButton);
-    final double screenCenter =
-        tester.getSize(find.byType(MaterialApp)).width / 2;
-    expect(addButtonCenter.dx, closeTo(screenCenter, 1));
-
+    final Finder addButton = find.text('New conversation');
+    await tester.ensureVisible(addButton);
     await tester.tap(addButton);
     await tester.pumpAndSettle();
 
@@ -211,7 +191,7 @@ void main() {
     await tester.pumpWidget(_homeApp());
     await tester.pumpAndSettle();
 
-    expect(find.text('START CONVERSATION'), findsOneWidget);
+    expect(find.text('New conversation'), findsOneWidget);
   });
 
   testWidgets('language snacks stay above recent conversations', (
@@ -248,40 +228,24 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('snack-tomato-touch')), findsOneWidget);
-    expect(find.text('START CONVERSATION'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('New conversation'), 300);
+    expect(find.text('New conversation'), findsOneWidget);
   });
 
-  testWidgets('Recent conversations collapse to four and toggle open', (
-    WidgetTester tester,
+  testWidgets('recent cards stop at two and new conversation follows them', (
+    tester,
   ) async {
     await tester.pumpWidget(
       _homeApp(conversations: _recentConversations(count: 6)),
     );
     await tester.pumpAndSettle();
-
     expect(find.text('Conversation 1'), findsOneWidget);
-    expect(find.text('Conversation 4'), findsOneWidget);
-    expect(find.text('Conversation 5'), findsNothing);
-    expect(find.text('SHOW ALL'), findsOneWidget);
-
-    await tester.ensureVisible(find.text('SHOW ALL'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('SHOW ALL'));
-    await tester.pumpAndSettle();
-
-    await tester.ensureVisible(find.text('Conversation 5'));
-    await tester.pumpAndSettle();
-    expect(find.text('Conversation 5'), findsOneWidget);
-    expect(find.text('Conversation 6'), findsOneWidget);
-    expect(find.text('SHOW LESS'), findsOneWidget);
-
-    await tester.ensureVisible(find.text('SHOW LESS'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('SHOW LESS'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Conversation 5'), findsNothing);
-    expect(find.text('SHOW ALL'), findsOneWidget);
+    expect(find.text('Conversation 2'), findsOneWidget);
+    expect(find.text('Conversation 3'), findsNothing);
+    expect(
+      tester.getTopLeft(find.text('New conversation')).dy,
+      greaterThan(tester.getBottomLeft(find.text('Conversation 2')).dy),
+    );
   });
 
   testWidgets('Recent conversations show updating indicator while refreshing', (
@@ -346,7 +310,7 @@ void main() {
     },
   );
 
-  testWidgets('History tab calls navigation callback', (
+  testWidgets('View all calls conversations navigation callback', (
     WidgetTester tester,
   ) async {
     int historyTapCount = 0;
@@ -356,14 +320,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('History'));
+    await tester.tap(find.text('View all'));
 
     expect(historyTapCount, 1);
   });
 
-  testWidgets('Profile tab opens account sheet and logout clears session', (
-    WidgetTester tester,
-  ) async {
+  testWidgets('profile logout clears session', (WidgetTester tester) async {
     final _MemoryTokenStorage tokenStorage = _MemoryTokenStorage(
       tokens: _tokens,
       deviceId: _deviceId,
@@ -377,6 +339,7 @@ void main() {
 
     await tester.pumpWidget(
       _homeApp(
+        profile: true,
         tokenStorage: tokenStorage,
         authRepository: authRepository,
         googleIdentityService: googleIdentityService,
@@ -385,8 +348,6 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Profile'));
-    await tester.pumpAndSettle();
     await tester.tap(find.text('LOG OUT'));
     await tester.pumpAndSettle();
 
@@ -407,6 +368,7 @@ void main() {
 
     await tester.pumpWidget(
       _homeApp(
+        profile: true,
         tokenStorage: tokenStorage,
         supabaseAuth: supabaseAuth,
         googleIdentityService: _FakeGoogleIdentityService(throwOnSignOut: true),
@@ -414,8 +376,6 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Profile'));
-    await tester.pumpAndSettle();
     await tester.tap(find.text('LOG OUT'));
     await tester.pumpAndSettle();
 
@@ -442,6 +402,8 @@ final Finder _refreshIndicator = find.byKey(
 );
 
 Widget _homeApp({
+  bool profile = false,
+  VoidCallback? onProfileSelected,
   _MemoryTokenStorage? tokenStorage,
   _FakeAuthRepository? authRepository,
   _FakeLanguagePreferencesRepository? languagePreferencesRepository,
@@ -501,11 +463,14 @@ Widget _homeApp({
     child: MaterialApp(
       theme: AppTheme.light,
       locale: const Locale('en'),
-      home: HomeScreen(
-        onConversationSelected: onConversationSelected,
-        onStartTypeSelected: onStartTypeSelected,
-        onHistorySelected: onHistorySelected,
-      ),
+      home: profile
+          ? const ProfileScreen()
+          : HomeScreen(
+              onProfileSelected: onProfileSelected,
+              onConversationSelected: onConversationSelected,
+              onStartTypeSelected: onStartTypeSelected,
+              onHistorySelected: onHistorySelected,
+            ),
     ),
   );
 }

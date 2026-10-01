@@ -1,3 +1,4 @@
+import 'package:curitalk/core/widgets/main_tab_scope.dart';
 import 'dart:async';
 import 'package:curitalk/app/theme/tokens/tokens.dart';
 import 'package:curitalk/features/home/application/language_snack_language.dart';
@@ -20,6 +21,7 @@ class _LanguageSnackHomeSectionState
     with WidgetsBindingObserver {
   Timer? _midnightTimer;
   bool _interacting = false;
+  bool _active = true;
   String? _scope;
   int _localResetVersion = 0;
 
@@ -30,7 +32,7 @@ class _LanguageSnackHomeSectionState
   }
 
   void _checkDay() {
-    if (!mounted || _interacting) return;
+    if (!mounted || !_active || _interacting) return;
     ref.read(dailySnackBasketProvider.notifier).ensureToday();
     _midnightTimer?.cancel();
     final now = ref.read(snackClockProvider)();
@@ -45,7 +47,7 @@ class _LanguageSnackHomeSectionState
   }
 
   void _refreshBasket() {
-    if (!mounted) return;
+    if (!mounted || !_active) return;
     _checkDay();
     unawaited(ref.read(dailySnackBasketProvider.notifier).refreshReset());
   }
@@ -64,11 +66,36 @@ class _LanguageSnackHomeSectionState
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
+    if (state == AppLifecycleState.resumed && _active) {
       ref.read(languageSnacksControllerProvider.notifier).refreshIfStale();
       _refreshBasket();
     } else {
       _midnightTimer?.cancel();
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final active = (MainTabScope.maybeOf(context)?.index ?? 0) == 0;
+    if (_active == active) return;
+    _active = active;
+    if (active) {
+      scheduleMicrotask(() {
+        if (!mounted || !_active) return;
+        ref.read(languageSnacksControllerProvider.notifier).refreshIfStale();
+        _refreshBasket();
+      });
+    } else {
+      _midnightTimer?.cancel();
+      _interacting = false;
+      scheduleMicrotask(() {
+        if (mounted) {
+          ref
+              .read(dailySnackBasketProvider.notifier)
+              .setInteractionActive(false);
+        }
+      });
     }
   }
 
@@ -108,7 +135,7 @@ class _LanguageSnackHomeSectionState
       children: [
         SnackTomatoBasket(
           key: ValueKey(
-            '$userId.$language.${basket.day}.${basket.resetId}.$_localResetVersion',
+            '$userId.$language.${basket.day}.${basket.resetId}.$_localResetVersion.$_active',
           ),
           basket: basket,
           onBite: () => ref.read(dailySnackBasketProvider.notifier).takeBite(),

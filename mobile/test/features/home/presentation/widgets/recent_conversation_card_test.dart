@@ -52,7 +52,7 @@ void main() {
     expect(tapCount, 1);
   });
 
-  testWidgets('places the small delete X at the card top right', (
+  testWidgets('keeps the delete X small with a 48 pixel touch target', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
@@ -73,7 +73,8 @@ void main() {
     final Rect cardRect = tester.getRect(cardFinder);
     final Rect deleteRect = tester.getRect(deleteFinder);
 
-    expect(deleteRect.size, const Size(28, 28));
+    expect(deleteRect.size, const Size(48, 48));
+    expect(tester.widget<Icon>(find.byIcon(Icons.close_rounded)).size, 18);
     expect(deleteRect.right, closeTo(cardRect.right - AppSpacing.lg, 0.1));
     expect(deleteRect.top, closeTo(cardRect.top + AppSpacing.lg, 0.1));
   });

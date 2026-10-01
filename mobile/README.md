@@ -114,7 +114,7 @@ assets/
 | `AppAsyncStateView` | loading·error·empty 공통 상태 표현 |
 | `AppPageIndicator` | 온보딩 등에 사용하는 현재 페이지 표시 |
 | `AppModalSheet` | 키보드와 Safe area를 고려한 공통 bottom sheet |
-| `MainNavigationBar` | Home·Chat·History·Profile 주 내비게이션 |
+| `MainNavigationBar` | 홈·대화·내 정보 3탭 내비게이션 |
 
 ## 2차 도메인 컴포넌트
 
@@ -170,11 +170,11 @@ Splash → Onboarding(최초 1회) → Google Login → Home
 - 바구니 리셋 v1 (2026-09-19): Home 진입·앱 복귀 시 `GET /api/v2/language-snacks/basket-reset/`을 확인해 새 리셋 ID에만 같은 카드 묶음의 진행을 0으로 돌려요. 팝업·애니메이션 중에는 종료 후 적용하고 오프라인에서는 유지해요. 운영 POST와 마이그레이션은 [테스트용 바구니 리셋](../docs/OPERATIONS.md#테스트용-바구니-리셋)을 참고해요. "오늘의 언어"와 하단 점·체크는 표시하지 않아요.
 - 테스트용 로컬 리셋 v1 (2026-09-20): 기본 `flutter run` 디버그 빌드에서는 열람 수 왼쪽의 restart 아이콘으로 같은 카드 묶음을 유지한 채 토마토 3개·0/12로 초기화해요. 서버 호출·운영 키 없이 기기에 저장되며 다른 기기에는 영향을 주지 않아요. 팝업·모션 중에는 비활성화하고 `--release`/`--profile` 빌드에서는 표시하지 않아요.
 - 설명은 영어 학습자에게 한국어, 한국어 학습자에게 영어로 제공하며 앱 chrome locale과 분리해요. 미지원 유형·버전은 건너뛰고 알려진 유형의 손상된 응답은 캐시로 복원해요. 운영 키나 생성 기능은 앱에 포함하지 않아요.
-- Home Navigation: `Chat`은 새 대화 시작 sheet, `History`는 대화 목록 화면, `Profile`은 account sheet를 열어요.
-- Account: 우상단 프로필 아바타 또는 `Profile` 탭에서 이름/email, 활성 언어쌍 변경, `LOG OUT`을 표시해요. 언어쌍 변경은 새 대화부터 적용되고 기존 대화는 시작 시점 언어쌍을 유지한다고 안내하며, 저장 후 profile을 다시 hydration해 Home의 활성 언어쌍을 갱신해요. 로그아웃 시 앱 token 삭제·서버 revoke·Google sign out을 best-effort로 처리해요.
-- Free Chat: Home sheet에서 Topic Input → Topic Prep으로 이동한 뒤 첫 답변으로 대화를 시작
-- Roleplay: Home sheet에서 Roleplay Setup으로 이동한 뒤 상황을 골라 롤플레이 대화를 시작
-- History: 하단 `History` 탭에서 대화 목록을 보고 기존 대화로 다시 진입
+- Home Navigation v2 (2026-09-22): 홈은 언어 스낵 → 최근 대화 2개(파스텔 카드) → `＋ 새 대화` 순서예요. `전체 보기`는 대화 탭으로 전환해요.
+- Account: 우상단 프로필 아바타 또는 `내 정보` 탭의 독립 화면에서 이름/email, 활성 언어쌍 변경, `LOG OUT`을 표시해요. 언어쌍 변경은 새 대화부터 적용되고 기존 대화는 시작 시점 언어쌍을 유지한다고 안내하며, 저장 후 현재 탭을 유지하며 profile과 Home의 활성 언어쌍을 갱신해요. 로그아웃 시 앱 token 삭제·서버 revoke·Google sign out을 best-effort로 처리해요.
+- Free Chat: 홈·대화의 공통 시작 sheet에서 Topic Input → Topic Prep으로 이동한 뒤 첫 답변으로 대화를 시작
+- Roleplay: 홈·대화의 공통 시작 sheet에서 Roleplay Setup으로 이동한 뒤 상황을 골라 롤플레이 대화를 시작
+- Conversations: 하단 `대화` 탭에서 전체 대화를 간결한 행 목록으로 보고 기존 대화로 다시 진입
 - Conversation: 최근 대화, Free Chat 시작, Roleplay 시작이 모두 `/conversation/:conversationId`로 합류
 
 ## 시스템 UI 언어와 학습 언어
@@ -187,20 +187,21 @@ Splash → Onboarding(최초 1회) → Google Login → Home
 
 ## Home Navigation 흐름
 
-Home의 좌측 햄버거 메뉴는 v1에서 제거했어요. 하단 네비게이션은 다음처럼 동작해요.
+하단 바는 `StatefulShellRoute.indexedStack` 공통 shell에서 한 번만 표시해요. 세 목적지는 같은 너비이며 라벨을 항상 표시하고, 탭 전환에는 슬라이드 애니메이션을 넣지 않아요.
 
-| 탭 | 동작 |
+| 탭 | 경로와 동작 |
 |----|------|
-| `Home` | 현재 Home 유지 |
-| `Chat` | `Start a conversation` sheet 열기 |
-| `History` | `/history`로 이동 |
-| `Profile` | account sheet 열기 |
+| 홈 / Home | `/home`: 언어 스낵, 최근 2개 카드, 그 아래 `＋ 새 대화` |
+| 대화 / Conversations | `/history`: 전체 대화 행 목록, 상단 `＋` |
+| 내 정보 / Profile | `/profile`: 계정, 앱 언어, 학습 언어, 로그아웃 |
 
-History 화면은 v1에서 기존 대화 목록 API를 재사용해 목록, loading, empty, error/retry 상태를 보여줘요. 향후 전체 pagination API가 준비되면 History 전용 provider로 확장해요.
+탭 전환은 각 화면과 스크롤을 보존하고, 같은 탭 재선택은 맨 위로 이동해요. 두 새 대화 버튼은 같은 자유 대화/롤플레이 선택 시트를 열어요. 준비·대화 화면은 shell 위에 열려 하단 바를 숨기며, 대화 생성 성공 후 완료한 준비 단계는 제거해요. 뒤로가기는 출발 탭으로 복귀하고, 직접 진입한 기존 대화는 대화 탭으로 돌아와요.
+
+전체 목록은 전용 `ConversationHistoryRepository`와 controller가 기존 `GET /api/conversations/`의 limit/offset을 사용해 20개씩 조회해요. 추가 조회 실패는 기존 행을 유지하고 재시도를 제공해요. 중복 ID·동시 조회·계정 변경 뒤 지연 응답을 차단하며, 대화 복귀·삭제 시 최근 목록과 전체 목록을 갱신해요. 이미 읽은 목록 범위는 새 offset 기준으로 다시 조회해 복귀 위치를 유지해요. API 변경은 없어요.
 
 ## Topic Prep 흐름
 
-Home의 `START CONVERSATION`에서 Free Chat을 선택하면 Topic Input 화면으로 이동해요. Topic Input은 2자 미만 입력을 클라이언트에서 막고, 예시 topic chip으로 빠르게 주제를 채울 수 있게 해요.
+홈의 `＋ 새 대화`에서 Free Chat을 선택하면 Topic Input 화면으로 이동해요. Topic Input은 2자 미만 입력을 클라이언트에서 막고, 예시 topic chip으로 빠르게 주제를 채울 수 있게 해요.
 
 Topic Prep 화면은 전달받은 topic으로 `POST /api/search/topic-prep/`를 호출해 loading, ready, low-quality, error 상태를 표시해요. 응답의 `language`는 첫 답변 입력 안내처럼 사용자가 직접 작성해야 하는 copy에 사용하고, 서버가 내려준 retry guidance가 있으면 그 문구를 우선 표시해요.
 
@@ -217,7 +218,7 @@ Topic Prep 화면은 전달받은 topic으로 `POST /api/search/topic-prep/`를 
 
 ## Roleplay Setup 흐름
 
-Home의 `START CONVERSATION`에서 Roleplay를 선택하면 Roleplay Setup 화면으로 이동해요. 사용자는 preset 상황 카드 7개 중 하나를 고르거나, custom 입력으로 원하는 상황을 직접 작성할 수 있어요. Preset 상황은 활성 언어쌍의 target language를 기준으로 골라요. 한국어 연습은 존댓말, 자기소개, 직장 인사, 서비스 요청처럼 한국어 사용 맥락을 우선하고, 영어 연습은 기존 cafe/travel/interview/meeting 같은 broad conversation 상황을 유지해요.
+홈의 `＋ 새 대화`에서 Roleplay를 선택하면 Roleplay Setup 화면으로 이동해요. 사용자는 preset 상황 카드 7개 중 하나를 고르거나, custom 입력으로 원하는 상황을 직접 작성할 수 있어요. Preset 상황은 활성 언어쌍의 target language를 기준으로 골라요. 한국어 연습은 존댓말, 자기소개, 직장 인사, 서비스 요청처럼 한국어 사용 맥락을 우선하고, 영어 연습은 기존 cafe/travel/interview/meeting 같은 broad conversation 상황을 유지해요.
 
 | 선택 | 동작 |
 |------|------|
@@ -230,7 +231,7 @@ Start Roleplay를 누르면 선택 결과를 백엔드 계약에 맞는 `role_ch
 
 대화 재진입 v1.1 (2026-09-22): 메시지는 시간순으로 유지하면서 목록을 아래쪽 기준으로 배치해 진입할 때 최신 메시지가 보여요. 최초 조회의 전체 개수가 40개를 넘으면 기존 offset API로 마지막 40개를 추가 조회한 뒤 표시하고, 상단의 이전 메시지 불러오기로 앞선 구간을 40개씩 이어서 읽어요. 이전 구간 로딩 중에는 중복 조회와 전송을 잠깐 막고, 실패 시 현재 메시지를 유지한 채 재시도할 수 있어요. 화면 재진입 시 스크롤 위치는 복원하지 않으며 화면 안에서 과거 내용을 읽거나 교정 카드를 펼칠 때 강제로 최신 위치로 이동하지 않아요. 기존 대화 상태·음성 캐시는 유지하며 다른 기기의 변경을 재진입 때 자동 동기화하는 기능은 포함하지 않아요.
 
-Conversation 화면은 Free Chat 시작, Roleplay 시작, Home 최근 대화 진입이 합류하는 대화 화면이에요. 상단에는 명시적인 뒤로가기 버튼을 두고, navigation stack이 없을 때는 Home으로 이동해요.
+Conversation 화면은 Free Chat 시작, Roleplay 시작, Home 최근 대화 진입이 합류하는 대화 화면이에요. 상단에는 명시적인 뒤로가기 버튼을 두고, navigation stack이 없을 때는 대화 탭으로 이동해요.
 
 | 동작 | API |
 |------|-----|

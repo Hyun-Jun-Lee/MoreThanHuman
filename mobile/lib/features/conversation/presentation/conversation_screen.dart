@@ -56,7 +56,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
     return AppScaffold(
       appBar: AppBar(
         leading: IconButton(
-          tooltip: copy.backToHomeLabel,
+          tooltip: copy.backLabel,
           icon: const Icon(Icons.arrow_back_rounded),
           onPressed: _goBack,
         ),
@@ -230,7 +230,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
       navigator.pop();
       return;
     }
-    context.go(AppRoute.home);
+    context.go(AppRoute.history);
   }
 }
 

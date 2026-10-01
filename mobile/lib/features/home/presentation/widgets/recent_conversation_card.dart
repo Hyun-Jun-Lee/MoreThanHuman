@@ -34,9 +34,7 @@ class RecentConversationCard extends StatelessWidget {
         child: Stack(
           children: <Widget>[
             Padding(
-              padding: EdgeInsets.only(
-                right: onDelete == null ? 0 : AppSpacing.xl,
-              ),
+              padding: EdgeInsets.only(right: onDelete == null ? 0 : 48),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
@@ -69,13 +67,13 @@ class RecentConversationCard extends StatelessWidget {
                   onPressed: onDelete,
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints.tightFor(
-                    width: 28,
-                    height: 28,
+                    width: 48,
+                    height: 48,
                   ),
                   style: IconButton.styleFrom(
                     backgroundColor: Colors.transparent,
                     foregroundColor: Theme.of(context).colorScheme.onSurface,
-                    minimumSize: const Size.square(28),
+                    minimumSize: const Size.square(48),
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
                   icon: const Icon(Icons.close_rounded, size: 18),

@@ -167,9 +167,16 @@ abstract final class AppComponentThemes {
       Set<WidgetState> states,
     ) {
       if (states.contains(WidgetState.selected)) {
-        return AppTypography.captionMono.copyWith(color: AppPalette.ink);
+        return AppTypography.bodySm.copyWith(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: AppPalette.ink,
+        );
       }
-      return AppTypography.captionMono.copyWith(color: AppPalette.inkSecondary);
+      return AppTypography.bodySm.copyWith(
+        fontSize: 12,
+        color: AppPalette.inkSecondary,
+      );
     }),
     iconTheme: WidgetStateProperty.resolveWith<IconThemeData>((
       Set<WidgetState> states,

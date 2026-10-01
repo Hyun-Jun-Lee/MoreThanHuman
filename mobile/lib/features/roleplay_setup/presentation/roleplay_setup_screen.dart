@@ -8,7 +8,6 @@ import 'package:curitalk/features/language/language.dart';
 import 'package:curitalk/features/roleplay_setup/roleplay_setup.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 final roleplayTargetLanguageProvider = Provider<LearningLanguageCode>((
   Ref ref,
@@ -81,9 +80,7 @@ class _RoleplaySetupScreenState extends ConsumerState<RoleplaySetupScreen> {
                   if (!context.mounted || response == null) {
                     return;
                   }
-                  context.go(
-                    AppRoute.conversationPath(response.conversationId),
-                  );
+                  openStartedConversation(context, response.conversationId);
                 }
               : null,
         ),

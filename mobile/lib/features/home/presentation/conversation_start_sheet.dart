@@ -15,17 +15,6 @@ Future<ConversationStartType?> showConversationStartSheet(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          Center(
-            child: Container(
-              width: AppSpacing.xxl,
-              height: AppSpacing.xxs,
-              decoration: const BoxDecoration(
-                color: AppPalette.hairline,
-                borderRadius: BorderRadius.all(Radius.circular(AppRadius.full)),
-              ),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.lg),
           Text(copy.startConversationTitle, style: AppTypography.headlineMd),
           const SizedBox(height: AppSpacing.lg),
           AppSelectionCard(

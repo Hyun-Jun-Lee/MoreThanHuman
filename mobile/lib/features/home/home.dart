@@ -8,7 +8,6 @@ export 'domain/conversation_start_type.dart';
 export 'domain/home_repository.dart';
 export 'domain/language_snack.dart';
 export 'domain/language_snack_repository.dart';
-export 'presentation/account_sheet.dart';
 export 'presentation/conversation_start_sheet.dart';
 export 'presentation/home_screen.dart';
 export 'presentation/widgets/widgets.dart';

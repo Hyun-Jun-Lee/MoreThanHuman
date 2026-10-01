@@ -210,7 +210,7 @@ class _TopicPrepScreenState extends ConsumerState<TopicPrepScreen> {
     if (!mounted || response == null) {
       return;
     }
-    context.go(AppRoute.conversationPath(response.conversationId));
+    openStartedConversation(context, response.conversationId);
   }
 
   Future<void> _startFreeChatWithAudio(
@@ -242,7 +242,7 @@ class _TopicPrepScreenState extends ConsumerState<TopicPrepScreen> {
     if (!mounted || response == null) {
       return;
     }
-    context.go(AppRoute.conversationPath(response.conversationId));
+    openStartedConversation(context, response.conversationId);
   }
 
   Future<void> _toggleVoiceInput(TopicPrepCard card) async {

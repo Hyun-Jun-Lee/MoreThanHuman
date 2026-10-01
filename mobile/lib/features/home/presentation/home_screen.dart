@@ -6,7 +6,8 @@ import 'package:curitalk/features/conversation/conversation.dart';
 import 'package:curitalk/features/home/application/recent_conversations_controller.dart';
 import 'package:curitalk/features/home/domain/conversation_summary.dart';
 import 'package:curitalk/features/home/domain/conversation_start_type.dart';
-import 'package:curitalk/features/home/presentation/account_sheet.dart';
+import 'package:curitalk/core/widgets/main_tab_scope.dart';
+import 'package:curitalk/features/history/application/conversation_history_controller.dart';
 import 'package:curitalk/features/home/presentation/conversation_start_sheet.dart';
 import 'package:curitalk/features/home/presentation/widgets/language_snack_home_section.dart';
 import 'package:curitalk/features/home/presentation/widgets/recent_conversation_card.dart';
@@ -20,12 +21,14 @@ class HomeScreen extends ConsumerWidget {
     this.onConversationSelected,
     this.onStartTypeSelected,
     this.onHistorySelected,
+    this.onProfileSelected,
     super.key,
   });
 
   final ValueChanged<String>? onConversationSelected;
   final ValueChanged<ConversationStartType>? onStartTypeSelected;
   final VoidCallback? onHistorySelected;
+  final VoidCallback? onProfileSelected;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -40,24 +43,14 @@ class HomeScreen extends ConsumerWidget {
     return AppScaffold(
       padding: EdgeInsets.zero,
       safeAreaBottom: false,
-      floatingActionButton: FloatingActionButton(
-        tooltip: copy.startConversationTooltip,
-        onPressed: () => _showStartSheet(context),
-        child: const Icon(Icons.add_rounded),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
-      bottomNavigationBar: MainNavigationBar(
-        destination: MainNavigationDestination.home,
-        onDestinationSelected: (MainNavigationDestination destination) =>
-            _handleDestinationSelected(context, ref, destination, user),
-      ),
       body: CustomScrollView(
+        key: const PageStorageKey('home-scroll'),
+        controller: MainTabScope.maybeOf(context)?.controllers[0],
         slivers: <Widget>[
           SliverToBoxAdapter(
             child: _HomeHeader(
               user: user,
-              onProfileTap: () =>
-                  showAccountSheet(context: context, ref: ref, user: user),
+              onProfileTap: () => onProfileSelected?.call(),
             ),
           ),
           SliverPadding(
@@ -65,13 +58,21 @@ class HomeScreen extends ConsumerWidget {
               AppSpacing.screenPadding,
               AppSpacing.xl,
               AppSpacing.screenPadding,
-              AppSpacing.sectionGap +
-                  AppSize.bottomNavigationHeight +
-                  AppSize.iconButton,
+              AppSpacing.sectionGap,
             ),
             sliver: SliverList(
               delegate: SliverChildListDelegate(<Widget>[
                 const LanguageSnackHomeSection(),
+                Row(
+                  children: [
+                    Expanded(child: AppSectionLabel(copy.recentLabel)),
+                    TextButton(
+                      onPressed: onHistorySelected,
+                      child: Text(copy.viewAllConversationsLabel),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.md),
                 recent.when(
                   loading: () => AppAsyncStateView.loading(
                     message: copy.loadingRecentConversations,
@@ -99,17 +100,22 @@ class HomeScreen extends ConsumerWidget {
                             LearningLanguageContext
                                 .defaultContext
                                 .nativeLanguage,
-                        onStart: () => _showStartSheet(context),
                       );
                     }
                     return _RecentConversations(
-                      conversations: conversations,
+                      conversations: conversations.take(2).toList(),
                       isRefreshing: isRefreshing,
                       onSelected: onConversationSelected,
                       onDelete: (ConversationSummary conversation) =>
                           _deleteConversation(context, ref, conversation),
                     );
                   },
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                AppPrimaryButton(
+                  label: copy.newConversationLabel,
+                  leading: const Icon(Icons.add_rounded),
+                  onPressed: () => _showStartSheet(context),
                 ),
               ]),
             ),
@@ -123,26 +129,8 @@ class HomeScreen extends ConsumerWidget {
     final ConversationStartType? selected = await showConversationStartSheet(
       context,
     );
-    if (selected != null) {
+    if (selected != null && context.mounted) {
       onStartTypeSelected?.call(selected);
-    }
-  }
-
-  void _handleDestinationSelected(
-    BuildContext context,
-    WidgetRef ref,
-    MainNavigationDestination destination,
-    UserProfile? user,
-  ) {
-    switch (destination) {
-      case MainNavigationDestination.home:
-        return;
-      case MainNavigationDestination.chat:
-        _showStartSheet(context);
-      case MainNavigationDestination.history:
-        onHistorySelected?.call();
-      case MainNavigationDestination.profile:
-        showAccountSheet(context: context, ref: ref, user: user);
     }
   }
 
@@ -171,6 +159,7 @@ class HomeScreen extends ConsumerWidget {
             () => (repository as ConversationDeletionRepository)
                 .deleteConversation(conversation.id),
           );
+      ref.invalidate(conversationHistoryControllerProvider);
     } on Object {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -265,110 +254,44 @@ class _LanguagePairBadge extends StatelessWidget {
   }
 }
 
-class _RecentConversations extends StatefulWidget {
+class _RecentConversations extends StatelessWidget {
   const _RecentConversations({
     required this.conversations,
     required this.isRefreshing,
     required this.onSelected,
     required this.onDelete,
   });
-
-  static const List<Color> _colors = <Color>[
-    AppPalette.blockLimeSoft,
-    AppPalette.blockBlue,
-    AppPalette.blockCream,
-    AppPalette.blockLilac,
-    AppPalette.blockPink,
-  ];
-
   final List<ConversationSummary> conversations;
   final bool isRefreshing;
   final ValueChanged<String>? onSelected;
   final ValueChanged<ConversationSummary> onDelete;
-
-  @override
-  State<_RecentConversations> createState() => _RecentConversationsState();
-}
-
-class _RecentConversationsState extends State<_RecentConversations> {
-  static const int _collapsedCount = 4;
-
-  bool _isExpanded = false;
-
+  static const _colors = [AppPalette.blockLimeSoft, AppPalette.blockBlue];
   @override
   Widget build(BuildContext context) {
-    final AppCopy copy = AppCopy.of(context);
-    final bool canToggle = widget.conversations.length > _collapsedCount;
-    final List<ConversationSummary> visibleConversations =
-        canToggle && !_isExpanded
-        ? widget.conversations.take(_collapsedCount).toList(growable: false)
-        : widget.conversations;
-
+    final copy = AppCopy.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        Row(
-          children: <Widget>[
-            AppSectionLabel(copy.recentLabel),
-            if (widget.isRefreshing) ...<Widget>[
-              const SizedBox(width: AppSpacing.sm),
-              Semantics(
-                label: copy.updatingConversationsSemanticLabel,
-                liveRegion: true,
-                child: const SizedBox.square(
-                  key: ValueKey<String>(
-                    'recent-conversations-refresh-indicator',
-                  ),
-                  dimension: 14,
-                  child: CircularProgressIndicator(
-                    strokeWidth: AppBorderWidth.hairline,
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ),
-        const SizedBox(height: AppSpacing.lg),
-        for (
-          int index = 0;
-          index < visibleConversations.length;
-          index++
-        ) ...<Widget>[
+      children: [
+        if (isRefreshing)
+          const LinearProgressIndicator(
+            key: ValueKey('recent-conversations-refresh-indicator'),
+          ),
+        for (int index = 0; index < conversations.length; index++) ...[
           RecentConversationCard(
-            category: copy.conversationCategory(
-              visibleConversations[index].kind.name,
-            ),
-            title: visibleConversations[index].title,
+            category: copy.conversationCategory(conversations[index].kind.name),
+            title: conversations[index].title,
             preview: copy.conversationPreview(
-              messageCount: visibleConversations[index].messageCount,
-              isActive: visibleConversations[index].isActive,
+              messageCount: conversations[index].messageCount,
+              isActive: conversations[index].isActive,
             ),
-            color: _RecentConversations
-                ._colors[index % _RecentConversations._colors.length],
-            onTap: widget.onSelected == null
+            color: _colors[index % _colors.length],
+            onTap: onSelected == null
                 ? null
-                : () => widget.onSelected!(visibleConversations[index].id),
-            onDelete: () => widget.onDelete(visibleConversations[index]),
+                : () => onSelected!(conversations[index].id),
+            onDelete: () => onDelete(conversations[index]),
           ),
-          if (index != visibleConversations.length - 1)
+          if (index != conversations.length - 1)
             const SizedBox(height: AppSpacing.md),
-        ],
-        if (canToggle) ...<Widget>[
-          const SizedBox(height: AppSpacing.md),
-          Align(
-            alignment: Alignment.center,
-            child: TextButton.icon(
-              onPressed: () {
-                setState(() => _isExpanded = !_isExpanded);
-              },
-              icon: Icon(
-                _isExpanded
-                    ? Icons.keyboard_arrow_up_rounded
-                    : Icons.keyboard_arrow_down_rounded,
-              ),
-              label: Text(_isExpanded ? copy.showLessLabel : copy.showAllLabel),
-            ),
-          ),
         ],
       ],
     );
@@ -376,10 +299,9 @@ class _RecentConversationsState extends State<_RecentConversations> {
 }
 
 class _EmptyHome extends StatelessWidget {
-  const _EmptyHome({required this.nativeLanguage, required this.onStart});
+  const _EmptyHome({required this.nativeLanguage});
 
   final LearningLanguageCode nativeLanguage;
-  final VoidCallback onStart;
 
   @override
   Widget build(BuildContext context) {
@@ -412,12 +334,6 @@ class _EmptyHome extends StatelessWidget {
               ),
             ],
           ),
-        ),
-        const SizedBox(height: AppSpacing.lg),
-        AppPrimaryButton(
-          label: copy.startConversationLabel,
-          leading: const Icon(Icons.add_rounded),
-          onPressed: onStart,
         ),
       ],
     );
