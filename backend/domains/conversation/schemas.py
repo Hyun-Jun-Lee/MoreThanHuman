@@ -50,6 +50,21 @@ class UpdateTitleRequest(BaseModel):
     title: str
 
 
+class ConversationAccess(BaseModel):
+    enabled: bool
+    can_create: bool
+    used_slots: int
+    slot_limit: int | None
+    remaining_slots: int | None
+
+
+class ConversationTurnAccess(BaseModel):
+    enabled: bool
+    user_turns: int
+    turn_limit: int | None
+    can_send: bool
+
+
 class Conversation(BaseModel):
     """대화 스키마"""
 

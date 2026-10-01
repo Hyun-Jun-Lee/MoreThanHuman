@@ -1,6 +1,6 @@
 # 환경변수
 
-> 최종 갱신: 2026-09-13 · 환경변수 설명의 단일 기준 문서 · 외부 HTTP 풀 v1 추가
+> 최종 갱신: 2026-10-01 · 환경변수 설명의 단일 기준 문서
 
 [빠른 시작](../README.md#실행-준비) · [운영 가이드](OPERATIONS.md)
 
@@ -74,6 +74,7 @@
 | `SEARCH_MAX_RESULTS` | 아니오 | `12` | 필터링 전 수집할 검색 결과 수 |
 | `SEARCH_MIN_RELEVANT_RESULTS` | 아니오 | `2` | LLM judge가 accept해야 하는 최소 출처 수 |
 | `MAX_HISTORY_TURNS` | 아니오 | `10` | 대화 기록 최대 턴 |
+| `CONVERSATION_ACCESS_ENABLED` | 아니오 | `false` | 대화 동시 보유·대화별 15턴 제한과 모바일 잠금 안내를 함께 활성화. 기존 슬롯 스냅샷 후 개발 환경에서 `true`로 UI·차단 동작을 시험할 수 있음. 운영은 결제·복원·유료 플랜 권한 준비 전 `false` 유지 |
 
 ## 외부 HTTP 연결 풀 v1
 

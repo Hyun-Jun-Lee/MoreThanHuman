@@ -15,3 +15,5 @@ os.environ.setdefault("OLLAMA_BASE_URL", "http://localhost:11434")
 os.environ.setdefault("OPENROUTER_MODEL", "test-model")
 os.environ.setdefault("OLLAMA_MODEL", "test-model")
 os.environ.setdefault("JWT_SECRET_KEY", "test-secret")
+# 로컬 개발 .env에서 잠금 UI를 켜도 기존 API 회귀 테스트는 독립적으로 실행해요.
+os.environ["CONVERSATION_ACCESS_ENABLED"] = "false"

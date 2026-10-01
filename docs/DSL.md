@@ -310,6 +310,8 @@ module Conversation {
     POST   /api/conversations/start/roleplay/        -> startRoleplay
     POST   /api/conversations/{id}/message/          -> sendMessage
     POST   /api/conversations/{id}/turn/             -> sendMultimodalTurn
+    GET    /api/conversations/access/                -> getConversationAccess
+    GET    /api/conversations/{id}/access/           -> getConversationTurnAccess
     GET    /api/conversations/                       -> listConversations
     GET    /api/conversations/{id}/                  -> getConversation
     GET    /api/conversations/{id}/messages/         -> listMessages
@@ -355,6 +357,21 @@ module Conversation {
     total_count: Integer
     has_more: Boolean
     next_offset: Integer
+  }
+
+  type ConversationAccess {
+    enabled: Boolean
+    can_create: Boolean
+    used_slots: Integer
+    slot_limit: Integer?       // enabled=false이면 null
+    remaining_slots: Integer?  // enabled=false이면 null
+  }
+
+  type ConversationTurnAccess {
+    enabled: Boolean
+    user_turns: Integer
+    turn_limit: Integer?       // enabled=false이면 null
+    can_send: Boolean
   }
 
   type PaginatedConversations {
@@ -431,6 +448,14 @@ module Conversation {
   }
 }
 ```
+
+### 대화 접근 정책 v1 (기본 비활성화)
+
+`CONVERSATION_ACCESS_ENABLED=false`가 코드 기본값이에요. 개발 환경 미리보기에서는 `true`로 설정해 슬롯·15턴 제한과 모바일 잠금을 함께 확인할 수 있어요. `false`일 때 `GET /access/`는 `enabled=false`, `can_create=true`, `slot_limit=null`, `remaining_slots=null`을 반환하고, 대화별 `GET /{id}/access/`는 `enabled=false`, `can_send=true`, `turn_limit=null`을 반환해요. 기존 생성·발화 API는 한도를 적용하지 않아요.
+
+활성화하면 무료 계정은 기본적으로 대화를 동시에 1개 보유하고, 삭제하면 다시 생성할 수 있어요. 기존 계정은 활성화 직전 스냅샷한 보유 개수까지 교체할 수 있어요. 검증된 영구 단품 구매 grant는 한도를 1칸 늘려요. `GET /access/`의 `used_slots`는 완료 상태를 포함한 저장된 대화 수예요. 실제 기존 대화는 잠기지 않아요. 계정별 `legacy_conversation_slots` 스냅샷과 활성화 순서는 [운영 가이드](OPERATIONS.md)를 따라요.
+
+활성화된 무료 플랜은 대화마다 사용자 발화 15회를 허용해요. 자유 대화의 첫 발화는 1회이며 역할극의 AI 첫 인사는 세지 않아요. 기존에 15회를 넘긴 대화는 열람할 수 있으나 새 발화는 막아요. 단품 슬롯으로 추가한 대화에도 15회가 적용돼요. 두 생성 API는 한도 초과 시 HTTP 409 `detail: {code: "CONVERSATION_SLOTS_FULL", message: "..."}`를, `/message/`와 `/turn/`은 HTTP 409 `CONVERSATION_TURNS_FULL`을 반환해요. 음성 요청은 STT 전에 한도를 미리 확인하고 저장 시 다시 검사해요.
 
 멀티모달 대화 API는 아래 다섯 가지 요청 형태를 기본 계약으로 사용해요.
 

@@ -100,6 +100,7 @@ class Settings(BaseSettings):
 
     # Conversation Settings
     max_history_turns: int = 10
+    conversation_access_enabled: bool = False
 
     # Voice Settings
     stt_provider: str = "openrouter"

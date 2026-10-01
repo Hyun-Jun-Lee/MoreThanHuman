@@ -22,9 +22,12 @@ from domains.auth.dependencies import get_current_user, get_current_user_from_to
 from domains.auth.models import ProfileModel
 from domains.conversation.enums import ConversationType
 from domains.conversation.repository import ConversationRepository
+from domains.conversation.repository import ConversationSlotsFull, ConversationTurnsFull
 from domains.conversation.schemas import (
     Conversation,
+    ConversationAccess,
     ConversationResponse,
+    ConversationTurnAccess,
     MessageResponse,
     MultimodalConversationResponse,
     MultimodalMessageResponse,
@@ -54,6 +57,13 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/conversations", tags=["conversations"])
 settings = get_settings()
+
+
+def _access_conflict(code: str, message: str) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail={"code": code, "message": message},
+    )
 
 
 FREE_CHAT_REQUEST_BODY_OPENAPI = {
@@ -306,6 +316,8 @@ async def start_free_chat_conversation(
 ):
     """자유 대화 시작"""
     try:
+        if settings.conversation_access_enabled:
+            service.assert_can_create(current_user.id)
         request, include_audio_response, audio_file = await _parse_free_chat_input(http_request)
         input_mode, first_message = await voice_service.resolve_input_text(
             text=request.first_message,
@@ -340,6 +352,8 @@ async def start_free_chat_conversation(
         return SuccessResponse(data=data, message="자유 대화가 시작되었습니다")
     except ValidationError as e:
         raise _validation_error_response(e)
+    except ConversationSlotsFull as e:
+        raise _access_conflict("CONVERSATION_SLOTS_FULL", e.message)
     except RateLimitException as e:
         logger.warning(f"RateLimitException in start_free_chat_conversation: {e.message}")
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=e.message)
@@ -368,6 +382,8 @@ async def start_roleplay_conversation(
 ):
     """롤플레이 대화 시작 (AI가 먼저 인사)"""
     try:
+        if settings.conversation_access_enabled:
+            service.assert_can_create(current_user.id)
         response = await service.start_roleplay_conversation(
             request.role_character,
             request.search_context,
@@ -387,6 +403,8 @@ async def start_roleplay_conversation(
             audio_error=audio_error,
         )
         return SuccessResponse(data=data, message="롤플레이 대화가 시작되었습니다")
+    except ConversationSlotsFull as e:
+        raise _access_conflict("CONVERSATION_SLOTS_FULL", e.message)
     except RateLimitException as e:
         logger.warning(f"RateLimitException in start_roleplay_conversation: {e.message}")
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=e.message)
@@ -414,6 +432,8 @@ async def send_message(
             str(conversation_id), request.message, user_id=current_user.id
         )
         return SuccessResponse(data=response)
+    except ConversationTurnsFull as e:
+        raise _access_conflict("CONVERSATION_TURNS_FULL", e.message)
     except RateLimitException as e:
         logger.warning(f"RateLimitException in send_message: {e.message}")
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=e.message)
@@ -442,6 +462,8 @@ async def send_multimodal_turn(
 ):
     """텍스트 또는 음성 파일로 대화 이어가기"""
     try:
+        if settings.conversation_access_enabled:
+            service.assert_can_send(str(conversation_id), current_user.id)
         text, include_audio_response, audio_file = await _parse_turn_input(http_request)
         input_mode, user_text = await voice_service.resolve_input_text(
             text=text,
@@ -467,6 +489,8 @@ async def send_multimodal_turn(
         return SuccessResponse(data=data)
     except ValidationError as e:
         raise _validation_error_response(e)
+    except ConversationTurnsFull as e:
+        raise _access_conflict("CONVERSATION_TURNS_FULL", e.message)
     except RateLimitException as e:
         logger.warning(f"RateLimitException in send_multimodal_turn: {e.message}")
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=e.message)
@@ -484,6 +508,30 @@ async def send_multimodal_turn(
     except Exception as e:
         logger.error(f"Unexpected error in send_multimodal_turn: {str(e)}", exc_info=True)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.get("/access/", response_model=SuccessResponse[ConversationAccess])
+def get_conversation_access(
+    current_user: ProfileModel = Depends(get_current_user),
+    service: ConversationService = Depends(get_conversation_service),
+):
+    """계정의 새 대화 생성 권한을 반환해요."""
+    return SuccessResponse(data=ConversationAccess(**service.get_access(current_user.id)))
+
+
+@router.get("/{conversation_id}/access/", response_model=SuccessResponse[ConversationTurnAccess])
+def get_conversation_turn_access(
+    conversation_id: UUID,
+    current_user: ProfileModel = Depends(get_current_user),
+    service: ConversationService = Depends(get_conversation_service),
+):
+    """대화별 사용자 발화 한도를 반환해요."""
+    try:
+        return SuccessResponse(
+            data=ConversationTurnAccess(**service.get_turn_access(str(conversation_id), current_user.id))
+        )
+    except NotFoundException as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
 
 
 @router.get("/", response_model=SuccessResponse[PaginatedConversations])

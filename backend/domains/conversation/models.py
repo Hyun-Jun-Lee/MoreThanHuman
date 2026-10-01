@@ -59,3 +59,15 @@ class MessageModel(Base):
     # Relationships
     conversation = relationship("ConversationModel", back_populates="messages")
     grammar_feedback = relationship("GrammarFeedbackModel", back_populates="message", uselist=False, cascade="all, delete-orphan")
+
+
+class ConversationSlotGrantModel(Base):
+    """검증된 영구 단품 구매가 부여한 대화 슬롯."""
+
+    __tablename__ = "conversation_slot_grants"
+
+    id = Column(String(36), primary_key=True)
+    user_id = Column(String(36), ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False, index=True)
+    purchase_key = Column(String(255), nullable=False, unique=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    revoked_at = Column(DateTime, nullable=True)

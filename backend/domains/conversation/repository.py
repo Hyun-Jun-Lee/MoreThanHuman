@@ -2,12 +2,22 @@
 Conversation Repository Layer
 데이터 접근 및 CRUD 연산
 """
-from sqlalchemy import desc
+from sqlalchemy import desc, func
 from sqlalchemy.orm import Session
 
 from domains.conversation.enums import ConversationStatus
-from domains.conversation.models import ConversationModel, MessageModel
-from shared.exceptions import NotFoundException
+from domains.auth.models import ProfileModel
+from domains.conversation.enums import MessageRole
+from domains.conversation.models import ConversationModel, ConversationSlotGrantModel, MessageModel
+from shared.exceptions import AppException, NotFoundException
+
+
+class ConversationSlotsFull(AppException):
+    """새 대화의 동시 보유 슬롯이 없어요."""
+
+
+class ConversationTurnsFull(AppException):
+    """대화별 무료 사용자 발화 한도에 도달했어요."""
 
 
 class ConversationRepository:
@@ -30,6 +40,114 @@ class ConversationRepository:
         self.db.commit()
         self.db.refresh(conversation)
         return conversation
+
+    def _slot_limit(self, profile: ProfileModel) -> int:
+        grants = (
+            self.db.query(func.count(ConversationSlotGrantModel.id))
+            .filter(
+                ConversationSlotGrantModel.user_id == profile.id,
+                ConversationSlotGrantModel.revoked_at.is_(None),
+            )
+            .scalar()
+        ) or 0
+        return max(1, profile.legacy_conversation_slots or 1) + grants
+
+    def access_summary(self, user_id: str, *, enabled: bool) -> dict:
+        """홈과 대화 탭에서 동일하게 사용하는 생성 권한."""
+        used = self.count_conversations(user_id)
+        if not enabled:
+            return {
+                "enabled": False,
+                "can_create": True,
+                "used_slots": used,
+                "slot_limit": None,
+                "remaining_slots": None,
+            }
+        profile = self.db.query(ProfileModel).filter(ProfileModel.id == user_id).one()
+        limit = self._slot_limit(profile)
+        return {
+            "enabled": True,
+            "can_create": used < limit,
+            "used_slots": used,
+            "slot_limit": limit,
+            "remaining_slots": max(0, limit - used),
+        }
+
+    def assert_can_create(self, user_id: str, *, enabled: bool) -> None:
+        if enabled and not self.access_summary(user_id, enabled=True)["can_create"]:
+            raise ConversationSlotsFull("추가 대화 이용권이 필요해요")
+
+    def create_with_access(self, conversation: ConversationModel, *, enabled: bool) -> ConversationModel:
+        """프로필 행 잠금 아래에서 슬롯 검사와 새 대화 INSERT를 직렬화해요."""
+        if not enabled:
+            return self.save(conversation)
+        try:
+            profile = (
+                self.db.query(ProfileModel)
+                .filter(ProfileModel.id == conversation.user_id)
+                .with_for_update()
+                .one()
+            )
+            used = self.count_conversations(conversation.user_id)
+            if used >= self._slot_limit(profile):
+                raise ConversationSlotsFull("추가 대화 이용권이 필요해요")
+            self.db.add(conversation)
+            self.db.commit()
+            self.db.refresh(conversation)
+            return conversation
+        except Exception:
+            self.db.rollback()
+            raise
+
+    def count_user_turns(self, conversation_id: str) -> int:
+        return (
+            self.db.query(func.count(MessageModel.id))
+            .filter(MessageModel.conversation_id == conversation_id, MessageModel.role == MessageRole.USER)
+            .scalar()
+        ) or 0
+
+    def turn_access(self, conversation_id: str, user_id: str, *, enabled: bool) -> dict:
+        self.find_by_id(conversation_id, user_id)
+        used = self.count_user_turns(conversation_id)
+        return {
+            "enabled": enabled,
+            "user_turns": used,
+            "turn_limit": 15 if enabled else None,
+            "can_send": not enabled or used < 15,
+        }
+
+    def assert_can_send(self, conversation_id: str, user_id: str, *, enabled: bool) -> None:
+        if enabled and not self.turn_access(conversation_id, user_id, enabled=True)["can_send"]:
+            raise ConversationTurnsFull("이 대화의 무료 15턴을 모두 사용했어요")
+
+    def save_user_turn(self, message: MessageModel, user_id: str, *, enabled: bool) -> MessageModel:
+        """대화 행 잠금 아래에서 사용자 발화 수와 INSERT를 원자적으로 처리해요."""
+        if not enabled:
+            return self.save_message(message)
+        try:
+            conversation = (
+                self.db.query(ConversationModel)
+                .filter(ConversationModel.id == message.conversation_id, ConversationModel.user_id == user_id)
+                .with_for_update()
+                .one_or_none()
+            )
+            if conversation is None:
+                raise NotFoundException(f"Conversation {message.conversation_id} not found")
+            if self.count_user_turns(conversation.id) >= 15:
+                raise ConversationTurnsFull("이 대화의 무료 15턴을 모두 사용했어요")
+            self.db.add(message)
+            self.db.commit()
+            self.db.refresh(message)
+            return message
+        except Exception:
+            self.db.rollback()
+            raise
+
+    def delete_failed_user_turn(self, message_id: str) -> None:
+        message = self.db.query(MessageModel).filter(MessageModel.id == message_id).one_or_none()
+        if message is not None:
+            self.db.delete(message)
+            self.db.commit()
 
     def find_by_id(self, conversation_id: str, user_id: str) -> ConversationModel:
         """
