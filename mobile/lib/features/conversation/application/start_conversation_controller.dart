@@ -2,6 +2,8 @@ import 'package:curitalk/features/conversation/data/api_conversation_repository.
 import 'package:curitalk/features/conversation/domain/conversation_models.dart';
 import 'package:curitalk/features/conversation/domain/conversation_repository.dart';
 import 'package:curitalk/features/home/application/recent_conversations_controller.dart';
+import 'package:curitalk/features/conversation/data/conversation_access_repository.dart';
+import 'package:curitalk/core/network/api_exception.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class InitialAssistantAudio {
@@ -36,6 +38,7 @@ class InitialAssistantAudioController extends Notifier<InitialAssistantAudio?> {
 enum StartConversationFailureReason {
   freeChatRequestFailed,
   roleplayRequestFailed,
+  slotsFull,
 }
 
 class StartConversationState {
@@ -97,9 +100,11 @@ class StartConversationController extends Notifier<StartConversationState> {
       _refreshRecentConversations();
       state = const StartConversationState();
       return response;
-    } on Object catch (_) {
-      state = const StartConversationState(
-        failureReason: StartConversationFailureReason.freeChatRequestFailed,
+    } on Object catch (error) {
+      state = StartConversationState(
+        failureReason: _isSlotLimit(error)
+            ? StartConversationFailureReason.slotsFull
+            : StartConversationFailureReason.freeChatRequestFailed,
       );
       return null;
     }
@@ -141,9 +146,11 @@ class StartConversationController extends Notifier<StartConversationState> {
       _refreshRecentConversations();
       state = const StartConversationState();
       return response;
-    } on Object catch (_) {
-      state = const StartConversationState(
-        failureReason: StartConversationFailureReason.freeChatRequestFailed,
+    } on Object catch (error) {
+      state = StartConversationState(
+        failureReason: _isSlotLimit(error)
+            ? StartConversationFailureReason.slotsFull
+            : StartConversationFailureReason.freeChatRequestFailed,
       );
       return null;
     }
@@ -166,9 +173,11 @@ class StartConversationController extends Notifier<StartConversationState> {
       _refreshRecentConversations();
       state = const StartConversationState();
       return response;
-    } on Object catch (_) {
-      state = const StartConversationState(
-        failureReason: StartConversationFailureReason.roleplayRequestFailed,
+    } on Object catch (error) {
+      state = StartConversationState(
+        failureReason: _isSlotLimit(error)
+            ? StartConversationFailureReason.slotsFull
+            : StartConversationFailureReason.roleplayRequestFailed,
       );
       return null;
     }
@@ -197,6 +206,15 @@ class StartConversationController extends Notifier<StartConversationState> {
         .read(recentConversationsRefreshingProvider.notifier)
         .setRefreshing(true);
     ref.invalidate(recentConversationsControllerProvider);
+    ref.invalidate(conversationAccessProvider);
+  }
+
+  bool _isSlotLimit(Object error) {
+    if (error is ApiException && error.code == 'CONVERSATION_SLOTS_FULL') {
+      ref.invalidate(conversationAccessProvider);
+      return true;
+    }
+    return false;
   }
 
   CustomFocusConversationRepository _customFocusRepository(

@@ -7,6 +7,36 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
 void main() {
+  testWidgets('15 used turns keep messages readable and disable the composer', (
+    WidgetTester tester,
+  ) async {
+    final repository = _FakeConversationRepository();
+    final router = _router();
+    addTearDown(router.dispose);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          conversationRepositoryProvider.overrideWithValue(repository),
+          conversationTurnAccessProvider('conversation-id').overrideWith(
+            (ref) async => const ConversationTurnAccess(
+              enabled: true,
+              userTurns: 15,
+              turnLimit: 15,
+              canSend: false,
+            ),
+          ),
+        ],
+        child: MaterialApp.router(theme: AppTheme.light, routerConfig: router),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Hello!'), findsOneWidget);
+    expect(find.textContaining('15 free turns'), findsOneWidget);
+    expect(tester.widget<TextField>(find.byType(TextField)).enabled, isFalse);
+    expect(repository.sentTextTurns, isEmpty);
+  });
+
   testWidgets(
     'reentering a long conversation shows newest message without restoring old scroll',
     (tester) async {
@@ -100,42 +130,49 @@ void main() {
     },
   );
 
-  testWidgets('explicit back button returns to Conversations when stack is empty', (
-    WidgetTester tester,
-  ) async {
-    final GoRouter router = GoRouter(
-      initialLocation: AppRoute.conversationPath('conversation-id'),
-      routes: <RouteBase>[
-        GoRoute(path: AppRoute.history, builder: (_, _) => const Text('Conversations')),
-        GoRoute(
-          path: '${AppRoute.conversation}/:conversationId',
-          builder: (_, GoRouterState state) {
-            return ConversationScreen(
-              conversationId: state.pathParameters['conversationId']!,
-            );
-          },
-        ),
-      ],
-    );
-
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          conversationRepositoryProvider.overrideWithValue(
-            _FakeConversationRepository(),
+  testWidgets(
+    'explicit back button returns to Conversations when stack is empty',
+    (WidgetTester tester) async {
+      final GoRouter router = GoRouter(
+        initialLocation: AppRoute.conversationPath('conversation-id'),
+        routes: <RouteBase>[
+          GoRoute(
+            path: AppRoute.history,
+            builder: (_, _) => const Text('Conversations'),
+          ),
+          GoRoute(
+            path: '${AppRoute.conversation}/:conversationId',
+            builder: (_, GoRouterState state) {
+              return ConversationScreen(
+                conversationId: state.pathParameters['conversationId']!,
+              );
+            },
           ),
         ],
-        child: MaterialApp.router(theme: AppTheme.light, routerConfig: router),
-      ),
-    );
-    await tester.pumpAndSettle();
+      );
 
-    expect(find.text('Hello!'), findsOneWidget);
-    await tester.tap(find.byTooltip('Back'));
-    await tester.pumpAndSettle();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            conversationRepositoryProvider.overrideWithValue(
+              _FakeConversationRepository(),
+            ),
+          ],
+          child: MaterialApp.router(
+            theme: AppTheme.light,
+            routerConfig: router,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
 
-    expect(find.text('Conversations'), findsOneWidget);
-  });
+      expect(find.text('Hello!'), findsOneWidget);
+      await tester.tap(find.byTooltip('Back'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Conversations'), findsOneWidget);
+    },
+  );
 
   testWidgets('voice input records and sends audio turn', (
     WidgetTester tester,

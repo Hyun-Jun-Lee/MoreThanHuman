@@ -105,6 +105,8 @@ class AppCopy {
         isKorean
             ? '음성 메시지를 보내지 못했어요. 다시 시도해 주세요.'
             : 'Your voice message could not be sent. Please try again.',
+      'turnLimitReached' => conversationTurnLimitReached,
+      'slotsFull' => additionalConversationLocked,
       'freeChatRequestFailed' =>
         isKorean
             ? '대화를 시작하지 못했어요. 다시 시도해 주세요.'
@@ -162,6 +164,18 @@ class AppCopy {
   String get backLabel => isKorean ? '뒤로' : 'Back';
   String get backToHomeLabel => isKorean ? '홈으로 돌아가기' : 'Back to home';
   String get conversationTitle => isKorean ? '대화' : 'Conversation';
+  String get additionalConversationLabel =>
+      isKorean ? '추가 대화' : 'Additional conversation';
+  String get additionalConversationLocked => isKorean
+      ? '추가 대화는 이용권이 필요해요.'
+      : 'An additional conversation requires a pass.';
+  String get additionalConversationLockedSemantic => isKorean
+      ? '잠긴 추가 대화, 이용권이 필요해요'
+      : 'Locked additional conversation, pass required';
+  String get accessDialogConfirm => isKorean ? '확인' : 'OK';
+  String get conversationTurnLimitReached => isKorean
+      ? '이 대화의 무료 15턴을 모두 사용했어요. 이전 대화는 계속 볼 수 있어요.'
+      : 'You have used all 15 free turns in this conversation. You can still read it.';
   String get deleteConversationTooltip =>
       isKorean ? '대화 삭제' : 'Delete conversation';
   String deleteConversationTitle(String title) =>

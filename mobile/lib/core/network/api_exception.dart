@@ -77,6 +77,14 @@ class ApiException implements Exception {
   final Object? details;
   final Object? cause;
 
+  String? get code {
+    final Object? data = details;
+    if (data is! Map<String, dynamic>) return null;
+    final Object? detail = data['detail'];
+    if (detail is! Map<String, dynamic>) return null;
+    return detail['code'] is String ? detail['code'] as String : null;
+  }
+
   static ApiErrorKind _kindForStatus(int? statusCode) {
     if (statusCode == 401 || statusCode == 403) {
       return ApiErrorKind.unauthorized;

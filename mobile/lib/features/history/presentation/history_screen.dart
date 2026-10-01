@@ -27,6 +27,8 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
   Widget build(BuildContext context) {
     final copy = AppCopy.of(context);
     final conversations = ref.watch(conversationHistoryControllerProvider);
+    final isAdditionalConversationLocked =
+        ref.watch(conversationAccessProvider).value?.isLocked == true;
     final controller = ref.read(conversationHistoryControllerProvider.notifier);
     return AppScaffold(
       padding: EdgeInsets.zero,
@@ -70,7 +72,12 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                   padding: const EdgeInsets.only(bottom: AppSpacing.lg),
                   itemCount: value.page.items.isEmpty
                       ? 1
-                      : value.page.items.length + 1,
+                      : value.page.items.length +
+                            1 +
+                            (isAdditionalConversationLocked &&
+                                    !value.page.hasMore
+                                ? 1
+                                : 0),
                   separatorBuilder: (_, _) => const Divider(
                     height: 1,
                     indent: AppSpacing.screenPadding,
@@ -83,7 +90,35 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                         message: copy.historyEmptyMessage,
                       );
                     }
-                    if (index == value.page.items.length) {
+                    if (isAdditionalConversationLocked &&
+                        !value.page.hasMore &&
+                        index == value.page.items.length) {
+                      return Semantics(
+                        key: const ValueKey('locked-additional-conversation'),
+                        label: copy.additionalConversationLockedSemantic,
+                        button: true,
+                        excludeSemantics: true,
+                        child: InkWell(
+                          onTap: () => showConversationAccessDialog(context),
+                          child: const SizedBox(
+                            width: double.infinity,
+                            height: 64,
+                            child: Center(
+                              child: LockedConversationBadge(
+                                dimension: 40,
+                                iconSize: 24,
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }
+                    if (index ==
+                        value.page.items.length +
+                            (isAdditionalConversationLocked &&
+                                    !value.page.hasMore
+                                ? 1
+                                : 0)) {
                       if (!value.page.hasMore) return const SizedBox.shrink();
                       return Padding(
                         padding: const EdgeInsets.all(AppSpacing.lg),
@@ -157,6 +192,10 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
   }
 
   Future<void> _showStartSheet() async {
+    if (ref.read(conversationAccessProvider).value?.isLocked == true) {
+      await showConversationAccessDialog(context);
+      return;
+    }
     final selected = await showConversationStartSheet(context);
     if (mounted && selected != null) widget.onStartTypeSelected?.call(selected);
   }
@@ -180,6 +219,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
       if (!mounted) return;
       ref.invalidate(conversationHistoryControllerProvider);
       ref.invalidate(recentConversationsControllerProvider);
+      ref.invalidate(conversationAccessProvider);
     } on Object {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

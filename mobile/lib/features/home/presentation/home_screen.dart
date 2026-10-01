@@ -37,6 +37,8 @@ class HomeScreen extends ConsumerWidget {
     final AsyncValue<List<ConversationSummary>> recent = ref.watch(
       recentConversationsControllerProvider,
     );
+    final bool isAdditionalConversationLocked =
+        ref.watch(conversationAccessProvider).value?.isLocked == true;
     final bool isRecentRefreshing = ref.watch(
       recentConversationsRefreshingProvider,
     );
@@ -111,11 +113,31 @@ class HomeScreen extends ConsumerWidget {
                     );
                   },
                 ),
+                if (isAdditionalConversationLocked) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  AppColorBlockCard(
+                    key: const ValueKey('locked-additional-conversation-home'),
+                    color: AppPalette.blockCream,
+                    semanticLabel: copy.additionalConversationLockedSemantic,
+                    onTap: () => showConversationAccessDialog(context),
+                    padding: EdgeInsets.zero,
+                    child: const SizedBox(
+                      width: double.infinity,
+                      height: 112,
+                      child: Center(
+                        child: LockedConversationBadge(
+                          dimension: 48,
+                          iconSize: 28,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: AppSpacing.lg),
                 AppPrimaryButton(
                   label: copy.newConversationLabel,
                   leading: const Icon(Icons.add_rounded),
-                  onPressed: () => _showStartSheet(context),
+                  onPressed: () => _showStartSheet(context, ref),
                 ),
               ]),
             ),
@@ -125,7 +147,11 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _showStartSheet(BuildContext context) async {
+  Future<void> _showStartSheet(BuildContext context, WidgetRef ref) async {
+    if (ref.read(conversationAccessProvider).value?.isLocked == true) {
+      await showConversationAccessDialog(context);
+      return;
+    }
     final ConversationStartType? selected = await showConversationStartSheet(
       context,
     );
@@ -160,6 +186,7 @@ class HomeScreen extends ConsumerWidget {
                 .deleteConversation(conversation.id),
           );
       ref.invalidate(conversationHistoryControllerProvider);
+      ref.invalidate(conversationAccessProvider);
     } on Object {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

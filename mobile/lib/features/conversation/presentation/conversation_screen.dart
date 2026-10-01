@@ -6,6 +6,7 @@ import 'package:curitalk/core/copy/copy.dart';
 import 'package:curitalk/core/widgets/widgets.dart';
 import 'package:curitalk/features/conversation/application/conversation_audio_services.dart';
 import 'package:curitalk/features/conversation/application/conversation_controller.dart';
+import 'package:curitalk/features/conversation/data/conversation_access_repository.dart';
 import 'package:curitalk/features/conversation/domain/conversation_models.dart';
 import 'package:curitalk/features/conversation/domain/conversation_repository.dart';
 import 'package:curitalk/features/conversation/presentation/widgets/widgets.dart';
@@ -52,6 +53,12 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
     );
     final AppCopy copy = AppCopy.of(context);
     final bool isSending = conversation.value?.isSending == true;
+    final bool turnLimitReached =
+        ref
+            .watch(conversationTurnAccessProvider(widget.conversationId))
+            .value
+            ?.canSend ==
+        false;
 
     return AppScaffold(
       appBar: AppBar(
@@ -67,7 +74,8 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
           controller: _composerController,
           enabled:
               conversation.hasValue &&
-              conversation.value?.isLoadingOlder != true,
+              conversation.value?.isLoadingOlder != true &&
+              !turnLimitReached,
           isSending: isSending,
           isRecording: _voiceInput.phase == _VoiceInputPhase.recording,
           isVoiceBusy: _voiceInput.isBusy,
@@ -99,6 +107,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
           state: state,
           voiceFailureReason: _voiceInput.failureReason,
           canLoadOlder: !_voiceInput.isRecordingActive && !_voiceInput.isBusy,
+          turnLimitReached: turnLimitReached,
         ),
       ),
     );
@@ -307,6 +316,7 @@ class _ConversationMessageList extends ConsumerStatefulWidget {
     required this.conversationId,
     required this.state,
     required this.canLoadOlder,
+    required this.turnLimitReached,
     this.voiceFailureReason,
     super.key,
   });
@@ -314,6 +324,7 @@ class _ConversationMessageList extends ConsumerStatefulWidget {
   final String conversationId;
   final ConversationState state;
   final bool canLoadOlder;
+  final bool turnLimitReached;
   final ConversationAudioExceptionReason? voiceFailureReason;
 
   @override
@@ -394,16 +405,29 @@ class _ConversationMessageListState
           reason:
               state.failureReason ??
               ConversationSendFailureReason.textRequestFailed,
-          onRetry: () {
-            final ConversationController controller = ref.read(
-              conversationControllerProvider(conversationId).notifier,
-            );
-            if (state.failedAudioFile != null) {
-              controller.retryFailedAudio();
-            } else {
-              controller.retryFailedMessage();
-            }
-          },
+          onRetry:
+              state.failureReason ==
+                  ConversationSendFailureReason.turnLimitReached
+              ? null
+              : () {
+                  final ConversationController controller = ref.read(
+                    conversationControllerProvider(conversationId).notifier,
+                  );
+                  if (state.failedAudioFile != null) {
+                    controller.retryFailedAudio();
+                  } else {
+                    controller.retryFailedMessage();
+                  }
+                },
+        ),
+      if (widget.turnLimitReached &&
+          state.failureReason != ConversationSendFailureReason.turnLimitReached)
+        AppColorBlockCard(
+          color: AppPalette.blockCream,
+          child: Text(
+            copy.conversationTurnLimitReached,
+            style: AppTypography.bodySm,
+          ),
         ),
       if (state.assistantAudioStatus != null) ...<Widget>[
         AppColorBlockCard(
@@ -441,7 +465,7 @@ class _SendFailureCard extends StatelessWidget {
   const _SendFailureCard({required this.reason, required this.onRetry});
 
   final ConversationSendFailureReason reason;
-  final VoidCallback onRetry;
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -454,12 +478,14 @@ class _SendFailureCard extends StatelessWidget {
             AppCopy.of(context).failureMessage(reason.name),
             style: AppTypography.bodySm,
           ),
-          const SizedBox(height: AppSpacing.sm),
-          OutlinedButton.icon(
-            onPressed: onRetry,
-            icon: const Icon(Icons.refresh_rounded),
-            label: Text(AppCopy.of(context).retryLabel),
-          ),
+          if (onRetry != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            OutlinedButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh_rounded),
+              label: Text(AppCopy.of(context).retryLabel),
+            ),
+          ],
         ],
       ),
     );

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:curitalk/features/history/data/conversation_history_repository.dart';
+import 'package:curitalk/features/conversation/conversation.dart';
 
 import 'package:curitalk/app/theme/app_theme.dart';
 import 'package:curitalk/core/storage/storage.dart';
@@ -92,6 +93,96 @@ void main() {
     await tester.pumpAndSettle();
     expect(selectedType, ConversationStartType.roleplay);
   });
+
+  testWidgets('locked extra slot appears as a row and blocks the plus action', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    await tester.pumpWidget(
+      _historyApp(
+        conversations: <ConversationSummary>[_conversation],
+        access: const ConversationAccess(
+          enabled: true,
+          canCreate: false,
+          usedSlots: 1,
+          slotLimit: 1,
+          remainingSlots: 0,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Osaka food trip'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('locked-additional-conversation')),
+      findsOneWidget,
+    );
+    final lockedRow = find.byKey(
+      const ValueKey('locked-additional-conversation'),
+    );
+    final lockIcon = find.descendant(
+      of: lockedRow,
+      matching: find.byIcon(Icons.lock_rounded),
+    );
+    expect(lockIcon, findsOneWidget);
+    final badge = find.descendant(
+      of: lockedRow,
+      matching: find.byType(LockedConversationBadge),
+    );
+    expect(tester.getSize(badge), const Size(40, 40));
+    expect(find.text('Additional conversation'), findsNothing);
+    expect(
+      find.text('An additional conversation requires a pass.'),
+      findsNothing,
+    );
+    expect(
+      find.bySemanticsLabel('Locked additional conversation, pass required'),
+      findsOneWidget,
+    );
+    expect(
+      (tester.getCenter(lockedRow) - tester.getCenter(lockIcon)).distance,
+      lessThan(1),
+    );
+    await tester.tap(find.byTooltip('New conversation'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('An additional conversation requires a pass.'),
+      findsWidgets,
+    );
+    expect(find.text('Free Chat'), findsNothing);
+    semantics.dispose();
+  });
+
+  testWidgets('locked slot follows the final real conversation page', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _historyApp(
+        homeRepository: _FakeHomeRepository(
+          conversations: <ConversationSummary>[_conversation],
+          hasMore: true,
+        ),
+        access: const ConversationAccess(
+          enabled: true,
+          canCreate: false,
+          usedSlots: 1,
+          slotLimit: 1,
+          remainingSlots: 0,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Osaka food trip'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('locked-additional-conversation')),
+      findsNothing,
+    );
+    await tester.tap(find.text('Load more conversations'));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('locked-additional-conversation')),
+      findsOneWidget,
+    );
+  });
 }
 
 const String _deviceId = '550e8400-e29b-41d4-a716-446655440000';
@@ -122,6 +213,7 @@ Widget _historyApp({
   List<ConversationSummary> conversations = const <ConversationSummary>[],
   ValueChanged<ConversationStartType>? onStartTypeSelected,
   ValueChanged<String>? onConversationSelected,
+  ConversationAccess access = const ConversationAccess.disabled(),
 }) {
   return ProviderScope(
     overrides: [
@@ -144,6 +236,9 @@ Widget _historyApp({
       conversationHistoryRepositoryProvider.overrideWithValue(
         homeRepository ?? _FakeHomeRepository(conversations: conversations),
       ),
+      conversationAccessRepositoryProvider.overrideWithValue(
+        _FakeConversationAccessRepository(access),
+      ),
     ],
     child: MaterialApp(
       theme: AppTheme.light,
@@ -154,6 +249,20 @@ Widget _historyApp({
       ),
     ),
   );
+}
+
+class _FakeConversationAccessRepository
+    implements ConversationAccessRepository {
+  const _FakeConversationAccessRepository(this.access);
+
+  final ConversationAccess access;
+
+  @override
+  Future<ConversationAccess> getAccess() async => access;
+
+  @override
+  Future<ConversationTurnAccess> getTurnAccess(String conversationId) async =>
+      const ConversationTurnAccess.disabled();
 }
 
 class _FakeGoogleIdentityService implements GoogleIdentityService {
@@ -258,11 +367,13 @@ class _FakeHomeRepository implements ConversationHistoryRepository {
     this.conversations = const <ConversationSummary>[],
     this.errorOnce = false,
     this.pending = false,
+    this.hasMore = false,
   });
 
   final List<ConversationSummary> conversations;
   final bool errorOnce;
   final bool pending;
+  final bool hasMore;
   int requestCount = 0;
 
   @override
@@ -271,9 +382,9 @@ class _FakeHomeRepository implements ConversationHistoryRepository {
     if (pending) return Completer<ConversationPage>().future;
     if (errorOnce && requestCount == 1) throw StateError('offline');
     return ConversationPage(
-      items: conversations,
+      items: offset == 0 ? conversations : const <ConversationSummary>[],
       nextOffset: conversations.length,
-      hasMore: false,
+      hasMore: hasMore && offset == 0,
     );
   }
 }

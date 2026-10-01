@@ -42,7 +42,7 @@ Convia는 freemium을 기본 BM으로 두고 `free`/`advance`/`plus` 구독 플�
 - 지속적인 음성 대화 사용
 - 고급 문법 피드백과 학습 통계
 
-서버 한도와 모바일 잠금 UI는 함께 구현하되 결제 기능이 준비될 때까지 비활성화해요. 활성화 시점의 기존 계정 보유 개수를 저장하고, 권한 이력과 사용량을 서버에서 판정해요. API 계약, 결제 provider, quota 응답 필드는 [대화 권한 구현 계획](docs/plans/2026-09-30-001-feat-conversation-access-plan.md)과 구현 시점의 `docs/DSL.md`에서 확정해요.
+서버 한도와 모바일 잠금 UI는 구현했고 개발 환경에서 차단 동작을 시험해요. 운영에서는 결제 기능이 준비될 때까지 비활성화해요. 활성화 시점의 기존 계정 보유 개수를 저장하고, 권한 이력과 사용량을 서버에서 판정해요. 현재 API는 [대화 권한 계약](.agent/_contracts/CONVERSATION_ACCESS.md)과 [DSL](docs/DSL.md)에 정의하고, 결제 provider와 유료 플랜별 한도는 후속 결제 작업에서 확정해요.
 
 ## Tracks
 

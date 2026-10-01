@@ -1,10 +1,16 @@
 import 'package:curitalk/features/conversation/application/start_conversation_controller.dart';
 import 'package:curitalk/features/conversation/data/api_conversation_repository.dart';
+import 'package:curitalk/features/conversation/data/conversation_access_repository.dart';
+import 'package:curitalk/core/network/api_exception.dart';
 import 'package:curitalk/features/conversation/domain/conversation_models.dart';
 import 'package:curitalk/features/conversation/domain/conversation_repository.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-enum ConversationSendFailureReason { textRequestFailed, audioRequestFailed }
+enum ConversationSendFailureReason {
+  textRequestFailed,
+  audioRequestFailed,
+  turnLimitReached,
+}
 
 enum AssistantAudioStatus { unavailable }
 
@@ -332,13 +338,21 @@ class ConversationController extends AsyncNotifier<ConversationState> {
               : <String>{assistantMessage.id},
         ),
       );
-    } on Object catch (_) {
+      ref.invalidate(conversationTurnAccessProvider(conversationId));
+    } on Object catch (error) {
+      final bool limitReached =
+          error is ApiException && error.code == 'CONVERSATION_TURNS_FULL';
+      if (limitReached) {
+        ref.invalidate(conversationTurnAccessProvider(conversationId));
+      }
       state = AsyncData<ConversationState>(
         previous.copyWith(
           isSending: false,
-          failedMessage: normalized,
+          failedMessage: limitReached ? null : normalized,
           clearFailedAudioFile: true,
-          failureReason: ConversationSendFailureReason.textRequestFailed,
+          failureReason: limitReached
+              ? ConversationSendFailureReason.turnLimitReached
+              : ConversationSendFailureReason.textRequestFailed,
           clearAssistantAudioStatus: true,
         ),
       );
@@ -410,13 +424,21 @@ class ConversationController extends AsyncNotifier<ConversationState> {
               : <String>{assistantMessage.id},
         ),
       );
-    } on Object catch (_) {
+      ref.invalidate(conversationTurnAccessProvider(conversationId));
+    } on Object catch (error) {
+      final bool limitReached =
+          error is ApiException && error.code == 'CONVERSATION_TURNS_FULL';
+      if (limitReached) {
+        ref.invalidate(conversationTurnAccessProvider(conversationId));
+      }
       state = AsyncData<ConversationState>(
         previous.copyWith(
           isSending: false,
           clearFailedMessage: true,
-          failedAudioFile: audioFile,
-          failureReason: ConversationSendFailureReason.audioRequestFailed,
+          failedAudioFile: limitReached ? null : audioFile,
+          failureReason: limitReached
+              ? ConversationSendFailureReason.turnLimitReached
+              : ConversationSendFailureReason.audioRequestFailed,
           clearAssistantAudioStatus: true,
         ),
       );

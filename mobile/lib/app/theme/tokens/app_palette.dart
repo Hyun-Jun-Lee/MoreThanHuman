@@ -17,6 +17,7 @@ abstract final class AppPalette {
   static const Color blockLilac = Color(0xFFE8E4F4);
   static const Color blockLilacSoft = Color(0xFFF1F3FF);
   static const Color blockCream = Color(0xFFF6F4EB);
+  static const Color lockedSlotBadge = Color(0xFFE9E5D8);
   static const Color blockBlue = Color(0xFFDBEAFE);
   static const Color blockCoral = Color(0xFFFFB694);
   static const Color blockPink = Color(0xFFFBDCCD);

@@ -29,6 +29,60 @@ void main() {
     expect(find.text('New conversation'), findsOneWidget);
   });
 
+  testWidgets('locked extra slot is distinct from real recent conversation', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    await tester.pumpWidget(
+      _homeApp(
+        conversations: _recentConversations(count: 1),
+        access: const ConversationAccess(
+          enabled: true,
+          canCreate: false,
+          usedSlots: 1,
+          slotLimit: 1,
+          remainingSlots: 0,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final lockedCard = find.byKey(
+      const ValueKey('locked-additional-conversation-home'),
+    );
+    await tester.scrollUntilVisible(lockedCard, 300);
+    final lockIcon = find.descendant(
+      of: lockedCard,
+      matching: find.byIcon(Icons.lock_rounded),
+    );
+    expect(lockIcon, findsOneWidget);
+    final badge = find.descendant(
+      of: lockedCard,
+      matching: find.byType(LockedConversationBadge),
+    );
+    expect(tester.getSize(badge), const Size(48, 48));
+    expect(find.text('Additional conversation'), findsNothing);
+    expect(
+      find.text('An additional conversation requires a pass.'),
+      findsNothing,
+    );
+    expect(
+      find.bySemanticsLabel('Locked additional conversation, pass required'),
+      findsOneWidget,
+    );
+    expect(
+      (tester.getCenter(lockedCard) - tester.getCenter(lockIcon)).distance,
+      lessThan(1),
+    );
+    await tester.tap(lockedCard);
+    await tester.pumpAndSettle();
+    expect(
+      find.text('An additional conversation requires a pass.'),
+      findsWidgets,
+    );
+    expect(find.text('Free Chat'), findsNothing);
+    semantics.dispose();
+  });
+
   testWidgets('profile displays account and language settings', (
     WidgetTester tester,
   ) async {
@@ -417,6 +471,7 @@ Widget _homeApp({
   LanguageSnackRepository? languageSnackRepository,
   LanguageSnackCache? languageSnackCache,
   ConversationRepository? conversationRepository,
+  ConversationAccess access = const ConversationAccess.disabled(),
 }) {
   final _MemoryTokenStorage effectiveTokenStorage =
       tokenStorage ?? _MemoryTokenStorage(tokens: _tokens, deviceId: _deviceId);
@@ -459,6 +514,9 @@ Widget _homeApp({
         conversationRepositoryProvider.overrideWithValue(
           conversationRepository,
         ),
+      conversationAccessRepositoryProvider.overrideWithValue(
+        _FakeConversationAccessRepository(access),
+      ),
     ],
     child: MaterialApp(
       theme: AppTheme.light,
@@ -473,6 +531,20 @@ Widget _homeApp({
             ),
     ),
   );
+}
+
+class _FakeConversationAccessRepository
+    implements ConversationAccessRepository {
+  const _FakeConversationAccessRepository(this.access);
+
+  final ConversationAccess access;
+
+  @override
+  Future<ConversationAccess> getAccess() async => access;
+
+  @override
+  Future<ConversationTurnAccess> getTurnAccess(String conversationId) async =>
+      const ConversationTurnAccess.disabled();
 }
 
 class _FakeGoogleIdentityService implements GoogleIdentityService {
