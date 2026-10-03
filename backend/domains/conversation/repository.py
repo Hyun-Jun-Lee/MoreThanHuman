@@ -2,13 +2,17 @@
 Conversation Repository Layer
 데이터 접근 및 CRUD 연산
 """
+from datetime import datetime, timedelta
+from uuid import uuid4
+
 from sqlalchemy import desc, func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from domains.conversation.enums import ConversationStatus
 from domains.auth.models import ProfileModel
 from domains.conversation.enums import MessageRole
-from domains.conversation.models import ConversationModel, ConversationSlotGrantModel, MessageModel
+from domains.conversation.models import ConversationModel, ConversationSlotGrantModel, MessageModel, SuggestedStartModel, WeeklyTopicModel
 from shared.exceptions import AppException, NotFoundException
 
 
@@ -20,11 +24,96 @@ class ConversationTurnsFull(AppException):
     """대화별 무료 사용자 발화 한도에 도달했어요."""
 
 
+class SuggestedStartInProgress(AppException):
+    """같은 요청 ID가 아직 AI의 첫 질문을 생성 중이에요."""
+
+
 class ConversationRepository:
     """대화 저장소"""
 
     def __init__(self, db: Session):
         self.db = db
+
+    def completed_suggested_start(self, user_id: str, request_id: str, topic_id: str) -> SuggestedStartModel | None:
+        """완료된 요청은 주제 보관 후에도 같은 결과로 재조회해요."""
+        existing = self.db.query(SuggestedStartModel).filter_by(
+            user_id=user_id, request_id=request_id, status="completed"
+        ).one_or_none()
+        if existing is not None and existing.topic_id != topic_id:
+            raise AppException("같은 요청 ID로 다른 주제를 시작할 수 없어요")
+        return existing
+
+    def reserve_suggested_start(self, user_id: str, request_id: str, topic_id: str) -> tuple[SuggestedStartModel, bool]:
+        """요청 ID를 영속적으로 예약하고, 완료 요청은 재조회해요."""
+        existing = self.db.query(SuggestedStartModel).filter_by(user_id=user_id, request_id=request_id).one_or_none()
+        if existing is not None:
+            if existing.topic_id != topic_id:
+                raise AppException("같은 요청 ID로 다른 주제를 시작할 수 없어요")
+            if existing.status == "completed":
+                return existing, True
+            # 중단된 프로세스의 예약은 제한 시간 뒤 재시도할 수 있어요.
+            if existing.created_at < datetime.utcnow() - timedelta(minutes=5):
+                self.db.delete(existing)
+                self.db.commit()
+            else:
+                raise SuggestedStartInProgress("대화를 준비하고 있어요")
+        reservation = SuggestedStartModel(
+            id=str(uuid4()), user_id=user_id, request_id=request_id, topic_id=topic_id,
+            status="pending", created_at=datetime.utcnow(),
+        )
+        try:
+            self.db.add(reservation)
+            self.db.commit()
+        except IntegrityError:
+            self.db.rollback()
+            existing = self.db.query(SuggestedStartModel).filter_by(user_id=user_id, request_id=request_id).one()
+            if existing.topic_id != topic_id:
+                raise AppException("같은 요청 ID로 다른 주제를 시작할 수 없어요")
+            if existing.status == "completed":
+                return existing, True
+            raise SuggestedStartInProgress("대화를 준비하고 있어요")
+        return reservation, False
+
+    def complete_suggested_start(self, reservation_id: str, conversation: ConversationModel, message: MessageModel, *, enabled: bool) -> None:
+        """슬롯 검사와 대화·AI 메시지·예약 완료를 한 트랜잭션에 저장해요."""
+        try:
+            profile = self.db.query(ProfileModel).filter_by(id=conversation.user_id).with_for_update().one()
+            reservation = self.db.query(SuggestedStartModel).filter_by(id=reservation_id, status="pending").one_or_none()
+            if reservation is None:
+                raise SuggestedStartInProgress("요청이 재시도 중이에요")
+            topic = self.db.query(WeeklyTopicModel).filter_by(
+                id=reservation.topic_id, archived_at=None
+            ).with_for_update().one_or_none()
+            if (topic is None or topic.batch.native_language != profile.native_language
+                    or topic.batch.target_language != profile.target_language):
+                raise NotFoundException("추천 주제를 찾을 수 없어요")
+            if enabled and self.count_conversations(conversation.user_id) >= self._slot_limit(profile):
+                raise ConversationSlotsFull("추가 대화 이용권이 필요해요")
+            self.db.add(conversation)
+            self.db.add(message)
+            reservation.status = "completed"
+            reservation.conversation_id = conversation.id
+            reservation.assistant_message_id = message.id
+            self.db.commit()
+        except Exception:
+            self.db.rollback()
+            raise
+
+    def release_suggested_start(self, reservation_id: str) -> None:
+        reservation = self.db.query(SuggestedStartModel).filter_by(id=reservation_id, status="pending").one_or_none()
+        if reservation is not None:
+            self.db.delete(reservation)
+            self.db.commit()
+
+    def suggested_result(self, reservation: SuggestedStartModel) -> tuple[ConversationModel, MessageModel]:
+        conversation = self.db.query(ConversationModel).filter_by(id=reservation.conversation_id).one()
+        message = self.db.query(MessageModel).filter_by(
+            id=reservation.assistant_message_id, conversation_id=conversation.id,
+            role=MessageRole.ASSISTANT,
+        ).one_or_none()
+        if message is None:
+            raise NotFoundException("첫 AI 메시지를 찾을 수 없어요")
+        return conversation, message
 
     def save(self, conversation: ConversationModel) -> ConversationModel:
         """
@@ -245,6 +334,9 @@ class ConversationRepository:
             user_id: 사용자 ID
         """
         conversation = self.find_by_id(conversation_id, user_id)
+        self.db.query(SuggestedStartModel).filter_by(
+            conversation_id=conversation_id, user_id=user_id
+        ).delete(synchronize_session=False)
         self.db.delete(conversation)
         self.db.commit()
 

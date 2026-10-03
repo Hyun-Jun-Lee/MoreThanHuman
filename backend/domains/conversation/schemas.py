@@ -38,6 +38,32 @@ class StartRoleplayRequest(BaseModel):
     include_audio_response: bool = False
 
 
+class StartSuggestedFreeChatRequest(BaseModel):
+    topic_id: UUID
+    start_request_id: UUID
+    include_audio_response: bool = False
+
+
+class SuggestedFreeChatResponse(BaseModel):
+    conversation_id: UUID
+    assistant_message_id: UUID
+    conversation_type: ConversationType
+    language: LearningLanguageContext
+    response: str
+    audio: VoiceAudioResponse | None = None
+    audio_error: VoiceAudioError | None = None
+
+
+class WeeklyTopicItem(BaseModel):
+    id: UUID
+    text: str
+
+
+class WeeklyTopicsResponse(BaseModel):
+    week_start: str | None
+    topics: list[WeeklyTopicItem]
+
+
 class SendMessageRequest(BaseModel):
     """메시지 전송 요청"""
 

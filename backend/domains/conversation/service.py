@@ -13,6 +13,7 @@ from database import SessionLocal
 from domains.conversation.enums import ConversationStatus, ConversationType, MessageRole
 from domains.conversation.models import ConversationModel, MessageModel
 from domains.conversation.repository import ConversationRepository
+from domains.conversation.topic_repository import WeeklyTopicRepository
 from domains.conversation.schemas import (
     Conversation,
     ConversationResponse,
@@ -21,6 +22,7 @@ from domains.conversation.schemas import (
     PaginatedConversations,
     PaginatedMessages,
     Pagination,
+    SuggestedFreeChatResponse,
 )
 from domains.grammar.repository import GrammarRepository
 from domains.grammar.service import GrammarService
@@ -54,6 +56,70 @@ class ConversationService:
         self.repository = repository
         self.http_client = http_client
         self.background_tasks = background_tasks
+
+    async def start_suggested_free_chat(
+        self,
+        topic_id: str,
+        request_id: str,
+        user_id: str,
+        language_context: LearningLanguageContext,
+    ) -> SuggestedFreeChatResponse:
+        """추천 주제로 AI가 첫 질문을 하는 자유 대화를 시작해요."""
+        reservation = self.repository.completed_suggested_start(user_id, request_id, topic_id)
+        if reservation is not None:
+            completed = True
+        else:
+            topic = WeeklyTopicRepository(self.repository.db).available(
+                topic_id, language_context.native_language.value, language_context.target_language.value
+            )
+            if topic is None:
+                from shared.exceptions import NotFoundException
+                raise NotFoundException("추천 주제를 찾을 수 없어요")
+            reservation, completed = self.repository.reserve_suggested_start(user_id, request_id, topic_id)
+        if completed:
+            conversation, message = self.repository.suggested_result(reservation)
+            return SuggestedFreeChatResponse(
+                conversation_id=conversation.id, assistant_message_id=message.id,
+                conversation_type=ConversationType.FREE_CHAT, language=conversation.language,
+                response=message.content,
+            )
+        try:
+            prompt = self.build_system_prompt(
+                conversation_type=ConversationType.FREE_CHAT, topic=topic.text,
+                language_context=language_context,
+            )
+            target_name = language_name(language_context.target_language)
+            first_question = await self.generate_response(
+                prompt, [],
+                f"Start a friendly free conversation about this topic: {topic.text}. "
+                f"Ask the learner one short, open-ended question in {target_name}. "
+                "Do not answer on the learner's behalf.",
+            )
+            if not first_question.strip():
+                raise ValueError("AI returned an empty first question")
+            conversation = ConversationModel(
+                id=str(uuid4()), user_id=user_id, title=topic.text[:200],
+                conversation_type=ConversationType.FREE_CHAT, role_character=None,
+                native_language=language_context.native_language.value,
+                target_language=language_context.target_language.value,
+                feedback_language=language_context.feedback_language.value,
+                message_count=1, status=ConversationStatus.ACTIVE,
+            )
+            message = MessageModel(
+                id=str(uuid4()), conversation_id=conversation.id,
+                role=MessageRole.ASSISTANT, content=first_question.strip(),
+            )
+            self.repository.complete_suggested_start(
+                reservation.id, conversation, message, enabled=settings.conversation_access_enabled
+            )
+            return SuggestedFreeChatResponse(
+                conversation_id=conversation.id, assistant_message_id=message.id,
+                conversation_type=ConversationType.FREE_CHAT,
+                language=language_context, response=message.content,
+            )
+        except Exception:
+            self.repository.release_suggested_start(reservation.id)
+            raise
 
     async def process_grammar_feedback_background(
         self,

@@ -1,6 +1,6 @@
 # 운영 가이드
 
-> 최종 갱신: 2026-10-01 · 배포·주간 생성·복구 절차
+> 최종 갱신: 2026-10-03 · 배포·주간 생성·복구 절차
 
 [실행 및 CLI](../README.md) · [환경변수](ENVIRONMENT.md) · [API 계약](DSL.md)
 
@@ -115,8 +115,29 @@ docker compose up -d --build --force-recreate --no-deps api
 
 GET은 일반 Bearer로 조회하며 운영 키를 앱에 넣지 않아요. 다른 기기는 각자 다음 조회 성공 때 반영돼요. 오프라인·구 앱에서는 즉시 반영되지 않으며, POST 성공 자체가 앱 리셋 완료를 뜻하지는 않아요. 테스트를 다시 시작하려면 POST를 다시 호출해요. 리셋 ID는 자정 이후에도 로컬에 유지되므로 같은 요청이 다음 날 소비를 초기화하지 않아요. DB 리셋 기록만 롤백할 때는 API 중지 후 `alembic downgrade 20260912_0001`로 새 테이블만 제거할 수 있어요.
 
+## 주간 대화 추천 운영
+
+`20261003_0001` migration 적용 뒤 `backend/`에서 수동 CLI를 실행해요. 이 버전은 cron·상시 worker·자동 알림을 설치하지 않아요. 새 묶음은 운영자가 실행한 경우에만 발행돼요.
+
+```bash
+cd backend
+uv run alembic upgrade head
+uv run python -m scripts.generate_weekly_topics --pair all
+```
+
+`--pair ko-en|en-ko|all`로 대상 언어쌍을 고르고 `--week-start YYYY-MM-DD`로 슬롯을 지정할 수 있어요. 이 날짜는 월요일이어야 하며 미래 슬롯은 발행하지 않아요. 기본 슬롯은 서울 시간 월요일 05:00부터 시작해요. 실행하면 LLM 사용량이 발생해요. JSON stdout의 각 언어쌍 `published`/`existing`/`failed`와 개수를 확인해요. 각 언어쌍당 8개를 요청하고 최소 6개가 검사를 통과해야 발행해요. 같은 언어쌍·슬롯 재실행은 중복 발행하지 않아요.
+
+생성 실패나 미실행 시 목록 API는 마지막 발행 묶음을 계속 반환해요. 처음부터 발행 기록이 없으면 홈의 추천 영역이 숨겨져요. 문제 주제를 발견하면 아래 명령으로 보관해요. 보관 후 새 목록에서 빠지고 기존 앱 캐시의 해당 ID도 대화 시작 시 서버가 거절해요.
+
+```bash
+uv run python -m scripts.archive_weekly_topic TOPIC_UUID
+```
+
+백업·복구에서는 API와 생성 CLI를 중지하고 `weekly_topic_batches`, `weekly_topics`, `suggested_starts`를 함께 다뤄요. `alembic downgrade 20261001_0001`은 이 세 테이블과 발행·멱등성 이력을 삭제하므로 운영 데이터 롤백에는 사전 DB 백업을 사용해요. 실제 LLM 출력은 자동 검사 후에도 의미·어조 오류가 남을 수 있으므로 첫 발행 표본을 확인해요.
+
 ## 변경 기록
 
+- 2026-10-03: 수동 주간 대화 추천 발행·보관·마지막 묶음 복구 절차를 추가했어요.
 - 2026-10-01: 기본 비활성화 대화 권한 설정, 기존 슬롯 스냅샷 CLI와 향후 활성화·롤백 절차를 추가했어요.
 - 2026-09-19: 바구니 리셋 API·추가 테이블 마이그레이션·앱 복귀 확인·구버전/오프라인 제한을 추가했어요.
 

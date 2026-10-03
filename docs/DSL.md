@@ -1,6 +1,6 @@
 # MoreThanHuman Backend DSL
 
-> 최종 갱신: 2026-09-13 · 범위: FastAPI 백엔드 API + Flutter 모바일 연동
+> 최종 갱신: 2026-10-03 · 범위: FastAPI 백엔드 API + Flutter 모바일 연동
 
 사용자 클라이언트는 `mobile/`의 Flutter 기반 모바일 앱으로 개발해요. 이 문서는 모바일 앱이 연동할 백엔드 도메인, 데이터 모델, API 계약을 정의해요.
 
@@ -307,6 +307,7 @@ curl -X POST http://localhost:8010/api/v2/language-snacks/ \
 module Conversation {
   router ConversationRouter {
     POST   /api/conversations/start/free-chat/       -> startFreeChat
+    POST   /api/conversations/start/free-chat/suggested/ -> startSuggestedFreeChat
     POST   /api/conversations/start/roleplay/        -> startRoleplay
     POST   /api/conversations/{id}/message/          -> sendMessage
     POST   /api/conversations/{id}/turn/             -> sendMultimodalTurn
@@ -336,6 +337,22 @@ module Conversation {
     role_character: String
     search_context?: String
     include_audio_response?: Boolean = false
+  }
+
+  type StartSuggestedFreeChatRequest {
+    topic_id: UUID
+    start_request_id: UUID
+    include_audio_response?: Boolean = false
+  }
+
+  type SuggestedFreeChatResponse {
+    conversation_id: UUID
+    assistant_message_id: UUID
+    conversation_type: "FREE_CHAT"
+    language: LearningLanguageContext
+    response: String
+    audio?: VoiceAudioResponse
+    audio_error?: VoiceAudioError
   }
 
   `role_character`는 클라이언트가 선택한 preset/custom 상황 또는 AI가 맡을 역할이에요.
@@ -448,6 +465,19 @@ module Conversation {
   }
 }
 ```
+
+### 주간 대화 추천 v1
+
+`20261003_0001` migration은 `weekly_topic_batches`, `weekly_topics`, `suggested_starts`를 추가해요. 기존 대화와 메시지는 변경하지 않아요. 운영자는 [운영 가이드](OPERATIONS.md#주간-대화-추천-운영)의 서버 CLI로 `ko→en`, `en→ko` 공통 묶음을 발행해요. 예약 worker는 없어요.
+
+| API | 계약 |
+|-----|------|
+| `GET /api/conversation-topics/weekly/` | Bearer 인증 필수. 현재 profile의 언어쌍에 가장 최근 발행된 묶음을 `{success:true,data:{week_start:"YYYY-MM-DD",topics:[{id,text}]}}`로 반환해요. 없으면 `week_start:null`, `topics:[]`예요. 보관 주제는 제외해요. |
+| `POST /api/conversations/start/free-chat/suggested/` | `StartSuggestedFreeChatRequest`를 받아 `SuggestedFreeChatResponse`를 성공 envelope에 담아요. 주제의 발행·보관·언어쌍과 대화 슬롯을 확인하고 AI 메시지 하나가 있는 `FREE_CHAT`을 만들어요. 사용자 첫 메시지와 문법 작업은 없고 사용자 발화 수는 0이에요. |
+
+같은 사용자·`start_request_id`의 완료된 요청은 같은 대화와 AI 메시지를 반환해요. 생성 중 중복 요청은 HTTP 409 `START_IN_PROGRESS`, 슬롯이 가득 차면 HTTP 409 `CONVERSATION_SLOTS_FULL`이에요. 없는 주제, 보관 주제, 다른 언어쌍 주제는 404예요. AI 생성이 실패하면 예약을 지우고 대화를 만들지 않아 같은 ID로 재시도할 수 있어요. 첫 AI 질문이 저장된 후 TTS만 실패하면 대화를 유지하고 `audio_error`를 반환해요. `X-Request-ID`는 별도의 진단 헤더이며 이 멱등성 키를 대신하지 않아요.
+
+홈은 최근 대화 로딩이 끝났고 대화가 0개일 때만 추천 주제를 보여줘요. 이전 주의 발행 주제도 보관되지 않았다면 시작할 수 있어요. 탭 시 검색·사실 확인·Topic Prep은 실행하지 않아요.
 
 ### 대화 접근 정책 v1 (기본 비활성화)
 

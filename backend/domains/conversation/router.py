@@ -22,7 +22,7 @@ from domains.auth.dependencies import get_current_user, get_current_user_from_to
 from domains.auth.models import ProfileModel
 from domains.conversation.enums import ConversationType
 from domains.conversation.repository import ConversationRepository
-from domains.conversation.repository import ConversationSlotsFull, ConversationTurnsFull
+from domains.conversation.repository import ConversationSlotsFull, ConversationTurnsFull, SuggestedStartInProgress
 from domains.conversation.schemas import (
     Conversation,
     ConversationAccess,
@@ -36,6 +36,8 @@ from domains.conversation.schemas import (
     SendMessageRequest,
     StartFreeChatRequest,
     StartRoleplayRequest,
+    StartSuggestedFreeChatRequest,
+    SuggestedFreeChatResponse,
     UpdateTitleRequest,
 )
 from domains.conversation.service import ConversationService
@@ -368,6 +370,41 @@ async def start_free_chat_conversation(
     except Exception as e:
         logger.error(f"Unexpected error in start_free_chat_conversation: {str(e)}", exc_info=True)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.post(
+    "/start/free-chat/suggested/",
+    response_model=SuccessResponse[SuggestedFreeChatResponse],
+)
+async def start_suggested_free_chat(
+    request: StartSuggestedFreeChatRequest,
+    current_user: ProfileModel = Depends(get_current_user),
+    service: ConversationService = Depends(get_conversation_service),
+    voice_service: VoiceService = Depends(get_voice_service),
+):
+    try:
+        response = await service.start_suggested_free_chat(
+            str(request.topic_id), str(request.start_request_id), current_user.id,
+            ensure_language_context(current_user.language),
+        )
+        audio, audio_error = await _synthesize_optional_audio(
+            include_audio_response=request.include_audio_response,
+            response_text=response.response,
+            voice_service=voice_service,
+        )
+        return SuccessResponse(data=response.model_copy(update={"audio": audio, "audio_error": audio_error}))
+    except ConversationSlotsFull as error:
+        raise _access_conflict("CONVERSATION_SLOTS_FULL", error.message)
+    except SuggestedStartInProgress as error:
+        raise _access_conflict("START_IN_PROGRESS", error.message)
+    except NotFoundException as error:
+        raise HTTPException(status_code=404, detail=error.message)
+    except RateLimitException as error:
+        raise HTTPException(status_code=429, detail=error.message)
+    except ExternalAPIException as error:
+        raise HTTPException(status_code=502, detail=error.message)
+    except AppException as error:
+        raise HTTPException(status_code=400, detail=error.message)
 
 
 @router.post(

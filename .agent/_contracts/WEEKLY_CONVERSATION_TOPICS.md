@@ -1,0 +1,24 @@
+# Weekly Conversation Topics — ACTIVE
+
+주간 추천은 로그인한 사용자의 학습 언어쌍에 공통으로 발행돼요. 운영자가 서버 CLI를 직접 실행해 생성하며 예약 worker는 이 계약의 범위 밖이에요.
+
+## Publication
+
+- 지원 언어쌍은 `ko→en`, `en→ko`예요. 문구는 모국어로, AI의 첫 질문은 학습 언어로 제공해요.
+- 주간 슬롯은 월요일 05:00 Asia/Seoul부터 시작해요. 언어쌍·슬롯별 발행 묶음은 하나예요.
+- 생성 결과 8개를 목표로 하고 최소 6개가 서버 검사를 통과해야 한 묶음으로 발행해요. 실패하면 마지막 발행 묶음을 유지해요.
+- 운영자가 보관한 주제는 목록과 시작 대상에서 제외해요. 이전 주차에 발행된 나머지 주제는 시작할 수 있어요.
+
+## API
+
+- `GET /api/conversation-topics/weekly/`는 인증된 profile의 언어쌍에서 최신 발행 묶음을 반환해요. 성공 `data`는 `{week_start, topics: [{id, text}]}`예요. 목록이 없으면 `week_start: null`, `topics: []`예요.
+- `POST /api/conversations/start/free-chat/suggested/`는 `{topic_id, start_request_id, include_audio_response}`를 받아요. 성공 `data`는 `{conversation_id, assistant_message_id, conversation_type, language, response, audio?, audio_error?}`예요.
+- 시작 시 profile 언어쌍, 발행 및 보관 상태, 대화 슬롯을 검사해요. 생성된 대화는 `FREE_CHAT`이고 첫 메시지는 AI 질문 하나예요. 사용자 발화 수는 0이에요.
+- `start_request_id`는 클라이언트가 탭마다 만든 UUID예요. 같은 사용자와 요청 ID의 성공한 요청은 같은 대화·첫 메시지를 반환해요. 처리 중 요청의 중복 호출은 `START_IN_PROGRESS`예요.
+- 탭 시 웹 검색·사실 확인·Topic Prep 검사는 실행하지 않아요. 발행 전에 형식·중복·안전성 검사를 실행해요.
+
+## Mobile
+
+- 대화 목록 로딩이 끝나고 대화가 0개일 때만 추천 영역을 표시해요.
+- 주제는 독립 탭 대상으로 왼쪽에서 오른쪽으로 얕은 곡선을 따라 움직여요. 터치 중 이동을 멈추고 동작 줄이기 및 접근성 탐색에서는 정적 선택 목록을 보여줘요.
+- 추천 조회가 실패하면 같은 계정·언어쌍의 마지막 성공 목록을 사용해요. 캐시도 없으면 추천 영역을 숨겨요.

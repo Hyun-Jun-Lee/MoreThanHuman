@@ -3,7 +3,7 @@ Conversation 도메인 SQLAlchemy 모델 정의
 """
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, Enum as SQLEnum, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import Column, Date, DateTime, Enum as SQLEnum, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
 
 from database import Base
@@ -71,3 +71,40 @@ class ConversationSlotGrantModel(Base):
     purchase_key = Column(String(255), nullable=False, unique=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     revoked_at = Column(DateTime, nullable=True)
+
+
+class WeeklyTopicBatchModel(Base):
+    __tablename__ = "weekly_topic_batches"
+    __table_args__ = (UniqueConstraint("native_language", "target_language", "week_start", name="uq_weekly_topic_batch_pair_week"),)
+
+    id = Column(String(36), primary_key=True)
+    native_language = Column(String(8), nullable=False)
+    target_language = Column(String(8), nullable=False)
+    week_start = Column(Date, nullable=False)
+    published_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    topics = relationship("WeeklyTopicModel", back_populates="batch", cascade="all, delete-orphan")
+
+
+class WeeklyTopicModel(Base):
+    __tablename__ = "weekly_topics"
+
+    id = Column(String(36), primary_key=True)
+    batch_id = Column(String(36), ForeignKey("weekly_topic_batches.id", ondelete="CASCADE"), nullable=False, index=True)
+    text = Column(String(200), nullable=False)
+    position = Column(Integer, nullable=False)
+    archived_at = Column(DateTime, nullable=True)
+    batch = relationship("WeeklyTopicBatchModel", back_populates="topics")
+
+
+class SuggestedStartModel(Base):
+    __tablename__ = "suggested_starts"
+    __table_args__ = (UniqueConstraint("user_id", "request_id", name="uq_suggested_start_user_request"),)
+
+    id = Column(String(36), primary_key=True)
+    user_id = Column(String(36), ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False, index=True)
+    request_id = Column(String(36), nullable=False)
+    topic_id = Column(String(36), ForeignKey("weekly_topics.id"), nullable=False)
+    status = Column(String(16), nullable=False, default="pending")
+    conversation_id = Column(String(36), ForeignKey("conversations.id", ondelete="CASCADE"), nullable=True)
+    assistant_message_id = Column(String(36), ForeignKey("messages.id", ondelete="CASCADE"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
