@@ -48,17 +48,45 @@ class WeeklyTopicRepository:
             .one_or_none()
         )
 
-    def publish(self, native: str, target: str, week_start: str, texts: list[str]) -> list[WeeklyTopicModel]:
+    def publish(
+        self, native: str, target: str, week_start: str,
+        items: list[tuple[str, str]], *, republish: bool = False,
+    ) -> list[WeeklyTopicModel]:
         week = date.fromisoformat(week_start)
         existing = self.db.query(WeeklyTopicBatchModel).filter_by(
             native_language=native, target_language=target, week_start=week
         ).one_or_none()
         if existing is not None:
-            return sorted(existing.topics, key=lambda topic: topic.position)
+            active = sorted((topic for topic in existing.topics if topic.archived_at is None), key=lambda topic: topic.position)
+            if not republish:
+                return active
+            if len(items) < len(active):
+                raise ValueError("not enough topics to preserve existing topic IDs")
+            try:
+                for index, (text, question) in enumerate(items):
+                    if index < len(active):
+                        active[index].text = text
+                        active[index].first_question = question
+                        active[index].position = index
+                    else:
+                        topic = WeeklyTopicModel(
+                            id=str(uuid4()), batch_id=existing.id, text=text,
+                            first_question=question, position=index,
+                        )
+                        self.db.add(topic)
+                        active.append(topic)
+                existing.published_at = datetime.utcnow()
+                self.db.commit()
+            except Exception:
+                self.db.rollback()
+                raise
+            return active
         batch = WeeklyTopicBatchModel(
             id=str(uuid4()), native_language=native, target_language=target, week_start=week
         )
-        topics = [WeeklyTopicModel(id=str(uuid4()), batch=batch, text=text, position=index) for index, text in enumerate(texts)]
+        topics = [WeeklyTopicModel(
+            id=str(uuid4()), batch=batch, text=text, first_question=question, position=index
+        ) for index, (text, question) in enumerate(items)]
         try:
             self.db.add(batch)
             self.db.commit()

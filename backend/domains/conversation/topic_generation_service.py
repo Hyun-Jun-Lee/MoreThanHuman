@@ -24,27 +24,42 @@ def weekly_slot(now: datetime | None = None) -> str:
     return start.date().isoformat()
 
 
-def validate_topics(value: object, native: str) -> list[str]:
-    """LLM의 성공 주장 대신 실제 문구를 검사해요."""
+def validate_topics(value: object, native: str, target: str) -> list[tuple[str, str]]:
+    """LLM의 성공 주장 대신 주제와 첫 질문의 실제 문구를 검사해요."""
     if not isinstance(value, dict) or not isinstance(value.get("topics"), list):
         raise ValueError("topics must be a JSON array")
-    accepted: list[str] = []
+    accepted: list[tuple[str, str]] = []
     seen: set[str] = set()
     for candidate in value["topics"]:
-        if not isinstance(candidate, str):
+        if not isinstance(candidate, dict):
             continue
-        text = " ".join(candidate.split())
+        raw_text = candidate.get("text")
+        raw_question = candidate.get("first_question")
+        if not isinstance(raw_text, str) or not isinstance(raw_question, str):
+            continue
+        text = " ".join(raw_text.split())
+        question = " ".join(raw_question.split())
         key = text.casefold()
         if not 8 <= len(text) <= 90 or key in seen:
             continue
-        if any(token in key for token in ("http://", "https://", "@", "#", "\n")):
+        min_question_length = 8 if target == "ko" else 12
+        if not min_question_length <= len(question) <= 180 or question.count("?") + question.count("？") != 1:
+            continue
+        if not question.endswith(("?", "？")):
+            continue
+        if any(token in phrase for phrase in (key, question.casefold()) for token in ("http://", "https://", "@", "#")):
             continue
         if native == "ko" and not any("가" <= char <= "힣" for char in text):
             continue
         if native == "en" and not any("a" <= char.lower() <= "z" for char in text):
             continue
+        if target == "ko" and not any("가" <= char <= "힣" for char in question):
+            continue
+        if target == "en" and (not any("a" <= char.lower() <= "z" for char in question)
+                               or any("가" <= char <= "힣" for char in question)):
+            continue
         seen.add(key)
-        accepted.append(text)
+        accepted.append((text, question))
     if len(accepted) < 6:
         raise ValueError("at least six distinct valid topics are required")
     return accepted[:8]
@@ -57,7 +72,7 @@ def parse_json_content(content: str) -> object:
     return json.loads(raw)
 
 
-def approved_topics(topics: list[str], review: object) -> list[str]:
+def approved_topics(topics: list[tuple[str, str]], review: object) -> list[tuple[str, str]]:
     if not isinstance(review, dict) or not isinstance(review.get("approved_indices"), list):
         raise ValueError("safety review is invalid")
     indices = review["approved_indices"]
@@ -74,7 +89,7 @@ class WeeklyTopicGenerator:
         self.repository = repository
         self.http_client = http_client
 
-    async def generate(self, native: str, target: str, *, week_start: str | None = None) -> dict:
+    async def generate(self, native: str, target: str, *, week_start: str | None = None, republish: bool = False) -> dict:
         if (native, target) not in PAIR_NAMES:
             raise ValueError("unsupported language pair")
         slot = week_start or weekly_slot()
@@ -87,50 +102,56 @@ class WeeklyTopicGenerator:
             native_language=native, target_language=target,
             week_start=week,
         ).one_or_none()
-        if existing is not None:
+        if existing is not None and not republish:
             return {"status": "existing", "count": len(existing.topics), "week_start": slot}
         native_name, target_name = PAIR_NAMES[(native, target)]
         _, previous_topics = self.repository.latest(native, target)
         previous_texts = [topic.text for topic in previous_topics]
+        active_count = len([topic for topic in existing.topics if topic.archived_at is None]) if existing else 0
         provider = LLMProviderFactory.create_provider(http_client=self.http_client)
         request = LLMRequest(
-            model=get_model_for_provider(), max_tokens=700, temperature=0.8,
+            model=get_model_for_provider(), max_tokens=1200, temperature=0.8,
             messages=[
                 LLMMessage(role="system", content=(
-                    "Generate exactly eight safe, distinct, everyday conversation starter topics for language learners. "
+                    "Generate exactly eight safe, distinct, everyday conversation starter topics and opening questions for language learners. "
                     "Use familiar personal experiences, hobbies, food, travel or daily routines. "
                     "Avoid news, politics, medical or legal advice, personal data, violence and sexual content. "
-                    "Return only JSON: {\"topics\":[\"...\"]}."
+                    "Return only JSON: {\"topics\":[{\"text\":\"...\",\"first_question\":\"... ?\"}]}."
                 )),
                 LLMMessage(role="user", content=(
                     f"Write eight short topics in {native_name} for learners practicing {target_name}. "
-                    "Each should invite an open-ended conversation without needing current facts. "
+                    f"For each topic, write one short open-ended first question in {target_name}. "
+                    "Questions should invite personal experience, not ask for current facts or answer for the learner. "
                     f"Do not repeat these previous topics: {json.dumps(previous_texts, ensure_ascii=False)}"
                 )),
             ],
         )
         response = await provider.chat_completion(request)
         try:
-            topics = validate_topics(parse_json_content(response.content), native)
+            topics = validate_topics(parse_json_content(response.content), native, target)
             previous_keys = {" ".join(text.split()).casefold() for text in previous_texts}
-            topics = [text for text in topics if text.casefold() not in previous_keys]
+            topics = [item for item in topics if item[0].casefold() not in previous_keys]
             if len(topics) < 6:
                 raise ValueError("not enough fresh topics")
             safety_request = LLMRequest(
-                model=get_model_for_provider(), max_tokens=250, temperature=0,
+                model=get_model_for_provider(), max_tokens=350, temperature=0,
                 messages=[
                     LLMMessage(role="system", content=(
-                        "Review the conversation topics for a language learning app. "
+                        "Review each topic and its opening question for a language learning app. "
                         "Reject sensitive, sexual, violent, discriminatory, political, news-dependent, "
                         "medical or legal advice topics. Return only JSON: {\"approved_indices\":[0,1,...]}. "
                         "Include only safe topic indices; do not rewrite them."
                     )),
-                    LLMMessage(role="user", content=json.dumps(topics, ensure_ascii=False)),
+                    LLMMessage(role="user", content=json.dumps(
+                        [{"text": text, "first_question": question} for text, question in topics], ensure_ascii=False
+                    )),
                 ],
             )
             review = await provider.chat_completion(safety_request)
             topics = approved_topics(topics, parse_json_content(review.content))
+            if existing is not None and len(topics) < active_count:
+                raise ValueError("not enough safe topics to preserve existing topic IDs")
         except (ValueError, json.JSONDecodeError) as error:
             raise ValueError("generated topics failed publication checks") from error
-        published = self.repository.publish(native, target, slot, topics)
-        return {"status": "published", "count": len(published), "week_start": slot}
+        published = self.repository.publish(native, target, slot, topics, republish=republish)
+        return {"status": "republished" if existing else "published", "count": len(published), "week_start": slot}

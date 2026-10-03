@@ -1,5 +1,6 @@
 import 'package:curitalk/app/theme/tokens/tokens.dart';
 import 'package:curitalk/features/home/domain/weekly_topic.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 const _topicColors = <Color>[
@@ -32,6 +33,7 @@ class _WeeklyTopicLoopState extends State<WeeklyTopicLoop>
   late final AnimationController _motion;
   bool _touching = false;
   bool _appActive = true;
+  double _dragOffset = 0;
 
   @override
   void initState() {
@@ -135,54 +137,68 @@ class _WeeklyTopicLoopState extends State<WeeklyTopicLoop>
         _touching = false;
         _syncMotion();
       },
-      child: SizedBox(
-        height: 112,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            const step = 172.0;
-            const itemWidth = 156.0;
-            final total = widget.topics.length * step;
-            final copies = (constraints.maxWidth / total).ceil() + 1;
-            return ClipRect(
-              child: AnimatedBuilder(
-                animation: _motion,
-                builder: (context, _) => Stack(
-                  children: [
-                    for (var index = 0; index < widget.topics.length; index++)
-                      for (var copy = 0; copy <= copies; copy++)
-                        Builder(
-                          builder: (context) {
-                            final x =
-                                ((index * step + _motion.value * total) %
-                                    total) -
-                                step +
-                                copy * total;
-                            final fraction =
-                                (x + itemWidth / 2) / constraints.maxWidth;
-                            final centered = (fraction * 2 - 1).clamp(
-                              -1.0,
-                              1.0,
-                            );
-                            final y = 18 + 10 * (1 - centered * centered);
-                            return Positioned(
-                              left: x,
-                              top: y,
-                              width: itemWidth,
-                              child: _TopicButton(
-                                topic: widget.topics[index],
-                                color:
-                                    _topicColors[index % _topicColors.length],
-                                onTap: widget.onSelected,
-                                keySuffix: '$copy',
-                              ),
-                            );
-                          },
-                        ),
-                  ],
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        dragStartBehavior: DragStartBehavior.down,
+        onHorizontalDragUpdate: (details) {
+          final total = widget.topics.length * 172.0;
+          if (total == 0) return;
+          setState(() {
+            _dragOffset =
+                ((_dragOffset + details.delta.dx) % total + total) % total;
+          });
+        },
+        child: SizedBox(
+          height: 112,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              const step = 172.0;
+              const itemWidth = 156.0;
+              final total = widget.topics.length * step;
+              final copies = (constraints.maxWidth / total).ceil() + 1;
+              return ClipRect(
+                child: AnimatedBuilder(
+                  animation: _motion,
+                  builder: (context, _) => Stack(
+                    children: [
+                      for (var index = 0; index < widget.topics.length; index++)
+                        for (var copy = 0; copy <= copies; copy++)
+                          Builder(
+                            builder: (context) {
+                              final x =
+                                  ((index * step +
+                                          _motion.value * total +
+                                          _dragOffset) %
+                                      total) -
+                                  step +
+                                  copy * total;
+                              final fraction =
+                                  (x + itemWidth / 2) / constraints.maxWidth;
+                              final centered = (fraction * 2 - 1).clamp(
+                                -1.0,
+                                1.0,
+                              );
+                              final y = 18 + 10 * (1 - centered * centered);
+                              return Positioned(
+                                left: x,
+                                top: y,
+                                width: itemWidth,
+                                child: _TopicButton(
+                                  topic: widget.topics[index],
+                                  color:
+                                      _topicColors[index % _topicColors.length],
+                                  onTap: widget.onSelected,
+                                  keySuffix: '$copy',
+                                ),
+                              );
+                            },
+                          ),
+                    ],
+                  ),
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         ),
       ),
     );

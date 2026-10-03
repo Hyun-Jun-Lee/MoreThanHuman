@@ -1,6 +1,6 @@
 # MoreThanHuman Backend DSL
 
-> 최종 갱신: 2026-10-03 · 범위: FastAPI 백엔드 API + Flutter 모바일 연동
+> 최종 갱신: 2026-10-04 · 범위: FastAPI 백엔드 API + Flutter 모바일 연동
 
 사용자 클라이언트는 `mobile/`의 Flutter 기반 모바일 앱으로 개발해요. 이 문서는 모바일 앱이 연동할 백엔드 도메인, 데이터 모델, API 계약을 정의해요.
 
@@ -468,14 +468,14 @@ module Conversation {
 
 ### 주간 대화 추천 v1
 
-`20261003_0001` migration은 `weekly_topic_batches`, `weekly_topics`, `suggested_starts`를 추가해요. 기존 대화와 메시지는 변경하지 않아요. 운영자는 [운영 가이드](OPERATIONS.md#주간-대화-추천-운영)의 서버 CLI로 `ko→en`, `en→ko` 공통 묶음을 발행해요. 예약 worker는 없어요.
+`20261003_0001` migration은 `weekly_topic_batches`, `weekly_topics`, `suggested_starts`를 추가해요. `20261004_0001` migration은 주제마다 학습 언어의 `first_question`을 저장해요. 기존 대화와 메시지는 변경하지 않아요. 운영자는 [운영 가이드](OPERATIONS.md#주간-대화-추천-운영)의 서버 CLI로 `ko→en`, `en→ko` 공통 묶음을 발행해요. 예약 worker는 없어요.
 
 | API | 계약 |
 |-----|------|
 | `GET /api/conversation-topics/weekly/` | Bearer 인증 필수. 현재 profile의 언어쌍에 가장 최근 발행된 묶음을 `{success:true,data:{week_start:"YYYY-MM-DD",topics:[{id,text}]}}`로 반환해요. 없으면 `week_start:null`, `topics:[]`예요. 보관 주제는 제외해요. |
-| `POST /api/conversations/start/free-chat/suggested/` | `StartSuggestedFreeChatRequest`를 받아 `SuggestedFreeChatResponse`를 성공 envelope에 담아요. 주제의 발행·보관·언어쌍과 대화 슬롯을 확인하고 AI 메시지 하나가 있는 `FREE_CHAT`을 만들어요. 사용자 첫 메시지와 문법 작업은 없고 사용자 발화 수는 0이에요. |
+| `POST /api/conversations/start/free-chat/suggested/` | `StartSuggestedFreeChatRequest`를 받아 `SuggestedFreeChatResponse`를 성공 envelope에 담아요. 주제의 발행·보관·언어쌍·첫 질문과 대화 슬롯을 확인하고 저장된 첫 질문이 AI 메시지 하나인 `FREE_CHAT`을 만들어요. 사용자 첫 메시지와 문법 작업은 없고 사용자 발화 수는 0이에요. |
 
-같은 사용자·`start_request_id`의 완료된 요청은 같은 대화와 AI 메시지를 반환해요. 생성 중 중복 요청은 HTTP 409 `START_IN_PROGRESS`, 슬롯이 가득 차면 HTTP 409 `CONVERSATION_SLOTS_FULL`이에요. 없는 주제, 보관 주제, 다른 언어쌍 주제는 404예요. AI 생성이 실패하면 예약을 지우고 대화를 만들지 않아 같은 ID로 재시도할 수 있어요. 첫 AI 질문이 저장된 후 TTS만 실패하면 대화를 유지하고 `audio_error`를 반환해요. `X-Request-ID`는 별도의 진단 헤더이며 이 멱등성 키를 대신하지 않아요.
+같은 사용자·`start_request_id`의 완료된 요청은 같은 대화와 AI 메시지를 반환해요. 처리 중 중복 요청은 HTTP 409 `START_IN_PROGRESS`, 슬롯이 가득 차면 HTTP 409 `CONVERSATION_SLOTS_FULL`이에요. 없는 주제, 보관 주제, 다른 언어쌍 주제, 첫 질문이 없는 구형 주제는 404예요. 저장이 실패하면 예약을 지우고 대화를 만들지 않아 같은 ID로 재시도할 수 있어요. 첫 AI 질문이 저장된 후 TTS만 실패하면 대화를 유지하고 `audio_error`를 반환해요. `X-Request-ID`는 별도의 진단 헤더이며 이 멱등성 키를 대신하지 않아요.
 
 홈은 발행된 주제가 있으면 최근 대화 로딩 상태와 저장된 대화 수에 관계없이 추천 주제를 보여줘요. 이전 주의 발행 주제도 보관되지 않았다면 시작할 수 있어요. 탭 시 검색·사실 확인·Topic Prep은 실행하지 않아요.
 
@@ -743,4 +743,5 @@ module LLM {
 
 ## 문서 변경 기록
 
+- 2026-10-04: 주간 추천의 첫 질문 선생성과 동일 주차 재발행 계약을 추가했어요.
 - 2026-09-13: README의 상세 API 안내를 통합하고 환경변수 상세는 ENVIRONMENT.md로 분리했어요. API 동작 자체는 변경하지 않았어요.

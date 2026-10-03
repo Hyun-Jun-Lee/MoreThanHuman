@@ -118,7 +118,7 @@ cd backend
 uv run python -m scripts.generate_weekly_topics --pair all
 ```
 
-`--pair ko-en|en-ko|all`과 `--week-start YYYY-MM-DD`를 지원해요. 주제 보관과 실패 복구는 [주간 대화 추천 운영 절차](docs/OPERATIONS.md#주간-대화-추천-운영)를 참고해요.
+`--pair ko-en|en-ko|all`, `--week-start YYYY-MM-DD`, 동일 주차를 다시 생성하는 `--republish`를 지원해요. 주제 보관과 실패 복구는 [주간 대화 추천 운영 절차](docs/OPERATIONS.md#주간-대화-추천-운영)를 참고해요.
 
 ### 테스트
 

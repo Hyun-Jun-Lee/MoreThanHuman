@@ -1,6 +1,6 @@
 # 운영 가이드
 
-> 최종 갱신: 2026-10-03 · 배포·주간 생성·복구 절차
+> 최종 갱신: 2026-10-04 · 배포·주간 생성·복구 절차
 
 [실행 및 CLI](../README.md) · [환경변수](ENVIRONMENT.md) · [API 계약](DSL.md)
 
@@ -127,7 +127,9 @@ uv run python -m scripts.generate_weekly_topics --pair all
 
 Docker Compose로 배포한 서버에서는 저장소 루트에서 `docker compose exec api python -m scripts.generate_weekly_topics --pair all`을 실행해요. API 배포와 DB migration만으로는 첫 주제가 생성되지 않아요.
 
-`--pair ko-en|en-ko|all`로 대상 언어쌍을 고르고 `--week-start YYYY-MM-DD`로 슬롯을 지정할 수 있어요. 이 날짜는 월요일이어야 하며 미래 슬롯은 발행하지 않아요. 기본 슬롯은 서울 시간 월요일 05:00부터 시작해요. 실행하면 LLM 사용량이 발생해요. JSON stdout의 각 언어쌍 `published`/`existing`/`failed`와 개수를 확인해요. 각 언어쌍당 8개를 요청하고 최소 6개가 검사를 통과해야 발행해요. 같은 언어쌍·슬롯 재실행은 중복 발행하지 않아요.
+`--pair ko-en|en-ko|all`로 대상 언어쌍을 고르고 `--week-start YYYY-MM-DD`로 슬롯을 지정할 수 있어요. 이 날짜는 월요일이어야 하며 미래 슬롯은 발행하지 않아요. 기본 슬롯은 서울 시간 월요일 05:00부터 시작해요. 실행하면 LLM 사용량이 발생해요. JSON stdout의 각 언어쌍 `published`/`existing`/`republished`/`failed`와 개수를 확인해요. 각 언어쌍당 모국어 주제와 학습 언어 첫 질문 8쌍을 요청하고 최소 6쌍이 검사를 통과해야 발행해요. 기본 재실행은 기존 묶음을 유지해요.
+
+기존 주차를 새 주제·첫 질문으로 교체하려면 migration과 새 API 배포 후 `uv run python -m scripts.generate_weekly_topics --pair all --republish`를 실행해요. Docker에서는 `docker compose exec api python -m scripts.generate_weekly_topics --pair all --republish`를 사용해요. 모든 후보를 검증한 다음 활성 주제의 ID를 유지하며 문구와 질문을 한 트랜잭션에서 교체해요. 기존 활성 주제 수보다 검증된 후보가 적으면 기존 발행을 유지하고 실패로 종료해요. 보관된 주제와 완료된 대화·시작 예약은 보존해요. `--pair all`은 언어쌍별로 순서대로 실행되므로 한쪽만 성공할 수 있어요. migration 후 재발행 전의 구형 주제는 첫 질문이 없어 새 대화를 시작할 수 없으므로, 배포 작업 중 재발행을 완료하고 목록·시작 동작을 확인해요.
 
 생성 실패나 미실행 시 목록 API는 마지막 발행 묶음을 계속 반환해요. 처음부터 발행 기록이 없으면 홈의 추천 영역이 숨겨져요. 문제 주제를 발견하면 아래 명령으로 보관해요. 보관 후 새 목록에서 빠지고 기존 앱 캐시의 해당 ID도 대화 시작 시 서버가 거절해요.
 
@@ -139,6 +141,7 @@ uv run python -m scripts.archive_weekly_topic TOPIC_UUID
 
 ## 변경 기록
 
+- 2026-10-04: 주간 주제 첫 질문 생성과 `--republish` 재발행 절차를 추가했어요.
 - 2026-10-03: 수동 주간 대화 추천 발행·보관·마지막 묶음 복구 절차를 추가했어요.
 - 2026-10-01: 기본 비활성화 대화 권한 설정, 기존 슬롯 스냅샷 CLI와 향후 활성화·롤백 절차를 추가했어요.
 - 2026-09-19: 바구니 리셋 API·추가 테이블 마이그레이션·앱 복귀 확인·구버전/오프라인 제한을 추가했어요.

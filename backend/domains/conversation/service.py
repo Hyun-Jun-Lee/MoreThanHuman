@@ -28,6 +28,7 @@ from domains.grammar.repository import GrammarRepository
 from domains.grammar.service import GrammarService
 from domains.llm.factory import LLMProviderFactory
 from domains.llm.schemas import LLMMessage, LLMRequest
+from shared.exceptions import NotFoundException
 from shared.language import (
     LanguageCode,
     LearningLanguageContext,
@@ -73,8 +74,9 @@ class ConversationService:
                 topic_id, language_context.native_language.value, language_context.target_language.value
             )
             if topic is None:
-                from shared.exceptions import NotFoundException
                 raise NotFoundException("추천 주제를 찾을 수 없어요")
+            if not topic.first_question:
+                raise NotFoundException("첫 질문이 준비되지 않은 주제예요")
             reservation, completed = self.repository.reserve_suggested_start(user_id, request_id, topic_id)
         if completed:
             conversation, message = self.repository.suggested_result(reservation)
@@ -84,19 +86,7 @@ class ConversationService:
                 response=message.content,
             )
         try:
-            prompt = self.build_system_prompt(
-                conversation_type=ConversationType.FREE_CHAT, topic=topic.text,
-                language_context=language_context,
-            )
-            target_name = language_name(language_context.target_language)
-            first_question = await self.generate_response(
-                prompt, [],
-                f"Start a friendly free conversation about this topic: {topic.text}. "
-                f"Ask the learner one short, open-ended question in {target_name}. "
-                "Do not answer on the learner's behalf.",
-            )
-            if not first_question.strip():
-                raise ValueError("AI returned an empty first question")
+            first_question = topic.first_question
             conversation = ConversationModel(
                 id=str(uuid4()), user_id=user_id, title=topic.text[:200],
                 conversation_type=ConversationType.FREE_CHAT, role_character=None,
@@ -107,7 +97,7 @@ class ConversationService:
             )
             message = MessageModel(
                 id=str(uuid4()), conversation_id=conversation.id,
-                role=MessageRole.ASSISTANT, content=first_question.strip(),
+                role=MessageRole.ASSISTANT, content=first_question,
             )
             self.repository.complete_suggested_start(
                 reservation.id, conversation, message, enabled=settings.conversation_access_enabled

@@ -20,6 +20,10 @@ from shared.language import LearningLanguageContext
 from shared.exceptions import NotFoundException
 
 
+def _items(prefix: str, count: int = 6) -> list[tuple[str, str]]:
+    return [(f"{prefix} {i}", f"What do you enjoy about topic {i}?") for i in range(count)]
+
+
 @pytest.fixture
 def db():
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
@@ -35,17 +39,40 @@ def db():
 
 def test_latest_published_batch_and_archive(db):
     topics = WeeklyTopicRepository(db)
-    first = topics.publish("ko", "en", "2026-09-28", [f"주제 {i}" for i in range(6)])
-    assert topics.publish("ko", "en", "2026-09-28", ["다른 주제"])[0].id == first[0].id
+    first = topics.publish("ko", "en", "2026-09-28", _items("주제"))
+    assert topics.publish("ko", "en", "2026-09-28", _items("다른 주제"))[0].id == first[0].id
     assert [item.text for item in topics.latest("ko", "en")[1]] == [f"주제 {i}" for i in range(6)]
     assert topics.latest("en", "ko") == (None, [])
     topics.archive(first[0].id)
     assert len(topics.latest("ko", "en")[1]) == 5
     assert topics.available(first[0].id, "ko", "en") is None
-    later = topics.publish("ko", "en", "2026-10-05", [f"새 주제 {i}" for i in range(6)])
+    later = topics.publish("ko", "en", "2026-10-05", _items("새 주제"))
     for item in later:
         topics.archive(item.id)
     assert topics.latest("ko", "en")[0].isoformat() == "2026-09-28"
+
+
+def test_republish_keeps_active_ids_and_existing_start_references(db):
+    user_id = str(uuid4())
+    db.add(ProfileModel(id=user_id, email=f"{user_id}@example.com", name="Learner"))
+    db.commit()
+    topics = WeeklyTopicRepository(db)
+    original = topics.publish("ko", "en", "2026-09-28", _items("기존 주제"))
+    reservation, _ = ConversationRepository(db).reserve_suggested_start(
+        user_id, str(uuid4()), original[0].id
+    )
+    archived_id = original[-1].id
+    topics.archive(archived_id)
+
+    replacement = topics.publish("ko", "en", "2026-09-28", _items("새 주제", 7), republish=True)
+    assert [topic.id for topic in replacement[:5]] == [topic.id for topic in original[:5]]
+    assert len(replacement) == 7
+    assert [topic.text for topic in topics.latest("ko", "en")[1]] == [f"새 주제 {i}" for i in range(7)]
+    assert topics.available(archived_id, "ko", "en") is None
+    assert db.query(SuggestedStartModel).filter_by(id=reservation.id).one().topic_id == original[0].id
+    with pytest.raises(ValueError):
+        topics.publish("ko", "en", "2026-09-28", _items("부족한 주제", 4), republish=True)
+    assert topics.latest("ko", "en")[1][0].text == "새 주제 0"
 
 
 @pytest.mark.asyncio
@@ -53,11 +80,11 @@ async def test_suggested_start_is_ai_first_and_idempotent(db, monkeypatch):
     user_id = str(uuid4())
     db.add(ProfileModel(id=user_id, email=f"{user_id}@example.com", name="Learner"))
     db.commit()
-    topic = WeeklyTopicRepository(db).publish("ko", "en", "2026-09-28", [f"주제 {i}" for i in range(6)])[0]
+    topic = WeeklyTopicRepository(db).publish("ko", "en", "2026-09-28", _items("주제"))[0]
     service = ConversationService(ConversationRepository(db))
 
     async def answer(*_args):
-        return "What would you like to try?"
+        raise AssertionError("starting a published topic must not call the LLM")
 
     monkeypatch.setattr(service, "generate_response", answer)
     request_id = str(uuid4())
@@ -71,6 +98,7 @@ async def test_suggested_start_is_ai_first_and_idempotent(db, monkeypatch):
     messages = db.query(MessageModel).filter_by(conversation_id=str(first.conversation_id)).all()
     assert len(messages) == 1
     assert messages[0].role == MessageRole.ASSISTANT
+    assert messages[0].content == topic.first_question
     assert str(first.assistant_message_id) == messages[0].id
     db.add(MessageModel(id=str(uuid4()), conversation_id=str(first.conversation_id), role=MessageRole.ASSISTANT, content="Later answer"))
     db.commit()
@@ -83,26 +111,21 @@ async def test_suggested_start_is_ai_first_and_idempotent(db, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_archived_topic_cannot_start_and_generation_failure_can_retry(db, monkeypatch):
+async def test_archived_or_unprepared_topic_cannot_start(db):
     user_id = str(uuid4())
     db.add(ProfileModel(id=user_id, email=f"{user_id}@example.com", name="Learner"))
     db.commit()
-    topic = WeeklyTopicRepository(db).publish("ko", "en", "2026-09-28", [f"주제 {i}" for i in range(6)])[0]
+    topic = WeeklyTopicRepository(db).publish("ko", "en", "2026-09-28", _items("주제"))[0]
     service = ConversationService(ConversationRepository(db))
     request_id = str(uuid4())
 
-    async def unavailable(*_args):
-        raise RuntimeError("model unavailable")
-
-    monkeypatch.setattr(service, "generate_response", unavailable)
-    with pytest.raises(RuntimeError, match="model unavailable"):
+    topic.first_question = None
+    db.commit()
+    with pytest.raises(NotFoundException):
         await service.start_suggested_free_chat(topic.id, request_id, user_id, LearningLanguageContext())
     assert service.repository.count_conversations(user_id) == 0
-
-    async def recovered(*_args):
-        return "What do you enjoy?"
-
-    monkeypatch.setattr(service, "generate_response", recovered)
+    topic.first_question = "What do you enjoy?"
+    db.commit()
     first = await service.start_suggested_free_chat(topic.id, request_id, user_id, LearningLanguageContext())
     WeeklyTopicRepository(db).archive(topic.id)
     repeated = await service.start_suggested_free_chat(topic.id, request_id, user_id, LearningLanguageContext())
@@ -113,18 +136,20 @@ async def test_archived_topic_cannot_start_and_generation_failure_can_retry(db, 
 
 
 @pytest.mark.asyncio
-async def test_topic_archived_during_ai_generation_does_not_create_chat(db, monkeypatch):
+async def test_topic_archived_before_completion_does_not_create_chat(db, monkeypatch):
     user_id = str(uuid4())
     db.add(ProfileModel(id=user_id, email=f"{user_id}@example.com", name="Learner"))
     db.commit()
-    topic = WeeklyTopicRepository(db).publish("ko", "en", "2026-09-28", [f"주제 {i}" for i in range(6)])[0]
+    topic = WeeklyTopicRepository(db).publish("ko", "en", "2026-09-28", _items("주제"))[0]
     service = ConversationService(ConversationRepository(db))
 
-    async def archive_then_answer(*_args):
-        WeeklyTopicRepository(db).archive(topic.id)
-        return "What do you enjoy?"
+    complete = service.repository.complete_suggested_start
 
-    monkeypatch.setattr(service, "generate_response", archive_then_answer)
+    def archive_then_complete(*args, **kwargs):
+        WeeklyTopicRepository(db).archive(topic.id)
+        return complete(*args, **kwargs)
+
+    monkeypatch.setattr(service.repository, "complete_suggested_start", archive_then_complete)
     with pytest.raises(NotFoundException):
         await service.start_suggested_free_chat(topic.id, str(uuid4()), user_id, LearningLanguageContext())
     assert service.repository.count_conversations(user_id) == 0
@@ -135,13 +160,9 @@ async def test_suggested_start_respects_slot_limit(db, monkeypatch):
     user_id = str(uuid4())
     db.add(ProfileModel(id=user_id, email=f"{user_id}@example.com", name="Learner"))
     db.commit()
-    topic = WeeklyTopicRepository(db).publish("ko", "en", "2026-09-28", [f"주제 {i}" for i in range(6)])[0]
+    topic = WeeklyTopicRepository(db).publish("ko", "en", "2026-09-28", _items("주제"))[0]
     service = ConversationService(ConversationRepository(db))
 
-    async def answer(*_args):
-        return "What do you enjoy?"
-
-    monkeypatch.setattr(service, "generate_response", answer)
     import domains.conversation.service as service_module
     monkeypatch.setattr(service_module.settings, "conversation_access_enabled", True)
     first = await service.start_suggested_free_chat(topic.id, str(uuid4()), user_id, LearningLanguageContext())
@@ -161,14 +182,10 @@ def test_api_lists_pair_topics_and_starts_ai_first(db, monkeypatch):
     db.add(profile)
     db.commit()
     topics = WeeklyTopicRepository(db)
-    own = topics.publish("ko", "en", "2026-09-28", [f"주제 {i}" for i in range(6)])
-    topics.publish("en", "ko", "2026-09-28", [f"Topic {i}" for i in range(6)])
+    own = topics.publish("ko", "en", "2026-09-28", _items("주제"))
+    topics.publish("en", "ko", "2026-09-28", _items("Topic"))
     service = ConversationService(ConversationRepository(db))
 
-    async def answer(*_args):
-        return "What do you like to do on weekends?"
-
-    monkeypatch.setattr(service, "generate_response", answer)
     app = FastAPI()
     app.include_router(topic_router.router)
     app.include_router(conversation_router.router)
@@ -182,6 +199,7 @@ def test_api_lists_pair_topics_and_starts_ai_first(db, monkeypatch):
     listing = client.get("/api/conversation-topics/weekly/")
     assert listing.status_code == 200
     assert [item["id"] for item in listing.json()["data"]["topics"]] == [item.id for item in own]
+    assert set(listing.json()["data"]["topics"][0]) == {"id", "text"}
     request_id = str(uuid4())
     started = client.post(
         "/api/conversations/start/free-chat/suggested/",

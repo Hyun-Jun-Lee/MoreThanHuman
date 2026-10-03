@@ -106,6 +106,43 @@ void main() {
     expect(selected?.id, 'second');
     await tester.pumpWidget(const SizedBox());
   });
+
+  testWidgets('drag moves topics both ways and auto motion resumes', (
+    tester,
+  ) async {
+    WeeklyTopic? selected;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: WeeklyTopicLoop(
+            topics: topics,
+            onSelected: (topic) => selected = topic,
+          ),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    final card = find.byKey(const ValueKey('weekly-topic-second-0'));
+    final before = tester.getTopLeft(card).dx;
+    final gesture = await tester.startGesture(tester.getCenter(card));
+
+    await gesture.moveBy(const Offset(-64, 0));
+    await tester.pump();
+    final left = tester.getTopLeft(card).dx;
+    expect(left, lessThan(before - 20));
+
+    await gesture.moveBy(const Offset(112, 0));
+    await tester.pump();
+    final right = tester.getTopLeft(card).dx;
+    expect(right, greaterThan(left + 60));
+
+    await gesture.up();
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    expect(tester.getTopLeft(card).dx, greaterThan(right));
+    expect(selected, isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
 }
 
 void _ignore(WeeklyTopic _) {}

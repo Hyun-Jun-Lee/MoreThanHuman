@@ -91,6 +91,7 @@ class WeeklyTopicModel(Base):
     id = Column(String(36), primary_key=True)
     batch_id = Column(String(36), ForeignKey("weekly_topic_batches.id", ondelete="CASCADE"), nullable=False, index=True)
     text = Column(String(200), nullable=False)
+    first_question = Column(String(300), nullable=True)
     position = Column(Integer, nullable=False)
     archived_at = Column(DateTime, nullable=True)
     batch = relationship("WeeklyTopicBatchModel", back_populates="topics")
