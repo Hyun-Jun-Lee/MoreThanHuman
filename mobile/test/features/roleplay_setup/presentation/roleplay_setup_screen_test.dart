@@ -247,6 +247,12 @@ class _FakeSupabaseAuthService implements SupabaseAuthService {
   }) async {}
 
   @override
+  Future<void> signInWithAppleToken({
+    required String idToken,
+    required String rawNonce,
+  }) async {}
+
+  @override
   Future<void> signOut() async {}
 }
 

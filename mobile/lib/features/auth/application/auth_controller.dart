@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:curitalk/core/network/network.dart';
 import 'package:curitalk/features/auth/data/api_auth_repository.dart';
+import 'package:curitalk/features/auth/data/apple_identity_service.dart';
 import 'package:curitalk/features/auth/data/google_identity_service.dart';
 import 'package:curitalk/features/auth/data/supabase_auth_service.dart';
 import 'package:curitalk/features/auth/domain/auth_repository.dart';
@@ -84,6 +85,36 @@ class AuthController extends AsyncNotifier<AuthSession> {
     } on Object catch (error, stackTrace) {
       debugPrint('CuritalkAuth controller sign-in failed: $error');
       debugPrintStack(stackTrace: stackTrace);
+      await _signOutSafely();
+      if (previousSession.isAuthenticated) {
+        _sessionCoordinator.activateSession();
+        state = AsyncData<AuthSession>(previousSession);
+      } else {
+        _sessionCoordinator.deactivateSession();
+        state = AsyncError<AuthSession>(error, stackTrace);
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> signInWithAppleToken(AppleIdentityTokens tokens) async {
+    if (tokens.idToken.trim().isEmpty || tokens.rawNonce.trim().isEmpty) {
+      throw ArgumentError.value(tokens, 'tokens', 'Must not be empty.');
+    }
+
+    final AuthSession previousSession =
+        state.value ?? const AuthSession.unauthenticated();
+    state = const AsyncLoading<AuthSession>();
+    try {
+      await _supabaseAuthService.signInWithAppleToken(
+        idToken: tokens.idToken.trim(),
+        rawNonce: tokens.rawNonce.trim(),
+      );
+      _sessionCoordinator.activateSession();
+      await _syncPendingLanguageContext();
+      final UserProfile user = await _repository.getCurrentUser();
+      state = AsyncData<AuthSession>(AuthSession.authenticated(user));
+    } on Object catch (error, stackTrace) {
       await _signOutSafely();
       if (previousSession.isAuthenticated) {
         _sessionCoordinator.activateSession();

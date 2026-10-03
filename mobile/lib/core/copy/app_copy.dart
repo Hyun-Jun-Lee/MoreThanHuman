@@ -84,6 +84,10 @@ class AppCopy {
         isKorean
             ? 'Google 로그인을 완료할 수 없어요. 다시 시도해 주세요.'
             : 'Google sign-in could not be completed. Please try again.',
+      'appleIdentity' =>
+        isKorean
+            ? 'Apple 로그인을 완료할 수 없어요. 다시 시도해 주세요.'
+            : 'Apple sign-in could not be completed. Please try again.',
       'request' =>
         isKorean
             ? '로그인을 완료할 수 없어요. 다시 시도해 주세요.'
@@ -573,6 +577,7 @@ class AppLoginCopy {
     required this.title,
     required this.description,
     required this.googleLabel,
+    required this.appleLabel,
     required this.tryAgainLabel,
     required this.topicCardTitle,
     required this.topicChips,
@@ -582,6 +587,7 @@ class AppLoginCopy {
     title: '내가 고른 주제로\n대화해요.',
     description: '나에게 중요한 이야기를 나누며 회화를 연습해요. 관심사가 대화를 이끌어요.',
     googleLabel: 'Google로 계속하기',
+    appleLabel: 'Apple로 계속하기',
     tryAgainLabel: '다시 시도',
     topicCardTitle: '나의 주제',
     topicChips: <String>['글로벌 뉴스', '여행', '야구', '기술'],
@@ -592,6 +598,7 @@ class AppLoginCopy {
     description:
         'Build fluency by discussing what actually matters to you. Your interests lead the conversation.',
     googleLabel: 'CONTINUE WITH GOOGLE',
+    appleLabel: 'CONTINUE WITH APPLE',
     tryAgainLabel: 'TRY AGAIN',
     topicCardTitle: 'Your topics',
     topicChips: <String>['GLOBAL NEWS', 'TRAVEL', 'BASEBALL', 'TECHNOLOGY'],
@@ -600,6 +607,7 @@ class AppLoginCopy {
   final String title;
   final String description;
   final String googleLabel;
+  final String appleLabel;
   final String tryAgainLabel;
   final String topicCardTitle;
   final List<String> topicChips;

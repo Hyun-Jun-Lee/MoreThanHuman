@@ -3,8 +3,10 @@ import 'package:curitalk/core/copy/copy.dart';
 import 'package:curitalk/core/network/network.dart';
 import 'package:curitalk/core/widgets/widgets.dart';
 import 'package:curitalk/features/auth/auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -15,9 +17,14 @@ class LoginScreen extends ConsumerStatefulWidget {
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   LoginFailureReason? _failureReason;
+  bool _isSigningIn = false;
 
   Future<void> _signIn() async {
-    setState(() => _failureReason = null);
+    if (_isSigningIn) return;
+    setState(() {
+      _failureReason = null;
+      _isSigningIn = true;
+    });
     try {
       if (ref.read(authControllerProvider).hasError) {
         await ref.read(authControllerProvider.notifier).restoreSession();
@@ -45,6 +52,41 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       debugPrint('CuritalkAuth login screen unexpected error: $error');
       debugPrintStack(stackTrace: stackTrace);
       _showFailure(LoginFailureReason.unknown);
+    } finally {
+      if (mounted) setState(() => _isSigningIn = false);
+    }
+  }
+
+  Future<void> _signInWithApple() async {
+    if (_isSigningIn) return;
+    setState(() {
+      _failureReason = null;
+      _isSigningIn = true;
+    });
+    try {
+      if (ref.read(authControllerProvider).hasError) {
+        await ref.read(authControllerProvider.notifier).restoreSession();
+        return;
+      }
+      final AppleIdentityTokens? tokens = await ref
+          .read(appleIdentityServiceProvider)
+          .signIn();
+      if (tokens == null) return;
+      await ref
+          .read(authControllerProvider.notifier)
+          .signInWithAppleToken(tokens);
+    } on AppleIdentityException catch (error) {
+      debugPrint('CuritalkAuth login screen AppleIdentityException: $error');
+      _showFailure(LoginFailureReason.appleIdentity);
+    } on ApiException catch (error) {
+      debugPrint('CuritalkAuth login screen ApiException: $error');
+      _showFailure(LoginFailureReason.request);
+    } on Object catch (error, stackTrace) {
+      debugPrint('CuritalkAuth login screen unexpected Apple error: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      _showFailure(LoginFailureReason.unknown);
+    } finally {
+      if (mounted) setState(() => _isSigningIn = false);
     }
   }
 
@@ -86,9 +128,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             AppPrimaryButton(
               label: auth.hasError ? copy.tryAgainLabel : copy.googleLabel,
               leading: const _GoogleMark(),
-              isLoading: auth.isLoading,
-              onPressed: _signIn,
+              isLoading: auth.isLoading || _isSigningIn,
+              onPressed: auth.isLoading || _isSigningIn ? null : _signIn,
             ),
+            if (!kIsWeb &&
+                defaultTargetPlatform == TargetPlatform.iOS) ...<Widget>[
+              const SizedBox(height: AppSpacing.md),
+              SignInWithAppleButton(
+                text: copy.appleLabel,
+                onPressed: auth.isLoading || _isSigningIn
+                    ? null
+                    : _signInWithApple,
+              ),
+            ],
             if (_failureReason != null) ...<Widget>[
               const SizedBox(height: AppSpacing.md),
               Semantics(
@@ -127,7 +179,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 }
 
-enum LoginFailureReason { identity, request, unknown }
+enum LoginFailureReason { identity, appleIdentity, request, unknown }
 
 class _GoogleMark extends StatelessWidget {
   const _GoogleMark();

@@ -80,6 +80,37 @@ void main() {
   );
 
   test(
+    'Apple token login forwards the raw nonce and publishes the user',
+    () async {
+      final _FakeSupabaseAuthService supabaseAuth = _FakeSupabaseAuthService();
+      final _FakeAuthRepository repository = _FakeAuthRepository(user: _user);
+      final ProviderContainer container = _createContainer(
+        supabaseAuth,
+        repository,
+      );
+      addTearDown(container.dispose);
+      await container.read(authControllerProvider.future);
+
+      await container
+          .read(authControllerProvider.notifier)
+          .signInWithAppleToken(
+            const AppleIdentityTokens(
+              idToken: ' apple-id-token ',
+              rawNonce: ' raw-nonce ',
+            ),
+          );
+
+      expect(supabaseAuth.lastAppleIdToken, 'apple-id-token');
+      expect(supabaseAuth.lastRawNonce, 'raw-nonce');
+      expect(repository.profileRequestCount, 1);
+      expect(
+        container.read(authControllerProvider).requireValue.isAuthenticated,
+        isTrue,
+      );
+    },
+  );
+
+  test(
     'syncs pending onboarding language before publishing the user',
     () async {
       final _FakeSupabaseAuthService supabaseAuth = _FakeSupabaseAuthService();
@@ -381,6 +412,8 @@ class _FakeSupabaseAuthService implements SupabaseAuthService {
   bool hasSession;
   String? lastIdToken;
   String? lastAccessToken;
+  String? lastAppleIdToken;
+  String? lastRawNonce;
   final StreamController<SupabaseSessionChange> _controller =
       StreamController<SupabaseSessionChange>.broadcast();
 
@@ -411,6 +444,22 @@ class _FakeSupabaseAuthService implements SupabaseAuthService {
   }) async {
     lastIdToken = idToken;
     lastAccessToken = accessToken;
+    hasSession = true;
+    _controller.add(
+      const SupabaseSessionChange(
+        event: SupabaseSessionEvent.signedIn,
+        hasSession: true,
+      ),
+    );
+  }
+
+  @override
+  Future<void> signInWithAppleToken({
+    required String idToken,
+    required String rawNonce,
+  }) async {
+    lastAppleIdToken = idToken;
+    lastRawNonce = rawNonce;
     hasSession = true;
     _controller.add(
       const SupabaseSessionChange(

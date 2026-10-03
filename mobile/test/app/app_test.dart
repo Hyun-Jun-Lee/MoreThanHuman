@@ -10,10 +10,39 @@ import 'package:curitalk/features/language/language.dart';
 import 'package:curitalk/features/onboarding/onboarding.dart';
 import 'package:curitalk/features/topic_prep/topic_prep.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('iOS Apple login creates a Supabase session and opens Home', (
+    WidgetTester tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    try {
+      final _FakeSupabaseAuthService supabaseAuth = _FakeSupabaseAuthService();
+
+      await tester.pumpWidget(
+        _appScope(
+          tokenStorage: _MemoryTokenStorage(),
+          onboardingStorage: _MemoryOnboardingStorage(true),
+          authRepository: _FakeAuthRepository(),
+          supabaseAuth: supabaseAuth,
+          appleIdentityService: const _FakeAppleIdentityService(),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('CONTINUE WITH APPLE'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Start a conversation'), findsOneWidget);
+      expect(supabaseAuth.lastAppleIdToken, 'apple-id-token');
+      expect(supabaseAuth.lastRawNonce, 'raw-nonce');
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
   testWidgets('first launch flows through onboarding and Google login to Home', (
     WidgetTester tester,
   ) async {
@@ -358,6 +387,7 @@ ProviderScope _appScope({
   _FakeSupabaseAuthService? supabaseAuth,
   _FakeGoogleIdentityService googleIdentityService =
       const _FakeGoogleIdentityService(),
+  AppleIdentityService appleIdentityService = const _FakeAppleIdentityService(),
 }) {
   return ProviderScope(
     overrides: [
@@ -367,6 +397,7 @@ ProviderScope _appScope({
       ),
       onboardingStorageProvider.overrideWithValue(onboardingStorage),
       googleIdentityServiceProvider.overrideWithValue(googleIdentityService),
+      appleIdentityServiceProvider.overrideWithValue(appleIdentityService),
       authRepositoryProvider.overrideWithValue(authRepository),
       languagePreferencesRepositoryProvider.overrideWithValue(
         _FakeLanguagePreferencesRepository(),
@@ -383,6 +414,16 @@ ProviderScope _appScope({
       ),
     ],
     child: const CuritalkApp(),
+  );
+}
+
+class _FakeAppleIdentityService implements AppleIdentityService {
+  const _FakeAppleIdentityService();
+
+  @override
+  Future<AppleIdentityTokens?> signIn() async => const AppleIdentityTokens(
+    idToken: 'apple-id-token',
+    rawNonce: 'raw-nonce',
   );
 }
 
@@ -421,6 +462,8 @@ class _FakeSupabaseAuthService implements SupabaseAuthService {
 
   bool hasSession;
   String? lastIdToken;
+  String? lastAppleIdToken;
+  String? lastRawNonce;
 
   @override
   Stream<SupabaseSessionChange> get authStateChanges =>
@@ -449,6 +492,16 @@ class _FakeSupabaseAuthService implements SupabaseAuthService {
     required String accessToken,
   }) async {
     lastIdToken = idToken;
+    hasSession = true;
+  }
+
+  @override
+  Future<void> signInWithAppleToken({
+    required String idToken,
+    required String rawNonce,
+  }) async {
+    lastAppleIdToken = idToken;
+    lastRawNonce = rawNonce;
     hasSession = true;
   }
 

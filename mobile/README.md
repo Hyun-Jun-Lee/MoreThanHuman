@@ -26,6 +26,8 @@ flutter test
 | `dio` | FastAPI HTTP client와 interceptor |
 | `flutter_secure_storage` | installation ID와 온보딩 상태 보관 |
 | `google_sign_in` | Google 모바일 로그인 |
+| `sign_in_with_apple` | iOS 네이티브 Apple 로그인 |
+| `crypto` | Apple 로그인 nonce의 SHA-256 해시 |
 | `supabase_flutter` | Supabase Auth 세션 생성·복원·refresh |
 | `record` | 대화 화면의 음성 입력 녹음 |
 | `path_provider` | 녹음 파일을 저장할 임시 디렉터리 조회 |
@@ -147,9 +149,9 @@ assets/
 
 `ApiClient`는 백엔드의 `{ success, data, message }` envelope를 `ApiResponse<T>`로 변환하고, FastAPI·네트워크·timeout 오류를 `ApiException`으로 통일해요. 인증 요청에는 Supabase SDK의 현재 access token을 `Authorization: Bearer` 헤더로 자동 추가하며 공개 요청은 `requiresAuth: false`로 제외할 수 있어요.
 
-`SupabaseAuthService`는 `supabase_flutter`를 감싸 Google token sign-in, 현재 session 확인, access token 조회, session refresh, sign-out을 제공해요. `SecureTokenStorage`는 더 이상 FastAPI token pair의 source of truth가 아니며 installation ID와 온보딩 같은 로컬 상태 보관에 사용해요.
+`SupabaseAuthService`는 `supabase_flutter`를 감싸 Google·Apple token sign-in, 현재 session 확인, access token 조회, session refresh, sign-out을 제공해요. iOS Apple 로그인은 매 요청마다 원본 nonce를 만들고 SHA-256 해시를 Apple에 전달한 뒤, Apple identity token과 원본 nonce를 Supabase에 전달해요. Runner의 Debug·Profile·Release 서명 설정에 Sign in with Apple entitlement가 필요해요. Supabase Apple provider의 Client IDs에는 iOS bundle ID `com.morethanhuman.curitalk`가 포함돼야 해요. `SecureTokenStorage`는 더 이상 FastAPI token pair의 source of truth가 아니며 installation ID와 온보딩 같은 로컬 상태 보관에 사용해요.
 
-`authControllerProvider`는 앱 시작 시 Supabase current session을 확인하고 `/auth/me`를 조회해 `authenticated` 또는 `unauthenticated` 상태를 제공해요. Google SDK에서 받은 `idToken`과 `accessToken`은 `signInWithGoogleTokens()`에 전달하고, 로그아웃은 Supabase sign-out과 Google sign-out을 best-effort로 처리해요. 온보딩에서 선택했지만 아직 인증 전인 언어쌍은 secure storage에 pending 상태로 저장하고, 로그인 또는 세션 복원 직후 `PUT /auth/me/language-preferences`로 동기화한 뒤 `/auth/me`를 다시 hydration해요.
+`authControllerProvider`는 앱 시작 시 Supabase current session을 확인하고 `/auth/me`를 조회해 `authenticated` 또는 `unauthenticated` 상태를 제공해요. Google SDK에서 받은 `idToken`과 `accessToken`은 `signInWithGoogleTokens()`에, Apple에서 받은 identity token과 원본 nonce는 `signInWithAppleToken()`에 전달해요. 로그아웃은 Supabase sign-out과 Google sign-out을 best-effort로 처리해요. 온보딩에서 선택했지만 아직 인증 전인 언어쌍은 secure storage에 pending 상태로 저장하고, 로그인 또는 세션 복원 직후 `PUT /auth/me/language-preferences`로 동기화한 뒤 `/auth/me`를 다시 hydration해요.
 
 인증 API가 `401`을 반환하면 `TokenRefreshInterceptor`가 Supabase SDK의 `refreshSession()` 결과를 사용해 원 요청을 한 번 재시도해요. 동시 `401`은 하나의 refresh 작업을 공유해요. refresh 후에도 세션이 없거나 재시도가 다시 `401`이면 Riverpod 상태를 `unauthenticated`로 전환해요.
 
@@ -158,12 +160,12 @@ assets/
 `go_router`는 onboarding 완료 상태와 `authControllerProvider`를 관찰해 아래 순서로 이동해요.
 
 ```text
-Splash → Onboarding(최초 1회) → Google Login → Home
+Splash → Onboarding(최초 1회) → Google 또는 iOS Apple Login → Home
 ```
 
 - Splash: 저장된 세션과 onboarding 완료 여부 확인
 - Onboarding: 기기 locale 기반 언어쌍 기본값을 보여주고 4장 소개 후 완료 상태와 pending 언어쌍을 secure storage에 저장
-- Login: Google Sign-In SDK의 `idToken`/`accessToken`으로 Supabase 세션 생성 후 `/auth/me` 조회
+- Login: Google Sign-In SDK의 `idToken`/`accessToken` 또는 iOS Apple identity token/원본 nonce로 Supabase 세션 생성 후 `/auth/me` 조회
 - Home: 사용자 이름, 활성 언어쌍, 학습 언어별 스낵, 최근 대화 5개와 시작 제안을 표시해요. 스낵은 바구니에서 꺼낸 토마토 3개를 각각 4입 먹으며 팝업으로 읽어요. 5초 자동 전환은 사용하지 않아요.
 - 스낵 v2 (2026-09-12): target_language 변경 시 즉시 재조회하고 이전 응답을 버려요. API 실패 시 `curitalk.language_snacks.v2.{target_language}.{explanation_language}`의 마지막 성공 목록을 사용하며 캐시가 없으면 영역만 숨겨요. Home 재진입·앱 복귀 시 5분 기준으로 갱신해요.
 - 토마토 스낵 v2.1 (2026-09-19): `order=random&limit=12`로 전체 발행 콘텐츠에서 무작위 추출해요. 당일 묶음·순서·진행은 사용자와 학습 언어별 기기 저장소에 유지하며, 4입마다 팝업을 닫으면 2·1·0개가 남은 바구니로 돌아가요. 다음 토마토는 바구니를 눌러 꺼내고, 12개를 모두 보면 빈 바구니를 현지 자정까지 유지해요. 자정 또는 앱 복귀 시 새 묶음을 구성하고, 열린 팝업·애니메이션이 있으면 종료 후 갱신해요. 12개 미만이면 있는 목록을 반복해요. 기기 간 진행 동기화나 서버 이용 제한은 없어요. 원본 `snack_content_tomato/`의 PNG 9장은 `mobile/assets/images/snack_tomato/`에 복사해 번들링했으며 원본 변경 시 앱 에셋도 함께 갱신해야 해요.

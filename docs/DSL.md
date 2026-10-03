@@ -177,7 +177,7 @@ module Auth {
 }
 ```
 
-모바일 앱은 Supabase Auth로 Google 로그인을 완료한 뒤 Supabase `access_token`을 FastAPI 보호 API의 `Authorization: Bearer` 헤더에 전달해요. `GET /api/auth/me`는 Supabase token을 검증하고, `profiles` row를 생성 또는 갱신한 뒤 기존 envelope 형식으로 `UserProfile`을 반환해요.
+모바일 앱은 Supabase Auth로 Google 또는 iOS Apple 로그인을 완료한 뒤 Supabase `access_token`을 FastAPI 보호 API의 `Authorization: Bearer` 헤더에 전달해요. `GET /api/auth/me`는 Supabase token을 검증하고, `profiles` row를 생성 또는 갱신한 뒤 기존 envelope 형식으로 `UserProfile`을 반환해요.
 `POST /api/auth/swagger/token`은 Swagger 수동 테스트를 위한 Supabase email/password token helper예요. `ENV=dev`에서는 사용할 수 있고, dev 외 환경에서는 `SWAGGER_TOKEN_ISSUER_ENABLED=true`와 `SWAGGER_TOKEN_ISSUER_SECRET`을 설정한 뒤 요청 body의 `secret`이 일치해야 해요. 발급된 `access_token`을 Swagger `Authorize`에 `Bearer <access_token>` 형식으로 넣어요.
 언어 선호는 프로필 기본값이며 새 대화 시작 시 `conversations` row에 snapshot으로 저장돼요. 기존 값이 없으면 `ko -> en`, feedback `ko`로 보정해요.
 `PUT /api/auth/me/language-preferences`는 profile default만 갱신해요. 모바일 Account UX는 변경값이 새 대화부터 적용되고 기존 conversation은 생성 시점 snapshot을 유지한다고 안내해야 해요.
@@ -700,7 +700,7 @@ module LLM {
 - conversation/message 조회와 삭제는 `user_id` ownership을 검증해요.
 - API key와 서버 전용 secret은 서버 환경변수로만 관리해요.
 - Flutter 앱은 OpenRouter/OpenAI secret이나 Supabase service role key를 직접 보유하지 않아요.
-- Flutter 앱은 Google Sign-In SDK로 받은 `id_token`과 Google `access_token`으로 Supabase 세션을 생성하고, FastAPI에는 Supabase `access_token`만 전달해요.
+- Flutter 앱은 Google Sign-In SDK의 `id_token`과 Google `access_token`, 또는 iOS Apple의 `identityToken`과 요청별 원본 nonce로 Supabase 세션을 생성하고, FastAPI에는 Supabase `access_token`만 전달해요. Apple에는 원본 nonce의 SHA-256 해시를 전달해요.
 - 외부 LLM/검색 실패는 `ExternalAPIException` 계열로 감싸 응답해요.
 
 ## 12. Health Check
