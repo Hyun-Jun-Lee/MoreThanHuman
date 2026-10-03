@@ -90,7 +90,9 @@ class ConversationRepository:
             if enabled and self.count_conversations(conversation.user_id) >= self._slot_limit(profile):
                 raise ConversationSlotsFull("추가 대화 이용권이 필요해요")
             self.db.add(conversation)
+            self.db.flush()
             self.db.add(message)
+            self.db.flush()
             reservation.status = "completed"
             reservation.conversation_id = conversation.id
             reservation.assistant_message_id = message.id
