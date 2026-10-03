@@ -7,7 +7,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from database import Base
-from domains.conversation.topic_generation_service import WeeklyTopicGenerator, validate_topics, weekly_slot
+from domains.conversation.topic_generation_service import TopicPublicationError, WeeklyTopicGenerator, validate_topics, weekly_slot
 from domains.conversation.topic_repository import WeeklyTopicRepository
 from domains.llm.schemas import LLMResponse
 
@@ -88,6 +88,49 @@ async def test_generation_publishes_once_and_keeps_last_batch_on_failure(monkeyp
 
 
 @pytest.mark.asyncio
+async def test_cli_reports_safe_failure_code_and_counts(monkeypatch, capsys):
+    from scripts import generate_weekly_topics as cli
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+    class FakeSession:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def rollback(self):
+            pass
+
+    class FakeGenerator:
+        def __init__(self, *_args):
+            pass
+
+        async def generate(self, *_args, **_kwargs):
+            raise TopicPublicationError(
+                "not_enough_topics_to_preserve_ids", approved_count=7, required_count=8
+            )
+
+    monkeypatch.setattr(cli, "create_http_client", lambda _settings: FakeClient())
+    monkeypatch.setattr(cli, "SessionLocal", FakeSession)
+    monkeypatch.setattr(cli, "get_settings", lambda: object())
+    monkeypatch.setattr(cli, "WeeklyTopicRepository", lambda _db: object())
+    monkeypatch.setattr(cli, "WeeklyTopicGenerator", FakeGenerator)
+
+    assert await cli.run("ko-en", "2026-09-28", republish=True) == 1
+    assert json.loads(capsys.readouterr().out) == [{
+        "pair": "ko-en", "status": "failed",
+        "error": "not_enough_topics_to_preserve_ids", "approved_count": 7, "required_count": 8,
+    }]
+
+
+@pytest.mark.asyncio
 async def test_republish_replaces_validated_pairs_without_changing_ids(monkeypatch):
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)
@@ -106,15 +149,16 @@ async def test_republish_replaces_validated_pairs_without_changing_ids(monkeypat
                 if self.calls == 1:
                     return LLMResponse(content=json.dumps({"topics": [
                         {"text": f"새로운 음식 이야기 {i}", "first_question": f"What food would you share with a friend {i}?"}
-                        for i in range(8)
+                        for i in range(12)
                     ]}))
-                return LLMResponse(content=json.dumps({"approved_indices": list(range(8))}))
+                return LLMResponse(content=json.dumps({"approved_indices": list(range(9))}))
 
         monkeypatch.setattr("domains.conversation.topic_generation_service.LLMProviderFactory.create_provider", lambda **_: FakeProvider())
         result = await WeeklyTopicGenerator(repository, object()).generate(
             "ko", "en", week_start="2026-09-28", republish=True
         )
         assert result["status"] == "republished"
+        assert result["count"] == 8
         refreshed = repository.latest("ko", "en")[1]
         assert [topic.id for topic in refreshed] == original_ids
         assert refreshed[0].text == "새로운 음식 이야기 0"
@@ -128,15 +172,17 @@ async def test_republish_replaces_validated_pairs_without_changing_ids(monkeypat
                 if self.calls == 1:
                     return LLMResponse(content=json.dumps({"topics": [
                         {"text": f"다른 여행 이야기 {i}", "first_question": f"Where would you travel with a friend {i}?"}
-                        for i in range(8)
+                        for i in range(12)
                     ]}))
                 return LLMResponse(content=json.dumps({"approved_indices": list(range(7))}))
 
         monkeypatch.setattr("domains.conversation.topic_generation_service.LLMProviderFactory.create_provider", lambda **_: UnsafeProvider())
-        with pytest.raises(ValueError, match="publication checks"):
+        with pytest.raises(TopicPublicationError) as failure:
             await WeeklyTopicGenerator(repository, object()).generate(
                 "ko", "en", week_start="2026-09-28", republish=True
             )
+        assert failure.value.code == "not_enough_topics_to_preserve_ids"
+        assert failure.value.counts == {"approved_count": 7, "required_count": 8}
         assert [topic.id for topic in repository.latest("ko", "en")[1]] == original_ids
         assert repository.latest("ko", "en")[1][0].text == "새로운 음식 이야기 0"
     engine.dispose()

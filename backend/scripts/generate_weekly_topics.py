@@ -6,7 +6,7 @@ import json
 
 from config import get_settings
 from database import SessionLocal
-from domains.conversation.topic_generation_service import WeeklyTopicGenerator, weekly_slot
+from domains.conversation.topic_generation_service import TopicPublicationError, WeeklyTopicGenerator, weekly_slot
 from domains.conversation.topic_repository import WeeklyTopicRepository
 from shared.http_clients import create_http_client
 
@@ -21,9 +21,12 @@ async def run(pair: str, slot: str | None = None, *, republish: bool = False) ->
                     result = await WeeklyTopicGenerator(WeeklyTopicRepository(db), client).generate(
                         *pairs[key], week_start=slot or weekly_slot(), republish=republish
                     )
+                except TopicPublicationError as error:
+                    db.rollback()
+                    result = {"status": "failed", "error": error.code, **error.counts}
                 except Exception:
                     db.rollback()
-                    result = {"status": "failed", "error": "generation_or_publication_failed"}
+                    result = {"status": "failed", "error": "generation_failed"}
                 results.append({"pair": key, **result})
     print(json.dumps(results, ensure_ascii=False))
     return 1 if any(result["status"] == "failed" for result in results) else 0
