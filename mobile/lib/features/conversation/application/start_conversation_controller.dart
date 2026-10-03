@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:curitalk/features/conversation/data/api_conversation_repository.dart';
 import 'package:curitalk/features/conversation/domain/conversation_models.dart';
 import 'package:curitalk/features/conversation/domain/conversation_repository.dart';
@@ -59,9 +61,68 @@ class StartConversationState {
 }
 
 class StartConversationController extends Notifier<StartConversationState> {
+  String? _pendingSuggestedTopic;
+  String? _pendingSuggestedRequestId;
+
   @override
   StartConversationState build() {
     return const StartConversationState();
+  }
+
+  Future<String?> startSuggestedFreeChat(String topicId) async {
+    if (state.isStarting) return null;
+    if (_pendingSuggestedTopic != topicId) {
+      _pendingSuggestedTopic = topicId;
+      _pendingSuggestedRequestId = _newRequestId();
+    }
+    state = const StartConversationState(isStarting: true);
+    try {
+      final repository = ref.read(conversationRepositoryProvider);
+      if (repository is! SuggestedConversationRepository) {
+        throw StateError('Suggested conversations are unavailable.');
+      }
+      final response = await (repository as SuggestedConversationRepository)
+          .startSuggestedFreeChat(
+            topicId: topicId,
+            startRequestId: _pendingSuggestedRequestId!,
+          );
+      if (response.audio != null || response.audioError != null) {
+        ref
+            .read(
+              initialAssistantAudioProvider(response.conversationId).notifier,
+            )
+            .setAudio(
+              InitialAssistantAudio(
+                responseText: response.response,
+                audio: response.audio,
+                audioError: response.audioError,
+              ),
+            );
+      }
+      _pendingSuggestedTopic = null;
+      _pendingSuggestedRequestId = null;
+      _refreshRecentConversations();
+      state = const StartConversationState();
+      return response.conversationId;
+    } on Object catch (error) {
+      state = StartConversationState(
+        failureReason: _isSlotLimit(error)
+            ? StartConversationFailureReason.slotsFull
+            : StartConversationFailureReason.freeChatRequestFailed,
+      );
+      return null;
+    }
+  }
+
+  String _newRequestId() {
+    final random = Random.secure();
+    final bytes = List<int>.generate(16, (_) => random.nextInt(256));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    final hex = bytes
+        .map((byte) => byte.toRadixString(16).padLeft(2, '0'))
+        .join();
+    return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
   }
 
   Future<ConversationResponse?> startFreeChat({

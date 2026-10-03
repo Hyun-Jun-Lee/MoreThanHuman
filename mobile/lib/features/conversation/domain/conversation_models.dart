@@ -226,6 +226,44 @@ class MultimodalConversationResponse extends ConversationResponse {
   final VoiceAudioError? audioError;
 }
 
+class SuggestedConversationResponse {
+  const SuggestedConversationResponse({
+    required this.conversationId,
+    required this.assistantMessageId,
+    required this.response,
+    this.audio,
+    this.audioError,
+  });
+
+  factory SuggestedConversationResponse.fromJson(Object? value) {
+    if (value is! Map<String, dynamic> ||
+        value['conversation_id'] is! String ||
+        value['assistant_message_id'] is! String ||
+        value['response'] is! String) {
+      throw const FormatException(
+        'Suggested conversation response is invalid.',
+      );
+    }
+    return SuggestedConversationResponse(
+      conversationId: value['conversation_id'] as String,
+      assistantMessageId: value['assistant_message_id'] as String,
+      response: value['response'] as String,
+      audio: value['audio'] == null
+          ? null
+          : VoiceAudioResponse.fromJson(value['audio']),
+      audioError: value['audio_error'] == null
+          ? null
+          : VoiceAudioError.fromJson(value['audio_error']),
+    );
+  }
+
+  final String conversationId;
+  final String assistantMessageId;
+  final String response;
+  final VoiceAudioResponse? audio;
+  final VoiceAudioError? audioError;
+}
+
 class MessageResponse {
   const MessageResponse({
     required this.messageId,

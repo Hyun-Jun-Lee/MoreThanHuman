@@ -87,3 +87,11 @@ abstract interface class CustomFocusConversationRepository {
 abstract interface class ConversationDeletionRepository {
   Future<void> deleteConversation(String conversationId);
 }
+
+abstract interface class SuggestedConversationRepository {
+  Future<SuggestedConversationResponse> startSuggestedFreeChat({
+    required String topicId,
+    required String startRequestId,
+    bool includeAudioResponse = true,
+  });
+}

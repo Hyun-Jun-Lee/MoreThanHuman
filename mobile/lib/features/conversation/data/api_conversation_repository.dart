@@ -8,10 +8,29 @@ class ApiConversationRepository
     implements
         ConversationRepository,
         CustomFocusConversationRepository,
-        ConversationDeletionRepository {
+        ConversationDeletionRepository,
+        SuggestedConversationRepository {
   const ApiConversationRepository(this.apiClient);
 
   final ApiClient apiClient;
+
+  @override
+  Future<SuggestedConversationResponse> startSuggestedFreeChat({
+    required String topicId,
+    required String startRequestId,
+    bool includeAudioResponse = true,
+  }) async {
+    final response = await apiClient.post<SuggestedConversationResponse>(
+      'conversations/start/free-chat/suggested/',
+      data: <String, Object?>{
+        'topic_id': topicId,
+        'start_request_id': startRequestId,
+        'include_audio_response': includeAudioResponse,
+      },
+      decodeData: SuggestedConversationResponse.fromJson,
+    );
+    return response.data;
+  }
 
   @override
   Future<MultimodalConversationResponse> startFreeChat({

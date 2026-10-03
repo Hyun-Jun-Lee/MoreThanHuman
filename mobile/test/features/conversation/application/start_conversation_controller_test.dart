@@ -12,6 +12,36 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('suggested start retries with the same request ID', () async {
+    final repository = _FakeConversationRepository()..failSuggestedOnce = true;
+    final container = ProviderContainer(
+      overrides: [conversationRepositoryProvider.overrideWithValue(repository)],
+    );
+    addTearDown(container.dispose);
+
+    final controller = container.read(
+      startConversationControllerProvider.notifier,
+    );
+    expect(await controller.startSuggestedFreeChat('topic-id'), isNull);
+    expect(
+      await controller.startSuggestedFreeChat('topic-id'),
+      'conversation-id',
+    );
+    expect(repository.suggestedRequestIds, hasLength(2));
+    expect(
+      repository.suggestedRequestIds[0],
+      repository.suggestedRequestIds[1],
+    );
+    expect(
+      repository.suggestedRequestIds.first,
+      matches(
+        RegExp(
+          r'^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$',
+        ),
+      ),
+    );
+  });
+
   test('starts free chat with topic metadata', () async {
     final _FakeConversationRepository repository =
         _FakeConversationRepository();
@@ -179,7 +209,31 @@ ProviderContainer _conversationContainer({
 }
 
 class _FakeConversationRepository
-    implements ConversationRepository, CustomFocusConversationRepository {
+    implements
+        ConversationRepository,
+        CustomFocusConversationRepository,
+        SuggestedConversationRepository {
+  bool failSuggestedOnce = false;
+  final List<String> suggestedRequestIds = [];
+
+  @override
+  Future<SuggestedConversationResponse> startSuggestedFreeChat({
+    required String topicId,
+    required String startRequestId,
+    bool includeAudioResponse = true,
+  }) async {
+    suggestedRequestIds.add(startRequestId);
+    if (failSuggestedOnce) {
+      failSuggestedOnce = false;
+      throw StateError('response lost');
+    }
+    return const SuggestedConversationResponse(
+      conversationId: 'conversation-id',
+      assistantMessageId: 'assistant-message-id',
+      response: 'What do you like?',
+    );
+  }
+
   Map<String, String?>? lastFreeChatBody;
   String? lastRoleCharacter;
   String? lastAudioFilename;

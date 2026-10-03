@@ -4,15 +4,17 @@ import 'package:curitalk/core/widgets/widgets.dart';
 import 'package:curitalk/features/auth/auth.dart';
 import 'package:curitalk/features/conversation/conversation.dart';
 import 'package:curitalk/features/home/application/recent_conversations_controller.dart';
+import 'package:curitalk/features/home/application/weekly_topics_controller.dart';
 import 'package:curitalk/features/home/domain/conversation_summary.dart';
 import 'package:curitalk/features/home/domain/conversation_start_type.dart';
+import 'package:curitalk/features/home/domain/weekly_topic.dart';
 import 'package:curitalk/core/widgets/main_tab_scope.dart';
 import 'package:curitalk/features/history/application/conversation_history_controller.dart';
 import 'package:curitalk/features/home/presentation/conversation_start_sheet.dart';
 import 'package:curitalk/features/home/presentation/widgets/language_snack_home_section.dart';
 import 'package:curitalk/features/home/presentation/widgets/recent_conversation_card.dart';
+import 'package:curitalk/features/home/presentation/widgets/weekly_topic_loop.dart';
 import 'package:curitalk/features/language/language.dart';
-import 'package:curitalk/features/topic_prep/topic_prep.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -65,6 +67,10 @@ class HomeScreen extends ConsumerWidget {
             sliver: SliverList(
               delegate: SliverChildListDelegate(<Widget>[
                 const LanguageSnackHomeSection(),
+                _WeeklyTopicSection(
+                  onSelected: (topic) =>
+                      _startSuggestedTopic(context, ref, topic),
+                ),
                 Row(
                   children: [
                     Expanded(child: AppSectionLabel(copy.recentLabel)),
@@ -96,13 +102,7 @@ class HomeScreen extends ConsumerWidget {
                           message: copy.updatingConversations,
                         );
                       }
-                      return _EmptyHome(
-                        nativeLanguage:
-                            user?.language.nativeLanguage ??
-                            LearningLanguageContext
-                                .defaultContext
-                                .nativeLanguage,
-                      );
+                      return const _EmptyHome();
                     }
                     return _RecentConversations(
                       conversations: conversations.take(2).toList(),
@@ -157,6 +157,58 @@ class HomeScreen extends ConsumerWidget {
     );
     if (selected != null && context.mounted) {
       onStartTypeSelected?.call(selected);
+    }
+  }
+
+  Future<void> _startSuggestedTopic(
+    BuildContext context,
+    WidgetRef ref,
+    WeeklyTopic topic,
+  ) async {
+    if (ref.read(startConversationControllerProvider).isStarting) return;
+    if (ref.read(conversationAccessProvider).value?.isLocked == true) {
+      await showConversationAccessDialog(context);
+      return;
+    }
+    final copy = AppCopy.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(copy.confirmSuggestedConversationTitle),
+        content: Text(topic.text),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(copy.cancelLabel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(copy.startConversationLabel),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    if (ref.read(startConversationControllerProvider).isStarting) return;
+    final conversationId = await ref
+        .read(startConversationControllerProvider.notifier)
+        .startSuggestedFreeChat(topic.id);
+    if (!context.mounted) return;
+    if (conversationId != null) {
+      onConversationSelected?.call(conversationId);
+      return;
+    }
+    final failure = ref.read(startConversationControllerProvider).failureReason;
+    if (failure == StartConversationFailureReason.slotsFull) {
+      await showConversationAccessDialog(context);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            AppCopy.of(context).failureMessage('freeChatRequestFailed'),
+          ),
+        ),
+      );
     }
   }
 
@@ -326,43 +378,85 @@ class _RecentConversations extends StatelessWidget {
 }
 
 class _EmptyHome extends StatelessWidget {
-  const _EmptyHome({required this.nativeLanguage});
+  const _EmptyHome();
 
-  final LearningLanguageCode nativeLanguage;
+  @override
+  Widget build(BuildContext context) => Text(
+    AppCopy.of(context).homeEmptyTitle,
+    textAlign: TextAlign.center,
+    style: AppTypography.headlineMd,
+  );
+}
+
+class _WeeklyTopicSection extends ConsumerStatefulWidget {
+  const _WeeklyTopicSection({required this.onSelected});
+
+  final ValueChanged<WeeklyTopic> onSelected;
+
+  @override
+  ConsumerState<_WeeklyTopicSection> createState() =>
+      _WeeklyTopicSectionState();
+}
+
+class _WeeklyTopicSectionState extends ConsumerState<_WeeklyTopicSection>
+    with WidgetsBindingObserver {
+  bool _homeActive = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref.read(weeklyTopicsControllerProvider.notifier).refreshIfNewWeek();
+      }
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      ref.read(weeklyTopicsControllerProvider.notifier).refreshIfNewWeek();
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final active = (MainTabScope.maybeOf(context)?.index ?? 0) == 0;
+    if (active && !_homeActive) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          ref.read(weeklyTopicsControllerProvider.notifier).refreshIfNewWeek();
+        }
+      });
+    }
+    _homeActive = active;
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final AppCopy copy = AppCopy.of(context);
-    final List<String> starterTopics = TopicStarterExamples.forNativeLanguage(
-      nativeLanguage,
-    );
-    return Column(
-      children: <Widget>[
-        Text(
-          copy.homeEmptyTitle,
-          textAlign: TextAlign.center,
-          style: AppTypography.headlineLg,
-        ),
-        const SizedBox(height: AppSpacing.xl),
-        AppColorBlockCard(
-          color: AppPalette.blockLime,
-          child: Column(
-            children: <Widget>[
-              AppSectionLabel(copy.suggestedStartingPoints),
-              SizedBox(height: AppSpacing.lg),
-              Wrap(
-                alignment: WrapAlignment.center,
-                spacing: AppSpacing.xs,
-                runSpacing: AppSpacing.xs,
-                children: <Widget>[
-                  for (final String topic in starterTopics.take(3))
-                    Chip(label: Text(topic)),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ],
+    final topics =
+        ref.watch(weeklyTopicsControllerProvider).value?.topics ??
+        const <WeeklyTopic>[];
+    final isStarting = ref
+        .watch(startConversationControllerProvider)
+        .isStarting;
+    if (topics.isEmpty && !isStarting) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl),
+      child: isStarting
+          ? AppAsyncStateView.loading(
+              key: const ValueKey('suggested-conversation-loading'),
+              message: AppCopy.of(context).preparingSuggestedConversation,
+            )
+          : WeeklyTopicLoop(topics: topics, onSelected: widget.onSelected),
     );
   }
 }

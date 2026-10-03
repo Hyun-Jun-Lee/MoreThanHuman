@@ -8,6 +8,26 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('posts suggested start ID and decodes assistant message ID', () async {
+    final adapter = _ConversationHttpClientAdapter();
+    final repository = _repository(adapter);
+    final response = await repository.startSuggestedFreeChat(
+      topicId: 'topic-id',
+      startRequestId: 'request-id',
+    );
+    expect(response.conversationId, 'conversation-id');
+    expect(response.assistantMessageId, 'assistant-message-id');
+    expect(
+      adapter.lastRequest?.uri.path,
+      '/api/conversations/start/free-chat/suggested/',
+    );
+    expect(adapter.lastRequest?.data, {
+      'topic_id': 'topic-id',
+      'start_request_id': 'request-id',
+      'include_audio_response': true,
+    });
+  });
+
   test('posts free-chat start metadata', () async {
     final _ConversationHttpClientAdapter adapter =
         _ConversationHttpClientAdapter();
@@ -182,6 +202,14 @@ class _ConversationHttpClientAdapter implements HttpClientAdapter {
     requests.add(options);
     final String path = options.uri.path;
     final Map<String, dynamic> data = switch (path) {
+      '/api/conversations/start/free-chat/suggested/' => <String, dynamic>{
+        'conversation_id': 'conversation-id',
+        'assistant_message_id': 'assistant-message-id',
+        'conversation_type': 'FREE_CHAT',
+        'response': 'What do you like?',
+        'audio': null,
+        'audio_error': null,
+      },
       '/api/conversations/conversation-id/messages/' => <String, dynamic>{
         'results': <Map<String, dynamic>>[
           <String, dynamic>{

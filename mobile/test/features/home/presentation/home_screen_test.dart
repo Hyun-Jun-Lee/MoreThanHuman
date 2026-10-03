@@ -2,10 +2,15 @@ import 'dart:async';
 import 'package:curitalk/features/profile/presentation/profile_screen.dart';
 
 import 'package:curitalk/app/theme/app_theme.dart';
+import 'package:curitalk/app/theme/tokens/tokens.dart';
 import 'package:curitalk/core/storage/storage.dart';
+import 'package:curitalk/core/widgets/app_color_block_card.dart';
 import 'package:curitalk/features/auth/auth.dart';
 import 'package:curitalk/features/conversation/conversation.dart';
 import 'package:curitalk/features/home/home.dart';
+import 'package:curitalk/features/home/application/weekly_topics_controller.dart';
+import 'package:curitalk/features/home/domain/weekly_topic.dart';
+import 'package:curitalk/features/home/presentation/widgets/weekly_topic_loop.dart';
 import 'package:curitalk/features/language/language.dart';
 import 'package:curitalk/features/onboarding/onboarding.dart';
 import 'package:flutter/material.dart';
@@ -246,6 +251,146 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('New conversation'), findsOneWidget);
+    expect(
+      tester.widget<Text>(find.text('Start a conversation')).style?.fontSize,
+      AppTypography.headlineMd.fontSize,
+    );
+  });
+
+  testWidgets('weekly topics remain visible beside recent conversations', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      _homeApp(
+        conversations: _recentConversations(count: 1),
+        weeklyTopics: const WeeklyTopics(
+          weekStart: '2026-09-28',
+          topics: [WeeklyTopic(id: 'topic-1', text: '오늘의 취미 이야기')],
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 20));
+
+    expect(find.text('Conversation 1'), findsOneWidget);
+    expect(find.byType(WeeklyTopicLoop), findsOneWidget);
+    expect(
+      tester.getBottomLeft(find.byType(WeeklyTopicLoop)).dy,
+      lessThan(tester.getTopLeft(find.text('Conversation 1')).dy),
+    );
+    expect(find.text('Suggested starting points'), findsNothing);
+    expect(
+      find.ancestor(
+        of: find.byType(WeeklyTopicLoop),
+        matching: find.byType(AppColorBlockCard),
+      ),
+      findsNothing,
+    );
+    expect(find.text('Start a conversation'), findsNothing);
+  });
+
+  testWidgets('canceling a suggested topic leaves conversations unchanged', (
+    WidgetTester tester,
+  ) async {
+    final repository = _DeferredSuggestedConversationRepository();
+    await tester.pumpWidget(
+      _homeApp(
+        weeklyTopics: _publishedTopics,
+        conversationRepository: repository,
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 20));
+
+    await tester.tap(find.byKey(const ValueKey('weekly-topic-topic-1-1')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('Start a conversation?'), findsOneWidget);
+    expect(find.text('오늘의 취미 이야기'), findsWidgets);
+    expect(repository.startCalls, 0);
+
+    await tester.tap(find.text('CANCEL'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(repository.startCalls, 0);
+    expect(
+      find.byKey(const ValueKey('suggested-conversation-loading')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('confirmed topic shows loading until the chat is ready', (
+    WidgetTester tester,
+  ) async {
+    final repository = _DeferredSuggestedConversationRepository();
+    String? openedConversation;
+    await tester.pumpWidget(
+      _homeApp(
+        weeklyTopics: _publishedTopics,
+        conversationRepository: repository,
+        onConversationSelected: (id) => openedConversation = id,
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 20));
+
+    await tester.tap(find.byKey(const ValueKey('weekly-topic-topic-1-1')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.text('START CONVERSATION'));
+    await tester.pump();
+
+    expect(repository.startCalls, 1);
+    expect(
+      find.byKey(const ValueKey('suggested-conversation-loading')),
+      findsOneWidget,
+    );
+    expect(find.text('Getting your conversation ready...'), findsOneWidget);
+    expect(find.byType(WeeklyTopicLoop), findsNothing);
+
+    repository.completeStart();
+    await tester.pump();
+    expect(openedConversation, 'suggested-conversation');
+    expect(
+      find.byKey(const ValueKey('suggested-conversation-loading')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('failed topic start restores choices and shows feedback', (
+    WidgetTester tester,
+  ) async {
+    final repository = _DeferredSuggestedConversationRepository();
+    await tester.pumpWidget(
+      _homeApp(
+        weeklyTopics: _publishedTopics,
+        conversationRepository: repository,
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 20));
+
+    await tester.tap(find.byKey(const ValueKey('weekly-topic-topic-1-1')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.text('START CONVERSATION'));
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey('suggested-conversation-loading')),
+      findsOneWidget,
+    );
+
+    repository.failStart();
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey('suggested-conversation-loading')),
+      findsNothing,
+    );
+    expect(find.byType(WeeklyTopicLoop), findsOneWidget);
+    expect(
+      find.text('The conversation could not be started. Please try again.'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('language snacks stay above recent conversations', (
@@ -451,6 +596,10 @@ final UserProfile _user = UserProfile(
   createdAt: DateTime.utc(2026, 6, 24),
   updatedAt: DateTime.utc(2026, 6, 24),
 );
+const WeeklyTopics _publishedTopics = WeeklyTopics(
+  weekStart: '2026-09-28',
+  topics: [WeeklyTopic(id: 'topic-1', text: '오늘의 취미 이야기')],
+);
 final Finder _refreshIndicator = find.byKey(
   const ValueKey<String>('recent-conversations-refresh-indicator'),
 );
@@ -472,6 +621,7 @@ Widget _homeApp({
   LanguageSnackCache? languageSnackCache,
   ConversationRepository? conversationRepository,
   ConversationAccess access = const ConversationAccess.disabled(),
+  WeeklyTopics weeklyTopics = const WeeklyTopics(weekStart: null, topics: []),
 }) {
   final _MemoryTokenStorage effectiveTokenStorage =
       tokenStorage ?? _MemoryTokenStorage(tokens: _tokens, deviceId: _deviceId);
@@ -517,6 +667,9 @@ Widget _homeApp({
       conversationAccessRepositoryProvider.overrideWithValue(
         _FakeConversationAccessRepository(access),
       ),
+      weeklyTopicsControllerProvider.overrideWith(
+        () => _FixedWeeklyTopicsController(weeklyTopics),
+      ),
     ],
     child: MaterialApp(
       theme: AppTheme.light,
@@ -531,6 +684,18 @@ Widget _homeApp({
             ),
     ),
   );
+}
+
+class _FixedWeeklyTopicsController extends WeeklyTopicsController {
+  _FixedWeeklyTopicsController(this.topics);
+
+  final WeeklyTopics topics;
+
+  @override
+  Future<WeeklyTopics> build() async => topics;
+
+  @override
+  void refreshIfNewWeek() {}
 }
 
 class _FakeConversationAccessRepository
@@ -850,6 +1015,38 @@ class _DeferredDeletionConversationRepository
     String? searchContext,
     bool includeAudioResponse = true,
   }) => throw UnimplementedError();
+}
+
+class _DeferredSuggestedConversationRepository
+    extends _DeferredDeletionConversationRepository
+    implements SuggestedConversationRepository {
+  final Completer<SuggestedConversationResponse> _startCompleter =
+      Completer<SuggestedConversationResponse>();
+  int startCalls = 0;
+
+  @override
+  Future<SuggestedConversationResponse> startSuggestedFreeChat({
+    required String topicId,
+    required String startRequestId,
+    bool includeAudioResponse = true,
+  }) {
+    startCalls += 1;
+    return _startCompleter.future;
+  }
+
+  void completeStart() {
+    _startCompleter.complete(
+      const SuggestedConversationResponse(
+        conversationId: 'suggested-conversation',
+        assistantMessageId: 'assistant-message',
+        response: 'What do you enjoy?',
+      ),
+    );
+  }
+
+  void failStart() {
+    _startCompleter.completeError(StateError('start failed'));
+  }
 }
 
 List<ConversationSummary> _recentConversations({required int count}) {

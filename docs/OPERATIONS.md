@@ -125,6 +125,8 @@ uv run alembic upgrade head
 uv run python -m scripts.generate_weekly_topics --pair all
 ```
 
+Docker Compose로 배포한 서버에서는 저장소 루트에서 `docker compose exec api python -m scripts.generate_weekly_topics --pair all`을 실행해요. API 배포와 DB migration만으로는 첫 주제가 생성되지 않아요.
+
 `--pair ko-en|en-ko|all`로 대상 언어쌍을 고르고 `--week-start YYYY-MM-DD`로 슬롯을 지정할 수 있어요. 이 날짜는 월요일이어야 하며 미래 슬롯은 발행하지 않아요. 기본 슬롯은 서울 시간 월요일 05:00부터 시작해요. 실행하면 LLM 사용량이 발생해요. JSON stdout의 각 언어쌍 `published`/`existing`/`failed`와 개수를 확인해요. 각 언어쌍당 8개를 요청하고 최소 6개가 검사를 통과해야 발행해요. 같은 언어쌍·슬롯 재실행은 중복 발행하지 않아요.
 
 생성 실패나 미실행 시 목록 API는 마지막 발행 묶음을 계속 반환해요. 처음부터 발행 기록이 없으면 홈의 추천 영역이 숨겨져요. 문제 주제를 발견하면 아래 명령으로 보관해요. 보관 후 새 목록에서 빠지고 기존 앱 캐시의 해당 ID도 대화 시작 시 서버가 거절해요.

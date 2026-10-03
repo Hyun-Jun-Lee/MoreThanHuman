@@ -303,8 +303,10 @@ class AppCopy {
   String get updatingConversations =>
       isKorean ? '대화를 업데이트하는 중...' : 'Updating conversations...';
   String get homeEmptyTitle => isKorean ? '대화를 시작하세요' : 'Start a conversation';
-  String get suggestedStartingPoints =>
-      isKorean ? '대화 시작 아이디어' : 'Suggested starting points';
+  String get confirmSuggestedConversationTitle =>
+      isKorean ? '대화를 시작할까요?' : 'Start a conversation?';
+  String get preparingSuggestedConversation =>
+      isKorean ? '대화 시작을 준비하고 있어요...' : 'Getting your conversation ready...';
   String get showAllLabel => isKorean ? '모두 보기' : 'SHOW ALL';
   String get showLessLabel => isKorean ? '접기' : 'SHOW LESS';
   String get showMoreLabel => isKorean ? '더 보기' : 'SHOW MORE';
