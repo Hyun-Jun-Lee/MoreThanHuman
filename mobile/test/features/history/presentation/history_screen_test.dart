@@ -94,10 +94,9 @@ void main() {
     expect(selectedType, ConversationStartType.roleplay);
   });
 
-  testWidgets('locked extra slot appears as a row and blocks the plus action', (
+  testWidgets('full slot blocks creating another conversation', (
     tester,
   ) async {
-    final semantics = tester.ensureSemantics();
     await tester.pumpWidget(
       _historyApp(
         conversations: <ConversationSummary>[_conversation],
@@ -112,47 +111,17 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Osaka food trip'), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('locked-additional-conversation')),
-      findsOneWidget,
-    );
-    final lockedRow = find.byKey(
-      const ValueKey('locked-additional-conversation'),
-    );
-    final lockIcon = find.descendant(
-      of: lockedRow,
-      matching: find.byIcon(Icons.lock_rounded),
-    );
-    expect(lockIcon, findsOneWidget);
-    final badge = find.descendant(
-      of: lockedRow,
-      matching: find.byType(LockedConversationBadge),
-    );
-    expect(tester.getSize(badge), const Size(40, 40));
-    expect(find.text('Additional conversation'), findsNothing);
-    expect(
-      find.text('An additional conversation requires a pass.'),
-      findsNothing,
-    );
-    expect(
-      find.bySemanticsLabel('Locked additional conversation, pass required'),
-      findsOneWidget,
-    );
-    expect(
-      (tester.getCenter(lockedRow) - tester.getCenter(lockIcon)).distance,
-      lessThan(1),
-    );
+    expect(find.byKey(const ValueKey('locked-additional-conversation')), findsNothing);
     await tester.tap(find.byTooltip('New conversation'));
     await tester.pumpAndSettle();
     expect(
-      find.text('An additional conversation requires a pass.'),
+      find.text('All active conversation slots are in use. Release a slot in History or subscribe.'),
       findsWidgets,
     );
     expect(find.text('Free Chat'), findsNothing);
-    semantics.dispose();
   });
 
-  testWidgets('locked slot follows the final real conversation page', (
+  testWidgets('pagination does not add a phantom locked conversation', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -178,10 +147,7 @@ void main() {
     );
     await tester.tap(find.text('Load more conversations'));
     await tester.pumpAndSettle();
-    expect(
-      find.byKey(const ValueKey('locked-additional-conversation')),
-      findsOneWidget,
-    );
+    expect(find.byKey(const ValueKey('locked-additional-conversation')), findsNothing);
   });
 }
 
@@ -239,6 +205,7 @@ Widget _historyApp({
       conversationAccessRepositoryProvider.overrideWithValue(
         _FakeConversationAccessRepository(access),
       ),
+      conversationAccessProvider.overrideWith((ref) async => access),
     ],
     child: MaterialApp(
       theme: AppTheme.light,
@@ -263,6 +230,12 @@ class _FakeConversationAccessRepository
   @override
   Future<ConversationTurnAccess> getTurnAccess(String conversationId) async =>
       const ConversationTurnAccess.disabled();
+
+  @override
+  Future<void> activate(String conversationId, {String? replaceConversationId}) async {}
+
+  @override
+  Future<void> deactivate(String conversationId) async {}
 }
 
 class _FakeGoogleIdentityService implements GoogleIdentityService {

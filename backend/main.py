@@ -12,8 +12,10 @@ from fastapi.staticfiles import StaticFiles
 from config import get_settings
 from database import Base, engine
 from domains.auth.models import ProfileModel  # noqa: F401 - 테이블 생성용 import
+from shared.subscription import AppleSubscriptionModel, AppleNotificationModel  # noqa: F401 - 테이블 생성용 import
 from domains.auth.router import router as auth_router
 from domains.conversation.router import router as conversation_router
+from domains.billing.router import router as billing_router
 from domains.conversation.topic_router import router as conversation_topic_router
 from domains.grammar.router import router as grammar_router
 from domains.language_snacks.models import LanguageSnackModel  # noqa: F401 - 테이블 생성용 import
@@ -108,6 +110,7 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 # API 라우터 등록
 app.include_router(auth_router)
 app.include_router(conversation_router)
+app.include_router(billing_router)
 app.include_router(conversation_topic_router)
 app.include_router(grammar_router)
 app.include_router(language_snacks_router)

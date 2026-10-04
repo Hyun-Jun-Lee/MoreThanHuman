@@ -34,10 +34,9 @@ void main() {
     expect(find.text('New conversation'), findsOneWidget);
   });
 
-  testWidgets('locked extra slot is distinct from real recent conversation', (
+  testWidgets('full slot keeps the real recent conversation and blocks creation', (
     tester,
   ) async {
-    final semantics = tester.ensureSemantics();
     await tester.pumpWidget(
       _homeApp(
         conversations: _recentConversations(count: 1),
@@ -51,41 +50,16 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    final lockedCard = find.byKey(
-      const ValueKey('locked-additional-conversation-home'),
-    );
-    await tester.scrollUntilVisible(lockedCard, 300);
-    final lockIcon = find.descendant(
-      of: lockedCard,
-      matching: find.byIcon(Icons.lock_rounded),
-    );
-    expect(lockIcon, findsOneWidget);
-    final badge = find.descendant(
-      of: lockedCard,
-      matching: find.byType(LockedConversationBadge),
-    );
-    expect(tester.getSize(badge), const Size(48, 48));
-    expect(find.text('Additional conversation'), findsNothing);
-    expect(
-      find.text('An additional conversation requires a pass.'),
-      findsNothing,
-    );
-    expect(
-      find.bySemanticsLabel('Locked additional conversation, pass required'),
-      findsOneWidget,
-    );
-    expect(
-      (tester.getCenter(lockedCard) - tester.getCenter(lockIcon)).distance,
-      lessThan(1),
-    );
-    await tester.tap(lockedCard);
+    expect(find.text('Conversation 1'), findsOneWidget);
+    expect(find.byKey(const ValueKey('locked-additional-conversation-home')), findsNothing);
+    await tester.scrollUntilVisible(find.text('New conversation'), 300);
+    await tester.tap(find.text('New conversation'));
     await tester.pumpAndSettle();
     expect(
-      find.text('An additional conversation requires a pass.'),
+      find.text('All active conversation slots are in use. Release a slot in History or subscribe.'),
       findsWidgets,
     );
     expect(find.text('Free Chat'), findsNothing);
-    semantics.dispose();
   });
 
   testWidgets('profile displays account and language settings', (
@@ -667,6 +641,7 @@ Widget _homeApp({
       conversationAccessRepositoryProvider.overrideWithValue(
         _FakeConversationAccessRepository(access),
       ),
+      conversationAccessProvider.overrideWith((ref) async => access),
       weeklyTopicsControllerProvider.overrideWith(
         () => _FixedWeeklyTopicsController(weeklyTopics),
       ),
@@ -710,6 +685,12 @@ class _FakeConversationAccessRepository
   @override
   Future<ConversationTurnAccess> getTurnAccess(String conversationId) async =>
       const ConversationTurnAccess.disabled();
+
+  @override
+  Future<void> activate(String conversationId, {String? replaceConversationId}) async {}
+
+  @override
+  Future<void> deactivate(String conversationId) async {}
 }
 
 class _FakeGoogleIdentityService implements GoogleIdentityService {

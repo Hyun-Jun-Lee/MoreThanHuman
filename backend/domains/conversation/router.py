@@ -22,8 +22,9 @@ from domains.auth.dependencies import get_current_user, get_current_user_from_to
 from domains.auth.models import ProfileModel
 from domains.conversation.enums import ConversationType
 from domains.conversation.repository import ConversationRepository
-from domains.conversation.repository import ConversationSlotsFull, ConversationTurnsFull, SuggestedStartInProgress
+from domains.conversation.repository import ConversationLocked, ConversationSlotsFull, ConversationTurnsFull, SuggestedStartInProgress
 from domains.conversation.schemas import (
+    ActivateConversationRequest,
     Conversation,
     ConversationAccess,
     ConversationResponse,
@@ -471,6 +472,8 @@ async def send_message(
         return SuccessResponse(data=response)
     except ConversationTurnsFull as e:
         raise _access_conflict("CONVERSATION_TURNS_FULL", e.message)
+    except ConversationLocked as e:
+        raise _access_conflict("CONVERSATION_LOCKED", e.message)
     except RateLimitException as e:
         logger.warning(f"RateLimitException in send_message: {e.message}")
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=e.message)
@@ -528,6 +531,8 @@ async def send_multimodal_turn(
         raise _validation_error_response(e)
     except ConversationTurnsFull as e:
         raise _access_conflict("CONVERSATION_TURNS_FULL", e.message)
+    except ConversationLocked as e:
+        raise _access_conflict("CONVERSATION_LOCKED", e.message)
     except RateLimitException as e:
         logger.warning(f"RateLimitException in send_multimodal_turn: {e.message}")
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=e.message)
@@ -569,6 +574,38 @@ def get_conversation_turn_access(
         )
     except NotFoundException as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
+
+
+@router.post("/{conversation_id}/activate/", response_model=SuccessResponse[ConversationAccess])
+def activate_conversation(
+    conversation_id: UUID,
+    payload: ActivateConversationRequest,
+    current_user: ProfileModel = Depends(get_current_user),
+    service: ConversationService = Depends(get_conversation_service),
+):
+    try:
+        service.activate_conversation(
+            str(conversation_id), current_user.id,
+            str(payload.replace_conversation_id) if payload.replace_conversation_id else None,
+        )
+        return SuccessResponse(data=ConversationAccess(**service.get_access(current_user.id)))
+    except ConversationSlotsFull as exc:
+        raise _access_conflict("CONVERSATION_SLOTS_FULL", exc.message)
+    except NotFoundException as exc:
+        raise HTTPException(status_code=404, detail=exc.message)
+
+
+@router.post("/{conversation_id}/deactivate/", response_model=SuccessResponse[ConversationAccess])
+def deactivate_conversation(
+    conversation_id: UUID,
+    current_user: ProfileModel = Depends(get_current_user),
+    service: ConversationService = Depends(get_conversation_service),
+):
+    try:
+        service.deactivate_conversation(str(conversation_id), current_user.id)
+        return SuccessResponse(data=ConversationAccess(**service.get_access(current_user.id)))
+    except NotFoundException as exc:
+        raise HTTPException(status_code=404, detail=exc.message)
 
 
 @router.get("/", response_model=SuccessResponse[PaginatedConversations])

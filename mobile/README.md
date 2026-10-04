@@ -32,6 +32,8 @@ flutter test
 | `record` | 대화 화면의 음성 입력 녹음 |
 | `path_provider` | 녹음 파일을 저장할 임시 디렉터리 조회 |
 | `audioplayers` | AI 음성 응답 base64 재생 |
+| `in_app_purchase`, `in_app_purchase_storekit` | iOS StoreKit 2 구독 구매·복원과 거래 JWS 수신 |
+| `url_launcher` | 이용약관·개인정보처리방침·Apple 구독 관리 열기 |
 
 ## 현재 구조
 
@@ -55,6 +57,7 @@ lib/
 │   └── widgets/             # 화면 공통 레이아웃과 상호작용 위젯
 └── features/
     ├── auth/                # 인증 API, 세션 모델, Riverpod controller
+    ├── billing/             # iOS paywall, StoreKit 구매·복원, 서버 권한
     ├── language/            # 언어쌍 모델, preference API, selector UI
     ├── onboarding/          # 완료 상태, pending 언어쌍, 4장 onboarding 화면
     ├── conversation/
@@ -173,7 +176,7 @@ Splash → Onboarding(최초 1회) → Google 또는 iOS Apple Login → Home
 - 테스트용 로컬 리셋 v1 (2026-09-20): 기본 `flutter run` 디버그 빌드에서는 열람 수 왼쪽의 restart 아이콘으로 같은 카드 묶음을 유지한 채 토마토 3개·0/12로 초기화해요. 서버 호출·운영 키 없이 기기에 저장되며 다른 기기에는 영향을 주지 않아요. 팝업·모션 중에는 비활성화하고 `--release`/`--profile` 빌드에서는 표시하지 않아요.
 - 설명은 영어 학습자에게 한국어, 한국어 학습자에게 영어로 제공하며 앱 chrome locale과 분리해요. 미지원 유형·버전은 건너뛰고 알려진 유형의 손상된 응답은 캐시로 복원해요. 운영 키나 생성 기능은 앱에 포함하지 않아요.
 - Home Navigation v2 (2026-09-22): 홈은 언어 스낵 → 최근 대화 2개(파스텔 카드) → `＋ 새 대화` 순서예요. `전체 보기`는 대화 탭으로 전환해요.
-- 대화 권한 v1 (2026-10-01): 서버 정책이 꺼져 있으면 기존 UI를 유지해요. 개발 환경에서 스위치를 켜고 슬롯이 가득 차면 홈에는 실제 대화 카드 뒤에 파스텔 잠금 카드, 대화 탭에는 실제 목록과 분리된 잠금 행을 표시해요. 잠금 자리에는 중앙의 옅은 원형 배지와 채워진 자물쇠만 보이고 접근성 설명과 탭 안내는 유지해요. 두 새 대화 버튼은 이용권 안내를 열고, 대화별 무료 15턴을 모두 쓰면 입력창을 막되 기록은 계속 볼 수 있어요. 실제 구매 화면은 결제 연동 후 제공해요.
+- 대화 권한 v2 (2026-10-04): 서버 정책이 켜지면 무료 계정은 활성 대화 1개·대화별 15회, Advance·Plus는 각각 5개·10개와 무제한 발화를 사용해요. 초과 대화는 실제 기록에 읽기 전용으로 표시하고 기록 탭에서 활성 대화를 교체·해제해요. iOS paywall은 App Store 가격과 구매·복원·구독 관리를 제공해요. Android에서는 구매 버튼을 숨겨요.
 - Account: 우상단 프로필 아바타 또는 `내 정보` 탭의 독립 화면에서 이름/email, 활성 언어쌍 변경, `LOG OUT`을 표시해요. 언어쌍 변경은 새 대화부터 적용되고 기존 대화는 시작 시점 언어쌍을 유지한다고 안내하며, 저장 후 현재 탭을 유지하며 profile과 Home의 활성 언어쌍을 갱신해요. 로그아웃 시 앱 token 삭제·서버 revoke·Google sign out을 best-effort로 처리해요.
 - Free Chat: 홈·대화의 공통 시작 sheet에서 Topic Input → Topic Prep으로 이동한 뒤 첫 답변으로 대화를 시작
 - Roleplay: 홈·대화의 공통 시작 sheet에서 Roleplay Setup으로 이동한 뒤 상황을 골라 롤플레이 대화를 시작
@@ -264,6 +267,8 @@ flutter run \
   --dart-define=GOOGLE_CLIENT_ID=<ios-oauth-client-id> \
   --dart-define=GOOGLE_SERVER_CLIENT_ID=<web-oauth-client-id>
 ```
+
+iOS 구독 화면에는 공개 개인정보처리방침 링크가 필요해요. 구매 버튼을 활성화하려면 실제 HTTPS 주소를 `--dart-define=PRIVACY_POLICY_URL=https://...`로 전달해요. 별도 이용약관을 사용하면 `--dart-define=SUBSCRIPTION_TERMS_URL=https://...`도 전달해요. 기본 이용약관 링크는 Apple 표준 EULA예요. 앱은 제품 가격을 App Store에서 직접 조회하므로 가격용 `dart-define`은 없어요.
 
 Android에서 `google-services.json`을 사용하지 않으면 `GOOGLE_SERVER_CLIENT_ID`가 필요해요. iOS는 `GOOGLE_CLIENT_ID`와 별개로 OAuth 설정의 `REVERSED_CLIENT_ID` URL scheme을 `Info.plist`에 등록해야 실제 로그인이 동작해요. `GOOGLE_SERVER_CLIENT_ID`는 Supabase Google Provider에 등록한 Web OAuth client ID와 같아야 해요.
 

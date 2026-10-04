@@ -3,7 +3,7 @@ Conversation 도메인 SQLAlchemy 모델 정의
 """
 from datetime import datetime
 
-from sqlalchemy import Column, Date, DateTime, Enum as SQLEnum, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Column, Date, DateTime, Enum as SQLEnum, ForeignKey, Index, Integer, String, Text, UniqueConstraint, false
 from sqlalchemy.orm import relationship
 
 from database import Base
@@ -17,6 +17,7 @@ class ConversationModel(Base):
     """대화 테이블"""
 
     __tablename__ = "conversations"
+    __table_args__ = (Index("ix_conversations_user_slot_active", "user_id", "slot_active"),)
 
     id = Column(String(36), primary_key=True)  # UUID를 문자열로 저장
     user_id = Column(String(36), ForeignKey("profiles.id"), nullable=False, index=True)
@@ -28,6 +29,7 @@ class ConversationModel(Base):
     feedback_language = Column(String(8), default=DEFAULT_LANGUAGE_CONTEXT.feedback_language.value, nullable=False)
     message_count = Column(Integer, default=0, nullable=False)
     status = Column(SQLEnum(ConversationStatus), default=ConversationStatus.ACTIVE, nullable=False)
+    slot_active = Column(Boolean, default=False, server_default=false(), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 

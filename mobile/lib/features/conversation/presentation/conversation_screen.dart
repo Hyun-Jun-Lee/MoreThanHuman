@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:curitalk/app/router/app_router.dart';
 import 'package:curitalk/app/theme/tokens/tokens.dart';
@@ -53,12 +54,10 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
     );
     final AppCopy copy = AppCopy.of(context);
     final bool isSending = conversation.value?.isSending == true;
-    final bool turnLimitReached =
-        ref
-            .watch(conversationTurnAccessProvider(widget.conversationId))
-            .value
-            ?.canSend ==
-        false;
+    final access = ref
+        .watch(conversationTurnAccessProvider(widget.conversationId))
+        .value;
+    final bool turnLimitReached = access?.canSend == false;
 
     return AppScaffold(
       appBar: AppBar(
@@ -108,6 +107,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
           voiceFailureReason: _voiceInput.failureReason,
           canLoadOlder: !_voiceInput.isRecordingActive && !_voiceInput.isBusy,
           turnLimitReached: turnLimitReached,
+          locked: access?.locked == true,
         ),
       ),
     );
@@ -317,6 +317,7 @@ class _ConversationMessageList extends ConsumerStatefulWidget {
     required this.state,
     required this.canLoadOlder,
     required this.turnLimitReached,
+    required this.locked,
     this.voiceFailureReason,
     super.key,
   });
@@ -325,6 +326,7 @@ class _ConversationMessageList extends ConsumerStatefulWidget {
   final ConversationState state;
   final bool canLoadOlder;
   final bool turnLimitReached;
+  final bool locked;
   final ConversationAudioExceptionReason? voiceFailureReason;
 
   @override
@@ -407,7 +409,9 @@ class _ConversationMessageListState
               ConversationSendFailureReason.textRequestFailed,
           onRetry:
               state.failureReason ==
-                  ConversationSendFailureReason.turnLimitReached
+                      ConversationSendFailureReason.turnLimitReached ||
+                  state.failureReason ==
+                      ConversationSendFailureReason.conversationLocked
               ? null
               : () {
                   final ConversationController controller = ref.read(
@@ -421,12 +425,27 @@ class _ConversationMessageListState
                 },
         ),
       if (widget.turnLimitReached &&
-          state.failureReason != ConversationSendFailureReason.turnLimitReached)
+          state.failureReason !=
+              ConversationSendFailureReason.turnLimitReached &&
+          state.failureReason !=
+              ConversationSendFailureReason.conversationLocked)
         AppColorBlockCard(
           color: AppPalette.blockCream,
-          child: Text(
-            copy.conversationTurnLimitReached,
-            style: AppTypography.bodySm,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                widget.locked
+                    ? copy.conversationLockedReadOnly
+                    : copy.conversationTurnLimitReached,
+                style: AppTypography.bodySm,
+              ),
+              if (Platform.isIOS)
+                TextButton(
+                  onPressed: () => context.push(AppRoute.paywall),
+                  child: Text(copy.subscriptionTitle),
+                ),
+            ],
           ),
         ),
       if (state.assistantAudioStatus != null) ...<Widget>[

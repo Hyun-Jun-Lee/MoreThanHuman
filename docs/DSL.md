@@ -479,13 +479,17 @@ module Conversation {
 
 홈은 발행된 주제가 있으면 최근 대화 로딩 상태와 저장된 대화 수에 관계없이 추천 주제를 보여줘요. 이전 주의 발행 주제도 보관되지 않았다면 시작할 수 있어요. 탭 시 검색·사실 확인·Topic Prep은 실행하지 않아요.
 
-### 대화 접근 정책 v1 (기본 비활성화)
+### 구독과 대화 접근 정책 v2 (기본 비활성화)
 
 `CONVERSATION_ACCESS_ENABLED=false`가 코드 기본값이에요. 개발 환경 미리보기에서는 `true`로 설정해 슬롯·15턴 제한과 모바일 잠금을 함께 확인할 수 있어요. `false`일 때 `GET /access/`는 `enabled=false`, `can_create=true`, `slot_limit=null`, `remaining_slots=null`을 반환하고, 대화별 `GET /{id}/access/`는 `enabled=false`, `can_send=true`, `turn_limit=null`을 반환해요. 기존 생성·발화 API는 한도를 적용하지 않아요.
 
-활성화하면 무료 계정은 기본적으로 대화를 동시에 1개 보유하고, 삭제하면 다시 생성할 수 있어요. 기존 계정은 활성화 직전 스냅샷한 보유 개수까지 교체할 수 있어요. 검증된 영구 단품 구매 grant는 한도를 1칸 늘려요. `GET /access/`의 `used_slots`는 완료 상태를 포함한 저장된 대화 수예요. 실제 기존 대화는 잠기지 않아요. 계정별 `legacy_conversation_slots` 스냅샷과 활성화 순서는 [운영 가이드](OPERATIONS.md)를 따라요.
+활성화하면 무료 계정은 활성 대화 1개와 대화당 사용자 발화 15회를 사용할 수 있어요. Advance는 활성 대화 5개, Plus는 10개이고 두 구독 모두 발화 수 제한이 없어요. 저장된 대화 수는 제한하지 않아요. 비활성 대화는 읽기·삭제할 수 있지만 발화할 수 없어요. 구독 만료·환불·철회 또는 하위 플랜 전환 시 최근 사용한 활성 대화만 현재 한도까지 남겨요. 기존 다중 대화 계정은 마지막 사용자 발화가 가장 최근인 대화 1개를 활성화하고 나머지를 잠가요. 앱에서 활성 대화를 해제하거나 다른 대화로 교체할 수 있어요. 기존 `legacy_conversation_slots`와 `conversation_slot_grants`는 보존하지만 구독 권한에 반영하지 않아요.
 
-활성화된 무료 플랜은 대화마다 사용자 발화 15회를 허용해요. 자유 대화의 첫 발화는 1회이며 역할극의 AI 첫 인사는 세지 않아요. 기존에 15회를 넘긴 대화는 열람할 수 있으나 새 발화는 막아요. 단품 슬롯으로 추가한 대화에도 15회가 적용돼요. 두 생성 API는 한도 초과 시 HTTP 409 `detail: {code: "CONVERSATION_SLOTS_FULL", message: "..."}`를, `/message/`와 `/turn/`은 HTTP 409 `CONVERSATION_TURNS_FULL`을 반환해요. 음성 요청은 STT 전에 한도를 미리 확인하고 저장 시 다시 검사해요.
+자유 대화의 첫 발화는 1회이며 역할극의 AI 첫 인사는 세지 않아요. 기존에 15회를 넘긴 무료 대화는 열람할 수 있으나 새 발화는 막아요. 생성 API는 한도 초과 시 HTTP 409 `CONVERSATION_SLOTS_FULL`, 잠긴 대화의 `/message/`·`/turn/`은 `CONVERSATION_LOCKED`, 무료 발화 초과는 `CONVERSATION_TURNS_FULL`을 반환해요. 음성 요청은 STT 전에 한도를 미리 확인하고 저장 시 다시 검사해요.
+
+`GET /api/conversations/access/`는 `used_slots`(활성 수), `slot_limit`, `remaining_slots`, `locked_count`, `plan`, `active_conversations`(`id`·`title`)을 반환해요. 목록 항목에는 `locked`가 포함되고 `GET /api/conversations/{id}/access/`에는 `can_send`, `locked`, `user_turns`, `turn_limit`이 포함돼요. `POST /api/conversations/{id}/activate/`는 선택적으로 `{ "replace_conversation_id": "UUID" }`를 받아 가득 찬 슬롯을 원자적으로 교체해요. `POST /api/conversations/{id}/deactivate/`는 슬롯을 해제해요.
+
+`GET /api/billing/entitlement/`는 인증 계정의 검증된 `plan`, `status`, `expires_at`, `slot_limit`, `turn_limit`을 반환해요. iOS 앱은 App Store 제품 ID `Advance`·`Plus`의 표시 가격을 직접 불러와요. `POST /api/billing/apple/verify/`는 인증 계정의 `{ "signed_transaction": "Apple StoreKit 2 JWS" }`를 받아 Apple 서명 및 App Store Server API의 현재 상태를 검증하고 권한을 반환해요. 다른 계정에 묶인 구매는 HTTP 409 `PURCHASE_ACCOUNT_CONFLICT`, 잘못된 거래는 HTTP 400 `INVALID_APPLE_PURCHASE`예요. `POST /api/billing/apple/notifications/`는 Apple Server Notifications V2의 `{ "signedPayload": "..." }`를 받아 서명을 검증하고 Apple의 현재 상태를 다시 조회해요. 알림 ID로 중복 처리를 막아요.
 
 멀티모달 대화 API는 아래 다섯 가지 요청 형태를 기본 계약으로 사용해요.
 

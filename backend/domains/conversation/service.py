@@ -470,7 +470,9 @@ class ConversationService:
             대화
         """
         conversation = self.repository.find_by_id(conversation_id, user_id)
-        return Conversation.model_validate(conversation)
+        return Conversation.model_validate(conversation).model_copy(
+            update={"locked": settings.conversation_access_enabled and not conversation.slot_active}
+        )
 
     def get_access(self, user_id: str) -> dict:
         return self.repository.access_summary(user_id, enabled=settings.conversation_access_enabled)
@@ -487,6 +489,12 @@ class ConversationService:
     def assert_can_send(self, conversation_id: str, user_id: str) -> None:
         if settings.conversation_access_enabled:
             self.repository.assert_can_send(conversation_id, user_id, enabled=True)
+
+    def activate_conversation(self, conversation_id: str, user_id: str, replace_id: str | None) -> None:
+        self.repository.activate_conversation(conversation_id, user_id, replace_id)
+
+    def deactivate_conversation(self, conversation_id: str, user_id: str) -> None:
+        self.repository.deactivate_conversation(conversation_id, user_id)
 
     @staticmethod
     def _build_pagination(*, limit: int, offset: int, total_count: int, current_count: int) -> Pagination:
@@ -511,9 +519,13 @@ class ConversationService:
         Returns:
             대화 목록
         """
+        if settings.conversation_access_enabled:
+            self.repository.access_summary(user_id, enabled=True)
         conversations = self.repository.find_all(user_id, limit, offset)
         total_count = self.repository.count_conversations(user_id)
-        results = [Conversation.model_validate(c) for c in conversations]
+        results = [Conversation.model_validate(c).model_copy(
+            update={"locked": settings.conversation_access_enabled and not c.slot_active}
+        ) for c in conversations]
         pagination = self._build_pagination(
             limit=limit,
             offset=offset,

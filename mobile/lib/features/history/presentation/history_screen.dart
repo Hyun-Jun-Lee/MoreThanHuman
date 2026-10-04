@@ -22,13 +22,13 @@ class HistoryScreen extends ConsumerStatefulWidget {
 
 class _HistoryScreenState extends ConsumerState<HistoryScreen> {
   final Set<String> _deleting = {};
+  final Set<String> _changing = {};
 
   @override
   Widget build(BuildContext context) {
     final copy = AppCopy.of(context);
     final conversations = ref.watch(conversationHistoryControllerProvider);
-    final isAdditionalConversationLocked =
-        ref.watch(conversationAccessProvider).value?.isLocked == true;
+    ref.watch(conversationAccessProvider);
     final controller = ref.read(conversationHistoryControllerProvider.notifier);
     return AppScaffold(
       padding: EdgeInsets.zero,
@@ -72,12 +72,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                   padding: const EdgeInsets.only(bottom: AppSpacing.lg),
                   itemCount: value.page.items.isEmpty
                       ? 1
-                      : value.page.items.length +
-                            1 +
-                            (isAdditionalConversationLocked &&
-                                    !value.page.hasMore
-                                ? 1
-                                : 0),
+                      : value.page.items.length + 1,
                   separatorBuilder: (_, _) => const Divider(
                     height: 1,
                     indent: AppSpacing.screenPadding,
@@ -90,35 +85,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                         message: copy.historyEmptyMessage,
                       );
                     }
-                    if (isAdditionalConversationLocked &&
-                        !value.page.hasMore &&
-                        index == value.page.items.length) {
-                      return Semantics(
-                        key: const ValueKey('locked-additional-conversation'),
-                        label: copy.additionalConversationLockedSemantic,
-                        button: true,
-                        excludeSemantics: true,
-                        child: InkWell(
-                          onTap: () => showConversationAccessDialog(context),
-                          child: const SizedBox(
-                            width: double.infinity,
-                            height: 64,
-                            child: Center(
-                              child: LockedConversationBadge(
-                                dimension: 40,
-                                iconSize: 24,
-                              ),
-                            ),
-                          ),
-                        ),
-                      );
-                    }
-                    if (index ==
-                        value.page.items.length +
-                            (isAdditionalConversationLocked &&
-                                    !value.page.hasMore
-                                ? 1
-                                : 0)) {
+                    if (index == value.page.items.length) {
                       if (!value.page.hasMore) return const SizedBox.shrink();
                       return Padding(
                         padding: const EdgeInsets.all(AppSpacing.lg),
@@ -155,16 +122,20 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                         style: AppTypography.button,
                       ),
                       subtitle: Text(
-                        copy.conversationPreview(
-                          messageCount: item.messageCount,
-                          isActive: item.isActive,
-                        ),
+                        item.locked
+                            ? copy.lockedConversationLabel
+                            : copy.conversationPreview(
+                                messageCount: item.messageCount,
+                                isActive: item.isActive,
+                              ),
                         style: AppTypography.bodySm.copyWith(
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
                       onTap: () => widget.onConversationSelected?.call(item.id),
-                      trailing: _deleting.contains(item.id)
+                      trailing:
+                          _deleting.contains(item.id) ||
+                              _changing.contains(item.id)
                           ? const SizedBox.square(
                               dimension: AppSize.icon,
                               child: CircularProgressIndicator(strokeWidth: 2),
@@ -172,8 +143,20 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                           : PopupMenuButton<String>(
                               tooltip: copy.conversationOptionsLabel,
                               icon: const Icon(Icons.more_horiz_rounded),
-                              onSelected: (_) => _deleteConversation(item),
+                              onSelected: (action) => action == 'delete'
+                                  ? _deleteConversation(item)
+                                  : _changeSlot(item),
                               itemBuilder: (_) => [
+                                PopupMenuItem(
+                                  value: item.locked
+                                      ? 'activate'
+                                      : 'deactivate',
+                                  child: Text(
+                                    item.locked
+                                        ? copy.activateConversation
+                                        : copy.deactivateConversation,
+                                  ),
+                                ),
                                 PopupMenuItem(
                                   value: 'delete',
                                   child: Text(copy.deleteConversationTooltip),
@@ -189,6 +172,64 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _changeSlot(ConversationSummary item) async {
+    if (_changing.contains(item.id)) return;
+    String? replaceId;
+    if (item.locked) {
+      final access = ref.read(conversationAccessProvider).value;
+      if (access?.isLocked == true) {
+        replaceId = await showDialog<String>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: Text(AppCopy.of(context).switchConversationTitle),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(AppCopy.of(context).switchConversationMessage),
+                for (final active in access!.activeConversations)
+                  ListTile(
+                    title: Text(active.title),
+                    onTap: () => Navigator.of(dialogContext).pop(active.id),
+                  ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: Text(AppCopy.of(context).cancelLabel),
+              ),
+            ],
+          ),
+        );
+        if (replaceId == null || !mounted) return;
+      }
+    }
+    setState(() => _changing.add(item.id));
+    try {
+      final repository = ref.read(conversationAccessRepositoryProvider);
+      if (item.locked) {
+        await repository.activate(item.id, replaceConversationId: replaceId);
+      } else {
+        await repository.deactivate(item.id);
+      }
+      ref.invalidate(conversationAccessProvider);
+      ref.invalidate(conversationHistoryControllerProvider);
+      ref.invalidate(recentConversationsControllerProvider);
+      ref.invalidate(conversationTurnAccessProvider(item.id));
+      if (replaceId != null) {
+        ref.invalidate(conversationTurnAccessProvider(replaceId));
+      }
+    } on Object {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppCopy.of(context).slotChangeFailed)),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _changing.remove(item.id));
+    }
   }
 
   Future<void> _showStartSheet() async {

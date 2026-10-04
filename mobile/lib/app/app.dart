@@ -4,12 +4,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:curitalk/features/auth/auth.dart';
+import 'package:curitalk/features/billing/billing_controller.dart';
+import 'package:flutter/foundation.dart';
 
 class CuritalkApp extends ConsumerWidget {
   const CuritalkApp({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      ref.watch(billingControllerProvider);
+    }
     final String? appLocale = ref
         .watch(authControllerProvider)
         .value

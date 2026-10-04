@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:curitalk/app/navigation/main_shell.dart';
 import 'package:curitalk/features/profile/presentation/profile_screen.dart';
+import 'package:curitalk/features/billing/paywall_screen.dart';
 import 'package:curitalk/features/history/application/conversation_history_controller.dart';
 import 'package:curitalk/features/auth/auth.dart';
 import 'package:curitalk/features/conversation/conversation.dart';
@@ -20,6 +21,7 @@ abstract final class AppRoute {
   static const String home = '/home';
   static const String history = '/history';
   static const String profile = '/profile';
+  static const String paywall = '/paywall';
   static const String topicInput = '/topic-input';
   static const String topicPrep = '/topic-prep';
   static const String roleplaySetup = '/roleplay-setup';
@@ -83,6 +85,10 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
       GoRoute(
         path: AppRoute.login,
         builder: (context, state) => const LoginScreen(),
+      ),
+      GoRoute(
+        path: AppRoute.paywall,
+        builder: (context, state) => const PaywallScreen(),
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, shell) => MainShell(navigationShell: shell),

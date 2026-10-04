@@ -6,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 abstract interface class ConversationAccessRepository {
   Future<ConversationAccess> getAccess();
   Future<ConversationTurnAccess> getTurnAccess(String conversationId);
+  Future<void> activate(String conversationId, {String? replaceConversationId});
+  Future<void> deactivate(String conversationId);
 }
 
 class ApiConversationAccessRepository implements ConversationAccessRepository {
@@ -29,6 +31,27 @@ class ApiConversationAccessRepository implements ConversationAccessRepository {
       decodeData: ConversationTurnAccess.fromJson,
     );
     return response.data;
+  }
+
+  @override
+  Future<void> activate(
+    String conversationId, {
+    String? replaceConversationId,
+  }) async {
+    await client.post<Object?>(
+      'conversations/$conversationId/activate/',
+      data: {'replace_conversation_id': replaceConversationId},
+      decodeData: (value) => value,
+    );
+  }
+
+  @override
+  Future<void> deactivate(String conversationId) async {
+    await client.post<Object?>(
+      'conversations/$conversationId/deactivate/',
+      data: {},
+      decodeData: (value) => value,
+    );
   }
 }
 

@@ -39,8 +39,7 @@ class HomeScreen extends ConsumerWidget {
     final AsyncValue<List<ConversationSummary>> recent = ref.watch(
       recentConversationsControllerProvider,
     );
-    final bool isAdditionalConversationLocked =
-        ref.watch(conversationAccessProvider).value?.isLocked == true;
+    ref.watch(conversationAccessProvider);
     final bool isRecentRefreshing = ref.watch(
       recentConversationsRefreshingProvider,
     );
@@ -113,26 +112,6 @@ class HomeScreen extends ConsumerWidget {
                     );
                   },
                 ),
-                if (isAdditionalConversationLocked) ...[
-                  const SizedBox(height: AppSpacing.md),
-                  AppColorBlockCard(
-                    key: const ValueKey('locked-additional-conversation-home'),
-                    color: AppPalette.blockCream,
-                    semanticLabel: copy.additionalConversationLockedSemantic,
-                    onTap: () => showConversationAccessDialog(context),
-                    padding: EdgeInsets.zero,
-                    child: const SizedBox(
-                      width: double.infinity,
-                      height: 112,
-                      child: Center(
-                        child: LockedConversationBadge(
-                          dimension: 48,
-                          iconSize: 28,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
                 const SizedBox(height: AppSpacing.lg),
                 AppPrimaryButton(
                   label: copy.newConversationLabel,
@@ -359,10 +338,12 @@ class _RecentConversations extends StatelessWidget {
           RecentConversationCard(
             category: copy.conversationCategory(conversations[index].kind.name),
             title: conversations[index].title,
-            preview: copy.conversationPreview(
-              messageCount: conversations[index].messageCount,
-              isActive: conversations[index].isActive,
-            ),
+            preview: conversations[index].locked
+                ? copy.lockedConversationLabel
+                : copy.conversationPreview(
+                    messageCount: conversations[index].messageCount,
+                    isActive: conversations[index].isActive,
+                  ),
             color: _colors[index % _colors.length],
             onTap: onSelected == null
                 ? null

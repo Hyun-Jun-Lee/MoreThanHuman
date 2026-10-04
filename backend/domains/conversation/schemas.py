@@ -82,6 +82,9 @@ class ConversationAccess(BaseModel):
     used_slots: int
     slot_limit: int | None
     remaining_slots: int | None
+    locked_count: int = 0
+    plan: str = "free"
+    active_conversations: list[dict[str, str]] = []
 
 
 class ConversationTurnAccess(BaseModel):
@@ -89,6 +92,11 @@ class ConversationTurnAccess(BaseModel):
     user_turns: int
     turn_limit: int | None
     can_send: bool
+    locked: bool = False
+
+
+class ActivateConversationRequest(BaseModel):
+    replace_conversation_id: UUID | None = None
 
 
 class Conversation(BaseModel):
@@ -101,6 +109,7 @@ class Conversation(BaseModel):
     language: LearningLanguageContext = Field(default_factory=LearningLanguageContext)
     message_count: int
     status: ConversationStatus
+    locked: bool = False
     created_at: datetime
     updated_at: datetime
 

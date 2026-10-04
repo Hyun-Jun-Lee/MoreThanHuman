@@ -76,7 +76,7 @@ docker compose up -d --build --force-recreate --no-deps api
 | `uv run alembic heads` | 코드의 최신 revision 확인 |
 | `uv run alembic upgrade head` | 미적용 마이그레이션 반영 |
 
-개발 환경에서 잠금 UI와 생성 차단을 확인하려면 [운영 가이드의 기존 대화 슬롯 스냅샷](docs/OPERATIONS.md#대화-이용-권한-활성화) 후 `CONVERSATION_ACCESS_ENABLED=true`로 API를 재시작해요. 운영 환경은 결제 연동 전 `false`를 유지해요.
+구독·대화 권한을 활성화하려면 [운영 가이드의 기존 대화 슬롯 초기화](docs/OPERATIONS.md#대화-이용-권한-활성화)와 Apple Sandbox 검증을 먼저 마쳐요. 운영 환경의 `CONVERSATION_ACCESS_ENABLED`는 검증 전 `false`로 유지해요.
 
 ### 스낵 콘텐츠 생성
 

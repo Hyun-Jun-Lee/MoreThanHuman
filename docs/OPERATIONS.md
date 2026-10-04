@@ -54,18 +54,18 @@ Flutter App
 
 ## 대화 이용 권한 활성화
 
-`20261001_0001` migration은 `profiles.legacy_conversation_slots`와 `conversation_slot_grants`를 추가해요. 코드 기본 설정 `CONVERSATION_ACCESS_ENABLED=false`에서는 대화 생성·발화 제한과 모바일 잠금 표시가 모두 꺼져 있어요. 개발 환경에서는 결제 없이 화면과 차단 동작을 확인하려고 활성화할 수 있어요. 운영에서는 결제·복원·환불과 유료 플랜 권한이 준비되기 전에는 켜지 않아요.
+`20261004_0002` migration은 Apple 구독·알림 표와 활성 대화 슬롯을 추가해요. `CONVERSATION_ACCESS_ENABLED=false`에서는 기존 대화 제한을 적용하지 않아요. 운영 활성화 전에는 Apple Sandbox의 구매·복원·갱신·만료·환불, PostgreSQL 동시 요청, 앱의 읽기 전용 대화 흐름을 확인해요.
 
 개발 환경 미리보기와 향후 결제 출시 때는 아래 순서로 활성화해요.
 
-1. API에 migration을 적용하고 모바일 앱을 갱신해요. 운영 활성화라면 결제·복원 경로도 배포해요. 기존 API의 대화 생성·삭제 쓰기를 잠시 중지해요.
-2. `backend/`에서 `uv run python -m scripts.snapshot_conversation_slots`를 실행해요. 아직 스냅샷하지 않은 계정의 현재 보유 개수를 최소 1로 저장해요. 재실행해도 이미 저장한 보장 슬롯은 줄이지 않아요.
-3. 샘플 계정의 `legacy_conversation_slots`와 실제 보유 대화 수가 일치하는지 확인해요. 쓰기 중지가 유지되는 동안 `CONVERSATION_ACCESS_ENABLED=true`로 API를 재시작해요.
-4. 무료 0/1/기존 다중 대화 계정의 `GET /api/conversations/access/`와 두 새 대화 시작 경로, 15턴 경계를 점검해요. 문제가 있으면 환경변수를 `false`로 되돌려 API를 재시작해요. 스냅샷과 구매 grant는 보존해요.
+1. API에 migration을 적용하고 새 iOS 앱을 배포해요. App Store Connect에서 월간 `Advance`·`Plus`를 같은 구독 그룹에 두고, 앱 내 구입 계약·세금·은행 정보와 상품 심사를 준비해요. 앱 빌드에는 공개 개인정보처리방침 URL을 `--dart-define=PRIVACY_POLICY_URL=...`로 제공해요.
+2. 서버 비밀 저장소에 `APPLE_IAP_*` 설정을 주입해요. App Store Connect에서 Server Notifications V2 URL을 `https://<API 호스트>/api/billing/apple/notifications/`로 지정해요. Sandbox는 `APPLE_IAP_ENVIRONMENT=sandbox`, 운영은 `production`으로 분리해요. `backend/certs/apple/`의 Apple 공식 루트 인증서 3개를 배포물에 포함해요.
+3. 기존 API의 대화 생성·삭제 쓰기를 잠시 중지하고, `backend/`에서 `uv run python -m scripts.initialize_conversation_slots`를 실행해요. 무료 계정은 가장 최근 사용자 발화가 있는 대화 1개만 활성화해요. 재실행 시 사용자가 직접 바꾼 활성 대화는 보존해요.
+4. 무료 0/1/기존 다중 대화 계정과 Advance·Plus 계정에서 `GET /api/conversations/access/`, 생성·발화, 15회 경계, 대화 전환·해제, 만료·환불 잠금을 확인해요. 쓰기 중지가 유지되는 동안 `CONVERSATION_ACCESS_ENABLED=true`로 API를 재시작해요. 문제가 있으면 스위치를 `false`로 되돌리고 원인을 분석해요.
 
-스냅샷과 스위치 변경 사이에 대화 생성·삭제가 발생하면 사용자의 교체 가능 개수가 실제 활성화 순간과 달라질 수 있으므로 쓰기를 중지해야 해요. 이 CLI는 스위치가 이미 켜져 있으면 실행을 거부해요. 개발용 `.env`에서 `CONVERSATION_ACCESS_ENABLED=true`를 지정하면 서버 재시작 후 무료 슬롯 1개와 대화당 15턴이 모두 적용돼요. 슬롯이 남은 계정에는 잠금 UI가 보이지 않으며, 첫 대화를 만든 뒤 추가 대화 자리가 잠겨요. 운영 배포의 환경변수는 별도로 `false`를 유지해요.
+초기화와 스위치 변경 사이에 대화 생성·삭제가 발생하면 활성 슬롯 선택이 달라질 수 있으므로 쓰기를 중지해요. 이 CLI는 스위치가 이미 켜져 있으면 실행을 거부해요. 테스트용 `.env`에서 스위치를 켜면 무료 계정에 활성 슬롯 1개와 대화당 15회가 적용돼요. 읽기 전용 대화는 앱에서 열람·삭제하고, 슬롯이 가득 차면 기록 화면에서 현재 활성 대화를 해제하거나 교체해요.
 
-동시 생성·발화 제한은 프로덕션 PostgreSQL의 행 잠금에 의존해요. 개발용 SQLite에서는 동시 요청 경계 검증을 대신할 수 없으므로 활성화 전 PostgreSQL에서 병렬 요청을 확인해요. 유료 플랜별 권한 판정도 결제 출시 전에 연결해야 해요.
+동시 생성·발화 제한은 프로덕션 PostgreSQL의 행 잠금에 의존해요. 개발용 SQLite에서는 동시 요청 경계 검증을 대신할 수 없으므로 활성화 전 PostgreSQL에서 병렬 요청을 확인해요. Apple 알림 누락에 대비해 `backend/`에서 `uv run python -m scripts.reconcile_apple_subscriptions`를 주기적으로 실행하고 종료 코드·실패 건수를 모니터링해요. 이 작업은 Apple 현재 상태를 다시 조회하고 기존 Convia 계정 연결을 유지해요.
 
 `ENV=dev`나 로컬 `.env`라는 파일명만으로 데이터가 운영과 분리되지는 않아요. UI 미리보기 전에 `DATABASE_URL`과 앱의 `SUPABASE_URL`이 별도 테스트 프로젝트를 가리키는지 확인해요. 같은 프로젝트라면 스위치를 켰을 때 실제 계정에도 제한이 적용돼요.
 

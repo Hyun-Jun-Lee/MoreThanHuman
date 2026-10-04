@@ -110,6 +110,7 @@ class AppCopy {
             ? '음성 메시지를 보내지 못했어요. 다시 시도해 주세요.'
             : 'Your voice message could not be sent. Please try again.',
       'turnLimitReached' => conversationTurnLimitReached,
+      'conversationLocked' => conversationLockedReadOnly,
       'slotsFull' => additionalConversationLocked,
       'freeChatRequestFailed' =>
         isKorean
@@ -165,17 +166,73 @@ class AppCopy {
   }
 
   String get retryLabel => isKorean ? '다시 시도' : 'Retry';
+  String get subscriptionTitle => isKorean ? '구독' : 'Subscription';
+  String get subscriptionIntro =>
+      isKorean ? '원하는 만큼 대화를 이어가세요' : 'Keep the conversation going';
+  String currentPlan(String plan) => isKorean
+      ? '현재 플랜: ${plan == 'free' ? '무료' : plan}'
+      : 'Current plan: ${plan == 'free' ? 'Free' : plan}';
+  String get subscriptionStatusUnavailable =>
+      isKorean ? '구독 상태를 확인하지 못했어요.' : 'Could not load subscription status.';
+  String get purchaseIosOnly => isKorean
+      ? '현재 iOS에서만 구독할 수 있어요.'
+      : 'Subscriptions are currently available on iOS.';
+  String planBenefits(bool plus) => isKorean
+      ? '활성 대화 최대 ${plus ? 10 : 5}개 · 발화 무제한'
+      : 'Up to ${plus ? 10 : 5} active conversations · Unlimited turns';
+  String get priceUnavailable => isKorean ? '가격을 불러오는 중이에요.' : 'Loading price';
+  String monthlyPrice(String price) =>
+      isKorean ? '$price / 월' : '$price / month';
+  String subscribeTo(String plan) =>
+      isKorean ? '$plan 구독하기' : 'Subscribe to $plan';
+  String get restorePurchases => isKorean ? '구매 복원' : 'Restore purchases';
+  String get manageSubscription => isKorean ? '구독 관리' : 'Manage subscription';
+  String get subscriptionDisclosure => isKorean
+      ? '월간 자동 갱신 구독이에요. 현재 결제 기간이 끝나기 전까지 언제든 취소할 수 있어요.'
+      : 'Monthly auto-renewing subscription. You can cancel before the current billing period ends.';
+  String get termsOfUse => isKorean ? '이용약관' : 'Terms of Use';
+  String get privacyPolicy => isKorean ? '개인정보처리방침' : 'Privacy Policy';
+  String billingMessage(String code) => switch ((isKorean, code)) {
+    (true, 'verified') => '구독이 확인되었어요.',
+    (false, 'verified') => 'Subscription verified.',
+    (true, 'account_conflict') => '이 구매는 다른 Convia 계정에 연결되어 있어요.',
+    (false, 'account_conflict') =>
+      'This purchase belongs to another Convia account.',
+    (true, 'purchase_canceled') => '구매를 취소했어요.',
+    (false, 'purchase_canceled') => 'Purchase canceled.',
+    (true, 'restore_requested') => '복원한 구매를 확인하고 있어요.',
+    (false, 'restore_requested') => 'Checking restored purchases.',
+    (true, 'products_unavailable') => 'App Store 상품을 불러오지 못했어요.',
+    (false, 'products_unavailable') => 'Could not load App Store products.',
+    (true, _) => '결제를 확인하지 못했어요. 다시 시도하거나 구매를 복원해 주세요.',
+    (false, _) => 'Could not verify the purchase. Retry or restore purchases.',
+  };
+  String get conversationLockedReadOnly => isKorean
+      ? '이 대화는 읽기 전용이에요. 다른 활성 대화를 바꾸거나 구독을 시작할 수 있어요.'
+      : 'This conversation is read-only. Switch your active conversation or subscribe.';
+  String get activateConversation =>
+      isKorean ? '활성 대화로 선택' : 'Use this conversation';
+  String get deactivateConversation =>
+      isKorean ? '활성 대화 해제' : 'Release active slot';
+  String get lockedConversationLabel => isKorean ? '읽기 전용' : 'Read-only';
   String get backLabel => isKorean ? '뒤로' : 'Back';
   String get backToHomeLabel => isKorean ? '홈으로 돌아가기' : 'Back to home';
   String get conversationTitle => isKorean ? '대화' : 'Conversation';
   String get additionalConversationLabel =>
       isKorean ? '추가 대화' : 'Additional conversation';
   String get additionalConversationLocked => isKorean
-      ? '추가 대화는 이용권이 필요해요.'
-      : 'An additional conversation requires a pass.';
-  String get additionalConversationLockedSemantic => isKorean
-      ? '잠긴 추가 대화, 이용권이 필요해요'
-      : 'Locked additional conversation, pass required';
+      ? '활성 대화 슬롯이 모두 사용 중이에요. 기록에서 대화 슬롯을 해제하거나 구독해 주세요.'
+      : 'All active conversation slots are in use. Release a slot in History or subscribe.';
+  String get additionalConversationLockedSemantic =>
+      isKorean ? '읽기 전용 대화' : 'Read-only conversation';
+  String get switchConversationTitle =>
+      isKorean ? '활성 대화 바꾸기' : 'Switch active conversation';
+  String get switchConversationMessage => isKorean
+      ? '대신 읽기 전용으로 전환할 대화를 선택해 주세요.'
+      : 'Choose a conversation to make read-only instead.';
+  String get slotChangeFailed => isKorean
+      ? '대화 슬롯을 변경하지 못했어요. 다시 시도해 주세요.'
+      : 'Could not change the active conversation. Try again.';
   String get accessDialogConfirm => isKorean ? '확인' : 'OK';
   String get conversationTurnLimitReached => isKorean
       ? '이 대화의 무료 15턴을 모두 사용했어요. 이전 대화는 계속 볼 수 있어요.'

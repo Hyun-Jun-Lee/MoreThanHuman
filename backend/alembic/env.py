@@ -10,6 +10,7 @@ from domains.auth import models as auth_models  # noqa: F401
 from domains.conversation import models as conversation_models  # noqa: F401
 from domains.grammar import models as grammar_models  # noqa: F401
 from domains.language_snacks import models as snack_models  # noqa: F401
+from shared import subscription as subscription_models  # noqa: F401
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

@@ -1,4 +1,8 @@
 import 'package:curitalk/app/theme/tokens/tokens.dart';
+import 'dart:io';
+import 'package:curitalk/app/router/app_router.dart';
+import 'package:curitalk/features/billing/billing_repository.dart';
+import 'package:go_router/go_router.dart';
 import 'package:curitalk/core/copy/copy.dart';
 import 'package:curitalk/core/widgets/widgets.dart';
 import 'package:curitalk/core/widgets/main_tab_scope.dart';
@@ -32,6 +36,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         : 'Curitalk user';
     final email = user?.email.trim() ?? '';
     final copy = AppCopy.of(context);
+    final entitlement = ref.watch(billingEntitlementProvider).value;
     return AppScaffold(
       safeAreaBottom: false,
       appBar: AppBar(title: Text(copy.profileLabel)),
@@ -73,6 +78,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               ],
             ),
             const SizedBox(height: AppSpacing.xl),
+            if (Platform.isIOS) ...[
+              AppSectionLabel(copy.subscriptionTitle),
+              const SizedBox(height: AppSpacing.md),
+              ListTile(
+                title: Text(copy.currentPlan(entitlement?.plan ?? 'free')),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () => context.push(AppRoute.paywall),
+              ),
+              const SizedBox(height: AppSpacing.xl),
+            ],
             AppPrimaryButton(
               label: copy.logOutLabel,
               isLoading: isLoggingOut,

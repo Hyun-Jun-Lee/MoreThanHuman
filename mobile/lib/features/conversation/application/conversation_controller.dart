@@ -10,6 +10,7 @@ enum ConversationSendFailureReason {
   textRequestFailed,
   audioRequestFailed,
   turnLimitReached,
+  conversationLocked,
 }
 
 enum AssistantAudioStatus { unavailable }
@@ -342,16 +343,20 @@ class ConversationController extends AsyncNotifier<ConversationState> {
     } on Object catch (error) {
       final bool limitReached =
           error is ApiException && error.code == 'CONVERSATION_TURNS_FULL';
-      if (limitReached) {
+      final bool locked =
+          error is ApiException && error.code == 'CONVERSATION_LOCKED';
+      if (limitReached || locked) {
         ref.invalidate(conversationTurnAccessProvider(conversationId));
       }
       state = AsyncData<ConversationState>(
         previous.copyWith(
           isSending: false,
-          failedMessage: limitReached ? null : normalized,
+          failedMessage: limitReached || locked ? null : normalized,
           clearFailedAudioFile: true,
           failureReason: limitReached
               ? ConversationSendFailureReason.turnLimitReached
+              : locked
+              ? ConversationSendFailureReason.conversationLocked
               : ConversationSendFailureReason.textRequestFailed,
           clearAssistantAudioStatus: true,
         ),
@@ -428,16 +433,20 @@ class ConversationController extends AsyncNotifier<ConversationState> {
     } on Object catch (error) {
       final bool limitReached =
           error is ApiException && error.code == 'CONVERSATION_TURNS_FULL';
-      if (limitReached) {
+      final bool locked =
+          error is ApiException && error.code == 'CONVERSATION_LOCKED';
+      if (limitReached || locked) {
         ref.invalidate(conversationTurnAccessProvider(conversationId));
       }
       state = AsyncData<ConversationState>(
         previous.copyWith(
           isSending: false,
           clearFailedMessage: true,
-          failedAudioFile: limitReached ? null : audioFile,
+          failedAudioFile: limitReached || locked ? null : audioFile,
           failureReason: limitReached
               ? ConversationSendFailureReason.turnLimitReached
+              : locked
+              ? ConversationSendFailureReason.conversationLocked
               : ConversationSendFailureReason.audioRequestFailed,
           clearAssistantAudioStatus: true,
         ),

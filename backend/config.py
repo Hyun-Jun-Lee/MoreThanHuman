@@ -101,6 +101,12 @@ class Settings(BaseSettings):
     # Conversation Settings
     max_history_turns: int = 10
     conversation_access_enabled: bool = False
+    apple_iap_environment: Literal["sandbox", "production"] | None = None
+    apple_iap_bundle_id: str | None = None
+    apple_iap_app_id: int | None = None
+    apple_iap_issuer_id: str | None = None
+    apple_iap_key_id: str | None = None
+    apple_iap_private_key: str | None = None
 
     # Voice Settings
     stt_provider: str = "openrouter"

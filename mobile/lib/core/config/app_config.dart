@@ -18,6 +18,12 @@ abstract final class AppConfig {
     'SUPABASE_PUBLISHABLE_KEY',
   );
 
+  static const String privacyPolicyUrl = String.fromEnvironment('PRIVACY_POLICY_URL');
+  static const String subscriptionTermsUrl = String.fromEnvironment(
+    'SUBSCRIPTION_TERMS_URL',
+    defaultValue: 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/',
+  );
+
   static String? get optionalGoogleClientId => _optional(googleClientId);
 
   static String? get optionalGoogleServerClientId =>

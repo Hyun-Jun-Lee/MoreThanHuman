@@ -74,7 +74,13 @@
 | `SEARCH_MAX_RESULTS` | 아니오 | `12` | 필터링 전 수집할 검색 결과 수 |
 | `SEARCH_MIN_RELEVANT_RESULTS` | 아니오 | `2` | LLM judge가 accept해야 하는 최소 출처 수 |
 | `MAX_HISTORY_TURNS` | 아니오 | `10` | 대화 기록 최대 턴 |
-| `CONVERSATION_ACCESS_ENABLED` | 아니오 | `false` | 대화 동시 보유·대화별 15턴 제한과 모바일 잠금 안내를 함께 활성화. 기존 슬롯 스냅샷 후 개발 환경에서 `true`로 UI·차단 동작을 시험할 수 있음. 운영은 결제·복원·유료 플랜 권한 준비 전 `false` 유지 |
+| `CONVERSATION_ACCESS_ENABLED` | 아니오 | `false` | 무료 1개·15회, Advance 5개·무제한, Plus 10개·무제한 정책을 서버에서 집행. 운영은 Apple Sandbox 검증과 기존 대화 초기화 후 활성화 |
+| `APPLE_IAP_ENVIRONMENT` | Apple 결제 시 필수 | 없음 | `sandbox` 또는 `production`; 서명과 API 환경이 일치해야 함 |
+| `APPLE_IAP_BUNDLE_ID` | Apple 결제 시 필수 | 없음 | App Store Connect 앱의 Bundle ID |
+| `APPLE_IAP_APP_ID` | 운영 결제 시 필수 | 없음 | App Store Connect의 숫자 Apple 앱 ID |
+| `APPLE_IAP_ISSUER_ID` | Apple 결제 시 필수 | 없음 | App Store Connect In-App Purchase 키 발급자 ID |
+| `APPLE_IAP_KEY_ID` | Apple 결제 시 필수 | 없음 | App Store Connect In-App Purchase 키 ID |
+| `APPLE_IAP_PRIVATE_KEY` | Apple 결제 시 필수 | 없음 | `.p8` 비밀 키 본문. 비밀 저장소에서 주입하고 줄바꿈은 `\n`으로 전달 가능 |
 
 ## 외부 HTTP 연결 풀 v1
 
