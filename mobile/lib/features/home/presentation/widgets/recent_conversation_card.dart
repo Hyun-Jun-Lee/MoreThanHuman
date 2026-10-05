@@ -1,8 +1,10 @@
 import 'package:curitalk/app/theme/tokens/tokens.dart';
 import 'package:curitalk/core/copy/copy.dart';
+import 'package:curitalk/core/text/word_pair_lines.dart';
 import 'package:curitalk/core/widgets/app_color_block_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
+import 'package:text_ko/text_ko.dart';
 
 class RecentConversationCard extends StatefulWidget {
   const RecentConversationCard({
@@ -134,8 +136,9 @@ class _RecentConversationCardState extends State<RecentConversationCard> {
               children: [
                 Expanded(
                   child: Text(
-                    widget.title,
-                    maxLines: 2,
+                    wrapWordsInPairs(widget.title).textKoKeepAll(),
+                    semanticsLabel: widget.title,
+                    maxLines: 3,
                     overflow: TextOverflow.ellipsis,
                     style: AppTypography.headlineMd.copyWith(
                       color: Theme.of(context).colorScheme.onSurface,

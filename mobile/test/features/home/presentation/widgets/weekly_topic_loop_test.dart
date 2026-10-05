@@ -82,14 +82,14 @@ void main() {
       AppPalette.topicSurface,
     );
     expect(
-      tester.widget<Text>(find.text('주말 산책 이야기').first).style?.color,
+      tester.widget<TextKo>(find.text('주말 산책\n이야기').first).style?.color,
       AppPalette.ink,
     );
     await tester.pumpWidget(const SizedBox());
   });
 
   testWidgets(
-    'moving cards keep equal width and centered one- or two-line text',
+    'moving cards keep equal width and centered wrapped text',
     (tester) async {
       const short = '취미 이야기';
       const long = '주말에 가장 기억에 남는 활동 이야기';
@@ -109,34 +109,40 @@ void main() {
 
       for (final id in ['short', 'long']) {
         final card = find.byKey(ValueKey('weekly-topic-card-$id-0'));
-        final text = find.text(id == 'short' ? short : long).first;
-        expect(tester.getSize(card), const Size(156, 84));
+        final text = find
+            .text(id == 'short' ? short : '주말에 가장\n기억에 남는\n활동 이야기')
+            .first;
+        expect(tester.getSize(card), const Size(156, 104));
         expect(
           tester.getCenter(text).dx,
           closeTo(tester.getCenter(card).dx, 0.1),
         );
-        expect(tester.widget<Text>(text).maxLines, 2);
+        expect(tester.widget<TextKo>(text).maxLines, 3);
       }
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
     },
   );
 
-  testWidgets('Korean topic keeps 기술 together on the second line', (
+  testWidgets('topic wraps every two words without changing its original', (
     tester,
   ) async {
     const topic = '내가 배우고 싶은 새로운 기술';
+    WeeklyTopic? selected;
     await tester.pumpWidget(
-      const MaterialApp(
+      MaterialApp(
         home: Scaffold(
           body: WeeklyTopicLoop(
-            topics: [WeeklyTopic(id: 'korean', text: topic)],
-            onSelected: _ignore,
+            topics: const [WeeklyTopic(id: 'korean', text: topic)],
+            onSelected: (value) => selected = value,
           ),
         ),
       ),
     );
 
+    final display = tester.widget<TextKo>(find.byType(TextKo).first);
+    expect(display.data, '내가 배우고\n싶은 새로운\n기술');
+    expect(display.semanticsLabel, topic);
     final richText = find
         .descendant(
           of: find.byType(TextKo).first,
@@ -156,7 +162,13 @@ void main() {
         .top;
 
     expect(topOf(technology), topOf(technology + 2));
-    expect(topOf(technology), greaterThan(topOf(rendered.indexOf('내'))));
+    expect(topOf(technology), greaterThan(topOf(rendered.indexOf('싶'))));
+    expect(
+      topOf(rendered.indexOf('싶')),
+      greaterThan(topOf(rendered.indexOf('내'))),
+    );
+    await tester.tap(find.byKey(const ValueKey('weekly-topic-korean-1')));
+    expect(selected?.text, topic);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });

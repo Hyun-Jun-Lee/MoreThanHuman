@@ -1,4 +1,5 @@
 import 'package:curitalk/app/theme/tokens/tokens.dart';
+import 'package:curitalk/core/text/word_pair_lines.dart';
 import 'package:curitalk/features/home/domain/weekly_topic.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -142,7 +143,7 @@ class _WeeklyTopicLoopState extends State<WeeklyTopicLoop>
           });
         },
         child: SizedBox(
-          height: 128,
+          height: 148,
           child: LayoutBuilder(
             builder: (context, constraints) {
               const step = 172.0;
@@ -183,7 +184,7 @@ class _WeeklyTopicLoopState extends State<WeeklyTopicLoop>
                                       widget.topics[index].id,
                                   onTap: widget.onSelected,
                                   cardWidth: itemWidth,
-                                  cardHeight: 84,
+                                  cardHeight: 104,
                                   keySuffix: '$copy',
                                 ),
                               );
@@ -221,10 +222,11 @@ class _TopicButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final text = TextKo(
-      topic.text,
+      wrapWordsInPairs(topic.text),
       wordBreak: TextKoWordBreak.keepAll,
+      semanticsLabel: topic.text,
       style: const TextStyle(color: AppPalette.ink),
-      maxLines: 2,
+      maxLines: 3,
       overflow: TextOverflow.ellipsis,
       textAlign: TextAlign.center,
     );
