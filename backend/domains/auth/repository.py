@@ -34,7 +34,7 @@ class AuthRepository:
         """이메일로 프로필 조회 (없으면 None)"""
         return self.db.query(ProfileModel).filter(ProfileModel.email == email).first()
 
-    def upsert_profile(
+    def get_or_create_profile(
         self,
         *,
         profile_id: str,
@@ -43,26 +43,22 @@ class AuthRepository:
         oauth_provider: str | None,
         avatar_url: str | None = None,
     ) -> ProfileModel:
-        """Supabase Auth claim 기준으로 프로필 생성 또는 갱신"""
+        """Supabase Auth claim으로 첫 프로필만 생성하고 기존 프로필은 조회해요."""
         profile = self.db.query(ProfileModel).filter(ProfileModel.id == profile_id).first()
+        if profile is not None:
+            return profile
+
         now = datetime.utcnow()
-        if profile is None:
-            profile = ProfileModel(
-                id=profile_id,
-                email=email,
-                name=name,
-                oauth_provider=oauth_provider,
-                avatar_url=avatar_url,
-                created_at=now,
-                updated_at=now,
-            )
-            self.db.add(profile)
-        else:
-            profile.email = email
-            profile.name = name
-            profile.oauth_provider = oauth_provider
-            profile.avatar_url = avatar_url
-            profile.updated_at = now
+        profile = ProfileModel(
+            id=profile_id,
+            email=email,
+            name=name,
+            oauth_provider=oauth_provider,
+            avatar_url=avatar_url,
+            created_at=now,
+            updated_at=now,
+        )
+        self.db.add(profile)
         self.db.commit()
         self.db.refresh(profile)
         return profile
@@ -77,6 +73,12 @@ class AuthRepository:
     ) -> ProfileModel:
         """현재 사용자 프로필의 언어 선호만 갱신"""
         profile = self.find_by_id(profile_id)
+        if (
+            profile.native_language == native_language
+            and profile.target_language == target_language
+            and profile.feedback_language == feedback_language
+        ):
+            return profile
         profile.native_language = native_language
         profile.target_language = target_language
         profile.feedback_language = feedback_language
@@ -88,6 +90,8 @@ class AuthRepository:
     def update_app_locale(self, *, profile_id: str, app_locale: str) -> ProfileModel:
         """프로필의 앱 표시 언어를 갱신"""
         profile = self.find_by_id(profile_id)
+        if profile.app_locale == app_locale:
+            return profile
         profile.app_locale = app_locale
         profile.updated_at = datetime.utcnow()
         self.db.commit()

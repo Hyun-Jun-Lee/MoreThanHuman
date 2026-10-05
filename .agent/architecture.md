@@ -158,12 +158,13 @@ domains/{name}/
 
 [FastAPI] → Authorization: Bearer <supabase_access_token>
           → Supabase Auth /user 검증
-          → profiles upsert/select + language defaults
+          → 최초 요청에서만 profile 생성, 이후 인증은 조회 + language defaults
           → current_user.id를 ownership boundary로 사용
 ```
 
 인증이 필요한 API는 `Authorization: Bearer <supabase_access_token>` 헤더를 사용해요. 모바일은 Google native sign-in과 iOS Apple native sign-in을 제공해요.
 언어 선호는 profile 기본값(`native_language`, `target_language`, `feedback_language`)으로 저장하고, 기존 값이 없으면 `ko -> en`과 feedback `ko`로 보정해요.
+인증된 API 요청은 기존 profile의 필드와 `updated_at`을 변경하지 않아요. 언어 선호와 앱 표시 언어의 명시적 변경 API에서만 해당 설정을 저장해요. Supabase의 이름·사진 등 metadata 변경은 현재 자동 동기화하지 않아요.
 
 ### 대화
 

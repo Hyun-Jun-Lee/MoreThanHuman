@@ -39,13 +39,13 @@ class AuthService:
         self.repository = repository
 
     def get_or_create_profile_from_claims(self, claims: SupabaseUserClaims) -> ProfileModel:
-        """Supabase claim 기반으로 앱 프로필 생성 또는 갱신"""
+        """Supabase claim 기반으로 앱 프로필을 조회하거나 처음 생성해요."""
         if not claims.sub:
             raise AuthenticationException("Invalid Supabase token: missing subject")
         if not claims.email:
             raise AuthenticationException("Invalid Supabase token: missing email")
 
-        return self.repository.upsert_profile(
+        return self.repository.get_or_create_profile(
             profile_id=claims.sub,
             email=claims.email,
             name=claims.name or claims.email.split("@")[0],
