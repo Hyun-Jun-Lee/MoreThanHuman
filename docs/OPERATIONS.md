@@ -1,6 +1,6 @@
 # 운영 가이드
 
-> 최종 갱신: 2026-10-04 · 배포·주간 생성·복구 절차
+> 최종 갱신: 2026-10-05 · 배포·주간 생성·복구 절차
 
 [실행 및 CLI](../README.md) · [환경변수](ENVIRONMENT.md) · [API 계약](DSL.md)
 
@@ -21,6 +21,8 @@ docker compose up -d --build --force-recreate --no-deps api
 docker compose ps
 docker compose logs --tail=100 api
 ```
+
+API는 Uvicorn worker 2개로 실행해요. Compose 명령만 바꾼 경우에도 위 `up --force-recreate --no-deps api`로 API 컨테이너만 재생성하면 돼요. 전체 `docker compose down`은 필요하지 않으며 nginx는 실행 상태를 유지해요. API 재생성 중 짧은 요청 실패가 발생할 수 있으므로 상태 확인 뒤 실제 API 요청도 점검해요.
 
 최초 nginx 실행 전에는 [설정 파일](../deploy/nginx/conf.d/api.conf)의 도메인과 호스트 볼륨 경로를 확인하고, 문서 접근용 `deploy/nginx/auth/docs.htpasswd`를 준비해요. [계정 파일 생성 스크립트](../deploy/scripts/create-docs-htpasswd.sh)는 사용자명·비밀번호를 인자로 받아 파일을 생성하며 기존 파일을 덮어써요. 비밀번호를 명령 기록·프로세스 인자로 노출하지 않도록 서버의 secret 관리 절차를 사용해요.
 
@@ -143,6 +145,7 @@ uv run python -m scripts.archive_weekly_topic TOPIC_UUID
 
 ## 변경 기록
 
+- 2026-10-05: API Uvicorn worker를 2개로 설정하고 전체 Compose 중단 없이 API만 재생성하는 절차를 명시했어요.
 - 2026-10-04: 재발행 후보를 12쌍으로 늘리고 실패 코드·검증 개수를 CLI 결과에 추가했어요.
 - 2026-10-04: 주간 주제 첫 질문 생성과 `--republish` 재발행 절차를 추가했어요.
 - 2026-10-03: 수동 주간 대화 추천 발행·보관·마지막 묶음 복구 절차를 추가했어요.

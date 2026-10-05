@@ -14,7 +14,7 @@ services:
       AUTO_CREATE_TABLES: "false"
     command: >
       sh -c "alembic upgrade head &&
-      uvicorn main:app --host 0.0.0.0 --port 8010 --proxy-headers --forwarded-allow-ips='*'"
+      uvicorn main:app --host 0.0.0.0 --port 8010 --workers 2 --proxy-headers --forwarded-allow-ips='*'"
     expose:
       - "8010"
     restart: unless-stopped
