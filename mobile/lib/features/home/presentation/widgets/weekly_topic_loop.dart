@@ -2,27 +2,19 @@ import 'package:curitalk/app/theme/tokens/tokens.dart';
 import 'package:curitalk/features/home/domain/weekly_topic.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-
-const _topicColors = <Color>[
-  AppPalette.blockBlue,
-  AppPalette.blockPink,
-  AppPalette.blockLime,
-  AppPalette.blockLilac,
-  AppPalette.blockCoral,
-  AppPalette.blockCream,
-  AppPalette.blockLimeSoft,
-  AppPalette.blockLilacSoft,
-];
+import 'package:text_ko/text_ko.dart';
 
 class WeeklyTopicLoop extends StatefulWidget {
   const WeeklyTopicLoop({
     required this.topics,
     required this.onSelected,
+    this.selectedTopicId,
     super.key,
   });
 
   final List<WeeklyTopic> topics;
   final ValueChanged<WeeklyTopic>? onSelected;
+  final String? selectedTopicId;
 
   @override
   State<WeeklyTopicLoop> createState() => _WeeklyTopicLoopState();
@@ -73,6 +65,7 @@ class _WeeklyTopicLoopState extends State<WeeklyTopicLoop>
     final shouldRun =
         _appActive &&
         !_touching &&
+        widget.selectedTopicId == null &&
         !reduceMotion &&
         TickerMode.valuesOf(context).enabled &&
         widget.onSelected != null &&
@@ -118,7 +111,7 @@ class _WeeklyTopicLoopState extends State<WeeklyTopicLoop>
           for (var index = 0; index < widget.topics.length; index++)
             _TopicButton(
               topic: widget.topics[index],
-              color: _topicColors[index % _topicColors.length],
+              selected: widget.selectedTopicId == widget.topics[index].id,
               onTap: widget.onSelected,
             ),
         ],
@@ -149,7 +142,7 @@ class _WeeklyTopicLoopState extends State<WeeklyTopicLoop>
           });
         },
         child: SizedBox(
-          height: 112,
+          height: 128,
           child: LayoutBuilder(
             builder: (context, constraints) {
               const step = 172.0;
@@ -185,9 +178,12 @@ class _WeeklyTopicLoopState extends State<WeeklyTopicLoop>
                                 width: itemWidth,
                                 child: _TopicButton(
                                   topic: widget.topics[index],
-                                  color:
-                                      _topicColors[index % _topicColors.length],
+                                  selected:
+                                      widget.selectedTopicId ==
+                                      widget.topics[index].id,
                                   onTap: widget.onSelected,
+                                  cardWidth: itemWidth,
+                                  cardHeight: 84,
                                   keySuffix: '$copy',
                                 ),
                               );
@@ -208,43 +204,103 @@ class _WeeklyTopicLoopState extends State<WeeklyTopicLoop>
 class _TopicButton extends StatelessWidget {
   const _TopicButton({
     required this.topic,
-    required this.color,
+    required this.selected,
     required this.onTap,
+    this.cardWidth,
+    this.cardHeight,
     this.keySuffix,
   });
 
   final WeeklyTopic topic;
-  final Color color;
+  final bool selected;
   final ValueChanged<WeeklyTopic>? onTap;
+  final double? cardWidth;
+  final double? cardHeight;
   final String? keySuffix;
 
   @override
   Widget build(BuildContext context) {
+    final text = TextKo(
+      topic.text,
+      wordBreak: TextKoWordBreak.keepAll,
+      style: const TextStyle(color: AppPalette.ink),
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+      textAlign: TextAlign.center,
+    );
     return Semantics(
       button: true,
+      selected: selected,
       label: topic.text,
-      child: Material(
-        key: ValueKey(
-          'weekly-topic-card-${topic.id}${keySuffix == null ? '' : '-$keySuffix'}',
-        ),
-        color: color,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          key: ValueKey(
-            'weekly-topic-${topic.id}${keySuffix == null ? '' : '-$keySuffix'}',
-          ),
-          borderRadius: BorderRadius.circular(AppRadius.lg),
-          onTap: onTap == null ? null : () => onTap!(topic),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Text(
-              topic.text,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
+      child: Padding(
+        padding: const EdgeInsets.only(top: 13),
+        child: Stack(
+          alignment: Alignment.topCenter,
+          clipBehavior: Clip.none,
+          children: [
+            SizedBox(
+              width: cardWidth,
+              height: cardHeight,
+              child: Material(
+                key: ValueKey(
+                  'weekly-topic-card-${topic.id}${keySuffix == null ? '' : '-$keySuffix'}',
+                ),
+                color: selected
+                    ? AppPalette.topicSelectedSurface
+                    : AppPalette.topicSurface,
+                borderRadius: BorderRadius.circular(AppRadius.lg),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  key: ValueKey(
+                    'weekly-topic-${topic.id}${keySuffix == null ? '' : '-$keySuffix'}',
+                  ),
+                  borderRadius: BorderRadius.circular(AppRadius.lg),
+                  splashFactory: NoSplash.splashFactory,
+                  highlightColor: Colors.transparent,
+                  onTap: onTap == null ? null : () => onTap!(topic),
+                  child: Padding(
+                    padding: cardWidth == null
+                        ? const EdgeInsets.fromLTRB(16, 18, 16, 12)
+                        : const EdgeInsets.fromLTRB(10, 18, 10, 12),
+                    child: cardWidth == null ? text : Center(child: text),
+                  ),
+                ),
+              ),
             ),
-          ),
+            const Positioned(
+              top: -13,
+              child: IgnorePointer(child: _TomatoCalyx()),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TomatoCalyx extends StatelessWidget {
+  const _TomatoCalyx();
+
+  @override
+  Widget build(BuildContext context) {
+    // 원본 PNG의 투명 여백을 위젯에서 잘라 꼭지 부분만 보여줘요.
+    return SizedBox(
+      width: 40,
+      height: 25.3,
+      child: ClipRect(
+        child: Stack(
+          children: [
+            Positioned(
+              left: -15.5,
+              top: -6.3,
+              child: Image.asset(
+                'assets/images/weekly_topic/tomato_calyx.png',
+                width: 73.3,
+                height: 73.3,
+                excludeFromSemantics: true,
+              ),
+            ),
+          ],
         ),
       ),
     );

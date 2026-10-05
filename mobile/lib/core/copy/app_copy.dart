@@ -297,7 +297,6 @@ class AppCopy {
       isKorean ? '대화 옵션' : 'Conversation options';
   String get conversationsLabel => isKorean ? '대화' : 'Conversations';
   String get newConversationLabel => isKorean ? '새 대화' : 'New conversation';
-  String get viewAllConversationsLabel => isKorean ? '전체 보기' : 'View all';
   String get loadMoreConversationsLabel =>
       isKorean ? '이전 대화 더 보기' : 'Load more conversations';
   String get moreConversationsFailed =>
@@ -351,7 +350,7 @@ class AppCopy {
     required String rightWord,
     required String meaning,
   }) => '$leftLabel $leftWord. $rightLabel $rightWord. $meaning';
-  String get recentLabel => isKorean ? '최근 대화' : 'Recent';
+  String get todayTomatoLabel => isKorean ? '오늘의 토마토' : "Today's Tomatoes";
   String get loadingRecentConversations =>
       isKorean ? '최근 대화를 불러오는 중...' : 'Loading recent conversations...';
   String get recentConversationsLoadFailed => isKorean
@@ -369,8 +368,6 @@ class AppCopy {
   String get showMoreLabel => isKorean ? '더 보기' : 'SHOW MORE';
   String get updatingConversationsSemanticLabel =>
       isKorean ? '대화를 업데이트하는 중' : 'Updating conversations';
-  String profileSemanticLabel(String name) =>
-      isKorean ? '$name 프로필' : 'Profile for $name';
   String get accountLabel => isKorean ? '계정' : 'Account';
   String get languagePairSectionLabel => isKorean ? '언어쌍' : 'Language Pair';
   String get logOutLabel => isKorean ? '로그아웃' : 'LOG OUT';
@@ -396,8 +393,8 @@ class AppCopy {
   String get noConversationsYetTitle =>
       isKorean ? '아직 대화가 없어요.' : 'No conversations yet.';
   String conversationCategory(String kind) => switch (kind) {
-    'roleplay' => isKorean ? '역할극' : 'Roleplay',
-    _ => isKorean ? '자유 대화' : 'Free chat',
+    'roleplay' => 'roleplaying',
+    _ => 'freechat',
   };
   String conversationPreview({
     required int messageCount,

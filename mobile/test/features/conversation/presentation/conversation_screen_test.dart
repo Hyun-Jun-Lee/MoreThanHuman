@@ -130,49 +130,42 @@ void main() {
     },
   );
 
-  testWidgets(
-    'explicit back button returns to Conversations when stack is empty',
-    (WidgetTester tester) async {
-      final GoRouter router = GoRouter(
-        initialLocation: AppRoute.conversationPath('conversation-id'),
-        routes: <RouteBase>[
-          GoRoute(
-            path: AppRoute.history,
-            builder: (_, _) => const Text('Conversations'),
-          ),
-          GoRoute(
-            path: '${AppRoute.conversation}/:conversationId',
-            builder: (_, GoRouterState state) {
-              return ConversationScreen(
-                conversationId: state.pathParameters['conversationId']!,
-              );
-            },
+  testWidgets('explicit back button returns to Home when stack is empty', (
+    WidgetTester tester,
+  ) async {
+    final GoRouter router = GoRouter(
+      initialLocation: AppRoute.conversationPath('conversation-id'),
+      routes: <RouteBase>[
+        GoRoute(path: AppRoute.home, builder: (_, _) => const Text('Home')),
+        GoRoute(
+          path: '${AppRoute.conversation}/:conversationId',
+          builder: (_, GoRouterState state) {
+            return ConversationScreen(
+              conversationId: state.pathParameters['conversationId']!,
+            );
+          },
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          conversationRepositoryProvider.overrideWithValue(
+            _FakeConversationRepository(),
           ),
         ],
-      );
+        child: MaterialApp.router(theme: AppTheme.light, routerConfig: router),
+      ),
+    );
+    await tester.pumpAndSettle();
 
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            conversationRepositoryProvider.overrideWithValue(
-              _FakeConversationRepository(),
-            ),
-          ],
-          child: MaterialApp.router(
-            theme: AppTheme.light,
-            routerConfig: router,
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
+    expect(find.text('Hello!'), findsOneWidget);
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
 
-      expect(find.text('Hello!'), findsOneWidget);
-      await tester.tap(find.byTooltip('Back'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Conversations'), findsOneWidget);
-    },
-  );
+    expect(find.text('Home'), findsOneWidget);
+  });
 
   testWidgets('voice input records and sends audio turn', (
     WidgetTester tester,

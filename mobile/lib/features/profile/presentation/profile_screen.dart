@@ -41,7 +41,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       safeAreaBottom: false,
       appBar: AppBar(title: Text(copy.profileLabel)),
       body: SingleChildScrollView(
-        controller: MainTabScope.maybeOf(context)?.controllers[2],
+        controller: MainTabScope.maybeOf(context)?.controllers[1],
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,

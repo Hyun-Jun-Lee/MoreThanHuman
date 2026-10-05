@@ -9,6 +9,8 @@ abstract final class AppPalette {
   static const Color surfaceSubtle = Color(0xFFF9F9FF);
   static const Color hairline = Color(0xFFD1D5DB);
   static const Color hairlineSoft = Color(0xFFE5E7EB);
+  static const Color topicSurface = Color(0xFFE5E7EB);
+  static const Color topicSelectedSurface = Color(0xFFFF6B6B);
   static const Color ink = Color(0xFF000000);
   static const Color inkSecondary = Color(0xFF4B5563);
   static const Color inverseInk = Color(0xFFFFFFFF);

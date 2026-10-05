@@ -35,7 +35,10 @@ void main() {
       await tester.tap(find.text('CONTINUE WITH APPLE'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Start a conversation'), findsOneWidget);
+      expect(
+        find.widgetWithText(FilledButton, 'Start a conversation'),
+        findsOneWidget,
+      );
       expect(supabaseAuth.lastAppleIdToken, 'apple-id-token');
       expect(supabaseAuth.lastRawNonce, 'raw-nonce');
     } finally {
@@ -100,13 +103,18 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Hi, Learner'), findsNothing);
-    expect(find.text('Start a conversation'), findsOneWidget);
+    expect(
+      find.widgetWithText(FilledButton, 'Start a conversation'),
+      findsOneWidget,
+    );
     expect(onboardingStorage.completed, isTrue);
     expect(supabaseAuth.hasSession, isTrue);
     expect(supabaseAuth.lastIdToken, 'google-id-token');
 
-    await tester.ensureVisible(find.text('New conversation'));
-    await tester.tap(find.text('New conversation'));
+    await tester.ensureVisible(
+      find.widgetWithText(FilledButton, 'Start a conversation'),
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Start a conversation'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Free Chat'));
     await tester.pumpAndSettle();
@@ -210,8 +218,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.ensureVisible(find.text('New conversation'));
-    await tester.tap(find.text('New conversation'));
+    await tester.ensureVisible(
+      find.widgetWithText(FilledButton, 'Start a conversation'),
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Start a conversation'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Roleplay'));
     await tester.pumpAndSettle();
@@ -220,7 +230,7 @@ void main() {
     expect(find.text('Cafe order'), findsOneWidget);
   });
 
-  testWidgets('authenticated user can open History from bottom navigation', (
+  testWidgets('authenticated user can open the direct History route', (
     WidgetTester tester,
   ) async {
     final _MemoryTokenStorage tokenStorage = _MemoryTokenStorage(
@@ -238,10 +248,19 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Conversations').last);
+    expect(find.text('View all'), findsNothing);
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(CuritalkApp)),
+    );
+    container.read(appRouterProvider).go(AppRoute.history);
     await tester.pumpAndSettle();
 
     expect(find.text('No conversations yet.'), findsOneWidget);
+    expect(find.byType(NavigationBar), findsNothing);
+    await tester.tap(find.byType(BackButton));
+    await tester.pumpAndSettle();
+    expect(find.text('Home'), findsOneWidget);
+    expect(find.byType(NavigationBar), findsOneWidget);
   });
 
   testWidgets('authenticated user can log out from Profile tab', (
@@ -277,62 +296,44 @@ void main() {
     );
   });
 
-  testWidgets(
-    'avatar opens Profile and profile refresh and locale save keep the tab',
-    (tester) async {
-      await tester.pumpWidget(
-        _appScope(
-          tokenStorage: _MemoryTokenStorage(
-            tokens: _tokens,
-            deviceId: _deviceId,
-          ),
-          onboardingStorage: _MemoryOnboardingStorage(true),
-          authRepository: _FakeAuthRepository(),
-          supabaseAuth: _FakeSupabaseAuthService(hasSession: true),
-        ),
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('L'));
-      await tester.pumpAndSettle();
-      final container = ProviderScope.containerOf(
-        tester.element(find.byType(CuritalkApp)),
-      );
-      expect(
-        container
-            .read(appRouterProvider)
-            .routeInformationProvider
-            .value
-            .uri
-            .path,
-        AppRoute.profile,
-      );
-      await container.read(authControllerProvider.notifier).refreshProfile();
-      await tester.pumpAndSettle();
-      expect(
-        container
-            .read(appRouterProvider)
-            .routeInformationProvider
-            .value
-            .uri
-            .path,
-        AppRoute.profile,
-      );
-      await tester.tap(find.text('KOREAN'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Change'));
-      await tester.pumpAndSettle();
-      expect(find.text('내 정보'), findsNWidgets(2));
-      expect(
-        container
-            .read(appRouterProvider)
-            .routeInformationProvider
-            .value
-            .uri
-            .path,
-        AppRoute.profile,
-      );
-    },
-  );
+  testWidgets('Profile tab stays open after refresh and locale save', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _appScope(
+        tokenStorage: _MemoryTokenStorage(tokens: _tokens, deviceId: _deviceId),
+        onboardingStorage: _MemoryOnboardingStorage(true),
+        authRepository: _FakeAuthRepository(),
+        supabaseAuth: _FakeSupabaseAuthService(hasSession: true),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(CircleAvatar), findsNothing);
+    await tester.tap(find.text('Profile'));
+    await tester.pumpAndSettle();
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(CuritalkApp)),
+    );
+    expect(
+      container.read(appRouterProvider).routeInformationProvider.value.uri.path,
+      AppRoute.profile,
+    );
+    await container.read(authControllerProvider.notifier).refreshProfile();
+    await tester.pumpAndSettle();
+    expect(
+      container.read(appRouterProvider).routeInformationProvider.value.uri.path,
+      AppRoute.profile,
+    );
+    await tester.tap(find.text('KOREAN'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Change'));
+    await tester.pumpAndSettle();
+    expect(find.text('내 정보'), findsNWidgets(2));
+    expect(
+      container.read(appRouterProvider).routeInformationProvider.value.uri.path,
+      AppRoute.profile,
+    );
+  });
 
   testWidgets('login unexpected error copy follows Korean system locale', (
     WidgetTester tester,

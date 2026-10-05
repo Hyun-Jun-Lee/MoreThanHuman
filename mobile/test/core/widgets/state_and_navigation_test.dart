@@ -107,10 +107,10 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('Conversations'));
+    await tester.tap(find.text('Profile'));
 
-    expect(selectedDestination, MainNavigationDestination.history);
-    expect(find.byType(NavigationDestination), findsNWidgets(3));
+    expect(selectedDestination, MainNavigationDestination.profile);
+    expect(find.byType(NavigationDestination), findsNWidgets(2));
   });
 
   testWidgets('shared chrome follows the Korean system locale', (
@@ -134,7 +134,8 @@ void main() {
 
     expect(find.text('불러오는 중...'), findsOneWidget);
     expect(find.text('홈'), findsOneWidget);
-    expect(find.text('대화'), findsOneWidget);
+    expect(find.text('내 정보'), findsOneWidget);
+    expect(find.text('대화'), findsNothing);
     expect(find.bySemanticsLabel('3개 중 2번째 페이지'), findsOneWidget);
   });
 }

@@ -1,7 +1,6 @@
 import 'package:curitalk/app/theme/tokens/tokens.dart';
 import 'package:curitalk/core/copy/copy.dart';
 import 'package:curitalk/core/widgets/widgets.dart';
-import 'package:curitalk/core/widgets/main_tab_scope.dart';
 import 'package:curitalk/features/conversation/conversation.dart';
 import 'package:curitalk/features/history/application/conversation_history_controller.dart';
 import 'package:curitalk/features/home/home.dart';
@@ -12,10 +11,12 @@ class HistoryScreen extends ConsumerStatefulWidget {
   const HistoryScreen({
     this.onStartTypeSelected,
     this.onConversationSelected,
+    this.onBack,
     super.key,
   });
   final ValueChanged<ConversationStartType>? onStartTypeSelected;
   final ValueChanged<String>? onConversationSelected;
+  final VoidCallback? onBack;
   @override
   ConsumerState<HistoryScreen> createState() => _HistoryScreenState();
 }
@@ -35,6 +36,9 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
       safeAreaBottom: false,
       appBar: AppBar(
         title: Text(copy.conversationsLabel),
+        leading: widget.onBack == null
+            ? null
+            : BackButton(onPressed: widget.onBack),
         actions: [
           IconButton(
             tooltip: copy.newConversationLabel,
@@ -67,7 +71,6 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                 },
                 child: ListView.separated(
                   key: const PageStorageKey('conversation-history-scroll'),
-                  controller: MainTabScope.maybeOf(context)?.controllers[1],
                   physics: const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.only(bottom: AppSpacing.lg),
                   itemCount: value.page.items.isEmpty

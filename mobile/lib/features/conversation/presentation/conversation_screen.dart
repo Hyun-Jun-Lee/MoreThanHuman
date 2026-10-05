@@ -239,7 +239,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
       navigator.pop();
       return;
     }
-    context.go(AppRoute.history);
+    context.go(AppRoute.home);
   }
 }
 

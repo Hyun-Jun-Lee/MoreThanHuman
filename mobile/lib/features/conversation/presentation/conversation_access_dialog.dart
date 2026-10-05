@@ -9,6 +9,7 @@ Future<void> showConversationAccessDialog(BuildContext context) {
   return showDialog<void>(
     context: context,
     builder: (dialogContext) => AlertDialog(
+      alignment: const Alignment(0, -0.45),
       title: Text(copy.additionalConversationLabel),
       content: Text(copy.additionalConversationLocked),
       actions: [

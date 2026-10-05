@@ -22,15 +22,11 @@ class HomeScreen extends ConsumerWidget {
   const HomeScreen({
     this.onConversationSelected,
     this.onStartTypeSelected,
-    this.onHistorySelected,
-    this.onProfileSelected,
     super.key,
   });
 
   final ValueChanged<String>? onConversationSelected;
   final ValueChanged<ConversationStartType>? onStartTypeSelected;
-  final VoidCallback? onHistorySelected;
-  final VoidCallback? onProfileSelected;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -50,12 +46,7 @@ class HomeScreen extends ConsumerWidget {
         key: const PageStorageKey('home-scroll'),
         controller: MainTabScope.maybeOf(context)?.controllers[0],
         slivers: <Widget>[
-          SliverToBoxAdapter(
-            child: _HomeHeader(
-              user: user,
-              onProfileTap: () => onProfileSelected?.call(),
-            ),
-          ),
+          SliverToBoxAdapter(child: _HomeHeader(user: user)),
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(
               AppSpacing.screenPadding,
@@ -66,20 +57,23 @@ class HomeScreen extends ConsumerWidget {
             sliver: SliverList(
               delegate: SliverChildListDelegate(<Widget>[
                 const LanguageSnackHomeSection(),
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.sm,
+                  ),
+                  child: Text(
+                    copy.todayTomatoLabel,
+                    textAlign: TextAlign.center,
+                    style: AppTypography.button.copyWith(
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
                 _WeeklyTopicSection(
                   onSelected: (topic) =>
                       _startSuggestedTopic(context, ref, topic),
                 ),
-                Row(
-                  children: [
-                    Expanded(child: AppSectionLabel(copy.recentLabel)),
-                    TextButton(
-                      onPressed: onHistorySelected,
-                      child: Text(copy.viewAllConversationsLabel),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.md),
                 recent.when(
                   loading: () => AppAsyncStateView.loading(
                     message: copy.loadingRecentConversations,
@@ -101,7 +95,7 @@ class HomeScreen extends ConsumerWidget {
                           message: copy.updatingConversations,
                         );
                       }
-                      return const _EmptyHome();
+                      return const SizedBox.shrink();
                     }
                     return _RecentConversations(
                       conversations: conversations.take(2).toList(),
@@ -114,7 +108,7 @@ class HomeScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: AppSpacing.lg),
                 AppPrimaryButton(
-                  label: copy.newConversationLabel,
+                  label: copy.homeEmptyTitle,
                   leading: const Icon(Icons.add_rounded),
                   onPressed: () => _showStartSheet(context, ref),
                 ),
@@ -153,6 +147,7 @@ class HomeScreen extends ConsumerWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
+        alignment: const Alignment(0, -0.45),
         title: Text(copy.confirmSuggestedConversationTitle),
         content: Text(topic.text),
         actions: [
@@ -229,17 +224,12 @@ class HomeScreen extends ConsumerWidget {
 }
 
 class _HomeHeader extends StatelessWidget {
-  const _HomeHeader({required this.user, required this.onProfileTap});
+  const _HomeHeader({required this.user});
 
   final UserProfile? user;
-  final VoidCallback onProfileTap;
 
   @override
   Widget build(BuildContext context) {
-    final String name = user?.name.trim() ?? '';
-    final String initial = name.isEmpty
-        ? '?'
-        : name.characters.first.toUpperCase();
     return Padding(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.screenPadding,
@@ -257,24 +247,6 @@ class _HomeHeader extends StatelessWidget {
             ),
           ),
           _LanguagePairBadge(language: user?.language),
-          const SizedBox(width: AppSpacing.sm),
-          Semantics(
-            button: true,
-            label: AppCopy.of(context).profileSemanticLabel(
-              user?.name ?? AppCopy.of(context).profileLabel,
-            ),
-            child: InkWell(
-              borderRadius: const BorderRadius.all(
-                Radius.circular(AppRadius.full),
-              ),
-              onTap: onProfileTap,
-              child: CircleAvatar(
-                radius: AppSize.iconButton / 2,
-                backgroundColor: AppPalette.blockPink,
-                child: Text(initial, style: AppTypography.button),
-              ),
-            ),
-          ),
         ],
       ),
     );
@@ -336,14 +308,12 @@ class _RecentConversations extends StatelessWidget {
           ),
         for (int index = 0; index < conversations.length; index++) ...[
           RecentConversationCard(
+            key: ValueKey(conversations[index].id),
             category: copy.conversationCategory(conversations[index].kind.name),
             title: conversations[index].title,
-            preview: conversations[index].locked
+            subtitle: conversations[index].locked
                 ? copy.lockedConversationLabel
-                : copy.conversationPreview(
-                    messageCount: conversations[index].messageCount,
-                    isActive: conversations[index].isActive,
-                  ),
+                : null,
             color: _colors[index % _colors.length],
             onTap: onSelected == null
                 ? null
@@ -358,21 +328,10 @@ class _RecentConversations extends StatelessWidget {
   }
 }
 
-class _EmptyHome extends StatelessWidget {
-  const _EmptyHome();
-
-  @override
-  Widget build(BuildContext context) => Text(
-    AppCopy.of(context).homeEmptyTitle,
-    textAlign: TextAlign.center,
-    style: AppTypography.headlineMd,
-  );
-}
-
 class _WeeklyTopicSection extends ConsumerStatefulWidget {
   const _WeeklyTopicSection({required this.onSelected});
 
-  final ValueChanged<WeeklyTopic> onSelected;
+  final Future<void> Function(WeeklyTopic) onSelected;
 
   @override
   ConsumerState<_WeeklyTopicSection> createState() =>
@@ -382,6 +341,17 @@ class _WeeklyTopicSection extends ConsumerStatefulWidget {
 class _WeeklyTopicSectionState extends ConsumerState<_WeeklyTopicSection>
     with WidgetsBindingObserver {
   bool _homeActive = true;
+  String? _selectedTopicId;
+
+  Future<void> _selectTopic(WeeklyTopic topic) async {
+    if (_selectedTopicId != null) return;
+    setState(() => _selectedTopicId = topic.id);
+    try {
+      await widget.onSelected(topic);
+    } finally {
+      if (mounted) setState(() => _selectedTopicId = null);
+    }
+  }
 
   @override
   void initState() {
@@ -431,13 +401,17 @@ class _WeeklyTopicSectionState extends ConsumerState<_WeeklyTopicSection>
         .isStarting;
     if (topics.isEmpty && !isStarting) return const SizedBox.shrink();
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl),
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
       child: isStarting
           ? AppAsyncStateView.loading(
               key: const ValueKey('suggested-conversation-loading'),
               message: AppCopy.of(context).preparingSuggestedConversation,
             )
-          : WeeklyTopicLoop(topics: topics, onSelected: widget.onSelected),
+          : WeeklyTopicLoop(
+              topics: topics,
+              selectedTopicId: _selectedTopicId,
+              onSelected: _selectTopic,
+            ),
     );
   }
 }

@@ -20,47 +20,68 @@ import '../snack_test_fixtures.dart';
 import 'package:curitalk/features/home/data/snack_basket_reset_repository.dart';
 
 void main() {
-  testWidgets('home delegates navigation to the shared three-tab shell', (
-    tester,
-  ) async {
+  testWidgets('home delegates navigation to the shared shell', (tester) async {
     await tester.pumpWidget(
       _homeApp(conversations: _recentConversations(count: 5)),
     );
     await tester.pumpAndSettle();
     expect(find.byType(NavigationBar), findsNothing);
     expect(find.byType(FloatingActionButton), findsNothing);
+    expect(find.byType(CircleAvatar), findsNothing);
+    expect(find.text('KR -> EN'), findsOneWidget);
+    expect(
+      tester.getTopRight(find.text('KR -> EN')).dx,
+      greaterThan(tester.getTopRight(find.text('CURITALK')).dx),
+    );
     expect(find.text('Conversation 3'), findsNothing);
-    await tester.scrollUntilVisible(find.text('New conversation'), 300);
-    expect(find.text('New conversation'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.widgetWithText(FilledButton, 'Start a conversation'),
+      300,
+    );
+    expect(
+      find.widgetWithText(FilledButton, 'Start a conversation'),
+      findsOneWidget,
+    );
   });
 
-  testWidgets('full slot keeps the real recent conversation and blocks creation', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      _homeApp(
-        conversations: _recentConversations(count: 1),
-        access: const ConversationAccess(
-          enabled: true,
-          canCreate: false,
-          usedSlots: 1,
-          slotLimit: 1,
-          remainingSlots: 0,
+  testWidgets(
+    'full slot keeps the real recent conversation and blocks creation',
+    (tester) async {
+      await tester.pumpWidget(
+        _homeApp(
+          conversations: _recentConversations(count: 1),
+          access: const ConversationAccess(
+            enabled: true,
+            canCreate: false,
+            usedSlots: 1,
+            slotLimit: 1,
+            remainingSlots: 0,
+          ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('Conversation 1'), findsOneWidget);
-    expect(find.byKey(const ValueKey('locked-additional-conversation-home')), findsNothing);
-    await tester.scrollUntilVisible(find.text('New conversation'), 300);
-    await tester.tap(find.text('New conversation'));
-    await tester.pumpAndSettle();
-    expect(
-      find.text('All active conversation slots are in use. Release a slot in History or subscribe.'),
-      findsWidgets,
-    );
-    expect(find.text('Free Chat'), findsNothing);
-  });
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Conversation 1'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('locked-additional-conversation-home')),
+        findsNothing,
+      );
+      await tester.scrollUntilVisible(
+        find.widgetWithText(FilledButton, 'Start a conversation'),
+        300,
+      );
+      await tester.tap(
+        find.widgetWithText(FilledButton, 'Start a conversation'),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.text(
+          'All active conversation slots are in use. Release a slot in History or subscribe.',
+        ),
+        findsWidgets,
+      );
+      expect(find.text('Free Chat'), findsNothing);
+    },
+  );
 
   testWidgets('profile displays account and language settings', (
     WidgetTester tester,
@@ -205,7 +226,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final Finder addButton = find.text('New conversation');
+    final Finder addButton = find.widgetWithText(
+      FilledButton,
+      'Start a conversation',
+    );
     await tester.ensureVisible(addButton);
     await tester.tap(addButton);
     await tester.pumpAndSettle();
@@ -224,10 +248,31 @@ void main() {
     await tester.pumpWidget(_homeApp());
     await tester.pumpAndSettle();
 
-    expect(find.text('New conversation'), findsOneWidget);
     expect(
-      tester.widget<Text>(find.text('Start a conversation')).style?.fontSize,
-      AppTypography.headlineMd.fontSize,
+      find.widgetWithText(FilledButton, 'Start a conversation'),
+      findsOneWidget,
+    );
+    expect(find.text('Start a conversation'), findsOneWidget);
+  });
+
+  testWidgets('Today tomatoes title is centered with its existing style', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_homeApp());
+    await tester.pumpAndSettle();
+
+    final title = find.text("Today's Tomatoes");
+    expect(title, findsOneWidget);
+    expect(find.text('View all'), findsNothing);
+    expect(find.text('Recent'), findsNothing);
+    expect(tester.widget<Text>(title).textAlign, TextAlign.center);
+    expect(
+      tester.widget<Text>(title).style?.fontSize,
+      AppTypography.button.fontSize,
+    );
+    expect(
+      tester.getTopLeft(title).dx,
+      AppSpacing.screenPadding + AppSpacing.sm,
     );
   });
 
@@ -249,6 +294,10 @@ void main() {
     expect(find.text('Conversation 1'), findsOneWidget);
     expect(find.byType(WeeklyTopicLoop), findsOneWidget);
     expect(
+      tester.getBottomLeft(find.text("Today's Tomatoes")).dy,
+      lessThan(tester.getTopLeft(find.byType(WeeklyTopicLoop)).dy),
+    );
+    expect(
       tester.getBottomLeft(find.byType(WeeklyTopicLoop)).dy,
       lessThan(tester.getTopLeft(find.text('Conversation 1')).dy),
     );
@@ -260,7 +309,7 @@ void main() {
       ),
       findsNothing,
     );
-    expect(find.text('Start a conversation'), findsNothing);
+    expect(find.text('Start a conversation'), findsOneWidget);
   });
 
   testWidgets('canceling a suggested topic leaves conversations unchanged', (
@@ -278,6 +327,14 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('weekly-topic-topic-1-1')));
     await tester.pump();
+    expect(
+      tester
+          .widget<Material>(
+            find.byKey(const ValueKey('weekly-topic-card-topic-1-1')),
+          )
+          .color,
+      AppPalette.topicSelectedSurface,
+    );
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('Start a conversation?'), findsOneWidget);
     expect(find.text('오늘의 취미 이야기'), findsWidgets);
@@ -287,6 +344,14 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     expect(repository.startCalls, 0);
+    expect(
+      tester
+          .widget<Material>(
+            find.byKey(const ValueKey('weekly-topic-card-topic-1-1')),
+          )
+          .color,
+      AppPalette.topicSurface,
+    );
     expect(
       find.byKey(const ValueKey('suggested-conversation-loading')),
       findsNothing,
@@ -362,6 +427,14 @@ void main() {
     );
     expect(find.byType(WeeklyTopicLoop), findsOneWidget);
     expect(
+      tester
+          .widget<Material>(
+            find.byKey(const ValueKey('weekly-topic-card-topic-1-1')),
+          )
+          .color,
+      AppPalette.topicSurface,
+    );
+    expect(
       find.text('The conversation could not be started. Please try again.'),
       findsOneWidget,
     );
@@ -401,8 +474,14 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('snack-tomato-touch')), findsOneWidget);
-    await tester.scrollUntilVisible(find.text('New conversation'), 300);
-    expect(find.text('New conversation'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.widgetWithText(FilledButton, 'Start a conversation'),
+      300,
+    );
+    expect(
+      find.widgetWithText(FilledButton, 'Start a conversation'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('recent cards stop at two and new conversation follows them', (
@@ -414,9 +493,15 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Conversation 1'), findsOneWidget);
     expect(find.text('Conversation 2'), findsOneWidget);
+    expect(find.text('freechat'), findsNWidgets(2));
     expect(find.text('Conversation 3'), findsNothing);
+    expect(find.textContaining('messages'), findsNothing);
+    expect(find.text('Continue speaking'), findsNothing);
+    expect(find.byIcon(Icons.close_rounded), findsNothing);
     expect(
-      tester.getTopLeft(find.text('New conversation')).dy,
+      tester
+          .getTopLeft(find.widgetWithText(FilledButton, 'Start a conversation'))
+          .dy,
       greaterThan(tester.getBottomLeft(find.text('Conversation 2')).dy),
     );
   });
@@ -467,9 +552,11 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byTooltip('Delete conversation'));
+      await tester.drag(find.text('Conversation 1'), const Offset(-120, 0));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Delete'));
+      await tester.tap(find.widgetWithText(TextButton, 'Delete'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
       await tester.pump();
 
       expect(conversationRepository.deleteStarted, isTrue);
@@ -482,21 +569,6 @@ void main() {
       expect(find.text('Start a conversation'), findsOneWidget);
     },
   );
-
-  testWidgets('View all calls conversations navigation callback', (
-    WidgetTester tester,
-  ) async {
-    int historyTapCount = 0;
-
-    await tester.pumpWidget(
-      _homeApp(onHistorySelected: () => historyTapCount += 1),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('View all'));
-
-    expect(historyTapCount, 1);
-  });
 
   testWidgets('profile logout clears session', (WidgetTester tester) async {
     final _MemoryTokenStorage tokenStorage = _MemoryTokenStorage(
@@ -580,7 +652,6 @@ final Finder _refreshIndicator = find.byKey(
 
 Widget _homeApp({
   bool profile = false,
-  VoidCallback? onProfileSelected,
   _MemoryTokenStorage? tokenStorage,
   _FakeAuthRepository? authRepository,
   _FakeLanguagePreferencesRepository? languagePreferencesRepository,
@@ -588,7 +659,6 @@ Widget _homeApp({
   _FakeSupabaseAuthService? supabaseAuth,
   ValueChanged<ConversationStartType>? onStartTypeSelected,
   ValueChanged<String>? onConversationSelected,
-  VoidCallback? onHistorySelected,
   List<ConversationSummary> conversations = const <ConversationSummary>[],
   HomeRepository? homeRepository,
   LanguageSnackRepository? languageSnackRepository,
@@ -652,10 +722,8 @@ Widget _homeApp({
       home: profile
           ? const ProfileScreen()
           : HomeScreen(
-              onProfileSelected: onProfileSelected,
               onConversationSelected: onConversationSelected,
               onStartTypeSelected: onStartTypeSelected,
-              onHistorySelected: onHistorySelected,
             ),
     ),
   );
@@ -687,7 +755,10 @@ class _FakeConversationAccessRepository
       const ConversationTurnAccess.disabled();
 
   @override
-  Future<void> activate(String conversationId, {String? replaceConversationId}) async {}
+  Future<void> activate(
+    String conversationId, {
+    String? replaceConversationId,
+  }) async {}
 
   @override
   Future<void> deactivate(String conversationId) async {}

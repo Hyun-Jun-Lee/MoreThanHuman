@@ -12,17 +12,19 @@ void main() {
     await tester.pumpWidget(
       _themedApp(
         RecentConversationCard(
-          category: 'Travel',
+          category: 'freechat',
           title: 'Osaka food trip',
-          preview: 'Let us make sure we visit Dotonbori for takoyaki.',
           color: AppPalette.blockLimeSoft,
           onTap: () => tapCount += 1,
         ),
       ),
     );
 
-    expect(find.text('TRAVEL'), findsNothing);
+    final badge = find.text('freechat');
+    expect(badge, findsOneWidget);
     expect(find.text('Osaka food trip'), findsOneWidget);
+    expect(find.textContaining('messages'), findsNothing);
+    expect(find.text('Continue speaking'), findsNothing);
     final Semantics semantics = tester
         .widgetList<Semantics>(
           find.descendant(
@@ -32,9 +34,16 @@ void main() {
         )
         .firstWhere(
           (Semantics item) =>
-              item.properties.label == 'Travel conversation: Osaka food trip',
+              item.properties.label == 'freechat conversation: Osaka food trip',
         );
-    expect(semantics.properties.label, 'Travel conversation: Osaka food trip');
+    expect(
+      semantics.properties.label,
+      'freechat conversation: Osaka food trip',
+    );
+    expect(
+      tester.getRect(badge).left,
+      greaterThan(tester.getRect(find.text('Osaka food trip')).right),
+    );
 
     final Material card = tester
         .widgetList<Material>(
@@ -52,32 +61,64 @@ void main() {
     expect(tapCount, 1);
   });
 
-  testWidgets('keeps the delete X small with a 48 pixel touch target', (
-    WidgetTester tester,
-  ) async {
-    await tester.pumpWidget(
-      _themedApp(
-        RecentConversationCard(
-          category: 'Travel',
-          title: 'Osaka food trip',
-          preview: 'Let us make sure we visit Dotonbori for takoyaki.',
-          color: AppPalette.blockLimeSoft,
-          onTap: () {},
-          onDelete: () {},
+  testWidgets(
+    'swiping left reveals Delete and preserves confirmation callback',
+    (WidgetTester tester) async {
+      int deleteCount = 0;
+      int tapCount = 0;
+      await tester.pumpWidget(
+        _themedApp(
+          RecentConversationCard(
+            category: 'roleplaying',
+            title: 'Osaka food trip',
+            color: AppPalette.blockLimeSoft,
+            onTap: () => tapCount += 1,
+            onDelete: () => deleteCount += 1,
+          ),
         ),
-      ),
-    );
+      );
 
-    final Finder cardFinder = find.byType(RecentConversationCard);
-    final Finder deleteFinder = find.byTooltip('Delete conversation');
-    final Rect cardRect = tester.getRect(cardFinder);
-    final Rect deleteRect = tester.getRect(deleteFinder);
+      expect(find.byIcon(Icons.close_rounded), findsNothing);
+      expect(find.text('roleplaying'), findsOneWidget);
+      expect(
+        tester
+            .widget<TextButton>(find.widgetWithText(TextButton, 'Delete'))
+            .onPressed,
+        isNull,
+      );
+      await tester.drag(find.text('Osaka food trip'), const Offset(-120, 0));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<TextButton>(find.widgetWithText(TextButton, 'Delete'))
+            .onPressed,
+        isNotNull,
+      );
+      await tester.drag(find.text('Osaka food trip'), const Offset(120, 0));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<TextButton>(find.widgetWithText(TextButton, 'Delete'))
+            .onPressed,
+        isNull,
+      );
+      await tester.drag(find.text('Osaka food trip'), const Offset(-120, 0));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(TextButton, 'Delete'));
+      await tester.pumpAndSettle();
+      expect(deleteCount, 1);
+      expect(tapCount, 0);
+      expect(
+        tester
+            .widget<TextButton>(find.widgetWithText(TextButton, 'Delete'))
+            .onPressed,
+        isNull,
+      );
 
-    expect(deleteRect.size, const Size(48, 48));
-    expect(tester.widget<Icon>(find.byIcon(Icons.close_rounded)).size, 18);
-    expect(deleteRect.right, closeTo(cardRect.right - AppSpacing.lg, 0.1));
-    expect(deleteRect.top, closeTo(cardRect.top + AppSpacing.lg, 0.1));
-  });
+      await tester.tap(find.text('Osaka food trip'));
+      expect(tapCount, 1);
+    },
+  );
 }
 
 Widget _themedApp(Widget child) {

@@ -1106,6 +1106,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.6.17"
+  text_ko:
+    dependency: "direct main"
+    description:
+      name: text_ko
+      sha256: "9df2990f758ec126d5d0c439550bdd8a17969d57903beeb6d1bf1dc9d118b795"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.1.2"
   typed_data:
     dependency: transitive
     description:

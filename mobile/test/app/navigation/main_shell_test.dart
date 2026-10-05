@@ -23,7 +23,7 @@ void main() {
     )!.controllers[0];
     final offset = controller.offset;
     expect(offset, greaterThan(0));
-    await tester.tap(find.text('Conversations'));
+    await tester.tap(find.text('Profile'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Home'));
     await tester.pumpAndSettle();
@@ -33,7 +33,7 @@ void main() {
     expect(controller.offset, 0);
   });
 
-  for (final origin in [AppRoute.home, AppRoute.history]) {
+  for (final origin in [AppRoute.home, AppRoute.profile]) {
     for (final preparation in [AppRoute.topicInput, AppRoute.roleplaySetup]) {
       testWidgets(
         '$origin returns from $preparation without completed preparation',
@@ -81,6 +81,32 @@ void main() {
       );
     }
   }
+
+  testWidgets('history opens above home and conversation returns to history', (
+    tester,
+  ) async {
+    final router = _router();
+    addTearDown(router.dispose);
+    await tester.pumpWidget(
+      MaterialApp.router(theme: AppTheme.light, routerConfig: router),
+    );
+    await tester.pumpAndSettle();
+    router.push(AppRoute.history);
+    await tester.pumpAndSettle();
+    expect(find.byType(NavigationBar), findsNothing);
+    router.push(AppRoute.topicInput);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Finish preparation'));
+    await tester.pumpAndSettle();
+    router.pop();
+    await tester.pumpAndSettle();
+    expect(find.text('History'), findsOneWidget);
+    expect(find.byType(NavigationBar), findsNothing);
+    router.pop();
+    await tester.pumpAndSettle();
+    expect(router.routeInformationProvider.value.uri.path, AppRoute.home);
+    expect(find.byType(NavigationBar), findsOneWidget);
+  });
 }
 
 GoRouter _router({String initialLocation = AppRoute.home}) => GoRouter(
@@ -89,11 +115,7 @@ GoRouter _router({String initialLocation = AppRoute.home}) => GoRouter(
     StatefulShellRoute.indexedStack(
       builder: (_, _, shell) => MainShell(navigationShell: shell),
       branches: [
-        for (final (index, path) in [
-          AppRoute.home,
-          AppRoute.history,
-          AppRoute.profile,
-        ].indexed)
+        for (final (index, path) in [AppRoute.home, AppRoute.profile].indexed)
           StatefulShellBranch(
             routes: [
               GoRoute(
@@ -108,6 +130,10 @@ GoRouter _router({String initialLocation = AppRoute.home}) => GoRouter(
             ],
           ),
       ],
+    ),
+    GoRoute(
+      path: AppRoute.history,
+      builder: (_, _) => const Scaffold(body: Text('History')),
     ),
     for (final path in [
       AppRoute.topicInput,

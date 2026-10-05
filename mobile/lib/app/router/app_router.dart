@@ -58,6 +58,11 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
             : AppRoute.splash;
       }
 
+      if (location == AppRoute.splash &&
+          !ref.read(splashMotionCompletedProvider)) {
+        return null;
+      }
+
       if (onboarding.value != true) {
         return location == AppRoute.onboarding ? null : AppRoute.onboarding;
       }
@@ -100,20 +105,6 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
                 builder: (context, state) => HomeScreen(
                   onConversationSelected: (id) =>
                       context.push(AppRoute.conversationPath(id)),
-                  onHistorySelected: () => context.go(AppRoute.history),
-                  onProfileSelected: () => context.go(AppRoute.profile),
-                  onStartTypeSelected: (type) => _startFlow(context, type),
-                ),
-              ),
-            ],
-          ),
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
-                path: AppRoute.history,
-                builder: (context, state) => HistoryScreen(
-                  onConversationSelected: (id) =>
-                      context.push(AppRoute.conversationPath(id)),
                   onStartTypeSelected: (type) => _startFlow(context, type),
                 ),
               ),
@@ -128,6 +119,16 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
             ],
           ),
         ],
+      ),
+      GoRoute(
+        path: AppRoute.history,
+        builder: (context, state) => HistoryScreen(
+          onBack: () =>
+              context.canPop() ? context.pop() : context.go(AppRoute.home),
+          onConversationSelected: (id) =>
+              context.push(AppRoute.conversationPath(id)),
+          onStartTypeSelected: (type) => _startFlow(context, type),
+        ),
       ),
       GoRoute(
         path: AppRoute.topicInput,
@@ -179,6 +180,7 @@ class _RouterRefreshNotifier extends ChangeNotifier {
   _RouterRefreshNotifier(Ref ref) {
     ref.listen(authControllerProvider, (_, _) => notifyListeners());
     ref.listen(onboardingControllerProvider, (_, _) => notifyListeners());
+    ref.listen(splashMotionCompletedProvider, (_, _) => notifyListeners());
   }
 }
 

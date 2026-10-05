@@ -11,7 +11,7 @@ class MainShell extends StatefulWidget {
 }
 
 class _MainShellState extends State<MainShell> {
-  final _controllers = List.generate(3, (_) => ScrollController());
+  final _controllers = List.generate(2, (_) => ScrollController());
   @override
   void dispose() {
     for (final controller in _controllers) {

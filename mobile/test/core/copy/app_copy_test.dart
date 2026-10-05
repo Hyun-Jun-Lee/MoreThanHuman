@@ -35,6 +35,14 @@ void main() {
       expect(korean.languageName('fr'), 'fr');
     });
 
+    test('uses the same conversation badge labels in Korean and English', () {
+      for (final locale in [const Locale('ko'), const Locale('en')]) {
+        final copy = AppCopy.forLocale(locale);
+        expect(copy.conversationCategory('freeChat'), 'freechat');
+        expect(copy.conversationCategory('roleplay'), 'roleplaying');
+      }
+    });
+
     test(
       'builds system-locale pair framing without changing language codes',
       () {
