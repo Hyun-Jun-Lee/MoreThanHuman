@@ -100,7 +100,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                     'assets/images/splash/toma_talk.png',
                     width: double.infinity,
                     fit: BoxFit.contain,
-                    semanticLabel: 'Toma Talk',
+                    semanticLabel: 'tomatalk',
                   ),
                 ),
               ),

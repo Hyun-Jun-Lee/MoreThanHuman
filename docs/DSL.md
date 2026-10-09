@@ -1,4 +1,4 @@
-# MoreThanHuman Backend DSL
+# tomatalk Backend DSL
 
 > 최종 갱신: 2026-10-09 · 범위: FastAPI 백엔드 API + Flutter 모바일 연동
 

@@ -1,6 +1,6 @@
-# MoreThanHuman
+# tomatalk
 
-Curitalk은 관심 있는 주제로 AI와 대화하고 문법 피드백과 짧은 언어 지식을 학습하는 다국어 회화 앱이에요. 이 저장소는 FastAPI 백엔드(`backend/`)와 Flutter iOS·Android 앱(`mobile/`)을 함께 관리해요.
+tomatalk은 관심 있는 주제로 AI와 대화하고 문법 피드백과 짧은 언어 지식을 학습하는 다국어 회화 앱이에요. 이 저장소는 FastAPI 백엔드(`backend/`)와 Flutter iOS·Android 앱(`mobile/`)을 함께 관리해요.
 
 ## 실행 준비
 

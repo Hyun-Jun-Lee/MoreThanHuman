@@ -61,7 +61,7 @@ async def lifespan(_app: FastAPI):
 
 # FastAPI 앱 생성
 app = FastAPI(
-    title="영어 회화 학습 API",
+    title="tomatalk API",
     description="AI 기반 영어 회화 학습 플랫폼",
     version="1.0.0",
     debug=settings.debug,

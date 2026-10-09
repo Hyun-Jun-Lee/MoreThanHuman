@@ -28,7 +28,7 @@ class OpenRouterVoiceProvider(VoiceProvider):
         return {
             "Authorization": f"Bearer {self.api_key}",
             "HTTP-Referer": "https://github.com/MoreThanHuman",
-            "X-OpenRouter-Title": "Curitalk",
+            "X-OpenRouter-Title": "tomatalk",
         }
 
     async def transcribe_audio(

@@ -21,7 +21,7 @@ class CuritalkApp extends ConsumerWidget {
         ?.user
         ?.appLocale;
     return MaterialApp.router(
-      title: 'Curitalk',
+      title: 'tomatalk',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       localizationsDelegates: const <LocalizationsDelegate<dynamic>>[

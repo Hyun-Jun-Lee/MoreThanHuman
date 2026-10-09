@@ -1,6 +1,6 @@
-# Curitalk Mobile
+# tomatalk Mobile
 
-관심사 기반 AI 다국어 회화 앱 Curitalk의 Flutter iOS·Android 클라이언트예요.
+관심사 기반 AI 다국어 회화 앱 tomatalk의 Flutter iOS·Android 클라이언트예요.
 
 ## 확인
 
@@ -101,7 +101,7 @@ assets/
 | `AppSize` | 접근 가능한 touch target과 component 크기 |
 | `AppMotion` | 버튼·상태 변화에 사용하는 애니메이션 시간 |
 
-`AppColorScheme`은 공통 Material 3 색상 역할을, `AppSemanticColors`는 대화·문법 피드백·검색 상태처럼 Curitalk 전용 역할을 제공해요. `AppComponentThemes`는 버튼·입력창·Chip·카드·Bottom sheet·Bottom navigation의 상태별 스타일을 정의해요. `AppTheme.light`가 세 계층을 등록하며 앱 루트에서 사용해요.
+`AppColorScheme`은 공통 Material 3 색상 역할을, `AppSemanticColors`는 대화·문법 피드백·검색 상태처럼 tomatalk 전용 역할을 제공해요. `AppComponentThemes`는 버튼·입력창·Chip·카드·Bottom sheet·Bottom navigation의 상태별 스타일을 정의해요. `AppTheme.light`가 세 계층을 등록하며 앱 루트에서 사용해요.
 
 토큰 원본은 `docs/design/DESIGN_SYSTEM.md`이며 화면 코드에는 raw Hex나 임의 수치를 직접 작성하지 않아요.
 

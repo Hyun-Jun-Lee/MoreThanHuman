@@ -14,9 +14,9 @@
 ## 구매 신뢰 경계
 
 - Flutter의 구매 성공 이벤트만으로 혜택을 부여하지 않아요. 인증된 검증 API가 Apple 서명 거래와 현재 구독 상태를 확인해요.
-- 원거래 ID는 한 Convia 계정에만 연결해요. 구매 시 Convia 사용자 UUID를 Apple `appAccountToken`으로 전달해요. 다른 계정의 복원은 기존 소유자 권한을 유지하고 두 번째 계정에는 혜택을 주지 않아요.
+- 원거래 ID는 한 tomatalk 계정에만 연결해요. 구매 시 tomatalk 사용자 UUID를 Apple `appAccountToken`으로 전달해요. 다른 계정의 복원은 기존 소유자 권한을 유지하고 두 번째 계정에는 혜택을 주지 않아요.
 - Apple Server Notifications V2는 서명된 payload를 검증해요. 중복·역순 이벤트는 현재 Apple 상태 재조회로 조정하고, 알림 누락에 대비해 재조회 작업을 운영해요.
-- Apple 로그인은 구매의 필수 조건이 아니에요. iOS에서 로그인한 Google/Apple Convia 계정 모두 구매할 수 있어요. Android 구매 UI는 숨기지만 같은 Convia 계정의 서버 권한은 적용해요.
+- Apple 로그인은 구매의 필수 조건이 아니에요. iOS에서 로그인한 Google/Apple tomatalk 계정 모두 구매할 수 있어요. Android 구매 UI는 숨기지만 같은 tomatalk 계정의 서버 권한은 적용해요.
 - 추가 대화 잠금 안내 팝업은 주간 주제 시작 확인 팝업과 같은 높이로 표시해요. iOS에서는 이 팝업에서 구독 화면으로 이동할 수 있어요.
 
 ## API

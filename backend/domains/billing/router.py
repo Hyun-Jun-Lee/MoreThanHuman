@@ -1,4 +1,4 @@
-"""Convia 구독 상태와 Apple 서버 알림 API."""
+"""tomatalk 구독 상태와 Apple 서버 알림 API."""
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session

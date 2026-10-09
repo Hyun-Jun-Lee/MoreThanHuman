@@ -239,7 +239,7 @@ class _HomeHeader extends StatelessWidget {
         children: <Widget>[
           const Expanded(
             child: Text(
-              'CURITALK',
+              'tomatalk',
               style: AppTypography.headlineMd,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,

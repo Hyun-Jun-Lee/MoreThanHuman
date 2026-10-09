@@ -1,6 +1,6 @@
 # AGENTS.md — Single Source of Truth
 
-> **프로젝트**: MoreThanHuman (Convia)
+> **프로젝트**: MoreThanHuman (서비스명: tomatalk)
 > **서비스**: AI 기반 영어 회화 학습 플랫폼
 > **시드 버전**: EstreGenesis v1.6.0
 > **마이그레이션일**: 2026-05-20

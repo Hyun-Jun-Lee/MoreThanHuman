@@ -33,7 +33,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         (Localizations.localeOf(context).languageCode == 'ko' ? 'ko' : 'en');
     final name = user?.name.trim().isNotEmpty == true
         ? user!.name.trim()
-        : 'Curitalk user';
+        : 'tomatalk user';
     final email = user?.email.trim() ?? '';
     final copy = AppCopy.of(context);
     final entitlement = ref.watch(billingEntitlementProvider).value;

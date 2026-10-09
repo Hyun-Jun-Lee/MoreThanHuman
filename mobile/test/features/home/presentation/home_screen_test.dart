@@ -31,7 +31,7 @@ void main() {
     expect(find.text('KR -> EN'), findsOneWidget);
     expect(
       tester.getTopRight(find.text('KR -> EN')).dx,
-      greaterThan(tester.getTopRight(find.text('CURITALK')).dx),
+      greaterThan(tester.getTopRight(find.text('tomatalk')).dx),
     );
     expect(find.text('Conversation 3'), findsNothing);
     await tester.scrollUntilVisible(

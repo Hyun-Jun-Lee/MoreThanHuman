@@ -91,7 +91,7 @@ flowchart TD
 ```text
 ┌─────────────────────────┐
 │                         │
-│        Curitalk         │
+│        tomatalk         │
 │   Speak about anything  │
 │                         │
 │        Loading...       │

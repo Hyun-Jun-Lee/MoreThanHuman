@@ -1,9 +1,9 @@
 ---
-name: Convia
+name: tomatalk
 last_updated: 2026-10-01
 ---
 
-# Convia Strategy
+# tomatalk Strategy
 
 ## Target problem
 
@@ -11,11 +11,11 @@ last_updated: 2026-10-01
 
 ## Our approach
 
-Convia는 정해진 role이나 상황을 제공하는 대신, 사용자가 원하는 최신 관심사를 먼저 입력하고 웹검색 컨텍스트를 대화에 포함시킨다. 이를 통해 사용자가 주도권을 가지고 자연스럽게 영어 회화를 이어가게 한다.
+tomatalk은 정해진 role이나 상황을 제공하는 대신, 사용자가 원하는 최신 관심사를 먼저 입력하고 웹검색 컨텍스트를 대화에 포함시킨다. 이를 통해 사용자가 주도권을 가지고 자연스럽게 영어 회화를 이어가게 한다.
 
 ## Who it's for
 
-**Primary:** 정해진 커리큘럼 앱에 질린 영어 회화 학습자 - 오늘 본 뉴스나 관심사를 주제로 부담 없이 영어 대화를 연습하려고 Convia를 쓴다.
+**Primary:** 정해진 커리큘럼 앱에 질린 영어 회화 학습자 - 오늘 본 뉴스나 관심사를 주제로 부담 없이 영어 대화를 연습하려고 tomatalk을 쓴다.
 
 ## Key metrics
 
@@ -25,7 +25,7 @@ Convia는 정해진 role이나 상황을 제공하는 대신, 사용자가 원�
 
 ## Business model
 
-Convia는 freemium을 기본 BM으로 두고 `free`/`advance`/`plus` 플랜을 제공해요. 무료 사용자는 제품의 핵심 가치인 관심사 기반 주제 준비, 실제 대화, 문법 피드백, 음성 입출력을 체험할 수 있어야 해요. iOS의 Advance·Plus는 App Store Connect에서 가격을 정하는 월간 자동 갱신 구독이에요. 추가 대화 단품 판매는 보류해요.
+tomatalk은 freemium을 기본 BM으로 두고 `free`/`advance`/`plus` 플랜을 제공해요. 무료 사용자는 제품의 핵심 가치인 관심사 기반 주제 준비, 실제 대화, 문법 피드백, 음성 입출력을 체험할 수 있어야 해요. iOS의 Advance·Plus는 App Store Connect에서 가격을 정하는 월간 자동 갱신 구독이에요. 추가 대화 단품 판매는 보류해요.
 
 구독 출시 시 적용할 대화 권한:
 

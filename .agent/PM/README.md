@@ -5,4 +5,4 @@
 | 문서 | 범위·상태 |
 |---|---|
 | [Phase 1 개발 계획](001_Phase1_Plan.md) | 2026-05-20에 작성된 초기 개발 계획 |
-| [Curitalk 마케팅 전략](MARKETING_STRATEGY.md) | 한국어·영어 학습자 초기 모집·홍보·재사용 검증 제안, v0.1 |
+| [tomatalk 마케팅 전략](MARKETING_STRATEGY.md) | 한국어·영어 학습자 초기 모집·홍보·재사용 검증 제안, v0.1 |

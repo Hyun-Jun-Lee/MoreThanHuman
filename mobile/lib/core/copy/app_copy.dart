@@ -195,9 +195,9 @@ class AppCopy {
   String billingMessage(String code) => switch ((isKorean, code)) {
     (true, 'verified') => '구독이 확인되었어요.',
     (false, 'verified') => 'Subscription verified.',
-    (true, 'account_conflict') => '이 구매는 다른 Convia 계정에 연결되어 있어요.',
+    (true, 'account_conflict') => '이 구매는 다른 tomatalk 계정에 연결되어 있어요.',
     (false, 'account_conflict') =>
-      'This purchase belongs to another Convia account.',
+      'This purchase belongs to another tomatalk account.',
     (true, 'purchase_canceled') => '구매를 취소했어요.',
     (false, 'purchase_canceled') => 'Purchase canceled.',
     (true, 'restore_requested') => '복원한 구매를 확인하고 있어요.',

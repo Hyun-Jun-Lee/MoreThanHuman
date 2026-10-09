@@ -114,7 +114,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Text('CURITALK', style: AppTypography.headlineMd),
+            Text('tomatalk', style: AppTypography.headlineMd),
             const SizedBox(height: AppSpacing.xxl),
             Text(copy.title, style: AppTypography.displayLg),
             const SizedBox(height: AppSpacing.lg),

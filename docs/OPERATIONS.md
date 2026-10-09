@@ -73,7 +73,7 @@ Flutter App
 
 초기화와 스위치 변경 사이에 대화 생성·삭제가 발생하면 활성 슬롯 선택이 달라질 수 있으므로 쓰기를 중지해요. 이 CLI는 스위치가 이미 켜져 있으면 실행을 거부해요. 테스트용 `.env`에서 스위치를 켜면 무료 계정에 활성 슬롯 1개와 대화당 15회가 적용돼요. 읽기 전용 대화는 앱에서 열람·삭제하고, 슬롯이 가득 차면 기록 화면에서 현재 활성 대화를 해제하거나 교체해요.
 
-동시 생성·발화 제한은 프로덕션 PostgreSQL의 행 잠금에 의존해요. 개발용 SQLite에서는 동시 요청 경계 검증을 대신할 수 없으므로 활성화 전 PostgreSQL에서 병렬 요청을 확인해요. Apple 알림 누락에 대비해 `backend/`에서 `uv run python -m scripts.reconcile_apple_subscriptions`를 주기적으로 실행하고 종료 코드·실패 건수를 모니터링해요. 이 작업은 Apple 현재 상태를 다시 조회하고 기존 Convia 계정 연결을 유지해요.
+동시 생성·발화 제한은 프로덕션 PostgreSQL의 행 잠금에 의존해요. 개발용 SQLite에서는 동시 요청 경계 검증을 대신할 수 없으므로 활성화 전 PostgreSQL에서 병렬 요청을 확인해요. Apple 알림 누락에 대비해 `backend/`에서 `uv run python -m scripts.reconcile_apple_subscriptions`를 주기적으로 실행하고 종료 코드·실패 건수를 모니터링해요. 이 작업은 Apple 현재 상태를 다시 조회하고 기존 tomatalk 계정 연결을 유지해요.
 
 `ENV=dev`나 로컬 `.env`라는 파일명만으로 데이터가 운영과 분리되지는 않아요. UI 미리보기 전에 `DATABASE_URL`과 앱의 `SUPABASE_URL`이 별도 테스트 프로젝트를 가리키는지 확인해요. 같은 프로젝트라면 스위치를 켰을 때 실제 계정에도 제한이 적용돼요.
 

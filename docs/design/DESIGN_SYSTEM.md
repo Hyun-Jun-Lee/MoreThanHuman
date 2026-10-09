@@ -1,5 +1,5 @@
 ---
-name: Curitalk Interface System
+name: tomatalk Interface System
 platform: Flutter iOS and Android
 theme: light
 colors:
@@ -138,7 +138,7 @@ motion:
 
 ## 1. 시스템 방향
 
-Curitalk은 Figma 마케팅 시스템의 편집형 대비와 컬러 블록 문법을 모바일 학습 앱에 맞게 변형해요. 기본 화면은 흑백의 깨끗한 캔버스를 유지하고, 대화 주제·학습 피드백·최근 대화처럼 의미가 있는 콘텐츠 묶음에만 파스텔 컬러 블록을 사용해요.
+tomatalk은 Figma 마케팅 시스템의 편집형 대비와 컬러 블록 문법을 모바일 학습 앱에 맞게 변형해요. 기본 화면은 흑백의 깨끗한 캔버스를 유지하고, 대화 주제·학습 피드백·최근 대화처럼 의미가 있는 콘텐츠 묶음에만 파스텔 컬러 블록을 사용해요.
 
 이 시스템의 핵심은 **Warm Terracotta & Sand가 아니라 Monochrome Editorial + Pastel Color Blocks**예요. Terracotta는 일부 Stitch 화면의 아이콘이나 작은 강조 요소에만 제한적으로 등장하며, 앱의 주 배경이나 CTA 색상이 아니에요.
 
@@ -172,7 +172,7 @@ Stitch HTML은 시각적 참고 자료이며 Flutter 위젯 구조나 화면별 
 - hairline, hairline-soft: 입력창, 카드, 리스트 구분선
 - ink-secondary: 설명, 보조 문구, 시간 정보에만 사용
 
-원본 마케팅 시스템은 mid-gray 텍스트를 거의 사용하지 않지만, Curitalk 모바일 앱은 긴 설명과 상태 정보가 많으므로 접근 가능한 보조 텍스트 역할을 허용해요. 중요한 학습 내용과 CTA는 항상 ink를 사용해요.
+원본 마케팅 시스템은 mid-gray 텍스트를 거의 사용하지 않지만, tomatalk 모바일 앱은 긴 설명과 상태 정보가 많으므로 접근 가능한 보조 텍스트 역할을 허용해요. 중요한 학습 내용과 CTA는 항상 ink를 사용해요.
 
 ### 3.2 Pastel Color Blocks
 
@@ -245,7 +245,7 @@ Mono 역할은 항상 uppercase를 기본으로 하며 문장형 본문에는 �
 
 ## 6. Elevation & Depth
 
-Curitalk은 기본적으로 flat system이에요.
+tomatalk은 기본적으로 flat system이에요.
 
 | Level | 처리 | 사용 |
 |---|---|---|
@@ -429,6 +429,6 @@ Color block 자체에는 그림자를 추가하지 않아요. focus와 pressed �
 ## 12. Known Gaps
 
 - Pastel Hex 값은 Stitch PNG와 HTML에서 정규화한 값이며 향후 실제 기기 검수에서 미세 조정할 수 있어요.
-- Stitch 화면에는 Convia 명칭과 Quicksand, Terracotta 중심 theme 같은 과거 생성 흔적이 남아 있어요. Flutter 구현에서는 이 문서의 Curitalk token을 우선해요.
+- Stitch 화면에는 이전 서비스 명칭과 Quicksand, Terracotta 중심 theme 같은 과거 생성 흔적이 남아 있어요. Flutter 구현에서는 이 문서의 tomatalk token을 우선해요.
 - Dark theme은 v1 범위가 아니며 block-navy는 light flow 안의 제한적인 inverse panel이에요.
 - 문법 피드백은 일반 AI 말풍선과 구분되도록 `grammarSuggestionSurface`를 사용하고, 설명 텍스트는 gray 계열 보조 텍스트를 유지해요. 긴 교정/설명은 기본 접힘 상태에서 1줄로 표시하고 `SHOW MORE`/`SHOW LESS`로 확장해요.

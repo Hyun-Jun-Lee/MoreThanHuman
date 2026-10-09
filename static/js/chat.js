@@ -427,7 +427,7 @@ function addLoadingMessage() {
                 <span class="material-symbols-outlined text-primary">smart_toy</span>
             </div>
             <div class="flex flex-1 flex-col gap-1 items-start">
-                <p class="text-subtle-light dark:text-subtle-dark text-sm font-medium leading-normal">MoreThanHuman AI</p>
+                <p class="text-subtle-light dark:text-subtle-dark text-sm font-medium leading-normal">tomatalk AI</p>
                 <p class="text-base font-normal leading-relaxed rounded-lg px-4 py-3 bg-surface-light dark:bg-surface-dark shadow-sm">
                     <span class="inline-flex items-center gap-1">
                         응답중<span class="animate-pulse">...</span>
@@ -509,7 +509,7 @@ function addAIMessage(content) {
             </div>
             <div class="flex flex-1 flex-col gap-1 items-start">
                 <div class="flex items-center gap-2">
-                    <p class="text-subtle-light dark:text-subtle-dark text-sm font-medium leading-normal">MoreThanHuman AI</p>
+                    <p class="text-subtle-light dark:text-subtle-dark text-sm font-medium leading-normal">tomatalk AI</p>
                     <button class="speaker-btn flex items-center justify-center size-7 rounded-full hover:bg-primary/10 transition-colors" data-text="${escapeHtml(content)}" title="Play audio">
                         <span class="material-symbols-outlined text-lg text-subtle-light dark:text-subtle-dark">volume_up</span>
                     </button>
@@ -551,7 +551,7 @@ function appendMessage(msg) {
                 </div>
                 <div class="flex flex-1 flex-col gap-1 items-start">
                     <div class="flex items-center gap-2">
-                        <p class="text-subtle-light dark:text-subtle-dark text-sm font-medium leading-normal">MoreThanHuman AI</p>
+                        <p class="text-subtle-light dark:text-subtle-dark text-sm font-medium leading-normal">tomatalk AI</p>
                         <button class="speaker-btn flex items-center justify-center size-7 rounded-full hover:bg-primary/10 transition-colors" data-text="${escapeHtml(msg.content)}" title="Play audio">
                             <span class="material-symbols-outlined text-lg text-subtle-light dark:text-subtle-dark">volume_up</span>
                         </button>
