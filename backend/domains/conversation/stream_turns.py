@@ -1,6 +1,7 @@
 """음성 스트림의 영속 상태와 시도 기록."""
 
 import json
+import re
 from datetime import datetime, timedelta
 from uuid import uuid4
 
@@ -8,6 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from domains.conversation.models import StreamAttemptModel, StreamTurnModel
+from shared.logging_config import log_event
 
 
 TURN_DEADLINE = timedelta(minutes=5)
@@ -60,18 +62,51 @@ class StreamTurnStore:
             status="pending", started_at=now,
         )
         try:
-            self.db.add_all([turn, attempt])
+            self.db.add(turn)
+            self.db.flush()
+            self.db.add(attempt)
             self.db.commit()
-        except IntegrityError:
+        except IntegrityError as error:
             self.db.rollback()
             existing = self.db.query(StreamTurnModel).filter_by(user_id=user_id, request_id=request_id).one_or_none()
-            if existing is None:
-                if input_data.get("conversation_id"):
-                    raise StreamTurnConflict("PREVIOUS_TURN_UNRESOLVED") from None
+            if existing is not None:
+                self._expire(existing)
+                raise StreamTurnConflict(self._conflict_code(existing)) from None
+            conversation_id = input_data.get("conversation_id")
+            unresolved = []
+            if conversation_id:
+                unresolved = self.db.query(StreamTurnModel.status).filter_by(
+                    user_id=user_id, conversation_id=conversation_id,
+                ).filter(StreamTurnModel.status.in_(["pending", "failed"])).all()
+            log_event(
+                "conversation.stream.conflict", source="reserve_integrity",
+                pending_count=sum(status == "pending" for (status,) in unresolved),
+                failed_count=sum(status == "failed" for (status,) in unresolved),
+                **self._safe_integrity_fields(error),
+            )
+            if unresolved:
+                raise StreamTurnConflict("PREVIOUS_TURN_UNRESOLVED") from None
+            reused_attempt = self.db.query(StreamAttemptModel).filter_by(
+                user_id=user_id, request_id=request_id,
+            ).one_or_none()
+            if reused_attempt is not None:
                 raise StreamTurnConflict("IDEMPOTENCY_KEY_REUSED") from None
-            self._expire(existing)
-            raise StreamTurnConflict(self._conflict_code(existing)) from None
+            raise
         return turn
+
+    @staticmethod
+    def _safe_integrity_fields(error: IntegrityError) -> dict[str, str]:
+        diag = getattr(error.orig, "diag", None)
+        raw = {
+            "db_sqlstate": getattr(error.orig, "pgcode", None),
+            "db_constraint": getattr(diag, "constraint_name", None),
+            "db_table": getattr(diag, "table_name", None),
+            "db_column": getattr(diag, "column_name", None),
+        }
+        return {
+            key: value for key, value in raw.items()
+            if isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9_]{1,64}", value)
+        }
 
     def complete_text(
         self, turn_id: str, *, conversation_id: str, assistant_message_id: str,

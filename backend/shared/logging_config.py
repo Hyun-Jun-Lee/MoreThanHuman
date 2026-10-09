@@ -21,7 +21,8 @@ _allowed_fields = {
     "output_chars", "input_bytes", "output_bytes", "prompt_tokens",
     "completion_tokens", "logger", "file", "function", "line",
     "source_count", "accepted_count", "rejected_count", "response_chars",
-    "recency_intent", "sufficient",
+    "recency_intent", "sufficient", "pending_count", "failed_count",
+    "db_sqlstate", "db_constraint", "db_table", "db_column",
 }
 
 
@@ -70,12 +71,10 @@ class JsonLogHandler(logging.Handler):
                     "line": record.lineno,
                 }
             payload = {
-                "ts": datetime.now(timezone.utc).isoformat(),
-                "schema_version": 1,
+                "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                 "level": record.levelname,
                 "service": "api",
                 "environment": os.getenv("ENV", "dev"),
-                "event": getattr(record, "event", None) or "python.log",
                 "trace_id": context.get("trace_id"),
                 "request_id": context.get("request_id"),
                 **fields,

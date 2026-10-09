@@ -17,7 +17,7 @@ def events(capsys):
     return [
         json.loads(line)
         for line in capsys.readouterr().out.splitlines()
-        if line.startswith("{") and '"event":"http.' in line
+        if line.startswith("{")
     ]
 
 
@@ -43,7 +43,7 @@ async def test_concurrent_requests_keep_trace_and_body_private(capsys):
     for trace in ("a" * 32, "b" * 32):
         matching = [row for row in rows if row["trace_id"] == trace]
         assert {row.get("stage") for row in matching} >= {"llm", "server_total"}
-        assert sum(row["event"] == "http.request.completed" for row in matching) == 1
+        assert sum("method" in row for row in matching) == 1
         assert len({row["request_id"] for row in matching}) == 1
         assert all(row["duration_ms"] >= 0 for row in matching)
     assert "private transcript" not in json.dumps(rows)
@@ -68,7 +68,7 @@ async def test_failed_span_preserves_exception_and_http_status(capsys):
     assert response.status_code == 502
     assert len(response.headers["x-request-id"]) == 32
     assert next(row for row in rows if row.get("stage") == "tts")["status"] == "error"
-    assert next(row for row in rows if row["event"] == "http.request.completed")["status_code"] == 502
+    assert next(row for row in rows if "method" in row)["status_code"] == 502
     assert "secret provider payload" not in json.dumps(rows)
     with latency_span("outside_request"):
         pass
@@ -89,7 +89,7 @@ async def test_health_requests_are_instrumented(capsys):
     assert len(response.headers["x-request-id"]) == 32
     rows = events(capsys)
     assert len(rows) == 1
-    assert rows[0]["event"] == "http.request.completed"
+    assert rows[0]["method"] == "GET"
     assert rows[0]["route"] == "/health"
 
 
@@ -110,7 +110,7 @@ async def test_retry_and_route_template_hide_path_and_query(capsys):
             )
             for _ in range(2)
         ]
-    rows = [row for row in events(capsys) if row["event"] == "http.request.completed"]
+    rows = [row for row in events(capsys) if "method" in row]
     assert [response.headers["x-request-id"] for response in responses] == ["a" * 32] * 2
     assert len({row["request_id"] for row in rows}) == 2
     assert {row["route"] for row in rows} == {"/api/items/{item_id}/"}
@@ -152,8 +152,8 @@ async def test_voice_service_spans_reach_request_context(capsys):
         response = await client.post("/api/conversations/start/free-chat/")
     assert response.status_code == 200
     rows = events(capsys)
-    assert {row.get("stage") for row in rows if row["event"] == "http.stage.completed"} == {"stt", "tts", "audio_encode", "server_total"}
-    assert sum(row["event"] == "http.request.completed" for row in rows) == 1
+    assert {row["stage"] for row in rows if "stage" in row} == {"stt", "tts", "audio_encode", "server_total"}
+    assert sum("method" in row for row in rows) == 1
     assert len({row["trace_id"] for row in rows}) == 1
     assert "private words" not in json.dumps(rows)
 
@@ -168,7 +168,7 @@ async def test_cancellation_is_preserved_and_context_is_reset(capsys):
     with pytest.raises(asyncio.CancelledError):
         await app({"type": "http", "method": "POST", "path": "/api/conversations/id/turn/"}, None, None)
     rows = events(capsys)
-    assert all(row["status"] == "error" for row in rows if row["event"] == "http.stage.completed")
+    assert all(row["status"] == "error" for row in rows if "stage" in row)
     assert rows[-1]["response_complete"] is False
     with latency_span("outside"):
         pass

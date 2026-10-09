@@ -17,6 +17,7 @@ from domains.conversation.service import ConversationService
 from domains.conversation.stream_turns import StreamTurnConflict, StreamTurnStore
 from shared.background_tasks import BackgroundTaskRegistry
 from shared.language import LearningLanguageContext, language_context_from_values, language_context_to_dict, language_name
+from shared.logging_config import log_event
 
 settings = get_settings()
 
@@ -68,7 +69,13 @@ def prepare_generation(
             if conversation_id:
                 conversation = repository.find_by_id(conversation_id, user_id)
                 repository.assert_can_send(conversation_id, user_id, enabled=settings.conversation_access_enabled)
-                if any(item.status != "completed" for item in store.unresolved(user_id, conversation_id)):
+                unresolved = store.unresolved(user_id, conversation_id)
+                if any(item.status != "completed" for item in unresolved):
+                    log_event(
+                        "conversation.stream.conflict", source="precheck",
+                        pending_count=sum(item.status == "pending" for item in unresolved),
+                        failed_count=sum(item.status == "failed" for item in unresolved),
+                    )
                     raise StreamTurnConflict("PREVIOUS_TURN_UNRESOLVED")
             elif kind == "free_chat_start":
                 repository.assert_can_create(user_id, enabled=settings.conversation_access_enabled)

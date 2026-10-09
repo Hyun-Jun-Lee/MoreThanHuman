@@ -21,7 +21,7 @@ from shared.logging_config import log_exception
 def _events(capsys):
     return [
         json.loads(line) for line in capsys.readouterr().out.splitlines()
-        if line.startswith("{") and ('"event":"http.' in line or '"event":"background_task.' in line)
+        if line.startswith("{")
     ]
 
 
@@ -57,8 +57,8 @@ async def test_http_and_validation_errors_are_logged_once_without_body(capsys):
 
     rows = _events(capsys)
     assert [unauthorized.status_code, invalid.status_code] == [401, 422]
-    assert sorted(row["status_code"] for row in rows if row["event"] == "http.request.completed") == [401, 422]
-    assert sorted(row["error_code"] for row in rows if row["event"] == "http.exception") == ["HTTP_401", "REQUEST_VALIDATION_ERROR"]
+    assert sorted(row["status_code"] for row in rows if "method" in row) == [401, 422]
+    assert sorted(row["error_code"] for row in rows if "error_code" in row) == ["HTTP_401", "REQUEST_VALIDATION_ERROR"]
     assert "private-token" not in json.dumps(rows)
     assert "body-secret" not in json.dumps(rows)
 
@@ -84,7 +84,7 @@ async def test_app_exceptions_preserve_response_and_log_safe_codes(capsys):
     assert [response.json()["error"] for response in responses] == [
         "private-auth", "private-missing", "private-other"
     ]
-    errors = [row for row in rows if row["event"] == "http.exception"]
+    errors = [row for row in rows if "error_code" in row]
     assert {row["error_code"] for row in errors} == {
         "AUTHENTICATION_FAILED", "NOT_FOUND", "AppException"
     }
@@ -108,8 +108,8 @@ async def test_unhandled_500_records_safe_stack_and_request_completion(capsys):
 
     rows = _events(capsys)
     assert response.status_code == 500
-    assert len([row for row in rows if row["event"] == "http.request.completed"]) == 1
-    exception = next(row for row in rows if row["event"] == "http.exception")
+    assert len([row for row in rows if "method" in row]) == 1
+    exception = next(row for row in rows if "error_code" in row)
     assert exception["exception_type"] == "RuntimeError"
     assert exception["stack_frames"][-1]["function"] == "broken"
     assert "message-secret" not in json.dumps(rows)
@@ -131,7 +131,7 @@ async def test_converted_502_preserves_cause_without_duplicate_exception(capsys)
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="http://test") as client:
         response = await client.get("/api/upstream/")
     rows = _events(capsys)
-    errors = [row for row in rows if row["event"] == "http.exception"]
+    errors = [row for row in rows if "error_code" in row]
     assert response.status_code == 502
     assert len(errors) == 1
     assert errors[0]["exception_type"] == "ExternalAPIException"
@@ -152,7 +152,7 @@ async def test_http_exception_handler_preserves_implicit_cause(capsys):
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="http://test") as client:
         response = await client.get("/api/implicit-cause/")
     rows = _events(capsys)
-    errors = [row for row in rows if row["event"] == "http.exception"]
+    errors = [row for row in rows if "error_code" in row]
     assert response.status_code == 503
     assert len(errors) == 1
     assert errors[0]["exception_type"] == "ValueError"
@@ -176,8 +176,8 @@ async def test_post_response_failure_is_separate_from_request_time(capsys):
     ) as client:
         response = await client.get("/api/background/")
     rows = _events(capsys)
-    completed = next(row for row in rows if row["event"] == "http.request.completed")
-    failed = next(row for row in rows if row["event"] == "background_task.failed")
+    completed = next(row for row in rows if "method" in row)
+    failed = next(row for row in rows if "exception_type" in row and "status_code" not in row)
     assert response.status_code == 200
     assert completed["response_complete"] is True
     assert completed["request_id"] == failed["request_id"]

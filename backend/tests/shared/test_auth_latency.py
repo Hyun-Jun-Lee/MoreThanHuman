@@ -71,18 +71,18 @@ async def test_all_protected_auth_paths_share_request_context_without_tokens(cap
         ]
 
     rows = [json.loads(line) for line in capsys.readouterr().out.splitlines()
-            if line.startswith("{") and '"event":"http.' in line]
+            if line.startswith("{")]
     assert [response.status_code for response in responses] == [200, 200, 200, 400, 403]
     for route in ("/api/bearer/", "/api/sse/", "/api/operations/", "/api/apple/"):
-        completed = next(row for row in rows if row["event"] == "http.request.completed"
+        completed = next(row for row in rows if "method" in row
                          and row["route"] == route and row["status_code"] != 403)
-        stages = [row for row in rows if row["event"] == "http.stage.completed"
+        stages = [row for row in rows if "stage" in row
                   and row["request_id"] == completed["request_id"]]
         assert len(stages) == 1
         assert stages[0]["stage"] == "auth"
-    forbidden = next(row for row in rows if row["event"] == "http.request.completed"
+    forbidden = next(row for row in rows if "method" in row
                      and row["status_code"] == 403)
-    assert not any(row["event"] == "http.stage.completed" and
+    assert not any("stage" in row and
                    row["request_id"] == forbidden["request_id"] for row in rows)
     assert all(secret not in json.dumps(rows) for secret in
                ("private-token", "operations-secret", "signed-secret"))

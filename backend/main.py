@@ -1,6 +1,7 @@
 """
 FastAPI 메인 애플리케이션
 """
+import re
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -113,7 +114,12 @@ async def app_exception_handler(_request, exc: AppException):
 @app.exception_handler(StarletteHTTPException)
 async def http_error_handler(request, exc: StarletteHTTPException):
     cause = exc.__cause__ or exc.__context__
-    log_exception(cause or exc, status_code=exc.status_code, error_code=f"HTTP_{exc.status_code}")
+    detail = exc.detail
+    code = detail.get("code") if isinstance(detail, dict) else None
+    error_code = f"HTTP_{exc.status_code}"
+    if isinstance(code, str) and re.fullmatch(r"[A-Z][A-Z0-9_]{0,63}", code):
+        error_code = code
+    log_exception(cause or exc, status_code=exc.status_code, error_code=error_code)
     return await http_exception_handler(request, exc)
 
 

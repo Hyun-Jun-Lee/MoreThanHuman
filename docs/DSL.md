@@ -497,6 +497,7 @@ module Conversation {
 NDJSON 각 줄에는 `event`, 0부터 증가하는 `seq`, `turn_id`, `attempt_id`가 있어요. `turn_started` 뒤 확정 사용자 발화가 있으면 `user_message_committed`를 보내고, 생성 중 `text_delta`와 문장별 `audio_segment`(`segment_index`, `text`, `content_type`, `format`, `base64`)를 보내요. 끝에는 `turn_completed`(`conversation_id`, `assistant_message_id`, `text`, `audio_status`) 또는 `turn_error` 하나를 보내요. TTS 실패 때는 `audio_error` 뒤 `audio_status: failed`인 `turn_completed`를 보내고 AI 메시지는 보존해요. 연결 단절 때는 마지막 이벤트를 받았다고 추정하지 않고 상태 조회로 확인해요. 같은 키의 중복 요청은 현재 상태에 따라 HTTP 409 `TURN_IN_PROGRESS`, `TURN_ALREADY_COMPLETED`, `TURN_FAILED_RETRY_REQUIRED`예요. 앱은 증분 UTF-8로 읽고, 세그먼트를 순서대로 재생해요.
 
 새 모바일 앱은 위 대화 흐름의 스트림 경로를 사용해요. 기존 JSON 경로는 유지돼요. 실패한 AI 답변은 사용자가 재시도 버튼을 누를 때만 다시 생성하고, 음성만 실패하면 저장된 답변의 음성만 다시 합성해요. 실기기·프록시·동시 부하 검증은 [7단계](VOICE_STREAMING.md#권장-개발-순서)예요.
+이전 turn이 미해결이면 새 발화는 409 `PREVIOUS_TURN_UNRESOLVED`예요. 앱은 `GET /api/conversations/{id}/turns/`에서 이전 turn을 찾아 상태 확인·수동 재시도를 제공하고, 거절된 새 발화를 저장된 메시지로 취급하지 않아요.
 
 홈은 발행된 주제가 있으면 최근 대화 로딩 상태와 저장된 대화 수에 관계없이 추천 주제를 보여줘요. 이전 주의 발행 주제도 보관되지 않았다면 시작할 수 있어요. 탭 시 검색·사실 확인·Topic Prep은 실행하지 않아요.
 

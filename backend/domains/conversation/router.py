@@ -61,7 +61,7 @@ from shared.exceptions import (
 from shared.types import ErrorResponse, SuccessResponse
 from shared.background_tasks import BackgroundTaskRegistry, get_background_tasks
 from shared.http_clients import get_ai_http_client
-from shared.logging_config import log_exception
+from shared.logging_config import log_event, log_exception
 
 logger = logging.getLogger(__name__)
 
@@ -616,9 +616,13 @@ async def list_stream_turns(
     conversation = db.query(ConversationModel).filter_by(id=str(conversation_id), user_id=current_user.id).one_or_none()
     if conversation is None:
         raise HTTPException(status_code=404, detail="대화를 찾을 수 없어요")
-    return SuccessResponse(data=[
-        turn_status(turn) for turn in StreamTurnStore(db).unresolved(current_user.id, str(conversation_id))
-    ])
+    turns = StreamTurnStore(db).unresolved(current_user.id, str(conversation_id))
+    log_event(
+        "conversation.stream.unresolved",
+        pending_count=sum(turn.status == "pending" for turn in turns),
+        failed_count=sum(turn.status == "failed" for turn in turns),
+    )
+    return SuccessResponse(data=[turn_status(turn) for turn in turns])
 
 
 _STREAM_RESPONSES = {200: {"content": {"application/x-ndjson": {"schema": {"type": "string"}}}}}

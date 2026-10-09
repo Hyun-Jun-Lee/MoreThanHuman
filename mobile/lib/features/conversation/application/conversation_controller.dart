@@ -822,8 +822,35 @@ class ConversationController extends AsyncNotifier<ConversationState> {
           'Conversation stream ended without a terminal event.',
         );
       }
-    } on Object {
+    } on Object catch (sendError) {
       if (!ref.mounted || token.isCancelled) return;
+      if (sendError is ApiException &&
+          sendError.statusCode == 409 &&
+          (sendError.code == 'PREVIOUS_TURN_UNRESOLVED' ||
+              sendError.code == null) &&
+          turnId == null) {
+        try {
+          final unresolved = await api.unresolved(conversationId);
+          StreamTurnStatus? previousTurn;
+          for (final candidate in unresolved) {
+            if (candidate.status == 'pending' || candidate.status == 'failed') {
+              previousTurn = candidate;
+              break;
+            }
+          }
+          if (previousTurn != null) {
+            await _recoverFromStatus(repository, previousTurn);
+            if (ref.mounted && text != null) {
+              state = AsyncData(
+                state.requireValue.copyWith(unconfirmedText: text),
+              );
+            }
+            return;
+          }
+        } on Object {
+          // 이전 turn 조회가 실패하면 이번 요청 키의 상태 확인으로 돌아가요.
+        }
+      }
       StreamTurnStatus? status;
       Object? lookupError;
       try {

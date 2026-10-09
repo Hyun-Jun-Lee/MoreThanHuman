@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:curitalk/core/diagnostics/latency_trace.dart';
@@ -103,6 +104,15 @@ class ConversationStreamApi {
       yield* decodeConversationEvents(body.stream.cast<List<int>>());
       result = 'ok';
     } on DioException catch (error) {
+      final errorBody = error.response?.data;
+      if (errorBody is ResponseBody) {
+        try {
+          final content = await utf8.decoder.bind(errorBody.stream).join();
+          error.response?.data = jsonDecode(content);
+        } on FormatException {
+          // JSON 이외의 오류 본문은 기존 HTTP 상태로 처리해요.
+        }
+      }
       throw ApiException.fromDio(error);
     } finally {
       trace?.mark(

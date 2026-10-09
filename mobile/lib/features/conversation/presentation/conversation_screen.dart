@@ -136,7 +136,15 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
     );
     unawaited(() async {
       await _startController.cancelSuggestedStreamFor(widget.conversationId);
-      if (mounted) await controller.send(message);
+      if (!mounted) return;
+      await controller.send(message);
+      if (!mounted || _composerController.text.isNotEmpty) return;
+      final current = ref
+          .read(conversationControllerProvider(widget.conversationId))
+          .value;
+      if (current?.unconfirmedText == message) {
+        _composerController.text = message;
+      }
     }());
   }
 

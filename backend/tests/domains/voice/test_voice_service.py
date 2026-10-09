@@ -119,8 +119,11 @@ async def test_transcribe_upload_returns_non_empty_transcript(capsys):
     assert result.text == "Let's talk about travel."
     assert provider.transcribe_calls[0]["filename"] == "speech.webm"
     rows = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line.startswith("{")]
-    upload = next(row for row in rows if row["event"] == "voice.upload_validated")
-    transcript = next(row for row in rows if row["event"] == "voice.transcription_completed")
+    upload = next(
+        row for row in rows
+        if "input_bytes" in row and "stage" not in row and "output_chars" not in row
+    )
+    transcript = next(row for row in rows if "output_chars" in row)
     assert upload["provider"] == "fake"
     assert upload["input_bytes"] == len(WEBM_BYTES)
     assert transcript["output_chars"] == len(result.text)
@@ -156,7 +159,7 @@ async def test_transcribe_upload_rejects_undersized_audio_before_provider_call(c
 
     assert provider.transcribe_calls == []
     rows = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line.startswith("{")]
-    rejected = next(row for row in rows if row["event"] == "voice.upload_rejected")
+    rejected = next(row for row in rows if row.get("error_code") == "AUDIO_TOO_SMALL")
     assert rejected["error_code"] == "AUDIO_TOO_SMALL"
     assert rejected["input_bytes"] == len(HEADER_ONLY_M4A_BYTES)
     assert "header-only.m4a" not in json.dumps(rows)
@@ -184,7 +187,7 @@ async def test_transcribe_upload_rejects_empty_transcript(capsys):
         await service.transcribe_upload(FakeUpload(WEBM_BYTES))
 
     rows = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line.startswith("{")]
-    empty = next(row for row in rows if row["event"] == "voice.transcription_empty")
+    empty = next(row for row in rows if row.get("level") == "WARNING" and row.get("provider") == "fake")
     assert empty["provider"] == "fake"
     assert empty["input_bytes"] == len(WEBM_BYTES)
 

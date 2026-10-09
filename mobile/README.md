@@ -240,6 +240,8 @@ Conversation 화면은 Free Chat 시작, Roleplay 시작, Home 최근 대화 진
 
 모든 대화 생성 경로는 문장별 음성 NDJSON을 받아요. 주간 추천 시작은 `POST /api/conversations/start/free-chat/suggested/stream/`에 주제·요청 UUID를 보내고 `turn_started`의 대화 ID로 화면을 열어요. 다른 흐름은 AI 텍스트를 임시 표시하고 `audio_segment`를 증분 UTF-8 decoder와 단일 재생 큐로 순서대로 재생해요. 확정 사용자 발화는 남기고 미완성 AI 답변은 실패 안내와 재시도 버튼으로 바꿔요. 연결이 끊기면 상태만 조회하고 사용자가 버튼을 눌렀을 때 다시 생성해요. TTS 또는 재생 실패에는 저장된 답변의 음성 다시 듣기 버튼을 보여줘요. 화면 이탈 때 스트림과 큐를 취소해요.
 
+이전 turn 때문에 새 텍스트 전송이 409로 거절되면 앱은 그 대화의 미해결 turn을 다시 조회해 이전 답변의 상태 확인·재시도 버튼을 보여줘요. 거절된 텍스트는 서버 메시지로 표시하지 않고 입력창에 복원해요.
+
 | 동작 | API |
 |------|-----|
 | 주간 추천 시작 | `POST /api/conversations/start/free-chat/suggested/stream/` NDJSON |

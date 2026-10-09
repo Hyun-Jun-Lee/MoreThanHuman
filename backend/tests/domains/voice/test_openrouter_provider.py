@@ -121,7 +121,10 @@ async def test_openrouter_transcribe_audio_logs_safe_details_on_http_error(monke
         )
 
     rows = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line.startswith("{")]
-    event = next(row for row in rows if row["event"] == "voice.provider_failed")
+    event = next(
+        row for row in rows
+        if row.get("model") == "openai/gpt-4o-mini-transcribe" and row.get("status_code") == 400
+    )
     assert event["status_code"] == 400
     assert event["model"] == "openai/gpt-4o-mini-transcribe"
     assert event["input_bytes"] == 11

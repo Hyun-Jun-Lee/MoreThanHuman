@@ -12,7 +12,7 @@
 
 ## 계측 지표
 
-서버는 Python `perf_counter()`, 앱은 Dart `Stopwatch`를 사용해요. 절대 시각을 서로 빼지 않아요. 서버는 `event=http.stage.completed` JSON 한 줄과 `duration_ms`를, 앱은 `[latency] ` JSON과 `elapsed_ms`를 사용해요. 원문·인증 토큰·오디오 데이터는 포함하지 않아요. 전체 필드 계약은 [API 로그 문서](OBSERVABILITY.md)에 있어요.
+서버는 Python `perf_counter()`, 앱은 Dart `Stopwatch`를 사용해요. 절대 시각을 서로 빼지 않아요. 서버는 `stage`와 `duration_ms`가 있는 JSON 한 줄을, 앱은 `[latency] ` JSON과 `elapsed_ms`를 사용해요. 원문·인증 토큰·오디오 데이터는 포함하지 않아요. 전체 필드 계약은 [API 로그 문서](OBSERVABILITY.md)에 있어요.
 
 | 위치 | stage | 서버 duration_ms / 앱 elapsed_ms의 의미 |
 |------|-------|-------------------|
@@ -42,7 +42,7 @@
 - 현재 API는 비스트리밍이므로 LLM 첫 토큰·첫 문장, TTS 첫 바이트 지연은 아직 측정하지 않아요. provider 시간에는 네트워크·연결 수립·업체 대기열·생성이 모두 포함돼요.
 - `playing` 이벤트는 실제 스피커 출력의 근사치예요. 앱에서는 재생 완료를 기다리는 기존 `play()` 호출 전후를 첫 재생 지연으로 사용하지 않아요. 이벤트를 받지 못했거나 재생 오류가 난 경우 표본이 누락됐음을 기록하고 성공으로 간주하지 않아요.
 
-음성 단계와 `server_total`의 대상은 `POST /api/conversations/start/free-chat/`, `/start/roleplay/`, `/{id}/turn/`, `/{id}/message/`예요. 모든 API 요청의 전체 시간은 `http.request.completed`로 별도 기록해요. 문법 background task 실패는 별도 이벤트로 남기고 완료 시간은 `server_total`에 넣지 않아요. 단계 로그는 실행된 단계당 한 번이에요.
+음성 단계와 `server_total`의 대상은 `POST /api/conversations/start/free-chat/`, `/start/roleplay/`, `/{id}/turn/`, `/{id}/message/`예요. 모든 API 요청의 전체 시간은 `method`·`route`가 있는 별도 로그에 기록해요. 문법 background task 실패는 별도 오류 로그로 남기고 완료 시간은 `server_total`에 넣지 않아요. 단계 로그는 실행된 단계당 한 번이에요.
 
 ## 로그 확인
 
@@ -61,14 +61,14 @@ flutter run --profile --dart-define-from-file=/absolute/path/mobile-config.json 
 ```
 
 ```bash
-rg '"event":"http.stage.completed"' /tmp/convia-server.log
+rg '"stage":"(auth|stt|llm|tts|audio_encode|server_total)"' /tmp/convia-server.log
 rg '\[latency\]' /tmp/convia-mobile.log
 ```
 
 출력 형식 예시이며 실제 측정값은 아니에요:
 
 ```text
-{"event":"http.stage.completed","service":"api","trace_id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","request_id":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","stage":"stt","status":"ok","duration_ms":820.0}
+{"ts":"2026-10-09T09:00:00+00:00","service":"api","trace_id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","request_id":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","stage":"stt","status":"ok","duration_ms":820.0}
 [latency] {"source":"mobile","trace_id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","origin":"recording_stop","stage":"playback_started","status":"ok","elapsed_ms":85.0,"since_start_ms":2410.0}
 ```
 
