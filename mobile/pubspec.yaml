@@ -75,6 +75,7 @@ flutter:
   uses-material-design: true
 
   assets:
+    - 'logo_img/KakaoTalk_Photo_2026-10-08-22-20-21 002.png'
     - assets/images/snack_tomato/
     - assets/images/weekly_topic/
     - assets/images/splash/toma_talk.png

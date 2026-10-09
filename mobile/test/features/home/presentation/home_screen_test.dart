@@ -29,9 +29,18 @@ void main() {
     expect(find.byType(FloatingActionButton), findsNothing);
     expect(find.byType(CircleAvatar), findsNothing);
     expect(find.text('KR -> EN'), findsOneWidget);
+    final logo = find.byKey(const ValueKey('home-brand-logo'));
+    expect(logo, findsOneWidget);
+    expect(find.text('tomatalk'), findsNothing);
+    expect(tester.getSize(logo), const Size(164, 40));
+    expect(
+      (tester.widget<Image>(logo).image as AssetImage).assetName,
+      'logo_img/KakaoTalk_Photo_2026-10-08-22-20-21 002.png',
+    );
+    expect(tester.getTopLeft(logo).dx, AppSpacing.screenPadding - 8);
     expect(
       tester.getTopRight(find.text('KR -> EN')).dx,
-      greaterThan(tester.getTopRight(find.text('tomatalk')).dx),
+      greaterThan(tester.getTopRight(logo).dx),
     );
     expect(find.text('Conversation 3'), findsNothing);
     await tester.scrollUntilVisible(

@@ -237,13 +237,23 @@ class _HomeHeader extends StatelessWidget {
       ),
       child: Row(
         children: <Widget>[
-          const Expanded(
-            child: Text(
-              'tomatalk',
-              style: AppTypography.headlineMd,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              softWrap: false,
+          Expanded(
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Transform.translate(
+                offset: const Offset(-8, 0),
+                child: SizedBox(
+                  width: 164,
+                  height: 40,
+                  child: Image.asset(
+                    'logo_img/KakaoTalk_Photo_2026-10-08-22-20-21 002.png',
+                    key: const ValueKey('home-brand-logo'),
+                    fit: BoxFit.cover,
+                    alignment: Alignment.center,
+                    semanticLabel: 'Toma Talk',
+                  ),
+                ),
+              ),
             ),
           ),
           _LanguagePairBadge(language: user?.language),
