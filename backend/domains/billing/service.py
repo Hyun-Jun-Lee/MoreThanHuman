@@ -80,7 +80,10 @@ class BillingService:
         return self.entitlement(user_id)
 
     def process_notification(self, signed_payload: str) -> None:
-        notification = self.gateway.decode_notification(signed_payload)
+        from shared.latency import latency_span
+
+        with latency_span("auth"):
+            notification = self.gateway.decode_notification(signed_payload)
         if not notification.notificationUUID:
             raise AppleVerificationError("Apple 알림 ID가 없어요")
         if self.db.query(AppleNotificationModel).filter_by(notification_uuid=notification.notificationUUID).first():

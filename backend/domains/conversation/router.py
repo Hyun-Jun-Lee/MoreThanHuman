@@ -55,6 +55,7 @@ from shared.exceptions import (
 from shared.types import ErrorResponse, SuccessResponse
 from shared.background_tasks import BackgroundTaskRegistry, get_background_tasks
 from shared.http_clients import get_ai_http_client
+from shared.logging_config import log_exception
 
 logger = logging.getLogger(__name__)
 
@@ -358,18 +359,18 @@ async def start_free_chat_conversation(
     except ConversationSlotsFull as e:
         raise _access_conflict("CONVERSATION_SLOTS_FULL", e.message)
     except RateLimitException as e:
-        logger.warning(f"RateLimitException in start_free_chat_conversation: {e.message}")
+        log_exception(e, status_code=429, error_code="RATE_LIMITED")
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=e.message)
     except ExternalAPIException as e:
-        logger.error(f"ExternalAPIException in start_free_chat_conversation: {e.message}", exc_info=True)
+        log_exception(e, status_code=502, error_code="EXTERNAL_API_FAILED")
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=e.message)
     except AppException as e:
-        logger.error(f"AppException in start_free_chat_conversation: {e.message}", exc_info=True)
+        log_exception(e, status_code=400, error_code=type(e).__name__)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Unexpected error in start_free_chat_conversation: {str(e)}", exc_info=True)
+        log_exception(e, status_code=500, error_code="UNHANDLED_EXCEPTION")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
@@ -444,16 +445,16 @@ async def start_roleplay_conversation(
     except ConversationSlotsFull as e:
         raise _access_conflict("CONVERSATION_SLOTS_FULL", e.message)
     except RateLimitException as e:
-        logger.warning(f"RateLimitException in start_roleplay_conversation: {e.message}")
+        log_exception(e, status_code=429, error_code="RATE_LIMITED")
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=e.message)
     except ExternalAPIException as e:
-        logger.error(f"ExternalAPIException in start_roleplay_conversation: {e.message}", exc_info=True)
+        log_exception(e, status_code=502, error_code="EXTERNAL_API_FAILED")
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=e.message)
     except AppException as e:
-        logger.error(f"AppException in start_roleplay_conversation: {e.message}", exc_info=True)
+        log_exception(e, status_code=400, error_code=type(e).__name__)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
     except Exception as e:
-        logger.error(f"Unexpected error in start_roleplay_conversation: {str(e)}", exc_info=True)
+        log_exception(e, status_code=500, error_code="UNHANDLED_EXCEPTION")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
@@ -475,16 +476,16 @@ async def send_message(
     except ConversationLocked as e:
         raise _access_conflict("CONVERSATION_LOCKED", e.message)
     except RateLimitException as e:
-        logger.warning(f"RateLimitException in send_message: {e.message}")
+        log_exception(e, status_code=429, error_code="RATE_LIMITED")
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=e.message)
     except NotFoundException as e:
-        logger.error(f"NotFoundException in send_message: {e.message}")
+        log_exception(e, status_code=404, error_code="NOT_FOUND")
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
     except AppException as e:
-        logger.error(f"AppException in send_message: {e.message}", exc_info=True)
+        log_exception(e, status_code=400, error_code=type(e).__name__)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
     except Exception as e:
-        logger.error(f"Unexpected error in send_message: {str(e)}", exc_info=True)
+        log_exception(e, status_code=500, error_code="UNHANDLED_EXCEPTION")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
@@ -534,21 +535,21 @@ async def send_multimodal_turn(
     except ConversationLocked as e:
         raise _access_conflict("CONVERSATION_LOCKED", e.message)
     except RateLimitException as e:
-        logger.warning(f"RateLimitException in send_multimodal_turn: {e.message}")
+        log_exception(e, status_code=429, error_code="RATE_LIMITED")
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=e.message)
     except ExternalAPIException as e:
-        logger.error(f"ExternalAPIException in send_multimodal_turn: {e.message}", exc_info=True)
+        log_exception(e, status_code=502, error_code="EXTERNAL_API_FAILED")
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=e.message)
     except NotFoundException as e:
-        logger.error(f"NotFoundException in send_multimodal_turn: {e.message}")
+        log_exception(e, status_code=404, error_code="NOT_FOUND")
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
     except AppException as e:
-        logger.error(f"AppException in send_multimodal_turn: {e.message}", exc_info=True)
+        log_exception(e, status_code=400, error_code=type(e).__name__)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Unexpected error in send_multimodal_turn: {str(e)}", exc_info=True)
+        log_exception(e, status_code=500, error_code="UNHANDLED_EXCEPTION")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
@@ -762,7 +763,7 @@ async def stream_grammar_feedback(
 
         except Exception as e:
             # NotFoundException이 아닌 실제 에러만 여기서 처리
-            logger.error(f"SSE stream error for message {message_id}: {str(e)}", exc_info=True)
+            log_exception(e, status_code=500, error_code="SSE_STREAM_ERROR")
             error_data = {'error': str(e)}
             yield f"data: {json.dumps(error_data)}\n\n"
 

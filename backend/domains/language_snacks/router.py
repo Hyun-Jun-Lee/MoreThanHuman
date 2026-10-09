@@ -27,6 +27,7 @@ from domains.language_snacks.schemas import (
     LanguageSnackCreate,
 )
 from shared.http_clients import get_ai_http_client
+from shared.logging_config import log_exception
 from shared.types import SuccessResponse
 
 router = APIRouter(tags=["language snacks"])
@@ -121,6 +122,7 @@ async def create_language_snack(
         )
         return SuccessResponse(data=row)
     except SnackError as error:
+        log_exception(error, status_code=error.status_code, error_code=error.code)
         raise HTTPException(error.status_code, error.code) from None
 
 
@@ -137,4 +139,5 @@ def archive_language_snack(
         with service.repository.locked():
             return SuccessResponse(data=service.archive(snack_id))
     except SnackError as error:
+        log_exception(error, status_code=error.status_code, error_code=error.code)
         raise HTTPException(error.status_code, error.code) from None

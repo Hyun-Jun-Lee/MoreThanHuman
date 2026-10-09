@@ -9,6 +9,7 @@ from domains.auth.dependencies import get_current_user
 from domains.auth.models import ProfileModel
 from domains.billing.apple import AppleConfigurationError, AppleGateway, AppleUnavailableError, AppleVerificationError
 from domains.billing.service import BillingService, PurchaseOwnedByAnotherAccount
+from shared.logging_config import log_exception
 from shared.types import SuccessResponse
 
 router = APIRouter(prefix="/api/billing", tags=["billing"])
@@ -25,7 +26,8 @@ class NotificationRequest(BaseModel):
 def get_billing_service(db: Session = Depends(get_db)) -> BillingService:
     try:
         return BillingService(db, AppleGateway(get_settings()))
-    except AppleConfigurationError:
+    except AppleConfigurationError as exc:
+        log_exception(exc, status_code=503, error_code="APPLE_NOT_CONFIGURED")
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Apple 결제가 아직 준비되지 않았어요")
 
 
@@ -44,10 +46,13 @@ def verify_purchase(
     try:
         return SuccessResponse(data=service.verify_purchase(current_user.id, payload.signed_transaction))
     except PurchaseOwnedByAnotherAccount as exc:
+        log_exception(exc, status_code=409, error_code="PURCHASE_ACCOUNT_CONFLICT")
         raise HTTPException(status_code=409, detail={"code": "PURCHASE_ACCOUNT_CONFLICT", "message": str(exc)})
     except AppleVerificationError as exc:
+        log_exception(exc, status_code=400, error_code="INVALID_APPLE_PURCHASE")
         raise HTTPException(status_code=400, detail={"code": "INVALID_APPLE_PURCHASE", "message": str(exc)})
-    except AppleUnavailableError:
+    except AppleUnavailableError as exc:
+        log_exception(exc, status_code=503, error_code="APPLE_UNAVAILABLE")
         raise HTTPException(status_code=503, detail={"code": "APPLE_UNAVAILABLE", "message": "Apple 구독 확인을 다시 시도해 주세요"})
 
 
@@ -56,7 +61,9 @@ def apple_notification(payload: NotificationRequest, service: BillingService = D
     try:
         service.process_notification(payload.signedPayload)
         return {"success": True}
-    except AppleVerificationError:
+    except AppleVerificationError as exc:
+        log_exception(exc, status_code=400, error_code="INVALID_APPLE_NOTIFICATION")
         raise HTTPException(status_code=400, detail="Invalid Apple notification")
-    except AppleUnavailableError:
+    except AppleUnavailableError as exc:
+        log_exception(exc, status_code=503, error_code="APPLE_UNAVAILABLE")
         raise HTTPException(status_code=503, detail="Apple status unavailable")

@@ -39,6 +39,7 @@ from domains.search.schemas import (
     TopicPrepResult,
 )
 from shared.exceptions import ExternalAPIException
+from shared.logging_config import log_event
 from shared.language import (
     LanguageCode,
     LearningLanguageContext,
@@ -49,8 +50,6 @@ from shared.language_prompt_policy import (
     format_topic_prep_priorities,
     practice_priority_summary,
 )
-
-logger = logging.getLogger(__name__)
 
 MIN_TOPIC_PREP_SOURCE_COUNT = 3
 INCOMPLETE_TOPIC_PREP_CARD_REASON = "검색 결과로 대화 준비 카드를 완성하지 못했어요."
@@ -311,12 +310,8 @@ class SearchService:
         """검색 전처리, 검색 수집, LLM source judge를 실행"""
         language_context = ensure_language_context(language_context)
         analysis = await self._analyze_query(query, language_context=language_context)
-        logger.info(
-            "Search pipeline stage=provider_search query=%r enhanced_query=%r recency_intent=%s",
-            query,
-            analysis.enhanced_query,
-            analysis.recency_intent,
-        )
+        log_event("search.pipeline", stage="provider_search", status="start",
+                  recency_intent=analysis.recency_intent)
         raw_results = await self._search_duckduckgo(
             analysis.enhanced_query,
             analysis,
@@ -330,11 +325,8 @@ class SearchService:
             )
             for r in raw_results
         ]
-        logger.info(
-            "Search pipeline stage=source_collection query=%r raw_count=%s",
-            query,
-            len(sources),
-        )
+        log_event("search.pipeline", stage="source_collection", status="ok",
+                  source_count=len(sources))
         if not sources:
             return PreparedSearchResult(
                 analysis=analysis,
@@ -373,14 +365,9 @@ class SearchService:
                 _timezone,
                 language_context=ensure_language_context(language_context),
             )
-        except Exception as exc:
-            logger.exception(
-                "Search LLM stage=query_analysis status=fallback query=%r current_date=%s timezone=%s error=%s",
-                query,
-                current_date,
-                _timezone,
-                exc,
-            )
+        except Exception:
+            log_event("search.pipeline", level=logging.WARNING,
+                      stage="query_analysis", status="fallback")
             llm_data = None
         return merge_query_analysis(rule_analysis, llm_data, current_date=current_date)
 
@@ -426,14 +413,8 @@ class SearchService:
                 "search_query_analysis",
             ),
         )
-        logger.info(
-            "Search LLM stage=query_analysis status=start provider=%s model=%s query=%r current_date=%s timezone=%s",
-            self._provider_name(provider),
-            request.model,
-            query,
-            current_date,
-            timezone,
-        )
+        log_event("search.pipeline", stage="query_analysis", status="start",
+                  provider=self._provider_name(provider), model=request.model)
         response = await self._chat_completion_with_structured_fallback(
             provider,
             request,
@@ -441,13 +422,10 @@ class SearchService:
             query=query,
         )
         data = self._parse_structured_json_response(response.content, SearchQueryAnalysisResult)
-        logger.info(
-            "Search LLM stage=query_analysis status=success provider=%s model=%s duration_ms=%s response_chars=%s",
-            self._provider_name(provider),
-            request.model,
-            round((time.perf_counter() - started_at) * 1000),
-            len(response.content or ""),
-        )
+        log_event("search.pipeline", stage="query_analysis", status="ok",
+                  provider=self._provider_name(provider), model=request.model,
+                  duration_ms=round((time.perf_counter() - started_at) * 1000),
+                  response_chars=len(response.content or ""))
         return data if isinstance(data, dict) else None
 
     async def _search_duckduckgo(
@@ -563,13 +541,9 @@ class SearchService:
                     "search_quality_judge",
                 ),
             )
-            logger.info(
-                "Search LLM stage=quality_judge status=start provider=%s model=%s query=%r source_count=%s",
-                self._provider_name(provider),
-                request.model,
-                query,
-                len(sources),
-            )
+            log_event("search.pipeline", stage="quality_judge", status="start",
+                      provider=self._provider_name(provider), model=request.model,
+                      source_count=len(sources))
             response = await self._chat_completion_with_structured_fallback(
                 provider,
                 request,
@@ -585,24 +559,17 @@ class SearchService:
                 judge_result,
                 language_context=language_context,
             )
-            logger.info(
-                "Search LLM stage=quality_judge status=success provider=%s model=%s duration_ms=%s sufficient=%s accepted_count=%s rejected_count=%s response_chars=%s",
-                self._provider_name(provider),
-                request.model,
-                round((time.perf_counter() - started_at) * 1000),
-                quality.is_sufficient,
-                quality.relevant_source_count,
-                len(judge_result.rejected_sources),
-                len(response.content or ""),
-            )
+            log_event("search.pipeline", stage="quality_judge", status="ok",
+                      provider=self._provider_name(provider), model=request.model,
+                      duration_ms=round((time.perf_counter() - started_at) * 1000),
+                      sufficient=quality.is_sufficient,
+                      accepted_count=quality.relevant_source_count,
+                      rejected_count=len(judge_result.rejected_sources),
+                      response_chars=len(response.content or ""))
             return accepted_sources, quality
-        except Exception as exc:
-            logger.exception(
-                "Search LLM stage=quality_judge status=fallback query=%r enhanced_query=%r error=%s",
-                query,
-                analysis.enhanced_query,
-                exc,
-            )
+        except Exception:
+            log_event("search.pipeline", level=logging.WARNING,
+                      stage="quality_judge", status="fallback")
             return [], self._build_failed_search_quality(
                 source_count=len(sources),
                 reason="검색 결과를 품질 판단하는 중 오류가 발생했어요.",
@@ -640,13 +607,9 @@ class SearchService:
         except ExternalAPIException as exc:
             if not self._should_retry_without_structured_output(exc):
                 raise
-            logger.warning(
-                "Search LLM stage=%s status=structured_output_fallback provider=%s query=%r error=%s",
-                stage,
-                self._provider_name(provider),
-                query,
-                exc,
-            )
+            log_event("search.pipeline", level=logging.WARNING,
+                      stage=stage, status="structured_output_fallback",
+                      provider=self._provider_name(provider))
             return await provider.chat_completion(request.model_copy(update={"extra_params": None}))
 
     def _should_retry_without_structured_output(self, exc: ExternalAPIException) -> bool:
@@ -845,14 +808,10 @@ class SearchService:
             reason=None if is_sufficient else reason,
             retry_suggestion=None if is_sufficient else retry_suggestion,
         )
-        logger.info(
-            "Search pipeline stage=quality_finalizer query=%r raw_count=%s accepted_count=%s dropped_count=%s sufficient=%s",
-            query,
-            quality.source_count,
-            quality.relevant_source_count,
-            quality.dropped_source_count,
-            quality.is_sufficient,
-        )
+        log_event("search.pipeline", stage="quality_finalizer", status="ok",
+                  source_count=quality.source_count,
+                  accepted_count=quality.relevant_source_count,
+                  sufficient=quality.is_sufficient)
         return accepted_sources, quality
 
     def _build_failed_search_quality(
@@ -936,30 +895,18 @@ class SearchService:
                 temperature=0.3,
             )
 
-            logger.info(
-                "Search LLM stage=summarization status=start provider=%s model=%s query=%r source_count=%s",
-                self._provider_name(provider),
-                request.model,
-                query,
-                len(sources),
-            )
+            log_event("search.pipeline", stage="summarization", status="start",
+                      provider=self._provider_name(provider), model=request.model,
+                      source_count=len(sources))
             response = await provider.chat_completion(request)
-            logger.info(
-                "Search LLM stage=summarization status=success provider=%s model=%s duration_ms=%s response_chars=%s",
-                self._provider_name(provider),
-                request.model,
-                round((time.perf_counter() - started_at) * 1000),
-                len(response.content or ""),
-            )
+            log_event("search.pipeline", stage="summarization", status="ok",
+                      provider=self._provider_name(provider), model=request.model,
+                      duration_ms=round((time.perf_counter() - started_at) * 1000),
+                      response_chars=len(response.content or ""))
             return response.content
-        except Exception as e:
-            logger.exception(
-                "Search LLM stage=summarization status=fallback query=%r enhanced_query=%r source_count=%s error=%s",
-                query,
-                analysis.enhanced_query,
-                len(sources),
-                e,
-            )
+        except Exception:
+            log_event("search.pipeline", level=logging.WARNING,
+                      stage="summarization", status="fallback", source_count=len(sources))
             return "\n".join(f"- {s.title}: {s.snippet}" for s in sources)
 
     async def _generate_topic_prep_card(
@@ -1019,7 +966,9 @@ class SearchService:
         except ExternalAPIException:
             raise
         except Exception as e:
-            logger.error(f"Topic prep generation failed: {e}", exc_info=True)
+            log_event("search.pipeline", level=logging.ERROR,
+                      stage="topic_prep_generation", status="error",
+                      exception_type=type(e).__name__)
             raise ExternalAPIException(f"Topic prep generation failed: {str(e)}")
 
     def _build_topic_prep_system_prompt(

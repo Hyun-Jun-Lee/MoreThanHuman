@@ -2,7 +2,6 @@
 Auth API Router
 Supabase Auth로 검증된 현재 프로필 조회
 """
-import logging
 import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -20,9 +19,8 @@ from domains.auth.schemas import (
 )
 from domains.auth.service import AuthService
 from shared.exceptions import AuthenticationException
+from shared.logging_config import log_exception
 from shared.types import SuccessResponse
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -71,6 +69,7 @@ async def issue_swagger_token(
         token = await service.issue_swagger_token(email=request.email, password=request.password)
         return SuccessResponse(data=token, message="Swagger 테스트용 토큰 발급 성공")
     except AuthenticationException as e:
+        log_exception(e, status_code=401, error_code="AUTHENTICATION_FAILED")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=e.message)
 
 

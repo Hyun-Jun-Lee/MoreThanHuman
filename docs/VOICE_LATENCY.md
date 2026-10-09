@@ -1,22 +1,22 @@
 # 음성 대화 지연 계측과 반복 실험
 
-> 버전: 1.1 · 갱신: 2026-09-13 · 현재 브랜치 계측 구현과 향후 최적화 검토
+> 버전: 1.2 · 갱신: 2026-10-09 · API 구조화 로그와 반복 실험
 
 ## 결정과 범위
 
-- 현재 `dev/mobile` 브랜치에 STT → LLM → TTS와 앱 재생의 경과 시간을 `print()`로 기록해요.
+- 서버의 STT → LLM → TTS는 JSON stdout 로그로, 앱의 재생 경과 시간은 기존 `[latency]` 로그로 기록해요.
 - API의 기존 JSON 본문과 대화 동작은 유지해요. 요청 식별 헤더로 서버·앱 로그를 연결해요.
-- AsyncClient 연결 풀 v1을 적용했어요. 기존 print 계측으로 적용 후 시간을 수집하고, 확보한 적용 전 표본과 같은 조건으로 비교해요.
+- AsyncClient 연결 풀 v1을 적용했어요. 구조화 로그로 적용 후 시간을 수집하고, 확보한 적용 전 표본과 같은 조건으로 비교해요.
 - [스트리밍 설계](VOICE_STREAMING.md)는 향후 구현을 위한 제안이며 활성 API 계약이 아니에요.
 - 로그의 성공·실패 전파, 동시 요청 구분, 재생 시작과 완료 구분을 검증해요. 기존 음성·대화·인증 테스트를 회귀 검증에 사용해요.
 
 ## 계측 지표
 
-서버는 Python `perf_counter()`, 앱은 Dart `Stopwatch`를 사용해요. 절대 시각을 서로 빼지 않아요. 신규 로그는 `[latency] ` 뒤에 JSON 한 줄을 출력하며 원문·인증 토큰·오디오 데이터는 포함하지 않아요.
+서버는 Python `perf_counter()`, 앱은 Dart `Stopwatch`를 사용해요. 절대 시각을 서로 빼지 않아요. 서버는 `event=http.stage.completed` JSON 한 줄과 `duration_ms`를, 앱은 `[latency] ` JSON과 `elapsed_ms`를 사용해요. 원문·인증 토큰·오디오 데이터는 포함하지 않아요. 전체 필드 계약은 [API 로그 문서](OBSERVABILITY.md)에 있어요.
 
-| 위치 | stage | elapsed_ms의 의미 |
+| 위치 | stage | 서버 duration_ms / 앱 elapsed_ms의 의미 |
 |------|-------|-------------------|
-| 서버 | `auth` | Supabase 검증 + profile 조회/갱신 |
+| 서버 | `auth` | Supabase 검증 + profile 조회 또는 최초 생성. SSE 토큰·운영 키·Apple 알림 서명 확인에도 기록해요. |
 | 서버 | `stt` | provider 호출 시작 → 전사 결과 수신; 파일 검증은 제외 |
 | 서버 | `llm` | provider 호출 시작 → 전체 답변 수신; 프롬프트 조립·DB 작업은 제외 |
 | 서버 | `tts` | provider 호출 시작 → 전체 오디오 수신 |
@@ -35,14 +35,14 @@
 - 앱의 `since_start_ms`는 전체 로컬 경과 시간이에요. `playback_started`의 이 값을 최종 체감 지표로 사용해요. `elapsed_ms`는 플레이어 준비 시간만 나타내요.
 - `origin=recording_stop`은 녹음 종료 함수 호출부터, `origin=http_request`는 텍스트 전송·파일 재시도 등의 HTTP 호출부터예요. 녹음 종료는 실제 발화 종료와 달라요. 말한 뒤 버튼을 누르기까지의 침묵은 포함되지 않아요.
 - 도메인 응답 파싱 시에만 Dart Zone으로 trace를 전달하고, 오디오 객체에 로컬 필드로 보관해요. 재생 시점에는 이 필드를 사용하며 전역의 마지막 요청을 참조하지 않아요. 오디오 재시도는 새 trace를 쓰고, 동일 응답의 재생 반복은 첫 재생 표본을 추가하지 않아요.
-- `status=error`는 실패나 취소를 포함해요. 서버 `server_total`에는 HTTP 상태도 있어요. TTS 실패는 기존 API 정책상 HTTP 200 + `audio_error`일 수 있으므로 `tts` 실패와 응답의 `audio_error`도 확인해요.
+- 단계의 `status=error`는 실패나 취소를 포함해요. 요청 완료 이벤트는 `status=cancelled`를 구분하고 `status_code`·`response_complete`를 남겨요. TTS 실패는 기존 API 정책상 HTTP 200 + `audio_error`일 수 있으므로 `tts` 실패와 응답의 `audio_error`도 확인해요.
 - LLM 로그에는 모델·입출력 문자 수와 제공되는 경우 입력/출력 토큰 수, STT/TTS에는 입력 크기나 출력 바이트 수를 남겨요. 실패 표본을 성공 표본과 섞어 평균 내지 않아요.
 - `server_total`은 단말의 수신 완료 시간이 아니에요. 앞단 nginx가 버퍼링한 업로드 시간과 클라이언트 재생은 포함하지 않아요. 서버 시작 전 프록시 대기도 측정할 수 없어요.
 - `http_response`와 `http_total`, `server_total`과 개별 stage는 서로 포함 관계예요. 전부 더하지 않아요. 앱 HTTP 시간에서 서버 시간을 뺀 차이에도 전송·프록시·앱 처리 등이 섞여 있으므로 순수 네트워크 지연이라고 부르지 않아요.
 - 현재 API는 비스트리밍이므로 LLM 첫 토큰·첫 문장, TTS 첫 바이트 지연은 아직 측정하지 않아요. provider 시간에는 네트워크·연결 수립·업체 대기열·생성이 모두 포함돼요.
 - `playing` 이벤트는 실제 스피커 출력의 근사치예요. 앱에서는 재생 완료를 기다리는 기존 `play()` 호출 전후를 첫 재생 지연으로 사용하지 않아요. 이벤트를 받지 못했거나 재생 오류가 난 경우 표본이 누락됐음을 기록하고 성공으로 간주하지 않아요.
 
-대상은 `POST /api/conversations/start/free-chat/`, `/start/roleplay/`, `/{id}/turn/`, `/{id}/message/`예요. 문법 background task와 polling은 별도로 시간을 출력하지 않아요. 전체 응답을 기다리지 않는 background 작업의 완료 시간도 server_total에 넣지 않아요. 로그 출력은 단계당 한 번이며, `print()` 자체의 작은 오버헤드는 있어요.
+음성 단계와 `server_total`의 대상은 `POST /api/conversations/start/free-chat/`, `/start/roleplay/`, `/{id}/turn/`, `/{id}/message/`예요. 모든 API 요청의 전체 시간은 `http.request.completed`로 별도 기록해요. 문법 background task 실패는 별도 이벤트로 남기고 완료 시간은 `server_total`에 넣지 않아요. 단계 로그는 실행된 단계당 한 번이에요.
 
 ## 로그 확인
 
@@ -61,13 +61,14 @@ flutter run --profile --dart-define-from-file=/absolute/path/mobile-config.json 
 ```
 
 ```bash
-rg '\[latency\]' /tmp/convia-server.log /tmp/convia-mobile.log
+rg '"event":"http.stage.completed"' /tmp/convia-server.log
+rg '\[latency\]' /tmp/convia-mobile.log
 ```
 
 출력 형식 예시이며 실제 측정값은 아니에요:
 
 ```text
-[latency] {"source":"server","trace_id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","request_id":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","stage":"stt","status":"ok","elapsed_ms":820.0}
+{"event":"http.stage.completed","service":"api","trace_id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","request_id":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","stage":"stt","status":"ok","duration_ms":820.0}
 [latency] {"source":"mobile","trace_id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","origin":"recording_stop","stage":"playback_started","status":"ok","elapsed_ms":85.0,"since_start_ms":2410.0}
 ```
 

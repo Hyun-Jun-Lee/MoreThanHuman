@@ -3,7 +3,6 @@ Conversation Service Layer
 비즈니스 로직 및 도메인 규칙
 """
 import logging
-import traceback
 from uuid import uuid4
 
 import httpx
@@ -37,6 +36,7 @@ from shared.language import (
 )
 from shared.language_prompt_policy import format_practice_priorities
 from shared.latency import latency_span
+from shared.logging_config import log_event, safe_stack_frames
 from shared.background_tasks import BackgroundTaskRegistry
 
 logger = logging.getLogger(__name__)
@@ -140,10 +140,11 @@ class ConversationService:
                 grammar_service = GrammarService(GrammarRepository(db), http_client=self.http_client)
                 await grammar_service.save_feedback(user_message_id, feedback)
 
-            logger.info(f"Grammar feedback saved for message {user_message_id}")
+            log_event("background_task.completed")
         except Exception as e:
             # 백그라운드 태스크 실패는 로깅만 하고 계속 진행
-            logger.error(f"Background grammar check failed: {str(e)}\n{traceback.format_exc()}")
+            log_event("background_task.failed", level=logging.ERROR,
+                      exception_type=type(e).__name__, stack_frames=safe_stack_frames(e))
 
     async def start_free_chat_conversation(
         self,
@@ -258,7 +259,6 @@ class ConversationService:
                     self.repository.delete_by_id(created_conversation_id, user_id)
                 except Exception:
                     logger.exception("Failed to release unsuccessful conversation slot")
-            logger.error(f"Error in start_free_chat_conversation: {str(e)}\n{traceback.format_exc()}")
             raise
 
     async def start_roleplay_conversation(
@@ -348,7 +348,6 @@ class ConversationService:
                     self.repository.delete_by_id(created_conversation_id, user_id)
                 except Exception:
                     logger.exception("Failed to release unsuccessful conversation slot")
-            logger.error(f"Error in start_roleplay_conversation: {str(e)}\n{traceback.format_exc()}")
             raise
 
     async def continue_conversation(self, conversation_id: str, user_message: str, user_id: str = "") -> MessageResponse:
@@ -455,7 +454,6 @@ class ConversationService:
                     self.repository.delete_failed_user_turn(reserved_user_message_id)
                 except Exception:
                     logger.exception("Failed to release unsuccessful conversation turn")
-            logger.error(f"Error in continue_conversation: {str(e)}\n{traceback.format_exc()}")
             raise
 
     def get_conversation(self, conversation_id: str, user_id: str) -> Conversation:

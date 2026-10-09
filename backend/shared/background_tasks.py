@@ -6,8 +6,7 @@ from collections.abc import Coroutine
 from typing import Any
 
 from fastapi import Request
-
-logger = logging.getLogger(__name__)
+from shared.logging_config import log_event, safe_stack_frames
 
 
 class BackgroundTaskRegistry:
@@ -27,7 +26,8 @@ class BackgroundTaskRegistry:
     def _finished(self, task: asyncio.Task[None]) -> None:
         self._tasks.discard(task)
         if not task.cancelled() and (error := task.exception()) is not None:
-            logger.error("Background task failed: %s", type(error).__name__)
+            log_event("background_task.failed", level=logging.ERROR,
+                      exception_type=type(error).__name__, stack_frames=safe_stack_frames(error))
 
     async def aclose(self, *, grace_seconds: float) -> None:
         self._closing = True

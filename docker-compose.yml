@@ -14,7 +14,12 @@ services:
       AUTO_CREATE_TABLES: "false"
     command: >
       sh -c "alembic upgrade head &&
-      uvicorn main:app --host 0.0.0.0 --port 8010 --workers 2 --proxy-headers --forwarded-allow-ips='*'"
+      uvicorn main:app --host 0.0.0.0 --port 8010 --workers 2 --proxy-headers --forwarded-allow-ips='*' --no-access-log"
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
     expose:
       - "8010"
     restart: unless-stopped
@@ -39,6 +44,11 @@ services:
 
   nginx:
     image: nginx:1.27-alpine
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
     depends_on:
       api:
         condition: service_healthy

@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from config import get_settings
 from domains.language_snacks.repository import LanguageSnackRepository
 from domains.language_snacks.service import LanguageSnackService
+from shared.latency import latency_span
 
 
 def get_language_snack_service(db: Session) -> LanguageSnackService:
@@ -28,14 +29,15 @@ def require_language_snack_operations_key(
     ] = None,
 ) -> None:
     """생성·보관·바구니 리셋 API를 서버의 운영 키로만 보호한다."""
-    configured_key = (configured_key or "").strip()
-    supplied_key = (operations_key or "").strip()
-    if (
-        not configured_key
-        or not supplied_key
-        or not secrets.compare_digest(supplied_key, configured_key)
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Valid operations key is required.",
-        )
+    with latency_span("auth"):
+        configured_key = (configured_key or "").strip()
+        supplied_key = (operations_key or "").strip()
+        if (
+            not configured_key
+            or not supplied_key
+            or not secrets.compare_digest(supplied_key, configured_key)
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Valid operations key is required.",
+            )

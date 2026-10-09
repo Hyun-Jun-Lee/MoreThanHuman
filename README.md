@@ -146,7 +146,8 @@ flutter test
 | [환경변수](docs/ENVIRONMENT.md) | 전체 설정·기본값·provider 선택 |
 | [운영 가이드](docs/OPERATIONS.md) | Docker 배포·인증·cron·복구 |
 | [API 명세](docs/DSL.md) | 요청·응답·인증·도메인 계약 |
-| [음성 지연 진단](docs/VOICE_LATENCY.md) | print 계측·10회 실험·연결 풀 v1 적용(2026-09-13) |
+| [API 로그와 지연 진단](docs/OBSERVABILITY.md) | 요청·예외 JSON 로그, nginx 시간, Docker 보관·Loki 검색 계약 |
+| [음성 지연 진단](docs/VOICE_LATENCY.md) | 음성 단계·앱 첫 재생 계측, 10회 실험·연결 풀 v1 |
 | [음성 스트리밍 제안](docs/VOICE_STREAMING.md) | 향후 문장별 TTS·앱 재생 설계 |
 | [모바일 가이드](mobile/README.md) | 플랫폼·로그인 설정과 앱 개발 |
 | [아키텍처](.agent/architecture.md) | 내부 구조와 데이터 흐름 |

@@ -1,6 +1,6 @@
 # 운영 가이드
 
-> 최종 갱신: 2026-10-05 · 배포·주간 생성·복구 절차
+> 최종 갱신: 2026-10-09 · 배포·주간 생성·복구 절차
 
 [실행 및 CLI](../README.md) · [환경변수](ENVIRONMENT.md) · [API 계약](DSL.md)
 
@@ -31,6 +31,12 @@ docker compose up -d --build api nginx
 ```
 
 기본 설정은 HTTP예요. HTTPS는 인증서 발급 후 [TLS 설정 예시](../deploy/nginx/conf.d/api.ssl.conf.example)의 도메인·인증서 경로를 확인해 적용해요. [인증서 갱신 스크립트](../deploy/scripts/certbot-renew.sh)는 호스트 certbot과 root 권한이 필요하고, 저장소 루트에서 실행해야 해요.
+
+## API 로그 점검
+
+API와 nginx는 JSON을 stdout에 기록하고 Docker `json-file`이 각 컨테이너에서 `20m × 5`로 회전해요. 이 용량 상한은 보존 일수를 보장하지 않아요. API 기본 접근 로그는 중복과 URL 쿼리 노출을 막기 위해 끄고, nginx 접근 로그에는 원본 URL 대신 메서드·상태·시간·요청 ID만 남겨요. 필드·측정 경계·조회 예시는 [API 로그 문서](OBSERVABILITY.md)에 있어요.
+
+배포 전 `CURITALK_ENV_FILE`을 지정한 상태에서 `docker compose config -q`를 실행해요. 배포 후 `docker compose exec nginx nginx -t`로 nginx 구성을 확인하고, API 성공·실패 요청 각 한 건에서 `trace_id`·`request_id`·`proxy_request_id`와 nginx 시간을 대조해요. nginx 설정을 바꿨다면 `docker compose up -d --force-recreate nginx`로 적용해요. 호스트에서는 `docker inspect <container> --format '{{json .HostConfig.LogConfig}}'`로 로깅 드라이버와 회전 설정을, `df -h`로 디스크 여유를 확인해요. 실제 로그량을 본 뒤 회전 상한을 조정해요.
 
 ## 상태 확인
 

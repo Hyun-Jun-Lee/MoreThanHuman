@@ -16,6 +16,7 @@ from domains.grammar.schemas import GrammarFeedback, GrammarStats
 from domains.grammar.service import GrammarService
 from shared.http_clients import get_ai_http_client
 from shared.exceptions import AppException, NotFoundException, RateLimitException
+from shared.logging_config import log_exception
 from shared.types import SuccessResponse
 
 router = APIRouter(prefix="/api/grammar", tags=["grammar"])
@@ -51,8 +52,10 @@ async def check_grammar(
         feedback = await service.check_grammar(request.text)
         return SuccessResponse(data=feedback)
     except RateLimitException as e:
+        log_exception(e, status_code=429, error_code="RATE_LIMITED")
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=e.message)
     except AppException as e:
+        log_exception(e, status_code=400, error_code=type(e).__name__)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
 
 
@@ -67,8 +70,10 @@ def get_feedback_by_message(
         feedback = service.get_feedback(message_id, user_id=current_user.id)
         return SuccessResponse(data=feedback)
     except NotFoundException as e:
+        log_exception(e, status_code=404, error_code="NOT_FOUND")
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
     except AppException as e:
+        log_exception(e, status_code=400, error_code=type(e).__name__)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
 
 
@@ -83,4 +88,5 @@ def get_stats(
         stats = service.get_stats(time_range)
         return SuccessResponse(data=stats)
     except AppException as e:
+        log_exception(e, status_code=400, error_code=type(e).__name__)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)

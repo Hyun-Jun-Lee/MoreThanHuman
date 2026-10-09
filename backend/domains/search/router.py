@@ -19,6 +19,7 @@ from domains.search.schemas import (
 )
 from domains.search.service import SearchService
 from shared.http_clients import get_ai_http_client
+from shared.logging_config import log_exception
 from shared.exceptions import AppException
 from shared.language import ensure_language_context
 from shared.types import SuccessResponse
@@ -54,6 +55,7 @@ async def search(
         )
         return SuccessResponse(data=result)
     except AppException as e:
+        log_exception(e, status_code=502, error_code="SEARCH_UPSTREAM_FAILED")
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=e.message)
 
 
@@ -71,6 +73,7 @@ async def prepare_topic(
         )
         return SuccessResponse(data=result)
     except AppException as e:
+        log_exception(e, status_code=502, error_code="SEARCH_UPSTREAM_FAILED")
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=e.message)
 
 
@@ -89,6 +92,7 @@ async def prepare_custom_focus_questions(
         )
         return SuccessResponse(data=result)
     except AppException as e:
+        log_exception(e, status_code=502, error_code="SEARCH_UPSTREAM_FAILED")
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=e.message)
 
 
@@ -107,4 +111,5 @@ async def regenerate_topic_prep_directions(
         )
         return SuccessResponse(data=result)
     except AppException as e:
+        log_exception(e, status_code=502, error_code="SEARCH_UPSTREAM_FAILED")
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=e.message)

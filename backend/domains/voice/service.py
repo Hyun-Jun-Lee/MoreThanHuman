@@ -20,9 +20,9 @@ from domains.voice.schemas import (
 )
 from shared.exceptions import AppException, ValidationException
 from shared.latency import latency_span
+from shared.logging_config import log_event
 
 settings = get_settings()
-logger = logging.getLogger(__name__)
 
 
 class UploadedAudio(Protocol):
@@ -131,13 +131,7 @@ class VoiceService:
 
         provider = self.provider
         provider_name = self._provider_name(provider)
-        logger.info(
-            "Voice STT stage=upload status=validated provider=%s filename=%r content_type=%s byte_length=%s",
-            provider_name,
-            filename,
-            content_type,
-            len(audio_bytes),
-        )
+        log_event("voice.upload_validated", provider=provider_name, input_bytes=len(audio_bytes))
         with latency_span(
             "stt", provider=provider_name, model=settings.stt_model, input_bytes=len(audio_bytes)
         ):
@@ -148,21 +142,11 @@ class VoiceService:
             )
         transcript = self.normalize_text(result.text)
         if not transcript:
-            logger.warning(
-                "Voice STT stage=transcription status=empty provider=%s filename=%r content_type=%s byte_length=%s",
-                provider_name,
-                filename,
-                content_type,
-                len(audio_bytes),
-            )
+            log_event("voice.transcription_empty", level=logging.WARNING,
+                      provider=provider_name, input_bytes=len(audio_bytes))
             raise ValidationException("STT returned an empty transcript.")
-        logger.info(
-            "Voice STT stage=transcription status=success provider=%s filename=%r byte_length=%s transcript_chars=%s",
-            provider_name,
-            filename,
-            len(audio_bytes),
-            len(transcript),
-        )
+        log_event("voice.transcription_completed", provider=provider_name,
+                  input_bytes=len(audio_bytes), output_chars=len(transcript))
         return VoiceTranscriptionResult(text=transcript)
 
     async def synthesize_response(self, text: str) -> VoiceAudioResponse:
@@ -242,14 +226,8 @@ class VoiceService:
         if not audio_bytes:
             raise ValidationException("audio_file is empty.")
         if len(audio_bytes) < self.minimum_audio_bytes:
-            logger.warning(
-                "Voice STT stage=upload status=rejected reason=too_small filename=%r "
-                "content_type=%s byte_length=%s minimum_byte_length=%s",
-                filename,
-                content_type,
-                len(audio_bytes),
-                self.minimum_audio_bytes,
-            )
+            log_event("voice.upload_rejected", level=logging.WARNING,
+                      error_code="AUDIO_TOO_SMALL", input_bytes=len(audio_bytes))
             raise ValidationException(
                 "audio_file is too small.",
                 details={

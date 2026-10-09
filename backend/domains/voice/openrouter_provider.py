@@ -2,16 +2,15 @@
 OpenRouter Voice Provider
 """
 import logging
-
 import httpx
 
 from config import get_settings
 from domains.voice.provider import VoiceProvider
 from domains.voice.schemas import VoiceSynthesisResult, VoiceTranscriptionResult
 from shared.exceptions import AppException, ExternalAPIException, RateLimitException
+from shared.logging_config import log_event
 
 settings = get_settings()
-logger = logging.getLogger(__name__)
 
 
 class OpenRouterVoiceProvider(VoiceProvider):
@@ -57,21 +56,9 @@ class OpenRouterVoiceProvider(VoiceProvider):
         except httpx.HTTPStatusError as e:
             status_code = e.response.status_code if e.response is not None else None
             response_body = e.response.text[:500] if e.response is not None else ""
-            response_headers = e.response.headers if e.response is not None else {}
-            request_id = response_headers.get("x-request-id") or response_headers.get(
-                "x-generation-id"
-            )
-            logger.warning(
-                "OpenRouter STT request failed status_code=%s model=%s filename=%r "
-                "content_type=%s byte_length=%s request_id=%s response_body=%r",
-                status_code,
-                settings.stt_model,
-                filename,
-                content_type,
-                len(audio_bytes),
-                request_id,
-                response_body,
-            )
+            log_event("voice.provider_failed", level=logging.WARNING, status_code=status_code,
+                      provider="openrouter", model=settings.stt_model,
+                      input_bytes=len(audio_bytes))
             if status_code == 429:
                 raise RateLimitException(
                     "STT provider rate limit reached. Please try again later.",

@@ -1,4 +1,4 @@
-import logging
+import json
 
 import httpx
 import pytest
@@ -98,7 +98,7 @@ async def test_openrouter_transcribe_audio_maps_rate_limit(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_openrouter_transcribe_audio_logs_response_details_on_http_error(monkeypatch, caplog):
+async def test_openrouter_transcribe_audio_logs_safe_details_on_http_error(monkeypatch, capsys):
     fake_client = FakeAsyncClient(
         make_response(
             400,
@@ -113,22 +113,22 @@ async def test_openrouter_transcribe_audio_logs_response_details_on_http_error(m
         "openai/gpt-4o-mini-transcribe",
     )
 
-    with caplog.at_level(logging.WARNING, logger="domains.voice.openrouter_provider"):
-        with pytest.raises(ExternalAPIException, match="OpenRouter transcription failed"):
-            await OpenRouterVoiceProvider(fake_client).transcribe_audio(
-                filename="speech.webm",
-                content_type="audio/webm",
-                audio_bytes=b"audio-bytes",
-            )
+    with pytest.raises(ExternalAPIException, match="OpenRouter transcription failed"):
+        await OpenRouterVoiceProvider(fake_client).transcribe_audio(
+            filename="speech.webm",
+            content_type="audio/webm",
+            audio_bytes=b"audio-bytes",
+        )
 
-    assert "OpenRouter STT request failed status_code=400" in caplog.text
-    assert "model=openai/gpt-4o-mini-transcribe" in caplog.text
-    assert "filename='speech.webm'" in caplog.text
-    assert "content_type=audio/webm" in caplog.text
-    assert "byte_length=11" in caplog.text
-    assert "request_id=generation-123" in caplog.text
-    assert "Unsupported audio codec" in caplog.text
-    assert "test-key" not in caplog.text
+    rows = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line.startswith("{")]
+    event = next(row for row in rows if row["event"] == "voice.provider_failed")
+    assert event["status_code"] == 400
+    assert event["model"] == "openai/gpt-4o-mini-transcribe"
+    assert event["input_bytes"] == 11
+    assert "speech.webm" not in json.dumps(event)
+    assert "generation-123" not in json.dumps(event)
+    assert "Unsupported audio codec" not in json.dumps(event)
+    assert "test-key" not in json.dumps(event)
 
 
 @pytest.mark.asyncio

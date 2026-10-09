@@ -1,4 +1,4 @@
-import logging
+import json
 
 import httpx
 import pytest
@@ -110,19 +110,21 @@ def test_create_provider_rejects_mixed_voice_providers(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_transcribe_upload_returns_non_empty_transcript(caplog):
+async def test_transcribe_upload_returns_non_empty_transcript(capsys):
     provider = FakeVoiceProvider(transcript="  Let's talk about travel. ")
     service = VoiceService(provider=provider)
 
-    with caplog.at_level(logging.INFO, logger="domains.voice.service"):
-        result = await service.transcribe_upload(FakeUpload(WEBM_BYTES))
+    result = await service.transcribe_upload(FakeUpload(WEBM_BYTES))
 
     assert result.text == "Let's talk about travel."
     assert provider.transcribe_calls[0]["filename"] == "speech.webm"
-    assert "Voice STT stage=upload status=validated provider=fake" in caplog.text
-    assert f"byte_length={len(WEBM_BYTES)}" in caplog.text
-    assert f"transcript_chars={len(result.text)}" in caplog.text
-    assert "Let's talk about travel" not in caplog.text
+    rows = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line.startswith("{")]
+    upload = next(row for row in rows if row["event"] == "voice.upload_validated")
+    transcript = next(row for row in rows if row["event"] == "voice.transcription_completed")
+    assert upload["provider"] == "fake"
+    assert upload["input_bytes"] == len(WEBM_BYTES)
+    assert transcript["output_chars"] == len(result.text)
+    assert "Let's talk about travel" not in json.dumps(rows)
 
 
 @pytest.mark.asyncio
@@ -139,24 +141,25 @@ async def test_transcribe_upload_accepts_x_m4a_content_type():
 
 
 @pytest.mark.asyncio
-async def test_transcribe_upload_rejects_undersized_audio_before_provider_call(caplog):
+async def test_transcribe_upload_rejects_undersized_audio_before_provider_call(capsys):
     provider = FakeVoiceProvider()
     service = VoiceService(provider=provider)
 
-    with caplog.at_level(logging.WARNING, logger="domains.voice.service"):
-        with pytest.raises(ValidationException, match="too small"):
-            await service.transcribe_upload(
-                FakeUpload(
-                    HEADER_ONLY_M4A_BYTES,
-                    filename="header-only.m4a",
-                    content_type="audio/m4a",
-                )
+    with pytest.raises(ValidationException, match="too small"):
+        await service.transcribe_upload(
+            FakeUpload(
+                HEADER_ONLY_M4A_BYTES,
+                filename="header-only.m4a",
+                content_type="audio/m4a",
             )
+        )
 
     assert provider.transcribe_calls == []
-    assert "Voice STT stage=upload status=rejected reason=too_small" in caplog.text
-    assert f"byte_length={len(HEADER_ONLY_M4A_BYTES)}" in caplog.text
-    assert f"minimum_byte_length={VoiceService.minimum_audio_bytes}" in caplog.text
+    rows = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line.startswith("{")]
+    rejected = next(row for row in rows if row["event"] == "voice.upload_rejected")
+    assert rejected["error_code"] == "AUDIO_TOO_SMALL"
+    assert rejected["input_bytes"] == len(HEADER_ONLY_M4A_BYTES)
+    assert "header-only.m4a" not in json.dumps(rows)
 
 
 @pytest.mark.asyncio
@@ -174,15 +177,16 @@ async def test_transcribe_upload_accepts_minimum_size_wav():
 
 
 @pytest.mark.asyncio
-async def test_transcribe_upload_rejects_empty_transcript(caplog):
+async def test_transcribe_upload_rejects_empty_transcript(capsys):
     service = VoiceService(provider=FakeVoiceProvider(transcript="   "))
 
-    with caplog.at_level(logging.INFO, logger="domains.voice.service"):
-        with pytest.raises(ValidationException, match="empty transcript"):
-            await service.transcribe_upload(FakeUpload(WEBM_BYTES))
+    with pytest.raises(ValidationException, match="empty transcript"):
+        await service.transcribe_upload(FakeUpload(WEBM_BYTES))
 
-    assert "Voice STT stage=transcription status=empty provider=fake" in caplog.text
-    assert f"byte_length={len(WEBM_BYTES)}" in caplog.text
+    rows = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line.startswith("{")]
+    empty = next(row for row in rows if row["event"] == "voice.transcription_empty")
+    assert empty["provider"] == "fake"
+    assert empty["input_bytes"] == len(WEBM_BYTES)
 
 
 @pytest.mark.asyncio

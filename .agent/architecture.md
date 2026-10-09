@@ -1,6 +1,6 @@
 # 시스템 아키텍처
 
-> 프로젝트: MoreThanHuman (Convia) · 버전: 0.1.9 · 최종 갱신: 2026-10-04
+> 프로젝트: MoreThanHuman (Convia) · 버전: 0.1.9 · 최종 갱신: 2026-10-09
 
 ---
 
@@ -133,9 +133,9 @@ domains/{name}/
 
 ## 3. 데이터 플로우
 
-### 음성 대화 지연 진단 v1
+### API 구조화 로그와 음성 지연 진단 v2
 
-`shared/latency.py`의 ASGI middleware는 대화 시작·이어 말하기 POST에 요청별 ContextVar를 설정해 인증 전부터 최종 body 전송까지 측정해요. auth·voice·conversation 서비스의 span은 같은 trace로 `print()` JSON 한 줄씩 출력해요. Flutter는 recorder 종료 때 시작한 Stopwatch를 요청과 로컬 오디오 객체까지 전달해 첫 playing 이벤트를 기록해요. JSON 본문은 유지되며 provider는 아래 외부 HTTP 풀 v1을 재사용해요. [계측·실험·연결 풀 적용](../docs/VOICE_LATENCY.md)과 [향후 스트리밍 제안](../docs/VOICE_STREAMING.md)을 참조해요.
+`shared/latency.py`의 ASGI middleware는 모든 `/api/` 요청과 `/health`에 요청별 ContextVar를 설정해 최종 body 전송까지 측정해요. 요청마다 JSON stdout 완료 로그 한 건을 내고, 보호 API의 인증 확인과 기존 음성 대화의 auth·STT·LLM·TTS·인코딩 단계는 같은 trace로 연결해요. `shared/logging_config.py`는 허용 필드만 직렬화하고 500 오류의 예외 종류·스택 위치에서 메시지와 지역 변수를 제외해요. nginx는 자체 요청 ID와 upstream 시간을 JSON으로 남기며 Docker가 API·nginx 로그를 회전해요. Flutter의 첫 playing 이벤트 측정은 유지해요. [로그 계약](../docs/OBSERVABILITY.md), [음성 실험](../docs/VOICE_LATENCY.md), [향후 스트리밍 제안](../docs/VOICE_STREAMING.md)을 참조해요.
 
 ### 인증
 

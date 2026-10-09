@@ -5,9 +5,12 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.exception_handlers import http_exception_handler, request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from config import get_settings
 from database import Base, engine
@@ -26,8 +29,10 @@ from shared.exceptions import AppException, AuthenticationException, NotFoundExc
 from shared.latency import LatencyMiddleware
 from shared.background_tasks import BackgroundTaskRegistry
 from shared.http_clients import http_clients
+from shared.logging_config import configure_logging, log_event, log_exception
 
 settings = get_settings()
+configure_logging()
 
 
 # Lifespan 이벤트 핸들러
@@ -37,10 +42,10 @@ async def lifespan(_app: FastAPI):
     # Startup
     if settings.auto_create_tables:
         Base.metadata.create_all(bind=engine)
-        print("✅ Database tables created via SQLAlchemy metadata")
+        log_event("app.database.metadata_created")
     else:
-        print("✅ Database migrations are managed by Alembic")
-    print(f"✅ Application started in {'DEBUG' if settings.debug else 'PRODUCTION'} mode")
+        log_event("app.database.migrations_managed")
+    log_event("app.started")
 
     async with http_clients(settings) as clients:
         _app.state.http_clients = clients
@@ -51,7 +56,7 @@ async def lifespan(_app: FastAPI):
         finally:
             # 문법 작업이 공유 client를 사용하는 동안 먼저 닫지 않아요.
             await tasks.aclose(grace_seconds=settings.background_shutdown_grace_seconds)
-            print("👋 Application shutting down")
+            log_event("app.stopped")
 
 
 # FastAPI 앱 생성
@@ -78,6 +83,7 @@ app.add_middleware(LatencyMiddleware)
 @app.exception_handler(AuthenticationException)
 async def authentication_exception_handler(_request, exc: AuthenticationException):
     """401 인증 에러 핸들러"""
+    log_exception(exc, status_code=401, error_code="AUTHENTICATION_FAILED")
     return JSONResponse(
         status_code=401,
         content={"success": False, "error": exc.message, "details": exc.details},
@@ -87,6 +93,7 @@ async def authentication_exception_handler(_request, exc: AuthenticationExceptio
 @app.exception_handler(NotFoundException)
 async def not_found_exception_handler(_request, exc: NotFoundException):
     """404 에러 핸들러"""
+    log_exception(exc, status_code=404, error_code="NOT_FOUND")
     return JSONResponse(
         status_code=404,
         content={"success": False, "error": exc.message, "details": exc.details},
@@ -96,10 +103,24 @@ async def not_found_exception_handler(_request, exc: NotFoundException):
 @app.exception_handler(AppException)
 async def app_exception_handler(_request, exc: AppException):
     """애플리케이션 에러 핸들러"""
+    log_exception(exc, status_code=400, error_code=type(exc).__name__)
     return JSONResponse(
         status_code=400,
         content={"success": False, "error": exc.message, "details": exc.details},
     )
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_error_handler(request, exc: StarletteHTTPException):
+    cause = exc.__cause__ or exc.__context__
+    log_exception(cause or exc, status_code=exc.status_code, error_code=f"HTTP_{exc.status_code}")
+    return await http_exception_handler(request, exc)
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error_handler(request, exc: RequestValidationError):
+    log_exception(exc, status_code=422, error_code="REQUEST_VALIDATION_ERROR")
+    return await request_validation_exception_handler(request, exc)
 
 
 # Static Files (정적 파일은 API 라우터보다 먼저 등록)

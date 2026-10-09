@@ -14,6 +14,7 @@ from domains.auth.service import AuthService
 from domains.auth.supabase import SupabaseAuthVerifier
 from shared.exceptions import AuthenticationException, NotFoundException
 from shared.latency import latency_span
+from shared.logging_config import log_exception
 from shared.http_clients import get_auth_http_client
 
 security = HTTPBearer()
@@ -51,12 +52,14 @@ async def get_current_user(
             )
         return profile
     except AuthenticationException as e:
+        log_exception(e, status_code=401, error_code="AUTHENTICATION_FAILED")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=e.message,
             headers={"WWW-Authenticate": "Bearer"},
         )
-    except NotFoundException:
+    except NotFoundException as e:
+        log_exception(e, status_code=401, error_code="NOT_FOUND")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="사용자를 찾을 수 없습니다",
@@ -71,8 +74,9 @@ async def get_current_user_from_token_param(
 ) -> ProfileModel:
     """쿼리 파라미터로 전달된 Supabase token에서 프로필 반환 (SSE 엔드포인트용)"""
     try:
-        claims = await verifier.verify_access_token(token)
-        profile = service.get_or_create_profile_from_claims(claims)
+        with latency_span("auth"):
+            claims = await verifier.verify_access_token(token)
+            profile = service.get_or_create_profile_from_claims(claims)
         if not profile.is_active:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -80,11 +84,13 @@ async def get_current_user_from_token_param(
             )
         return profile
     except AuthenticationException as e:
+        log_exception(e, status_code=401, error_code="AUTHENTICATION_FAILED")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=e.message,
         )
-    except NotFoundException:
+    except NotFoundException as e:
+        log_exception(e, status_code=401, error_code="NOT_FOUND")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="사용자를 찾을 수 없습니다",
