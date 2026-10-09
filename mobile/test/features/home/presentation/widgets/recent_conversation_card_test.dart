@@ -164,6 +164,48 @@ void main() {
       expect(tapCount, 1);
     },
   );
+
+  testWidgets('long press reveals the same Delete button', (
+    WidgetTester tester,
+  ) async {
+    int deleteCount = 0;
+    int tapCount = 0;
+    await tester.pumpWidget(
+      _themedApp(
+        RecentConversationCard(
+          category: 'freechat',
+          title: 'Osaka food trip',
+          color: AppPalette.blockLimeSoft,
+          onTap: () => tapCount += 1,
+          onDelete: () => deleteCount += 1,
+        ),
+      ),
+    );
+
+    await tester.longPress(find.text(_displayTitle));
+    await tester.pumpAndSettle();
+
+    expect(tapCount, 0);
+    expect(deleteCount, 0);
+    expect(
+      tester
+          .widget<TextButton>(find.widgetWithText(TextButton, 'Delete'))
+          .onPressed,
+      isNotNull,
+    );
+
+    await tester.tap(find.widgetWithText(TextButton, 'Delete'));
+    await tester.pumpAndSettle();
+
+    expect(deleteCount, 1);
+    expect(tapCount, 0);
+    expect(
+      tester
+          .widget<TextButton>(find.widgetWithText(TextButton, 'Delete'))
+          .onPressed,
+      isNull,
+    );
+  });
 }
 
 Widget _themedApp(Widget child) {

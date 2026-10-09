@@ -4,6 +4,16 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('AppCopy', () {
+    test('labels the profile language section', () {
+      expect(
+        AppCopy.forLocale(const Locale('ko')).languagePairSectionLabel,
+        '학습 언어 선택',
+      );
+      expect(
+        AppCopy.forLocale(const Locale('en')).languagePairSectionLabel,
+        'Select Learning Language',
+      );
+    });
     test('localizes the debug basket reset tooltip', () {
       expect(
         AppCopy.forLocale(const Locale('ko')).resetSnackBasketTooltip,

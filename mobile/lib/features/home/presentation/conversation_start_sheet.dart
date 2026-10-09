@@ -18,7 +18,7 @@ Future<ConversationStartType?> showConversationStartSheet(
           Text(copy.startConversationTitle, style: AppTypography.headlineMd),
           const SizedBox(height: AppSpacing.lg),
           AppSelectionCard(
-            title: copy.freeChatTitle,
+            title: 'Free Chat',
             description: copy.freeChatDescription,
             icon: const Icon(Icons.forum_outlined),
             selected: false,
@@ -27,7 +27,7 @@ Future<ConversationStartType?> showConversationStartSheet(
           ),
           const SizedBox(height: AppSpacing.md),
           AppSelectionCard(
-            title: copy.roleplayTitle,
+            title: 'Roleplay',
             description: copy.roleplayDescription,
             icon: const Icon(Icons.theater_comedy_outlined),
             selected: false,

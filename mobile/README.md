@@ -129,11 +129,11 @@ assets/
 |----------|------|
 | `AppSelectionChip` | 대화 방향 등의 단일 선택 chip |
 | `AppSelectionCard` | 대화 방식·롤플레이 상황 등의 선택 카드 |
-| `RecentConversationCard` | 왼쪽 제목·오른쪽 `freechat`/`roleplaying` 배지가 있는 pastel 카드(한국어·영어 동일). 왼쪽 스와이프 시 삭제 동작을 표시하고 확인 후 삭제 |
+| `RecentConversationCard` | 왼쪽 제목·오른쪽 `freechat`/`roleplaying` 배지가 있는 pastel 카드(한국어·영어 동일). 왼쪽 스와이프 또는 길게 누르면 삭제 버튼을 표시하고 확인 후 삭제 |
 | `SnackTomatoBasket` | 바구니와 3개 토마토의 4입 단계·팝업·당일 소진 상태 |
 | `LanguageSnackContent` | 지역별 표현·용법 차이·동음이의어의 공통 표시 본문 |
 | `ChatBubble` | 사용자·AI 역할별 정렬과 semantic color, 문단-aware 텍스트가 적용된 말풍선 |
-| `GrammarFeedbackCard` | 사용자 메시지 아래의 접기·펼치기 가능한 교정 문장과 설명 |
+| `GrammarFeedbackCard` | 사용자 메시지 아래의 교정 문장과 설명 전체 표시 |
 | `TypingIndicator` | Reduce Motion 설정을 따르는 AI 응답 대기 표시 |
 
 ## 3차 입력·상태 컴포넌트
@@ -200,7 +200,7 @@ Splash → Onboarding(최초 1회) → Google 또는 iOS Apple Login → Home
 | 홈 / Home | `/home`: 언어 스낵, 최근 2개 카드, 그 아래 `＋ 새 대화` |
 | 내 정보 / Profile | `/profile`: 계정, 앱 언어, 학습 언어, 로그아웃 |
 
-탭 전환은 각 화면과 스크롤을 보존하고, 같은 탭 재선택은 맨 위로 이동해요. 전체 대화 경로 `/history`로 직접 진입하면 shell 위에 열려 하단 바를 숨겨요. 전체 대화 화면의 상단 `＋`와 홈의 새 대화 버튼은 같은 자유 대화/롤플레이 선택 시트를 열어요. 준비·대화 화면도 shell 위에 열며, 대화 생성 성공 후 완료한 준비 단계는 제거해요. 뒤로가기는 출발 화면으로 복귀하고, 직접 진입한 기존 대화는 홈으로 돌아와요.
+탭 전환은 각 화면과 스크롤을 보존하고, 같은 탭 재선택은 맨 위로 이동해요. 전체 대화 경로 `/history`로 직접 진입하면 shell 위에 열려 하단 바를 숨겨요. 전체 대화 화면의 상단 `＋`와 홈의 새 대화 버튼은 같은 선택 시트를 열고, 선택지 제목은 앱 표시 언어와 관계없이 `Free Chat`·`Roleplay`로 보여줘요. 준비·대화 화면도 shell 위에 열며, 대화 생성 성공 후 완료한 준비 단계는 제거해요. 뒤로가기는 출발 화면으로 복귀하고, 직접 진입한 기존 대화는 홈으로 돌아와요.
 
 전체 목록은 전용 `ConversationHistoryRepository`와 controller가 기존 `GET /api/conversations/`의 limit/offset을 사용해 20개씩 조회해요. 추가 조회 실패는 기존 행을 유지하고 재시도를 제공해요. 중복 ID·동시 조회·계정 변경 뒤 지연 응답을 차단하며, 대화 복귀·삭제 시 최근 목록과 전체 목록을 갱신해요. 이미 읽은 목록 범위는 새 offset 기준으로 다시 조회해 복귀 위치를 유지해요. API 변경은 없어요.
 
@@ -260,7 +260,7 @@ Conversation 화면은 Free Chat 시작, Roleplay 시작, Home 최근 대화 진
 
 음성 입력은 `Voice input → Stop recording` 흐름으로 동작하며, 녹음 중에는 타이머와 cancel 버튼을 보여주고 텍스트 입력·전송을 잠가 한 turn에 text와 audio가 섞이지 않게 해요. cancel은 업로드 없이 녹음을 폐기하고, 권한 거부·빈 녹음·녹음 실패는 대화 전송 실패와 분리된 안내로 표시해요. 녹음 임시 파일은 성공적으로 읽은 뒤와 cancel/dispose 시 best-effort로 정리해요. assistant audio 재생은 메시지 단위 loading/playing/error 상태를 가지며, 중복 재생 탭을 막고 playback failure를 send retry와 분리해요.
 
-사용자 메시지의 문법 피드백은 2초 간격으로 최대 30초 polling해요. `404`는 pending으로 보고 계속 기다리며, `200`이면 `has_errors=false`는 `NaturalFeedbackBadge`, `has_errors=true`는 `GrammarFeedbackCard`로 표시해요. 문법 피드백의 교정 문장과 설명도 서버 원문은 유지하고 화면 표시 단계에서 문장 단위 줄바꿈과 누락된 공백을 보정해요. 빈 줄로 나뉜 텍스트는 문단 간격을 두고 표시하며, 1줄을 넘는 피드백은 기본 접힘 상태에서 `SHOW MORE`/`SHOW LESS`로 확장할 수 있어요. 설명 텍스트는 gray 계열을 유지하고 피드백 카드는 일반 AI 말풍선과 다른 semantic color를 사용해요. 30초 동안 준비되지 않으면 timeout 안내를 표시해요.
+사용자 메시지의 문법 피드백은 2초 간격으로 최대 30초 polling해요. `404`는 pending으로 보고 계속 기다리며, `200`이면 `has_errors=false`는 `NaturalFeedbackBadge`, `has_errors=true`는 `GrammarFeedbackCard`로 표시해요. 문법 피드백의 교정 문장과 설명도 서버 원문은 유지하고 화면 표시 단계에서 문장 단위 줄바꿈과 누락된 공백을 보정해요. 빈 줄로 나뉜 텍스트는 문단 간격을 두고 표시하며, 피드백 아이콘을 누르면 교정 문장과 설명 전체를 바로 보여줘요. 설명 텍스트는 gray 계열을 유지하고 피드백 카드는 일반 AI 말풍선과 다른 semantic color를 사용해요. 30초 동안 준비되지 않으면 timeout 안내를 표시해요.
 
 SSE 기반 실시간 피드백과 waveform 표시는 후속 작업으로 남겨요. 메시지는 최신 40개부터 조회하며 이전 구간을 40개씩 추가 조회할 수 있어요. 실제 기기 QA에서는 microphone permission denied, 녹음 cancel, stop/upload, assistant audio playback, playback failure를 확인해요.
 

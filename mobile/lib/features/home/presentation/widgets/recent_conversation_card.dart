@@ -93,6 +93,7 @@ class _RecentConversationCardState extends State<RecentConversationCard> {
                 ),
               ),
               GestureDetector(
+                onLongPress: () => setState(() => _dragOffset = -_deleteWidth),
                 onHorizontalDragStart: (_) => setState(() => _dragging = true),
                 onHorizontalDragUpdate: _onDragUpdate,
                 onHorizontalDragEnd: _onDragEnd,

@@ -153,13 +153,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               ),
             const SizedBox(height: AppSpacing.xl),
             AppSectionLabel(copy.languagePairSectionLabel),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              copy.preferenceChangePolicyText(),
-              style: AppTypography.bodySm.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
             const SizedBox(height: AppSpacing.md),
             LanguagePairSelector(
               selected: selectedLanguage,

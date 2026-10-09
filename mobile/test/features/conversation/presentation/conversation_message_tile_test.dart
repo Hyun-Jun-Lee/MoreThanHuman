@@ -61,6 +61,8 @@ void main() {
 
     expect(find.textContaining('I was surprised.'), findsOneWidget);
     expect(find.text('Use the past participle after was.'), findsOneWidget);
+    expect(find.text('SHOW MORE'), findsNothing);
+    expect(find.text('SHOW LESS'), findsNothing);
     expect(find.byTooltip('Hide grammar feedback'), findsOneWidget);
 
     await tester.tap(find.byTooltip('Hide grammar feedback'));

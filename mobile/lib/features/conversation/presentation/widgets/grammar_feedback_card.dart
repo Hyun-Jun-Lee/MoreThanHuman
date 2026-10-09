@@ -6,7 +6,7 @@ import 'package:curitalk/features/conversation/domain/grammar_feedback.dart';
 import 'package:curitalk/features/conversation/presentation/widgets/conversation_text_formatter.dart';
 import 'package:flutter/material.dart';
 
-class GrammarFeedbackCard extends StatefulWidget {
+class GrammarFeedbackCard extends StatelessWidget {
   const GrammarFeedbackCard({
     required this.suggestion,
     required this.explanation,
@@ -21,20 +21,13 @@ class GrammarFeedbackCard extends StatefulWidget {
   final String? reasonLabel;
 
   @override
-  State<GrammarFeedbackCard> createState() => _GrammarFeedbackCardState();
-}
-
-class _GrammarFeedbackCardState extends State<GrammarFeedbackCard> {
-  bool _expanded = false;
-
-  @override
   Widget build(BuildContext context) {
     final AppCopy copy = AppCopy.of(context);
     final AppSemanticColors colors = AppSemanticColors.of(context);
     final String displaySuggestion =
-        ConversationTextFormatter.formatAssistantMessage(widget.suggestion);
+        ConversationTextFormatter.formatAssistantMessage(suggestion);
     final String displayExplanation =
-        ConversationTextFormatter.formatAssistantMessage(widget.explanation);
+        ConversationTextFormatter.formatAssistantMessage(explanation);
     final TextStyle suggestionStyle = AppTypography.bodySm.copyWith(
       color: colors.onGrammarSuggestion,
     );
@@ -54,79 +47,32 @@ class _GrammarFeedbackCardState extends State<GrammarFeedbackCard> {
         borderRadius: const BorderRadius.all(Radius.circular(AppRadius.lg)),
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.lg),
-          child: LayoutBuilder(
-            builder: (BuildContext context, BoxConstraints constraints) {
-              final bool canExpand =
-                  _exceedsSingleLine(
-                    text: displaySuggestion,
-                    style: suggestionStyle,
-                    maxWidth: constraints.maxWidth,
-                    textScaler: MediaQuery.textScalerOf(context),
-                  ) ||
-                  _exceedsSingleLine(
-                    text: displayExplanation,
-                    style: explanationStyle,
-                    maxWidth: constraints.maxWidth,
-                    textScaler: MediaQuery.textScalerOf(context),
-                  );
-
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  _HighlightedFeedbackText(
-                    text: displaySuggestion,
-                    style: suggestionStyle,
-                    highlightStyle: correctionStyle,
-                    highlightedValues: widget.errors
-                        .map((GrammarError error) => error.corrected)
-                        .toList(growable: false),
-                    expanded: _expanded || !canExpand,
-                    textKey: const ValueKey<String>(
-                      'grammar-feedback-suggestion-text',
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  _ReasonBlock(
-                    label: widget.reasonLabel ?? copy.grammarReasonLabel,
-                    text: displayExplanation,
-                    style: explanationStyle,
-                    expanded: _expanded || !canExpand,
-                  ),
-                  if (canExpand) ...<Widget>[
-                    const SizedBox(height: AppSpacing.sm),
-                    TextButton(
-                      onPressed: () {
-                        setState(() => _expanded = !_expanded);
-                      },
-                      child: Text(
-                        _expanded ? copy.showLessLabel : copy.showMoreLabel,
-                      ),
-                    ),
-                  ],
-                ],
-              );
-            },
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              _HighlightedFeedbackText(
+                text: displaySuggestion,
+                style: suggestionStyle,
+                highlightStyle: correctionStyle,
+                highlightedValues: errors
+                    .map((GrammarError error) => error.corrected)
+                    .toList(growable: false),
+                textKey: const ValueKey<String>(
+                  'grammar-feedback-suggestion-text',
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              _ReasonBlock(
+                label: reasonLabel ?? copy.grammarReasonLabel,
+                text: displayExplanation,
+                style: explanationStyle,
+              ),
+            ],
           ),
         ),
       ),
     );
-  }
-
-  bool _exceedsSingleLine({
-    required String text,
-    required TextStyle style,
-    required double maxWidth,
-    required TextScaler textScaler,
-  }) {
-    final TextPainter painter = TextPainter(
-      text: TextSpan(text: _singleLineText(text), style: style),
-      maxLines: 1,
-      textDirection: TextDirection.ltr,
-      textScaler: textScaler,
-    )..layout(maxWidth: maxWidth);
-
-    return painter.didExceedMaxLines;
   }
 }
 
@@ -135,13 +81,11 @@ class _ReasonBlock extends StatelessWidget {
     required this.label,
     required this.text,
     required this.style,
-    required this.expanded,
   });
 
   final String label;
   final String text;
   final TextStyle style;
-  final bool expanded;
 
   @override
   Widget build(BuildContext context) {
@@ -170,7 +114,7 @@ class _ReasonBlock extends StatelessWidget {
           ),
         ),
         const SizedBox(height: AppSpacing.xs),
-        _FeedbackText(text: text, style: style, expanded: expanded),
+        AppParagraphText(text: text, style: style),
       ],
     );
   }
@@ -182,7 +126,6 @@ class _HighlightedFeedbackText extends StatelessWidget {
     required this.style,
     required this.highlightStyle,
     required this.highlightedValues,
-    required this.expanded,
     required this.textKey,
   });
 
@@ -190,55 +133,20 @@ class _HighlightedFeedbackText extends StatelessWidget {
   final TextStyle style;
   final TextStyle highlightStyle;
   final List<String> highlightedValues;
-  final bool expanded;
   final Key textKey;
 
   @override
   Widget build(BuildContext context) {
-    final String displayText = expanded ? text : _singleLineText(text);
-
     return Text.rich(
       _highlightedTextSpan(
-        text: displayText,
+        text: text,
         style: style,
         highlightStyle: highlightStyle,
         highlightedValues: highlightedValues,
       ),
       key: textKey,
-      maxLines: expanded ? null : 1,
-      overflow: expanded ? TextOverflow.visible : TextOverflow.ellipsis,
     );
   }
-}
-
-class _FeedbackText extends StatelessWidget {
-  const _FeedbackText({
-    required this.text,
-    required this.style,
-    required this.expanded,
-  });
-
-  final String text;
-  final TextStyle style;
-  final bool expanded;
-
-  @override
-  Widget build(BuildContext context) {
-    if (!expanded) {
-      return Text(
-        _singleLineText(text),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: style,
-      );
-    }
-
-    return AppParagraphText(text: text, style: style);
-  }
-}
-
-String _singleLineText(String text) {
-  return text.replaceAll(RegExp(r'\s+'), ' ').trim();
 }
 
 TextSpan _highlightedTextSpan({

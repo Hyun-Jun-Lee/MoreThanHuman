@@ -274,7 +274,7 @@ void main() {
     expect(card.color, AppSemanticColors.light.grammarSuggestionSurface);
   });
 
-  testWidgets('GrammarFeedbackCard expands dense feedback text', (
+  testWidgets('GrammarFeedbackCard shows all dense feedback immediately', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
@@ -290,23 +290,8 @@ void main() {
       ),
     );
 
-    expect(find.text('SHOW MORE'), findsOneWidget);
+    expect(find.text('SHOW MORE'), findsNothing);
     expect(find.text('SHOW LESS'), findsNothing);
-    expect(
-      tester
-          .widget<Text>(
-            find.byKey(
-              const ValueKey<String>('grammar-feedback-suggestion-text'),
-            ),
-          )
-          .maxLines,
-      1,
-    );
-
-    await tester.tap(find.text('SHOW MORE'));
-    await tester.pump();
-
-    expect(find.text('SHOW LESS'), findsOneWidget);
     expect(
       tester
           .widget<Text>(

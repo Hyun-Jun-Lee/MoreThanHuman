@@ -64,12 +64,6 @@ class AppCopy {
     return isKorean ? '$target 첫 답변' : 'First answer in $target';
   }
 
-  String preferenceChangePolicyText() {
-    return isKorean
-        ? '새 대화부터 적용돼요. 기존 대화는 시작할 때 선택한 언어쌍을 유지해요.'
-        : 'Applies to new conversations. Existing conversations keep the language pair they started with.';
-  }
-
   AppOnboardingCopy get onboarding {
     return isKorean ? AppOnboardingCopy.korean : AppOnboardingCopy.english;
   }
@@ -369,7 +363,8 @@ class AppCopy {
   String get updatingConversationsSemanticLabel =>
       isKorean ? '대화를 업데이트하는 중' : 'Updating conversations';
   String get accountLabel => isKorean ? '계정' : 'Account';
-  String get languagePairSectionLabel => isKorean ? '언어쌍' : 'Language Pair';
+  String get languagePairSectionLabel =>
+      isKorean ? '학습 언어 선택' : 'Select Learning Language';
   String get logOutLabel => isKorean ? '로그아웃' : 'LOG OUT';
   String get languagePairSaveFailed =>
       isKorean ? '언어쌍을 저장하지 못했어요.' : 'Language pair could not be saved.';

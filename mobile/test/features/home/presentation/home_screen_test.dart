@@ -105,11 +105,12 @@ void main() {
     expect(find.text('Learner Kim'), findsOneWidget);
     expect(find.text('learner@example.com'), findsOneWidget);
     expect(find.text('LOG OUT'), findsOneWidget);
+    expect(find.text('SELECT LEARNING LANGUAGE'), findsOneWidget);
     expect(
       find.text(
         'Applies to new conversations. Existing conversations keep the language pair they started with.',
       ),
-      findsOneWidget,
+      findsNothing,
     );
   });
 
@@ -146,7 +147,7 @@ void main() {
     );
   });
 
-  testWidgets('language pair confirmation failure keeps policy note visible', (
+  testWidgets('language pair confirmation failure omits policy note', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
@@ -171,7 +172,7 @@ void main() {
       find.text(
         'Applies to new conversations. Existing conversations keep the language pair they started with.',
       ),
-      findsOneWidget,
+      findsNothing,
     );
   });
 
