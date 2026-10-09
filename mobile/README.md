@@ -238,8 +238,11 @@ Start Roleplay를 누르면 선택 결과를 백엔드 계약에 맞는 `role_ch
 
 Conversation 화면은 Free Chat 시작, Roleplay 시작, Home 최근 대화 진입이 합류하는 대화 화면이에요. 상단에는 명시적인 뒤로가기 버튼을 두고, navigation stack이 없을 때는 홈으로 이동해요.
 
+주간 추천 시작은 `POST /api/conversations/start/free-chat/suggested/stream/`에 주제·요청 UUID를 보내요. `turn_started`의 대화 ID로 바로 화면을 열고, NDJSON의 `audio_segment`를 증분 UTF-8 decoder와 단일 재생 큐로 순서대로 들려줘요. 첫 질문 텍스트는 서버에 먼저 저장돼 있어 메시지 조회로 표시해요. 화면 이탈·다음 발화 때 스트림과 큐를 취소하고, 음성 실패는 답변 텍스트를 유지한 채 안내해요. AI 생성 스트림·음성만 다시 듣기 버튼·연결 복구 UI는 [후속 단계](../docs/VOICE_STREAMING.md#권장-개발-순서)예요.
+
 | 동작 | API |
 |------|-----|
+| 주간 추천 시작 | `POST /api/conversations/start/free-chat/suggested/stream/` NDJSON |
 | 기존 메시지 로드 | `GET /api/conversations/{conversation_id}/messages/?limit=40&offset=0` |
 | 텍스트 turn 전송 | `POST /api/conversations/{conversation_id}/turn/` JSON |
 | 음성 turn 전송 | `POST /api/conversations/{conversation_id}/turn/` multipart |

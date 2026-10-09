@@ -6,7 +6,7 @@
 
 ### API 진단 헤더 v2 (2026-10-09)
 
-모든 `/api/` 요청과 `/health`에 `X-Request-ID`를 선택적으로 전달할 수 있어요. 값은 소문자 16진수 32자리예요. 누락·형식 불일치 시 서버가 새 값을 만들며 FastAPI가 시작한 응답 헤더에도 반환해요. 로그 연결용이며 인증·멱등성을 제공하지 않아요. nginx가 자체 생성한 응답이나 ASGI 바깥의 500 응답에는 헤더가 없을 수 있어요. 서버는 각 HTTP 시도에 별도 `request_id`를 부여하고 nginx의 내부 `X-Proxy-Request-ID`를 `proxy_request_id`로 기록해요. JSON 본문·오류 상태 계약은 유지돼요. 필드와 조회법은 [API 로그 문서](OBSERVABILITY.md), 지연 실험은 [음성 지연 문서](VOICE_LATENCY.md), 미구현 제안은 [스트리밍 설계](VOICE_STREAMING.md)에 있어요.
+모든 `/api/` 요청과 `/health`에 `X-Request-ID`를 선택적으로 전달할 수 있어요. 값은 소문자 16진수 32자리예요. 누락·형식 불일치 시 서버가 새 값을 만들며 FastAPI가 시작한 응답 헤더에도 반환해요. 로그 연결용이며 인증·멱등성을 제공하지 않아요. nginx가 자체 생성한 응답이나 ASGI 바깥의 500 응답에는 헤더가 없을 수 있어요. 서버는 각 HTTP 시도에 별도 `request_id`를 부여하고 nginx의 내부 `X-Proxy-Request-ID`를 `proxy_request_id`로 기록해요. JSON 본문·오류 상태 계약은 유지돼요. 필드와 조회법은 [API 로그 문서](OBSERVABILITY.md), 지연 실험은 [음성 지연 문서](VOICE_LATENCY.md), 스트림 경로의 단계별 범위는 [스트리밍 설계](VOICE_STREAMING.md)에 있어요.
 
 ## 1. 시스템
 
@@ -476,6 +476,20 @@ module Conversation {
 | `POST /api/conversations/start/free-chat/suggested/` | `StartSuggestedFreeChatRequest`를 받아 `SuggestedFreeChatResponse`를 성공 envelope에 담아요. 주제의 발행·보관·언어쌍·첫 질문과 대화 슬롯을 확인하고 저장된 첫 질문이 AI 메시지 하나인 `FREE_CHAT`을 만들어요. 사용자 첫 메시지와 문법 작업은 없고 사용자 발화 수는 0이에요. |
 
 같은 사용자·`start_request_id`의 완료된 요청은 같은 대화와 AI 메시지를 반환해요. 처리 중 중복 요청은 HTTP 409 `START_IN_PROGRESS`, 슬롯이 가득 차면 HTTP 409 `CONVERSATION_SLOTS_FULL`이에요. 없는 주제, 보관 주제, 다른 언어쌍 주제, 첫 질문이 없는 구형 주제는 404예요. 저장이 실패하면 예약을 지우고 대화를 만들지 않아 같은 ID로 재시도할 수 있어요. 첫 AI 질문이 저장된 후 TTS만 실패하면 대화를 유지하고 `audio_error`를 반환해요. `X-Request-ID`는 별도의 진단 헤더이며 이 멱등성 키를 대신하지 않아요.
+
+#### 주간 추천 음성 스트림 v1 (1~3단계)
+
+`20261005_0001` migration은 `stream_turns`와 `stream_attempts`를 추가해요. 사용자·요청 키의 고유 제약으로 최초 요청의 중복 TTS를 막고, turn의 `pending/completed/failed`와 별개로 `audio_status`를 기록해요. 기한이 지난 pending 상태는 조회 시 실패로 정리해요. 실패 turn의 입력·시도 이력과 원자적 재시도 전이 기반을 저장하지만 AI 답변 재시도 경로는 후속 단계에서 열어요.
+
+| API | 계약 |
+|-----|------|
+| `POST /api/conversations/start/free-chat/suggested/stream/` | Bearer 인증. 기존 `topic_id`, `start_request_id` JSON과 같은 UUID의 `Idempotency-Key` 헤더 필수. 기존 추천 시작의 슬롯·주제 검사를 재사용하고 저장된 첫 질문을 합성해 `application/x-ndjson; charset=utf-8`, `Cache-Control: no-store`, `X-Accel-Buffering: no`로 반환해요. 기존 JSON 요청이 같은 ID로 완료됐다면 대화와 메시지를 재사용해요. |
+| `GET /api/conversations/turns/{turn_id}/` | 소유자에게만 JSON envelope의 `{turn_id,kind,status,attempt_id,conversation_id,user_message_id,assistant_message_id,audio_status,error_code,retryable}`를 반환해요. 타 사용자·없는 turn은 404예요. |
+| `GET /api/conversations/{id}/turns/` | 대화 소유자에게만 pending·failed turn과 오디오가 failed인 완료 turn을 최신순 JSON envelope로 반환해요. |
+
+NDJSON 각 줄에는 `event`, 0부터 증가하는 `seq`, `turn_id`, `attempt_id`가 있어요. 이 경로는 `turn_started`(저장된 `conversation_id` 포함) → `text_delta`(저장된 첫 질문) → 문장마다 `audio_segment`(`segment_index`, `text`, `content_type`, `format`, `base64`) → `turn_completed`(`conversation_id`, `assistant_message_id`, `text`, `audio_status`) 순서예요. TTS 실패 때는 `audio_error` 뒤 `audio_status: failed`인 `turn_completed`를 보내고 AI 메시지는 보존해요. 연결 단절 때는 마지막 이벤트를 받았다고 추정하지 않고 상태 조회로 확인해요. 같은 키의 중복 요청은 현재 상태에 따라 HTTP 409 `TURN_IN_PROGRESS`, `TURN_ALREADY_COMPLETED`, `TURN_FAILED_RETRY_REQUIRED`예요. 앱은 HTTP 청크와 줄 경계가 다를 수 있으므로 증분 UTF-8로 읽고, 세그먼트를 순서대로 재생해요.
+
+현재 스트림 호출 전환은 주간 추천 시작에만 적용돼요. Free Chat·Roleplay의 다른 시작/이어 말하기와 AI 재시도·오디오 전용 재합성 경로는 [후속 구현 단계](VOICE_STREAMING.md#권장-개발-순서)예요. 기존 JSON 경로는 유지돼요.
 
 홈은 발행된 주제가 있으면 최근 대화 로딩 상태와 저장된 대화 수에 관계없이 추천 주제를 보여줘요. 이전 주의 발행 주제도 보관되지 않았다면 시작할 수 있어요. 탭 시 검색·사실 확인·Topic Prep은 실행하지 않아요.
 

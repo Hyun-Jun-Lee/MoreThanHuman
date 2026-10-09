@@ -135,7 +135,9 @@ domains/{name}/
 
 ### API 구조화 로그와 음성 지연 진단 v2
 
-`shared/latency.py`의 ASGI middleware는 모든 `/api/` 요청과 `/health`에 요청별 ContextVar를 설정해 최종 body 전송까지 측정해요. 요청마다 JSON stdout 완료 로그 한 건을 내고, 보호 API의 인증 확인과 기존 음성 대화의 auth·STT·LLM·TTS·인코딩 단계는 같은 trace로 연결해요. `shared/logging_config.py`는 허용 필드만 직렬화하고 500 오류의 예외 종류·스택 위치에서 메시지와 지역 변수를 제외해요. nginx는 자체 요청 ID와 upstream 시간을 JSON으로 남기며 Docker가 API·nginx 로그를 회전해요. Flutter의 첫 playing 이벤트 측정은 유지해요. [로그 계약](../docs/OBSERVABILITY.md), [음성 실험](../docs/VOICE_LATENCY.md), [향후 스트리밍 제안](../docs/VOICE_STREAMING.md)을 참조해요.
+`shared/latency.py`의 ASGI middleware는 모든 `/api/` 요청과 `/health`에 요청별 ContextVar를 설정해 최종 body 전송까지 측정해요. 요청마다 JSON stdout 완료 로그 한 건을 내고, 보호 API의 인증 확인과 대화의 auth·STT·LLM·TTS·인코딩 단계를 같은 trace로 연결해요. `shared/logging_config.py`는 허용 필드만 직렬화하고 500 오류의 예외 종류·스택 위치에서 메시지와 지역 변수를 제외해요. nginx는 자체 요청 ID와 upstream 시간을 JSON으로 남기며 Docker가 API·nginx 로그를 회전해요. Flutter의 첫 playing 이벤트 측정은 유지해요. [로그 계약](../docs/OBSERVABILITY.md), [음성 실험](../docs/VOICE_LATENCY.md), [스트리밍 설계·단계별 구현](../docs/VOICE_STREAMING.md)을 참조해요.
+
+주간 추천 시작의 음성 스트림은 기존 추천 예약이 첫 AI 질문을 저장한 뒤 `stream_turns`·`stream_attempts`에 상태를 남겨요. `/start/free-chat/suggested/stream/`는 짧은 DB 작업 후 문장별 TTS를 NDJSON/Base64로 보내고, 스트림 안의 상태 변경은 독립 DB session에서 처리해요. 앱의 Dio 증분 decoder가 이벤트 줄을 완성해 읽고 단일 재생 큐가 순서대로 재생해요. 화면 이탈이나 다음 발화 때 요청과 큐를 취소해요. 다른 대화 흐름의 LLM 생성 스트림은 후속 단계예요.
 
 ### 인증
 

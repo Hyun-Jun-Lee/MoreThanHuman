@@ -17,10 +17,15 @@ from shared.logging_config import (
 
 
 _turn_path = re.compile(
-    r"^/api/conversations/(?:start/(?:free-chat|roleplay)|[^/]+/(?:turn|message))/?$"
+    r"^/api/conversations/(?:start/(?:free-chat(?:/suggested)?|roleplay)|[^/]+/(?:turn|message))(?:/stream)?/?$"
 )
 _valid_id = re.compile(r"[a-f0-9]{32}")
 LogValue = str | int | float | bool | None
+
+
+def current_trace_id() -> str | None:
+    context = request_context.get()
+    return context["trace_id"] if context else None
 
 
 def _emit_stage(stage: str, started: float, status: str = "ok", **fields: LogValue) -> None:

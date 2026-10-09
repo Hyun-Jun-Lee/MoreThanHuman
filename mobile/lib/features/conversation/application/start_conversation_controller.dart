@@ -1,12 +1,18 @@
+import 'dart:async';
+import 'dart:collection';
 import 'dart:math';
 
+import 'package:curitalk/features/conversation/application/conversation_audio_services.dart';
+import 'package:curitalk/core/diagnostics/latency_trace.dart';
 import 'package:curitalk/features/conversation/data/api_conversation_repository.dart';
+import 'package:curitalk/features/conversation/data/suggested_conversation_stream.dart';
 import 'package:curitalk/features/conversation/domain/conversation_models.dart';
 import 'package:curitalk/features/conversation/domain/conversation_repository.dart';
 import 'package:curitalk/features/home/application/recent_conversations_controller.dart';
 import 'package:curitalk/features/conversation/data/conversation_access_repository.dart';
 import 'package:curitalk/core/network/api_exception.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dio/dio.dart';
 
 class InitialAssistantAudio {
   const InitialAssistantAudio({
@@ -63,6 +69,20 @@ class StartConversationState {
 class StartConversationController extends Notifier<StartConversationState> {
   String? _pendingSuggestedTopic;
   String? _pendingSuggestedRequestId;
+  String? _activeSuggestedConversationId;
+  String? _activeTurnId;
+  String? _activeAttemptId;
+  bool _suggestedTerminalSeen = false;
+  Completer<String?>? _suggestedStartCompleter;
+  int _expectedSeq = 0;
+  int _nextSegmentIndex = 0;
+  CancelToken? _suggestedCancelToken;
+  LatencyTrace? _suggestedTrace;
+  StreamSubscription<Map<String, dynamic>>? _suggestedSubscription;
+  final Queue<VoiceAudioResponse> _suggestedAudioQueue =
+      Queue<VoiceAudioResponse>();
+  bool _playingSuggestedAudio = false;
+  int _playGeneration = 0;
 
   @override
   StartConversationState build() {
@@ -80,6 +100,9 @@ class StartConversationController extends Notifier<StartConversationState> {
       final repository = ref.read(conversationRepositoryProvider);
       if (repository is! SuggestedConversationRepository) {
         throw StateError('Suggested conversations are unavailable.');
+      }
+      if (repository is ApiConversationRepository) {
+        return await _startSuggestedStream(repository, topicId);
       }
       final response = await (repository as SuggestedConversationRepository)
           .startSuggestedFreeChat(
@@ -111,6 +134,194 @@ class StartConversationController extends Notifier<StartConversationState> {
             : StartConversationFailureReason.freeChatRequestFailed,
       );
       return null;
+    }
+  }
+
+  Future<String?> _startSuggestedStream(
+    ApiConversationRepository repository,
+    String topicId,
+  ) async {
+    await cancelSuggestedStream();
+    final Completer<String?> started = Completer<String?>();
+    _suggestedStartCompleter = started;
+    final CancelToken token = CancelToken();
+    final trace = LatencyTrace();
+    _suggestedCancelToken = token;
+    _suggestedTrace = trace;
+    _activeTurnId = null;
+    _activeAttemptId = null;
+    _suggestedTerminalSeen = false;
+    _expectedSeq = 0;
+    _nextSegmentIndex = 0;
+    final stream = SuggestedConversationStream(repository.apiClient).start(
+      topicId: topicId,
+      requestId: _pendingSuggestedRequestId!,
+      cancelToken: token,
+      trace: trace,
+    );
+    _suggestedSubscription = stream.listen(
+      (event) {
+        try {
+          _handleSuggestedEvent(event, started);
+        } on Object catch (error) {
+          token.cancel('Invalid conversation stream: $error');
+          _handleSuggestedError(started);
+        }
+      },
+      onError: (Object error, StackTrace stack) =>
+          _handleSuggestedError(started),
+      onDone: () {
+        if (!_suggestedTerminalSeen && !token.isCancelled) {
+          _handleSuggestedError(started);
+        }
+        _suggestedSubscription = null;
+        _suggestedCancelToken = null;
+        _suggestedStartCompleter = null;
+      },
+    );
+    return started.future;
+  }
+
+  void _handleSuggestedEvent(
+    Map<String, dynamic> event,
+    Completer<String?> started,
+  ) {
+    final int? seq = event['seq'] as int?;
+    final String? turnId = event['turn_id'] as String?;
+    final String? attemptId = event['attempt_id'] as String?;
+    if (seq != _expectedSeq || turnId == null || attemptId == null) {
+      throw const FormatException('Unexpected conversation event order.');
+    }
+    _expectedSeq++;
+    if (_activeTurnId == null) {
+      if (event['event'] != 'turn_started') {
+        throw const FormatException('Missing turn_started event.');
+      }
+      _activeTurnId = turnId;
+      _activeAttemptId = attemptId;
+    } else if (_activeTurnId != turnId || _activeAttemptId != attemptId) {
+      throw const FormatException('Event belongs to another attempt.');
+    }
+    switch (event['event']) {
+      case 'turn_started':
+        final String? conversationId = event['conversation_id'] as String?;
+        if (conversationId == null || started.isCompleted) {
+          throw const FormatException('Missing conversation ID.');
+        }
+        _activeSuggestedConversationId = conversationId;
+        _pendingSuggestedTopic = null;
+        _pendingSuggestedRequestId = null;
+        _refreshRecentConversations();
+        state = const StartConversationState();
+        started.complete(conversationId);
+        break;
+      case 'audio_segment':
+        final int? index = event['segment_index'] as int?;
+        if (index != _nextSegmentIndex) {
+          throw const FormatException('Out-of-order audio segment.');
+        }
+        _nextSegmentIndex++;
+        if (index == 0) _suggestedTrace?.mark('first_audio_segment');
+        final trace = _suggestedTrace;
+        _suggestedAudioQueue.add(
+          trace == null
+              ? VoiceAudioResponse.fromJson(event)
+              : trace.duringDecode(() => VoiceAudioResponse.fromJson(event)),
+        );
+        unawaited(_playSuggestedAudio());
+        break;
+      case 'audio_error':
+        _suggestedAudioQueue.clear();
+        final conversationId = _activeSuggestedConversationId;
+        if (conversationId != null) {
+          ref
+              .read(suggestedAudioFailureProvider(conversationId).notifier)
+              .setFailed();
+        }
+        break;
+      case 'turn_completed':
+        _suggestedTerminalSeen = true;
+        if (event['audio_status'] == 'failed') {
+          final conversationId = _activeSuggestedConversationId;
+          if (conversationId != null) {
+            ref
+                .read(suggestedAudioFailureProvider(conversationId).notifier)
+                .setFailed();
+          }
+        }
+        break;
+    }
+  }
+
+  void _handleSuggestedError(Completer<String?> started) {
+    _suggestedAudioQueue.clear();
+    unawaited(_stopSuggestedAudio());
+    if (!started.isCompleted) {
+      state = const StartConversationState(
+        failureReason: StartConversationFailureReason.freeChatRequestFailed,
+      );
+      started.complete(null);
+    } else {
+      final conversationId = _activeSuggestedConversationId;
+      if (conversationId != null) {
+        ref
+            .read(suggestedAudioFailureProvider(conversationId).notifier)
+            .setFailed();
+      }
+    }
+  }
+
+  Future<void> _playSuggestedAudio() async {
+    if (_playingSuggestedAudio) return;
+    _playingSuggestedAudio = true;
+    final generation = _playGeneration;
+    try {
+      while (_suggestedAudioQueue.isNotEmpty && generation == _playGeneration) {
+        final audio = _suggestedAudioQueue.removeFirst();
+        await ref.read(conversationAudioPlayerProvider).play(audio);
+      }
+    } on Object {
+      _suggestedAudioQueue.clear();
+      final conversationId = _activeSuggestedConversationId;
+      if (conversationId != null) {
+        ref
+            .read(suggestedAudioFailureProvider(conversationId).notifier)
+            .setFailed();
+      }
+    } finally {
+      _playingSuggestedAudio = false;
+      if (_suggestedAudioQueue.isNotEmpty) {
+        unawaited(_playSuggestedAudio());
+      }
+    }
+  }
+
+  Future<void> cancelSuggestedStream() async {
+    _playGeneration++;
+    _suggestedAudioQueue.clear();
+    _activeSuggestedConversationId = null;
+    final started = _suggestedStartCompleter;
+    if (started != null && !started.isCompleted) started.complete(null);
+    _suggestedCancelToken?.cancel('Conversation screen closed');
+    await _suggestedSubscription?.cancel();
+    _suggestedSubscription = null;
+    _suggestedCancelToken = null;
+    _suggestedTrace = null;
+    _suggestedStartCompleter = null;
+    await _stopSuggestedAudio();
+  }
+
+  Future<void> _stopSuggestedAudio() async {
+    try {
+      await ref.read(conversationAudioPlayerProvider).stop();
+    } on Object {
+      // 취소·오류 정리는 재생 장치 오류가 있어도 계속해요.
+    }
+  }
+
+  Future<void> cancelSuggestedStreamFor(String conversationId) async {
+    if (_activeSuggestedConversationId == conversationId) {
+      await cancelSuggestedStream();
     }
   }
 
@@ -300,4 +511,20 @@ final initialAssistantAudioProvider =
 final startConversationControllerProvider =
     NotifierProvider<StartConversationController, StartConversationState>(
       StartConversationController.new,
+    );
+
+class SuggestedAudioFailureController extends Notifier<bool> {
+  SuggestedAudioFailureController(this.conversationId);
+
+  final String conversationId;
+
+  @override
+  bool build() => false;
+
+  void setFailed() => state = true;
+}
+
+final suggestedAudioFailureProvider =
+    NotifierProvider.family<SuggestedAudioFailureController, bool, String>(
+      SuggestedAudioFailureController.new,
     );
