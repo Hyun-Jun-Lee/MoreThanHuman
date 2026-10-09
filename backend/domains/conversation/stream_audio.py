@@ -40,3 +40,41 @@ def completed_sentences(text: str, *, max_chars: int = 400) -> list[str]:
 def event_line(event: str, seq: int, turn_id: str, attempt_id: str, **fields: object) -> bytes:
     payload = {"event": event, "seq": seq, "turn_id": turn_id, "attempt_id": attempt_id, **fields}
     return (json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8")
+
+
+class SentenceBuffer:
+    """LLM delta에서 완성된 문장만 꺼내고 마지막 꼬리는 종료 때 돌려줘요."""
+
+    def __init__(self, max_chars: int = 400):
+        self.pending = ""
+        self.max_chars = max_chars
+
+    def feed(self, delta: str) -> list[str]:
+        self.pending += delta
+        ready: list[str] = []
+        while self.pending:
+            boundary = None
+            for match in re.finditer(r"(?<=[.!?。！？])\s+", self.pending):
+                candidate = self.pending[:match.start()].strip()
+                last_word = candidate.rsplit(" ", 1)[-1].lower()
+                if last_word not in {"dr.", "mr.", "mrs.", "ms.", "prof.", "st.", "vs.", "e.g.", "i.e."}:
+                    boundary = match
+                    break
+            if boundary is not None:
+                candidate = self.pending[:boundary.start()].strip()
+                ready.extend(completed_sentences(candidate, max_chars=self.max_chars))
+                self.pending = self.pending[boundary.end():]
+                continue
+            if len(self.pending) <= self.max_chars:
+                break
+            cut = self.pending.rfind(" ", 0, self.max_chars + 1)
+            if cut <= 0:
+                cut = self.max_chars
+            ready.append(self.pending[:cut].strip())
+            self.pending = self.pending[cut:].lstrip()
+        return [sentence for sentence in ready if sentence]
+
+    def finish(self) -> list[str]:
+        tail = completed_sentences(self.pending, max_chars=self.max_chars)
+        self.pending = ""
+        return tail

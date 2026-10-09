@@ -217,7 +217,7 @@ Topic Prep 화면은 전달받은 topic으로 `POST /api/search/topic-prep/`를 
 | `ready=false` | retry guidance, example topic chip, edit topic 복귀 |
 | `error` | 재시도 가능한 오류 상태 |
 
-기본 선택은 `CASUAL_CHAT`과 첫 번째 질문이에요. 사용자는 선택한 첫 질문에 대한 답변을 활성 target language로 입력하고, 앱은 `POST /api/conversations/start/free-chat/`에 `first_message`, `search_context`, `topic`, `conversation_direction`, `selected_question`을 보내 Conversation 화면으로 이동해요. 첫 답변은 2자 미만이면 클라이언트에서 막아요.
+기본 선택은 `CASUAL_CHAT`과 첫 번째 질문이에요. 사용자는 선택한 첫 질문에 대한 답변을 활성 target language로 입력하고, 앱은 `POST /api/conversations/start/free-chat/stream/`에 `first_message`, `search_context`, `topic`, `conversation_direction`, `selected_question`을 보내 Conversation 화면으로 이동해요. 첫 답변은 2자 미만이면 클라이언트에서 막아요.
 
 출처 링크는 현재 화면에 표시만 하고, 외부 브라우저 열기는 `url_launcher`를 도입하는 후속 작업에서 연결해요.
 
@@ -230,7 +230,7 @@ Topic Prep 화면은 전달받은 topic으로 `POST /api/search/topic-prep/`를 
 | preset 상황 | 선택 즉시 Start Roleplay CTA 활성화 |
 | custom 상황 | 2자 이상 입력 시 Start Roleplay CTA 활성화 |
 
-Start Roleplay를 누르면 선택 결과를 백엔드 계약에 맞는 `role_character` 문자열로 합성하고 `POST /api/conversations/start/roleplay/`를 호출해 Conversation 화면으로 이동해요. Custom 입력은 사용자의 상황이나 사용자 역할을 설명하는 값으로 보고, AI는 그 상황의 상대역을 맡도록 prompt를 합성해요. 서버는 conversation snapshot의 target language로 roleplay scenario examples를 고르고, feedback language는 필요한 설명에만 사용해요. Roleplay 시작 응답의 `message_id`는 AI 첫 인사 메시지 ID로 취급하므로 사용자 문법 피드백 polling 대상이 아니에요.
+Start Roleplay를 누르면 선택 결과를 백엔드 계약에 맞는 `role_character` 문자열로 합성하고 `POST /api/conversations/start/roleplay/stream/`를 호출해요. AI 첫 인사가 완료되면 Conversation 화면으로 이동해요. Custom 입력은 사용자의 상황이나 사용자 역할을 설명하는 값으로 보고, AI는 그 상황의 상대역을 맡도록 prompt를 합성해요. 서버는 conversation snapshot의 target language로 roleplay scenario examples를 고르고, feedback language는 필요한 설명에만 사용해요. Roleplay 첫 인사의 `assistant_message_id`는 사용자 문법 피드백 polling 대상이 아니에요.
 
 ## Conversation 흐름
 
@@ -238,19 +238,23 @@ Start Roleplay를 누르면 선택 결과를 백엔드 계약에 맞는 `role_ch
 
 Conversation 화면은 Free Chat 시작, Roleplay 시작, Home 최근 대화 진입이 합류하는 대화 화면이에요. 상단에는 명시적인 뒤로가기 버튼을 두고, navigation stack이 없을 때는 홈으로 이동해요.
 
-주간 추천 시작은 `POST /api/conversations/start/free-chat/suggested/stream/`에 주제·요청 UUID를 보내요. `turn_started`의 대화 ID로 바로 화면을 열고, NDJSON의 `audio_segment`를 증분 UTF-8 decoder와 단일 재생 큐로 순서대로 들려줘요. 첫 질문 텍스트는 서버에 먼저 저장돼 있어 메시지 조회로 표시해요. 화면 이탈·다음 발화 때 스트림과 큐를 취소하고, 음성 실패는 답변 텍스트를 유지한 채 안내해요. AI 생성 스트림·음성만 다시 듣기 버튼·연결 복구 UI는 [후속 단계](../docs/VOICE_STREAMING.md#권장-개발-순서)예요.
+모든 대화 생성 경로는 문장별 음성 NDJSON을 받아요. 주간 추천 시작은 `POST /api/conversations/start/free-chat/suggested/stream/`에 주제·요청 UUID를 보내고 `turn_started`의 대화 ID로 화면을 열어요. 다른 흐름은 AI 텍스트를 임시 표시하고 `audio_segment`를 증분 UTF-8 decoder와 단일 재생 큐로 순서대로 재생해요. 확정 사용자 발화는 남기고 미완성 AI 답변은 실패 안내와 재시도 버튼으로 바꿔요. 연결이 끊기면 상태만 조회하고 사용자가 버튼을 눌렀을 때 다시 생성해요. TTS 또는 재생 실패에는 저장된 답변의 음성 다시 듣기 버튼을 보여줘요. 화면 이탈 때 스트림과 큐를 취소해요.
 
 | 동작 | API |
 |------|-----|
 | 주간 추천 시작 | `POST /api/conversations/start/free-chat/suggested/stream/` NDJSON |
+| Free Chat 시작 | `POST /api/conversations/start/free-chat/stream/` NDJSON |
+| Roleplay 시작 | `POST /api/conversations/start/roleplay/stream/` NDJSON |
 | 기존 메시지 로드 | `GET /api/conversations/{conversation_id}/messages/?limit=40&offset=0` |
-| 텍스트 turn 전송 | `POST /api/conversations/{conversation_id}/turn/` JSON |
-| 음성 turn 전송 | `POST /api/conversations/{conversation_id}/turn/` multipart |
+| 텍스트 turn 전송 | `POST /api/conversations/{conversation_id}/turn/stream/` NDJSON |
+| 음성 turn 전송 | `POST /api/conversations/{conversation_id}/turn/stream/` multipart·NDJSON |
+| 상태 조회·수동 재시도 | `GET /api/conversations/turns/{turn_id}/`, `GET /api/conversations/turns/by-request/{request_id}/`, `POST /api/conversations/turns/{turn_id}/retry/stream/` |
+| 음성 다시 듣기 | `POST /api/conversations/messages/{assistant_message_id}/audio/stream/` NDJSON |
 | 문법 피드백 조회 | `GET /api/grammar/message/{message_id}/` |
 
-메시지는 서버의 시간순 목록을 기준으로 표시해요. 텍스트 전송 중에는 사용자 메시지를 즉시 보여주고 `TypingIndicator`를 표시한 뒤, 성공하면 AI 응답을 반영하고 canonical 메시지 목록을 다시 불러와요. 실패하면 같은 메시지를 Retry할 수 있어요. AI 응답은 서버 원문을 바꾸지 않고 화면 표시 단계에서 문장 단위 줄바꿈과 누락된 공백을 보정해 읽기 쉽게 보여줘요.
+메시지는 서버의 시간순 목록을 기준으로 표시해요. 텍스트 전송 중에는 사용자 메시지를 즉시 보여주고 AI 텍스트를 증분 표시한 뒤, 성공하면 canonical 메시지 목록을 다시 불러와요. 생성 실패 시 임시 AI 텍스트를 지우고 저장된 사용자 발화 아래 재시도 버튼을 표시해요. AI 응답은 서버 원문을 바꾸지 않고 화면 표시 단계에서 문장 단위 줄바꿈과 누락된 공백을 보정해 읽기 쉽게 보여줘요.
 
-새 채팅 composer는 기존 텍스트 전용 `/message/` 대신 `/turn/` API를 사용해요. 텍스트 입력은 JSON body의 `text`와 `include_audio_response=false`를 보내고, 음성 입력은 iOS에서 `.wav`/`audio/wav`, Android에서 `.m4a`/`audio/m4a`를 녹음한 뒤 같은 multipart `audio_file`과 `include_audio_response=false`를 보내요. 1KiB 미만 녹음은 업로드하지 않고 재녹음을 안내해요. 음성 turn 응답의 `transcript`는 사용자 말풍선으로 표시하고, `audio`가 포함되면 AI 말풍선 아래에 재생 버튼을 보여줘요. `audio_error`는 대화 전송 실패와 분리된 비차단 안내로 표시해요.
+새 채팅 composer는 `/turn/stream/` API를 사용해요. 텍스트 입력은 JSON body의 `text`를 보내고, 음성 입력은 iOS에서 `.wav`/`audio/wav`, Android에서 `.m4a`/`audio/m4a`를 녹음한 뒤 multipart `audio_file`로 보내요. 1KiB 미만 녹음은 업로드하지 않고 재녹음을 안내해요. `user_message_committed`의 전사 텍스트를 사용자 말풍선으로 표시하고, `audio_error`는 생성 실패와 분리된 비차단 안내로 표시해요.
 
 음성 입력은 `Voice input → Stop recording` 흐름으로 동작하며, 녹음 중에는 타이머와 cancel 버튼을 보여주고 텍스트 입력·전송을 잠가 한 turn에 text와 audio가 섞이지 않게 해요. cancel은 업로드 없이 녹음을 폐기하고, 권한 거부·빈 녹음·녹음 실패는 대화 전송 실패와 분리된 안내로 표시해요. 녹음 임시 파일은 성공적으로 읽은 뒤와 cancel/dispose 시 best-effort로 정리해요. assistant audio 재생은 메시지 단위 loading/playing/error 상태를 가지며, 중복 재생 탭을 막고 playback failure를 send retry와 분리해요.
 

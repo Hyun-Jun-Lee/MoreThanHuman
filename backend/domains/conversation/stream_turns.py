@@ -42,10 +42,16 @@ class StreamTurnStore:
         if existing is not None:
             self._expire(existing)
             raise StreamTurnConflict(self._conflict_code(existing))
+        reused_attempt = self.db.query(StreamAttemptModel).filter_by(
+            user_id=user_id, request_id=request_id,
+        ).one_or_none()
+        if reused_attempt is not None:
+            raise StreamTurnConflict("IDEMPOTENCY_KEY_REUSED")
         now = datetime.utcnow()
         turn = StreamTurnModel(
             id=str(uuid4()), user_id=user_id, request_id=request_id, kind=kind,
             input_json=json.dumps(input_data, ensure_ascii=False),
+            conversation_id=input_data.get("conversation_id"),
             status="pending", audio_status="pending", attempt_id=str(uuid4()),
             deadline_at=now + TURN_DEADLINE, created_at=now, updated_at=now,
         )
@@ -60,13 +66,21 @@ class StreamTurnStore:
             self.db.rollback()
             existing = self.db.query(StreamTurnModel).filter_by(user_id=user_id, request_id=request_id).one_or_none()
             if existing is None:
+                if input_data.get("conversation_id"):
+                    raise StreamTurnConflict("PREVIOUS_TURN_UNRESOLVED") from None
                 raise StreamTurnConflict("IDEMPOTENCY_KEY_REUSED") from None
             self._expire(existing)
             raise StreamTurnConflict(self._conflict_code(existing)) from None
         return turn
 
-    def complete_text(self, turn_id: str, *, conversation_id: str, assistant_message_id: str) -> None:
-        turn = self.db.query(StreamTurnModel).filter_by(id=turn_id, status="pending").one()
+    def complete_text(
+        self, turn_id: str, *, conversation_id: str, assistant_message_id: str,
+        attempt_id: str | None = None,
+    ) -> None:
+        query = self.db.query(StreamTurnModel).filter_by(id=turn_id, status="pending")
+        if attempt_id is not None:
+            query = query.filter_by(attempt_id=attempt_id)
+        turn = query.one()
         turn.conversation_id = conversation_id
         turn.assistant_message_id = assistant_message_id
         turn.status = "completed"
@@ -75,27 +89,22 @@ class StreamTurnStore:
         self._finish_attempt(turn, "completed", None)
         self.db.commit()
 
-    def link_user_message(self, turn_id: str, *, conversation_id: str, user_message_id: str) -> None:
-        """확정 발화만 연결해 이후 생성 실패·재시도에도 같은 메시지를 가리켜요."""
-        turn = self.db.query(StreamTurnModel).filter_by(id=turn_id, status="pending").one()
-        if turn.user_message_id is not None and turn.user_message_id != user_message_id:
-            raise StreamTurnConflict("USER_MESSAGE_ALREADY_COMMITTED")
-        turn.conversation_id = conversation_id
-        turn.user_message_id = user_message_id
-        turn.updated_at = datetime.utcnow()
-        self.db.commit()
-
-    def complete_audio(self, turn_id: str, *, error_code: str | None = None) -> None:
+    def complete_audio(
+        self, turn_id: str, *, error_code: str | None = None,
+        attempt_id: str | None = None, audio_attempt_id: str | None = None,
+    ) -> None:
         turn = self.db.query(StreamTurnModel).filter_by(id=turn_id).one()
-        if turn.audio_status == "pending":
+        if (turn.audio_status == "pending"
+                and (attempt_id is None or turn.attempt_id == attempt_id)
+                and (audio_attempt_id is None or turn.audio_attempt_id == audio_attempt_id)):
             turn.audio_status = "failed" if error_code else "completed"
             turn.error_code = error_code
             turn.updated_at = datetime.utcnow()
             self.db.commit()
 
-    def fail(self, turn_id: str, code: str) -> None:
+    def fail(self, turn_id: str, code: str, *, attempt_id: str | None = None) -> None:
         turn = self.db.query(StreamTurnModel).filter_by(id=turn_id).one()
-        if turn.status == "pending":
+        if turn.status == "pending" and (attempt_id is None or turn.attempt_id == attempt_id):
             turn.status = "failed"
             turn.audio_status = "failed"
             turn.error_code = code
@@ -110,11 +119,17 @@ class StreamTurnStore:
             raise LookupError(turn_id)
         if turn.status != "failed":
             raise StreamTurnConflict(self._conflict_code(turn))
+        reused_turn = self.db.query(StreamTurnModel).filter_by(
+            user_id=user_id, request_id=request_id,
+        ).one_or_none()
+        if reused_turn is not None:
+            raise StreamTurnConflict("IDEMPOTENCY_KEY_REUSED")
         now = datetime.utcnow()
         attempt_id = str(uuid4())
         changed = self.db.query(StreamTurnModel).filter_by(id=turn_id, user_id=user_id, status="failed").update({
             "status": "pending", "audio_status": "pending", "error_code": None,
-            "attempt_id": attempt_id, "deadline_at": now + TURN_DEADLINE, "updated_at": now,
+            "attempt_id": attempt_id, "audio_attempt_id": None,
+            "deadline_at": now + TURN_DEADLINE, "updated_at": now,
         })
         if changed != 1:
             self.db.rollback()
@@ -128,6 +143,27 @@ class StreamTurnStore:
         except IntegrityError:
             self.db.rollback()
             raise StreamTurnConflict("TURN_IN_PROGRESS") from None
+        return self.get(user_id, turn_id)
+
+    def retry_audio(self, *, user_id: str, turn_id: str) -> StreamTurnModel:
+        turn = self.get(user_id, turn_id)
+        if turn is None:
+            raise LookupError(turn_id)
+        if turn.status != "completed" or turn.audio_status not in {"failed", "completed"}:
+            raise StreamTurnConflict("AUDIO_RETRY_NOT_AVAILABLE")
+        now = datetime.utcnow()
+        audio_attempt_id = str(uuid4())
+        changed = self.db.query(StreamTurnModel).filter_by(
+            id=turn_id, user_id=user_id, status="completed", audio_status=turn.audio_status
+        ).update({
+            "audio_status": "pending", "error_code": None,
+            "audio_attempt_id": audio_attempt_id,
+            "deadline_at": now + TURN_DEADLINE, "updated_at": now,
+        })
+        if changed != 1:
+            self.db.rollback()
+            raise StreamTurnConflict("AUDIO_RETRY_IN_PROGRESS")
+        self.db.commit()
         return self.get(user_id, turn_id)
 
     def _expire(self, turn: StreamTurnModel) -> None:

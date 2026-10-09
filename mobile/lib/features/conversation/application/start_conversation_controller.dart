@@ -5,6 +5,7 @@ import 'dart:math';
 import 'package:curitalk/features/conversation/application/conversation_audio_services.dart';
 import 'package:curitalk/core/diagnostics/latency_trace.dart';
 import 'package:curitalk/features/conversation/data/api_conversation_repository.dart';
+import 'package:curitalk/features/conversation/data/conversation_stream_api.dart';
 import 'package:curitalk/features/conversation/data/suggested_conversation_stream.dart';
 import 'package:curitalk/features/conversation/domain/conversation_models.dart';
 import 'package:curitalk/features/conversation/domain/conversation_repository.dart';
@@ -69,6 +70,7 @@ class StartConversationState {
 class StartConversationController extends Notifier<StartConversationState> {
   String? _pendingSuggestedTopic;
   String? _pendingSuggestedRequestId;
+  bool _suggestedRequestSent = false;
   String? _activeSuggestedConversationId;
   String? _activeTurnId;
   String? _activeAttemptId;
@@ -83,6 +85,10 @@ class StartConversationController extends Notifier<StartConversationState> {
       Queue<VoiceAudioResponse>();
   bool _playingSuggestedAudio = false;
   int _playGeneration = 0;
+  String? _failedGeneratedStartTurnId;
+  String? _failedGeneratedStartFingerprint;
+  String? _pendingGeneratedStartRequestId;
+  String? _pendingGeneratedStartFingerprint;
 
   @override
   StartConversationState build() {
@@ -102,6 +108,47 @@ class StartConversationController extends Notifier<StartConversationState> {
         throw StateError('Suggested conversations are unavailable.');
       }
       if (repository is ApiConversationRepository) {
+        if (_suggestedRequestSent && _pendingSuggestedRequestId != null) {
+          final api = ConversationStreamApi(repository.apiClient);
+          try {
+            final status = await api.statusForRequest(
+              _pendingSuggestedRequestId!,
+            );
+            if (status.status == 'pending') {
+              state = const StartConversationState(
+                failureReason:
+                    StartConversationFailureReason.freeChatRequestFailed,
+              );
+              return null;
+            }
+            if (status.status == 'completed' && status.conversationId != null) {
+              _pendingSuggestedTopic = null;
+              _pendingSuggestedRequestId = null;
+              _suggestedRequestSent = false;
+              _refreshRecentConversations();
+              state = const StartConversationState();
+              if (status.audioStatus == 'failed') {
+                ref
+                    .read(
+                      suggestedAudioFailureProvider(
+                        status.conversationId!,
+                      ).notifier,
+                    )
+                    .setFailed();
+              }
+              return status.conversationId;
+            }
+            if (status.status == 'failed') {
+              return await _startSuggestedStream(
+                repository,
+                topicId,
+                retryTurnId: status.turnId,
+              );
+            }
+          } on ApiException catch (error) {
+            if (error.statusCode != 404) rethrow;
+          }
+        }
         return await _startSuggestedStream(repository, topicId);
       }
       final response = await (repository as SuggestedConversationRepository)
@@ -124,6 +171,7 @@ class StartConversationController extends Notifier<StartConversationState> {
       }
       _pendingSuggestedTopic = null;
       _pendingSuggestedRequestId = null;
+      _suggestedRequestSent = false;
       _refreshRecentConversations();
       state = const StartConversationState();
       return response.conversationId;
@@ -139,8 +187,9 @@ class StartConversationController extends Notifier<StartConversationState> {
 
   Future<String?> _startSuggestedStream(
     ApiConversationRepository repository,
-    String topicId,
-  ) async {
+    String topicId, {
+    String? retryTurnId,
+  }) async {
     await cancelSuggestedStream();
     final Completer<String?> started = Completer<String?>();
     _suggestedStartCompleter = started;
@@ -153,12 +202,20 @@ class StartConversationController extends Notifier<StartConversationState> {
     _suggestedTerminalSeen = false;
     _expectedSeq = 0;
     _nextSegmentIndex = 0;
-    final stream = SuggestedConversationStream(repository.apiClient).start(
-      topicId: topicId,
-      requestId: _pendingSuggestedRequestId!,
-      cancelToken: token,
-      trace: trace,
-    );
+    final stream = retryTurnId == null
+        ? SuggestedConversationStream(repository.apiClient).start(
+            topicId: topicId,
+            requestId: _pendingSuggestedRequestId!,
+            cancelToken: token,
+            trace: trace,
+          )
+        : ConversationStreamApi(repository.apiClient).events(
+            path: 'conversations/turns/$retryTurnId/retry/stream/',
+            cancelToken: token,
+            idempotencyKey: newConversationRequestId(),
+            trace: trace,
+          );
+    _suggestedRequestSent = true;
     _suggestedSubscription = stream.listen(
       (event) {
         try {
@@ -211,6 +268,7 @@ class StartConversationController extends Notifier<StartConversationState> {
         _activeSuggestedConversationId = conversationId;
         _pendingSuggestedTopic = null;
         _pendingSuggestedRequestId = null;
+        _suggestedRequestSent = false;
         _refreshRecentConversations();
         state = const StartConversationState();
         started.complete(conversationId);
@@ -349,6 +407,23 @@ class StartConversationController extends Notifier<StartConversationState> {
       final ConversationRepository repository = ref.read(
         conversationRepositoryProvider,
       );
+      if (repository is ApiConversationRepository) {
+        return await _startGeneratedStream(
+          repository,
+          path: 'conversations/start/free-chat/stream/',
+          data: <String, Object?>{
+            'first_message': firstMessage,
+            'search_context': searchContext,
+            'topic': topic,
+            'conversation_direction': conversationDirection,
+            'selected_question': selectedQuestion,
+            'custom_focus': customFocus,
+          },
+          fingerprint:
+              'free:$firstMessage:$topic:$selectedQuestion:$customFocus',
+          type: ConversationType.freeChat,
+        );
+      }
       final ConversationResponse response = customFocus == null
           ? await repository.startFreeChat(
               firstMessage: firstMessage,
@@ -395,6 +470,28 @@ class StartConversationController extends Notifier<StartConversationState> {
       final ConversationRepository repository = ref.read(
         conversationRepositoryProvider,
       );
+      if (repository is ApiConversationRepository) {
+        return await _startGeneratedStream(
+          repository,
+          path: 'conversations/start/free-chat/stream/',
+          data: FormData.fromMap(<String, Object?>{
+            'audio_file': MultipartFile.fromBytes(
+              audioFile.bytes,
+              filename: audioFile.filename,
+              contentType: DioMediaType.parse(audioFile.contentType),
+            ),
+            'search_context': searchContext,
+            'topic': topic,
+            'conversation_direction': conversationDirection,
+            'selected_question': selectedQuestion,
+            'custom_focus': customFocus,
+          }),
+          fingerprint:
+              'free-audio:${audioFile.filename}:$topic:$selectedQuestion:$customFocus',
+          type: ConversationType.freeChat,
+          trace: audioFile.latencyTrace,
+        );
+      }
       final ConversationResponse response = customFocus == null
           ? await repository.startFreeChatWithAudio(
               audioFile: audioFile,
@@ -434,13 +531,25 @@ class StartConversationController extends Notifier<StartConversationState> {
   }) async {
     state = const StartConversationState(isStarting: true);
     try {
-      final ConversationResponse response = await ref
-          .read(conversationRepositoryProvider)
-          .startRoleplay(
-            roleCharacter: roleCharacter,
-            searchContext: searchContext,
-            includeAudioResponse: true,
-          );
+      final repository = ref.read(conversationRepositoryProvider);
+      if (repository is ApiConversationRepository) {
+        return await _startGeneratedStream(
+          repository,
+          path: 'conversations/start/roleplay/stream/',
+          data: <String, Object?>{
+            'role_character': roleCharacter,
+            'search_context': searchContext,
+          },
+          fingerprint: 'roleplay:$roleCharacter:$searchContext',
+          type: ConversationType.rolePlaying,
+          roleCharacter: roleCharacter,
+        );
+      }
+      final ConversationResponse response = await repository.startRoleplay(
+        roleCharacter: roleCharacter,
+        searchContext: searchContext,
+        includeAudioResponse: true,
+      );
       _storeInitialAssistantAudio(response);
       _refreshRecentConversations();
       state = const StartConversationState();
@@ -452,6 +561,217 @@ class StartConversationController extends Notifier<StartConversationState> {
             : StartConversationFailureReason.roleplayRequestFailed,
       );
       return null;
+    }
+  }
+
+  Future<ConversationResponse?> _startGeneratedStream(
+    ApiConversationRepository repository, {
+    required String path,
+    required Object data,
+    required String fingerprint,
+    required ConversationType type,
+    String? roleCharacter,
+    LatencyTrace? trace,
+  }) async {
+    await cancelSuggestedStream();
+    final api = ConversationStreamApi(repository.apiClient);
+    if (_pendingGeneratedStartFingerprint == fingerprint &&
+        _pendingGeneratedStartRequestId != null) {
+      try {
+        final status = await api.statusForRequest(
+          _pendingGeneratedStartRequestId!,
+        );
+        if (status.status == 'pending') {
+          state = StartConversationState(
+            failureReason: type == ConversationType.rolePlaying
+                ? StartConversationFailureReason.roleplayRequestFailed
+                : StartConversationFailureReason.freeChatRequestFailed,
+          );
+          return null;
+        }
+        if (status.status == 'completed' && status.conversationId != null) {
+          _pendingGeneratedStartRequestId = null;
+          _pendingGeneratedStartFingerprint = null;
+          _refreshRecentConversations();
+          state = const StartConversationState();
+          return ConversationResponse(
+            conversationId: status.conversationId!,
+            messageId: status.userMessageId ?? status.assistantMessageId ?? '',
+            conversationType: type,
+            roleCharacter: roleCharacter,
+            response: '',
+          );
+        }
+        if (status.status == 'failed') {
+          _failedGeneratedStartTurnId = status.turnId;
+          _failedGeneratedStartFingerprint = fingerprint;
+        }
+        _pendingGeneratedStartRequestId = null;
+        _pendingGeneratedStartFingerprint = null;
+      } on ApiException catch (error) {
+        if (error.statusCode != 404) {
+          state = StartConversationState(
+            failureReason: type == ConversationType.rolePlaying
+                ? StartConversationFailureReason.roleplayRequestFailed
+                : StartConversationFailureReason.freeChatRequestFailed,
+          );
+          return null;
+        }
+        _pendingGeneratedStartRequestId = null;
+        _pendingGeneratedStartFingerprint = null;
+      }
+    }
+    final requestId = newConversationRequestId();
+    _pendingGeneratedStartRequestId = requestId;
+    _pendingGeneratedStartFingerprint = fingerprint;
+    final token = CancelToken();
+    _suggestedCancelToken = token;
+    _suggestedTrace = trace;
+    final retryId = _failedGeneratedStartFingerprint == fingerprint
+        ? _failedGeneratedStartTurnId
+        : null;
+    String? conversationId;
+    String? userMessageId;
+    String? assistantId;
+    String? turnId;
+    String? attemptId;
+    String responseText = '';
+    var expectedSeq = 0;
+    var nextSegment = 0;
+    var terminal = false;
+    try {
+      await for (final event in api.events(
+        path: retryId == null
+            ? path
+            : 'conversations/turns/$retryId/retry/stream/',
+        data: retryId == null ? data : null,
+        idempotencyKey: requestId,
+        cancelToken: token,
+        trace: trace ?? LatencyTrace(),
+      )) {
+        if (token.isCancelled) break;
+        final currentTurn = event['turn_id'];
+        final currentAttempt = event['attempt_id'];
+        if (event['seq'] != expectedSeq++ ||
+            currentTurn is! String ||
+            currentAttempt is! String ||
+            (turnId != null && turnId != currentTurn) ||
+            (attemptId != null && attemptId != currentAttempt)) {
+          throw const FormatException('Invalid conversation start event.');
+        }
+        turnId = currentTurn;
+        attemptId = currentAttempt;
+        switch (event['event']) {
+          case 'turn_started':
+            conversationId = event['conversation_id'] as String?;
+            _activeSuggestedConversationId = conversationId;
+            break;
+          case 'user_message_committed':
+            conversationId = event['conversation_id'] as String?;
+            userMessageId = event['user_message_id'] as String?;
+            _activeSuggestedConversationId = conversationId;
+            break;
+          case 'text_delta':
+            responseText += event['delta'] as String;
+            break;
+          case 'audio_segment':
+            if (event['segment_index'] != nextSegment++) {
+              throw const FormatException('Invalid start audio segment order.');
+            }
+            _suggestedAudioQueue.add(VoiceAudioResponse.fromJson(event));
+            unawaited(_playSuggestedAudio());
+            break;
+          case 'audio_error':
+            _suggestedAudioQueue.clear();
+            break;
+          case 'turn_completed':
+            terminal = true;
+            conversationId = event['conversation_id'] as String?;
+            assistantId = event['assistant_message_id'] as String?;
+            responseText = event['text'] as String? ?? responseText;
+            _activeSuggestedConversationId = conversationId;
+            if (event['audio_status'] == 'failed' && conversationId != null) {
+              ref
+                  .read(suggestedAudioFailureProvider(conversationId).notifier)
+                  .setFailed();
+            }
+            break;
+          case 'turn_error':
+            terminal = true;
+            _suggestedAudioQueue.clear();
+            conversationId =
+                event['conversation_id'] as String? ?? conversationId;
+            userMessageId =
+                event['user_message_id'] as String? ?? userMessageId;
+            _failedGeneratedStartTurnId = turnId;
+            _failedGeneratedStartFingerprint = fingerprint;
+            break;
+        }
+      }
+      if (!terminal) {
+        throw const FormatException(
+          'Start stream ended without terminal event.',
+        );
+      }
+      if (conversationId == null) {
+        state = StartConversationState(
+          failureReason: type == ConversationType.rolePlaying
+              ? StartConversationFailureReason.roleplayRequestFailed
+              : StartConversationFailureReason.freeChatRequestFailed,
+        );
+        return null;
+      }
+      _failedGeneratedStartTurnId = null;
+      _failedGeneratedStartFingerprint = null;
+      _pendingGeneratedStartRequestId = null;
+      _pendingGeneratedStartFingerprint = null;
+      _refreshRecentConversations();
+      state = const StartConversationState();
+      return ConversationResponse(
+        conversationId: conversationId,
+        messageId: userMessageId ?? assistantId ?? '',
+        conversationType: type,
+        roleCharacter: roleCharacter,
+        response: responseText,
+      );
+    } on Object {
+      StreamTurnStatus? status;
+      try {
+        status = turnId == null
+            ? await api.statusForRequest(requestId)
+            : await api.status(turnId);
+      } on ApiException catch (error) {
+        // 요청이 서버에 도달하지 않았다면 기존 시작 화면의 재시도를 사용해요.
+        if (error.statusCode == 404) {
+          _pendingGeneratedStartRequestId = null;
+          _pendingGeneratedStartFingerprint = null;
+        }
+      }
+      if (status != null && status.status == 'failed') {
+        _pendingGeneratedStartRequestId = null;
+        _pendingGeneratedStartFingerprint = null;
+        _failedGeneratedStartTurnId = status.turnId;
+        _failedGeneratedStartFingerprint = fingerprint;
+        if (status.conversationId != null) {
+          state = const StartConversationState();
+          _refreshRecentConversations();
+          return ConversationResponse(
+            conversationId: status.conversationId!,
+            messageId: status.userMessageId ?? '',
+            conversationType: type,
+            roleCharacter: roleCharacter,
+            response: '',
+          );
+        }
+      }
+      state = StartConversationState(
+        failureReason: type == ConversationType.rolePlaying
+            ? StartConversationFailureReason.roleplayRequestFailed
+            : StartConversationFailureReason.freeChatRequestFailed,
+      );
+      return null;
+    } finally {
+      if (identical(_suggestedCancelToken, token)) _suggestedCancelToken = null;
     }
   }
 

@@ -3,7 +3,7 @@ Conversation 도메인 SQLAlchemy 모델 정의
 """
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, Date, DateTime, Enum as SQLEnum, ForeignKey, Index, Integer, String, Text, UniqueConstraint, false
+from sqlalchemy import Boolean, Column, Date, DateTime, Enum as SQLEnum, ForeignKey, Index, Integer, String, Text, UniqueConstraint, false, text
 from sqlalchemy.orm import relationship
 
 from database import Base
@@ -117,7 +117,12 @@ class StreamTurnModel(Base):
     """스트림 요청의 영속 상태. 사용자와 요청 키가 논리적 turn을 식별해요."""
 
     __tablename__ = "stream_turns"
-    __table_args__ = (UniqueConstraint("user_id", "request_id", name="uq_stream_turn_user_request"),)
+    __table_args__ = (
+        UniqueConstraint("user_id", "request_id", name="uq_stream_turn_user_request"),
+        Index("uq_stream_turn_unresolved_conversation", "user_id", "conversation_id", unique=True,
+              sqlite_where=text("status IN ('pending','failed') AND conversation_id IS NOT NULL"),
+              postgresql_where=text("status IN ('pending','failed') AND conversation_id IS NOT NULL")),
+    )
 
     id = Column(String(36), primary_key=True)
     user_id = Column(String(36), ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -129,6 +134,7 @@ class StreamTurnModel(Base):
     assistant_message_id = Column(String(36), ForeignKey("messages.id", ondelete="SET NULL"), nullable=True)
     status = Column(String(16), nullable=False, default="pending")
     audio_status = Column(String(16), nullable=False, default="pending")
+    audio_attempt_id = Column(String(36), nullable=True)
     error_code = Column(String(64), nullable=True)
     attempt_id = Column(String(36), nullable=False)
     deadline_at = Column(DateTime, nullable=False)

@@ -47,6 +47,11 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
       unawaited(_recorder.cancel());
     }
     unawaited(_startController.cancelSuggestedStreamFor(widget.conversationId));
+    unawaited(
+      ref
+          .read(conversationControllerProvider(widget.conversationId).notifier)
+          .cancelActiveStream(),
+    );
     _composerController.dispose();
     super.dispose();
   }
@@ -81,6 +86,9 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
           enabled:
               conversation.hasValue &&
               conversation.value?.isLoadingOlder != true &&
+              conversation.value?.failedTurnId == null &&
+              conversation.value?.pendingTurnId == null &&
+              conversation.value?.pendingRequestId == null &&
               !turnLimitReached,
           isSending: isSending,
           isRecording: _voiceInput.phase == _VoiceInputPhase.recording,
@@ -438,6 +446,27 @@ class _ConversationMessageListState
                   }
                 },
         ),
+      if (state.pendingTurnId != null ||
+          state.pendingRequestId != null) ...<Widget>[
+        AppColorBlockCard(
+          color: AppPalette.blockCream,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              const Text('답변 상태를 확인하고 있어요.', style: AppTypography.bodySm),
+              TextButton(
+                onPressed: () => ref
+                    .read(
+                      conversationControllerProvider(conversationId).notifier,
+                    )
+                    .refreshTurnStatus(),
+                child: const Text('상태 확인'),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+      ],
       if (widget.turnLimitReached &&
           state.failureReason !=
               ConversationSendFailureReason.turnLimitReached &&
@@ -466,9 +495,28 @@ class _ConversationMessageListState
           widget.suggestedAudioFailed) ...<Widget>[
         AppColorBlockCard(
           color: AppPalette.blockCream,
-          child: Text(
-            AppCopy.of(context).failureMessage('assistantAudioUnavailable'),
-            style: AppTypography.bodySm,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                AppCopy.of(context).failureMessage('assistantAudioUnavailable'),
+                style: AppTypography.bodySm,
+              ),
+              if (state.audioRetryMessageId != null)
+                OutlinedButton.icon(
+                  onPressed: state.isSending
+                      ? null
+                      : () => ref
+                            .read(
+                              conversationControllerProvider(
+                                conversationId,
+                              ).notifier,
+                            )
+                            .retryAssistantAudio(),
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('음성 다시 듣기'),
+                ),
+            ],
           ),
         ),
         const SizedBox(height: AppSpacing.md),

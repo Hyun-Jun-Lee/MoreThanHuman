@@ -3,6 +3,7 @@ Conversation Service Layer
 비즈니스 로직 및 도메인 규칙
 """
 import logging
+from collections.abc import AsyncIterator
 from uuid import uuid4
 
 import httpx
@@ -369,6 +370,7 @@ class ConversationService:
         try:
             # 1. 대화 조회
             conversation = self.repository.find_by_id(conversation_id, user_id)
+            self.repository.assert_no_unresolved_turn(conversation.id, user_id)
             language_context = conversation.language
 
             # 2. 사용자 메시지 저장
@@ -645,6 +647,20 @@ class ConversationService:
                 if isinstance(value, int):
                     timing[key] = value
         return response.content
+
+    def stream_response(
+        self, system_prompt: str, message_history: list[dict], user_input: str
+    ) -> AsyncIterator[str]:
+        provider = LLMProviderFactory.create_provider(http_client=self.http_client)
+        messages = [
+            LLMMessage(role="system", content=system_prompt),
+            *[LLMMessage(role=item["role"], content=item["content"]) for item in message_history],
+            LLMMessage(role="user", content=user_input),
+        ]
+        return provider.chat_completion_stream(LLMRequest(
+            messages=messages, model=get_model_for_provider(),
+            max_tokens=settings.max_tokens, temperature=settings.temperature,
+        ))
 
     # Helper 함수
     def build_system_prompt(
