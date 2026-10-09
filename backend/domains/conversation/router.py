@@ -11,16 +11,17 @@ import logging
 from uuid import UUID
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from config import get_settings
-from database import get_db
+from database import SessionLocal, get_db
 from domains.auth.dependencies import get_current_user, get_current_user_from_token_param
 from domains.auth.models import ProfileModel
 from domains.conversation.enums import ConversationType
+from domains.conversation.models import ConversationModel
 from domains.conversation.repository import ConversationRepository
 from domains.conversation.repository import ConversationLocked, ConversationSlotsFull, ConversationTurnsFull, SuggestedStartInProgress
 from domains.conversation.schemas import (
@@ -42,9 +43,12 @@ from domains.conversation.schemas import (
     UpdateTitleRequest,
 )
 from domains.conversation.service import ConversationService
+from domains.conversation.stream_audio import completed_sentences, event_line
+from domains.conversation.stream_turns import StreamTurnConflict, StreamTurnStore, turn_status
 from domains.voice.schemas import VoiceAudioError, VoiceAudioResponse, VoiceInputMode
 from domains.voice.service import VoiceService
 from shared.language import ensure_language_context
+from shared.latency import current_trace_id
 from shared.exceptions import (
     AppException,
     ExternalAPIException,
@@ -406,6 +410,140 @@ async def start_suggested_free_chat(
         raise HTTPException(status_code=502, detail=error.message)
     except AppException as error:
         raise HTTPException(status_code=400, detail=error.message)
+
+
+@router.post(
+    "/start/free-chat/suggested/stream/",
+    response_class=StreamingResponse,
+    responses={
+        200: {"content": {"application/x-ndjson": {"schema": {"type": "string"}}}}
+    },
+)
+async def start_suggested_free_chat_stream(
+    body: StartSuggestedFreeChatRequest,
+    idempotency_key: UUID = Header(alias="Idempotency-Key"),
+    current_user: ProfileModel = Depends(get_current_user),
+    service: ConversationService = Depends(get_conversation_service),
+    voice_service: VoiceService = Depends(get_voice_service),
+):
+    """저장된 첫 질문을 문장별 완성 오디오와 함께 전송해요."""
+    if idempotency_key != body.start_request_id:
+        raise HTTPException(status_code=400, detail="Idempotency-Key와 start_request_id가 달라요")
+    trace_id = current_trace_id()
+    user_id = current_user.id
+    with SessionLocal() as db:
+        store = StreamTurnStore(db)
+        try:
+            turn = store.reserve(
+                user_id=user_id, request_id=str(idempotency_key), kind="suggested_start",
+                input_data={"topic_id": str(body.topic_id), "start_request_id": str(body.start_request_id)},
+            )
+        except StreamTurnConflict as error:
+            raise _access_conflict(error.code, "요청 상태를 조회한 뒤 다시 시도해 주세요")
+        turn_id, attempt_id = turn.id, turn.attempt_id
+    try:
+        response = await service.start_suggested_free_chat(
+            str(body.topic_id), str(body.start_request_id), user_id,
+            ensure_language_context(current_user.language),
+        )
+        with SessionLocal() as db:
+            StreamTurnStore(db).complete_text(
+                turn_id, conversation_id=str(response.conversation_id),
+                assistant_message_id=str(response.assistant_message_id),
+            )
+    except Exception as error:
+        with SessionLocal() as db:
+            StreamTurnStore(db).fail(turn_id, "START_FAILED")
+        if isinstance(error, ConversationSlotsFull):
+            raise _access_conflict("CONVERSATION_SLOTS_FULL", error.message)
+        if isinstance(error, SuggestedStartInProgress):
+            raise _access_conflict("START_IN_PROGRESS", error.message)
+        if isinstance(error, NotFoundException):
+            raise HTTPException(status_code=404, detail=error.message)
+        if isinstance(error, AppException):
+            raise HTTPException(status_code=400, detail=error.message)
+        raise
+
+    service.repository.db.close()
+
+    async def events():
+        seq = 0
+        audio_done = False
+        audio_status = "completed"
+        try:
+            yield event_line(
+                "turn_started", seq, turn_id, attempt_id,
+                trace_id=trace_id,
+                conversation_id=str(response.conversation_id),
+            )
+            seq += 1
+            yield event_line("text_delta", seq, turn_id, attempt_id, delta=response.response)
+            seq += 1
+            sentences = completed_sentences(response.response)
+            if not sentences:
+                raise ValueError("Saved first question is empty")
+            for segment_index, sentence in enumerate(sentences):
+                audio = await voice_service.synthesize_response(sentence)
+                yield event_line(
+                    "audio_segment", seq, turn_id, attempt_id,
+                    segment_index=segment_index, text=sentence,
+                    content_type=audio.content_type, format=audio.format, base64=audio.base64,
+                )
+                seq += 1
+            with SessionLocal() as db:
+                StreamTurnStore(db).complete_audio(turn_id)
+            audio_done = True
+        except Exception:
+            logger.exception("Suggested first-question audio streaming failed", extra={"turn_id": turn_id})
+            audio_status = "failed"
+            with SessionLocal() as db:
+                StreamTurnStore(db).complete_audio(turn_id, error_code="AUDIO_FAILED")
+            audio_done = True
+            yield event_line("audio_error", seq, turn_id, attempt_id, code="AUDIO_FAILED")
+            seq += 1
+        finally:
+            if not audio_done:
+                with SessionLocal() as db:
+                    StreamTurnStore(db).complete_audio(turn_id, error_code="STREAM_DISCONNECTED")
+        if audio_done:
+            yield event_line(
+                "turn_completed", seq, turn_id, attempt_id,
+                conversation_id=str(response.conversation_id),
+                assistant_message_id=str(response.assistant_message_id),
+                text=response.response,
+                audio_status=audio_status,
+            )
+
+    return StreamingResponse(
+        events(), media_type="application/x-ndjson; charset=utf-8",
+        headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},
+    )
+
+
+@router.get("/turns/{turn_id}/", response_model=SuccessResponse[dict])
+async def get_stream_turn(
+    turn_id: UUID,
+    current_user: ProfileModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    turn = StreamTurnStore(db).get(current_user.id, str(turn_id))
+    if turn is None:
+        raise HTTPException(status_code=404, detail="turn을 찾을 수 없어요")
+    return SuccessResponse(data=turn_status(turn))
+
+
+@router.get("/{conversation_id}/turns/", response_model=SuccessResponse[list[dict]])
+async def list_stream_turns(
+    conversation_id: UUID,
+    current_user: ProfileModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    conversation = db.query(ConversationModel).filter_by(id=str(conversation_id), user_id=current_user.id).one_or_none()
+    if conversation is None:
+        raise HTTPException(status_code=404, detail="대화를 찾을 수 없어요")
+    return SuccessResponse(data=[
+        turn_status(turn) for turn in StreamTurnStore(db).unresolved(current_user.id, str(conversation_id))
+    ])
 
 
 @router.post(

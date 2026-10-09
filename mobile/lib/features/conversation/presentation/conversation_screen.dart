@@ -7,6 +7,7 @@ import 'package:curitalk/core/copy/copy.dart';
 import 'package:curitalk/core/widgets/widgets.dart';
 import 'package:curitalk/features/conversation/application/conversation_audio_services.dart';
 import 'package:curitalk/features/conversation/application/conversation_controller.dart';
+import 'package:curitalk/features/conversation/application/start_conversation_controller.dart';
 import 'package:curitalk/features/conversation/data/conversation_access_repository.dart';
 import 'package:curitalk/features/conversation/domain/conversation_models.dart';
 import 'package:curitalk/features/conversation/domain/conversation_repository.dart';
@@ -27,6 +28,7 @@ class ConversationScreen extends ConsumerStatefulWidget {
 class _ConversationScreenState extends ConsumerState<ConversationScreen> {
   late final TextEditingController _composerController;
   late final ConversationAudioRecorder _recorder;
+  late final StartConversationController _startController;
   Timer? _recordingTimer;
   _VoiceInputState _voiceInput = const _VoiceInputState.idle();
 
@@ -35,6 +37,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
     super.initState();
     _composerController = TextEditingController();
     _recorder = ref.read(conversationAudioRecorderProvider);
+    _startController = ref.read(startConversationControllerProvider.notifier);
   }
 
   @override
@@ -43,6 +46,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
     if (_voiceInput.isRecordingActive) {
       unawaited(_recorder.cancel());
     }
+    unawaited(_startController.cancelSuggestedStreamFor(widget.conversationId));
     _composerController.dispose();
     super.dispose();
   }
@@ -54,6 +58,9 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
     );
     final AppCopy copy = AppCopy.of(context);
     final bool isSending = conversation.value?.isSending == true;
+    final bool suggestedAudioFailed = ref.watch(
+      suggestedAudioFailureProvider(widget.conversationId),
+    );
     final access = ref
         .watch(conversationTurnAccessProvider(widget.conversationId))
         .value;
@@ -108,6 +115,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
           canLoadOlder: !_voiceInput.isRecordingActive && !_voiceInput.isBusy,
           turnLimitReached: turnLimitReached,
           locked: access?.locked == true,
+          suggestedAudioFailed: suggestedAudioFailed,
         ),
       ),
     );
@@ -115,11 +123,13 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
 
   void _sendMessage(String message) {
     _composerController.clear();
-    unawaited(
-      ref
-          .read(conversationControllerProvider(widget.conversationId).notifier)
-          .send(message),
+    final controller = ref.read(
+      conversationControllerProvider(widget.conversationId).notifier,
     );
+    unawaited(() async {
+      await _startController.cancelSuggestedStreamFor(widget.conversationId);
+      if (mounted) await controller.send(message);
+    }());
   }
 
   Future<void> _toggleVoiceInput() async {
@@ -130,6 +140,8 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
         _voiceInput.phase == _VoiceInputPhase.failed ||
         _voiceInput.phase == _VoiceInputPhase.permissionDenied) {
       try {
+        await _startController.cancelSuggestedStreamFor(widget.conversationId);
+        if (!mounted) return;
         setState(() => _voiceInput = const _VoiceInputState.starting());
         await _recorder.start();
         if (!mounted) {
@@ -318,6 +330,7 @@ class _ConversationMessageList extends ConsumerStatefulWidget {
     required this.canLoadOlder,
     required this.turnLimitReached,
     required this.locked,
+    required this.suggestedAudioFailed,
     this.voiceFailureReason,
     super.key,
   });
@@ -327,6 +340,7 @@ class _ConversationMessageList extends ConsumerStatefulWidget {
   final bool canLoadOlder;
   final bool turnLimitReached;
   final bool locked;
+  final bool suggestedAudioFailed;
   final ConversationAudioExceptionReason? voiceFailureReason;
 
   @override
@@ -448,7 +462,8 @@ class _ConversationMessageListState
             ],
           ),
         ),
-      if (state.assistantAudioStatus != null) ...<Widget>[
+      if (state.assistantAudioStatus != null ||
+          widget.suggestedAudioFailed) ...<Widget>[
         AppColorBlockCard(
           color: AppPalette.blockCream,
           child: Text(

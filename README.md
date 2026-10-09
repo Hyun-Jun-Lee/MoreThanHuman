@@ -147,7 +147,7 @@ flutter test
 | [운영 가이드](docs/OPERATIONS.md) | Docker 배포·인증·cron·복구 |
 | [API 명세](docs/DSL.md) | 요청·응답·인증·도메인 계약 |
 | [음성 지연 진단](docs/VOICE_LATENCY.md) | print 계측·10회 실험·연결 풀 v1 적용(2026-09-13) |
-| [음성 스트리밍 제안](docs/VOICE_STREAMING.md) | 향후 문장별 TTS·앱 재생 설계 |
+| [음성 스트리밍](docs/VOICE_STREAMING.md) | 주간 추천 시작의 문장별 TTS·앱 재생(1~3단계), 나머지 흐름의 개발 순서 |
 | [모바일 가이드](mobile/README.md) | 플랫폼·로그인 설정과 앱 개발 |
 | [아키텍처](.agent/architecture.md) | 내부 구조와 데이터 흐름 |
 | [디자인 시스템](docs/design/DESIGN_SYSTEM.md) | UI 토큰과 컴포넌트 기준 |

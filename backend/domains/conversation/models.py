@@ -111,3 +111,40 @@ class SuggestedStartModel(Base):
     conversation_id = Column(String(36), ForeignKey("conversations.id", ondelete="CASCADE"), nullable=True)
     assistant_message_id = Column(String(36), ForeignKey("messages.id", ondelete="CASCADE"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class StreamTurnModel(Base):
+    """스트림 요청의 영속 상태. 사용자와 요청 키가 논리적 turn을 식별해요."""
+
+    __tablename__ = "stream_turns"
+    __table_args__ = (UniqueConstraint("user_id", "request_id", name="uq_stream_turn_user_request"),)
+
+    id = Column(String(36), primary_key=True)
+    user_id = Column(String(36), ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False, index=True)
+    request_id = Column(String(36), nullable=False)
+    kind = Column(String(32), nullable=False)
+    input_json = Column(Text, nullable=False)
+    conversation_id = Column(String(36), ForeignKey("conversations.id", ondelete="CASCADE"), nullable=True, index=True)
+    user_message_id = Column(String(36), ForeignKey("messages.id", ondelete="SET NULL"), nullable=True)
+    assistant_message_id = Column(String(36), ForeignKey("messages.id", ondelete="SET NULL"), nullable=True)
+    status = Column(String(16), nullable=False, default="pending")
+    audio_status = Column(String(16), nullable=False, default="pending")
+    error_code = Column(String(64), nullable=True)
+    attempt_id = Column(String(36), nullable=False)
+    deadline_at = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class StreamAttemptModel(Base):
+    __tablename__ = "stream_attempts"
+    __table_args__ = (UniqueConstraint("user_id", "request_id", name="uq_stream_attempt_user_request"),)
+
+    id = Column(String(36), primary_key=True)
+    user_id = Column(String(36), ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False)
+    turn_id = Column(String(36), ForeignKey("stream_turns.id", ondelete="CASCADE"), nullable=False, index=True)
+    request_id = Column(String(36), nullable=False)
+    status = Column(String(16), nullable=False, default="pending")
+    error_code = Column(String(64), nullable=True)
+    started_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    finished_at = Column(DateTime, nullable=True)

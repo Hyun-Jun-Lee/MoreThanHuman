@@ -135,7 +135,9 @@ domains/{name}/
 
 ### 음성 대화 지연 진단 v1
 
-`shared/latency.py`의 ASGI middleware는 대화 시작·이어 말하기 POST에 요청별 ContextVar를 설정해 인증 전부터 최종 body 전송까지 측정해요. auth·voice·conversation 서비스의 span은 같은 trace로 `print()` JSON 한 줄씩 출력해요. Flutter는 recorder 종료 때 시작한 Stopwatch를 요청과 로컬 오디오 객체까지 전달해 첫 playing 이벤트를 기록해요. JSON 본문은 유지되며 provider는 아래 외부 HTTP 풀 v1을 재사용해요. [계측·실험·연결 풀 적용](../docs/VOICE_LATENCY.md)과 [향후 스트리밍 제안](../docs/VOICE_STREAMING.md)을 참조해요.
+`shared/latency.py`의 ASGI middleware는 대화 시작·이어 말하기 POST에 요청별 ContextVar를 설정해 인증 전부터 최종 body 전송까지 측정해요. auth·voice·conversation 서비스의 span은 같은 trace로 `print()` JSON 한 줄씩 출력해요. Flutter는 recorder 종료 때 시작한 Stopwatch를 요청과 로컬 오디오 객체까지 전달해 첫 playing 이벤트를 기록해요. 기존 JSON 본문은 유지되며 provider는 아래 외부 HTTP 풀 v1을 재사용해요. [계측·실험·연결 풀 적용](../docs/VOICE_LATENCY.md)과 [스트리밍 설계·단계별 구현](../docs/VOICE_STREAMING.md)을 참조해요.
+
+주간 추천 시작의 음성 스트림은 기존 추천 예약이 첫 AI 질문을 저장한 뒤 `stream_turns`·`stream_attempts`에 상태를 남겨요. `/start/free-chat/suggested/stream/`는 짧은 DB 작업 후 문장별 TTS를 NDJSON/Base64로 보내고, 스트림 안의 상태 변경은 독립 DB session에서 처리해요. 앱의 Dio 증분 decoder가 이벤트 줄을 완성해 읽고 단일 재생 큐가 순서대로 재생해요. 화면 이탈이나 다음 발화 때 요청과 큐를 취소해요. 다른 대화 흐름의 LLM 생성 스트림은 후속 단계예요.
 
 ### 인증
 

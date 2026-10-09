@@ -12,9 +12,14 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 _request_context: ContextVar[dict[str, str] | None] = ContextVar("latency_context", default=None)
 _turn_path = re.compile(
-    r"^/api/conversations/(?:start/(?:free-chat|roleplay)|[^/]+/(?:turn|message))/?$"
+    r"^/api/conversations/(?:start/(?:free-chat(?:/suggested)?|roleplay)|[^/]+/(?:turn|message))(?:/stream)?/?$"
 )
 LogValue = str | int | float | bool | None
+
+
+def current_trace_id() -> str | None:
+    context = _request_context.get()
+    return context["trace_id"] if context else None
 
 
 def _emit(stage: str, started: float, status: str = "ok", **fields: LogValue) -> None:
