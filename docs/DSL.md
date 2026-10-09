@@ -477,19 +477,26 @@ module Conversation {
 
 같은 사용자·`start_request_id`의 완료된 요청은 같은 대화와 AI 메시지를 반환해요. 처리 중 중복 요청은 HTTP 409 `START_IN_PROGRESS`, 슬롯이 가득 차면 HTTP 409 `CONVERSATION_SLOTS_FULL`이에요. 없는 주제, 보관 주제, 다른 언어쌍 주제, 첫 질문이 없는 구형 주제는 404예요. 저장이 실패하면 예약을 지우고 대화를 만들지 않아 같은 ID로 재시도할 수 있어요. 첫 AI 질문이 저장된 후 TTS만 실패하면 대화를 유지하고 `audio_error`를 반환해요. `X-Request-ID`는 별도의 진단 헤더이며 이 멱등성 키를 대신하지 않아요.
 
-#### 주간 추천 음성 스트림 v1 (1~3단계)
+#### 대화 음성 스트림 v1 (1~6단계)
 
-`20261005_0001` migration은 `stream_turns`와 `stream_attempts`를 추가해요. 사용자·요청 키의 고유 제약으로 최초 요청의 중복 TTS를 막고, turn의 `pending/completed/failed`와 별개로 `audio_status`를 기록해요. 기한이 지난 pending 상태는 조회 시 실패로 정리해요. 실패 turn의 입력·시도 이력과 원자적 재시도 전이 기반을 저장하지만 AI 답변 재시도 경로는 후속 단계에서 열어요.
+`20261005_0001` migration은 `stream_turns`와 `stream_attempts`를 추가해요. `20261009_0001`은 오디오 재합성 시도 ID와 대화별 미해결 turn 고유 제약을 추가해요. 사용자·요청 키는 중복 생성을 막고, turn의 `pending/completed/failed`와 별개로 `audio_status`를 기록해요. 기한이 지난 pending 상태는 조회 시 실패로 정리해요. 배포 전 두 migration을 순서대로 적용해야 해요.
 
 | API | 계약 |
 |-----|------|
 | `POST /api/conversations/start/free-chat/suggested/stream/` | Bearer 인증. 기존 `topic_id`, `start_request_id` JSON과 같은 UUID의 `Idempotency-Key` 헤더 필수. 기존 추천 시작의 슬롯·주제 검사를 재사용하고 저장된 첫 질문을 합성해 `application/x-ndjson; charset=utf-8`, `Cache-Control: no-store`, `X-Accel-Buffering: no`로 반환해요. 기존 JSON 요청이 같은 ID로 완료됐다면 대화와 메시지를 재사용해요. |
+| `POST /api/conversations/start/free-chat/stream/` | 기존 Free Chat 텍스트 JSON 또는 음성 multipart로 시작해요. STT로 확정된 사용자 발화를 먼저 저장하고 AI 응답을 문장별로 생성·합성해요. |
+| `POST /api/conversations/start/roleplay/stream/` | 기존 역할·상황 JSON으로 첫 인사를 생성해요. 완료 전에는 빈 대화를 만들지 않아요. |
+| `POST /api/conversations/{id}/turn/stream/` | 기존 텍스트 JSON 또는 음성 multipart로 이어 말해요. 확정 사용자 발화는 생성 실패 후에도 남아요. |
+| `POST /api/conversations/{id}/message/stream/` | 기존 텍스트 JSON의 스트림 경로예요. |
 | `GET /api/conversations/turns/{turn_id}/` | 소유자에게만 JSON envelope의 `{turn_id,kind,status,attempt_id,conversation_id,user_message_id,assistant_message_id,audio_status,error_code,retryable}`를 반환해요. 타 사용자·없는 turn은 404예요. |
+| `GET /api/conversations/turns/by-request/{request_id}/` | 첫 이벤트 전 연결이 끊겨 turn ID를 받지 못한 경우 요청 UUID로 상태를 조회해요. |
 | `GET /api/conversations/{id}/turns/` | 대화 소유자에게만 pending·failed turn과 오디오가 failed인 완료 turn을 최신순 JSON envelope로 반환해요. |
+| `POST /api/conversations/turns/{turn_id}/retry/stream/` | 실패한 AI 생성을 저장된 입력으로 다시 시도해요. 새 사용자 발화와 STT는 만들지 않아요. |
+| `POST /api/conversations/messages/{assistant_message_id}/audio/stream/` | 저장된 AI 답변의 TTS만 다시 실행해요. |
 
-NDJSON 각 줄에는 `event`, 0부터 증가하는 `seq`, `turn_id`, `attempt_id`가 있어요. 이 경로는 `turn_started`(저장된 `conversation_id` 포함) → `text_delta`(저장된 첫 질문) → 문장마다 `audio_segment`(`segment_index`, `text`, `content_type`, `format`, `base64`) → `turn_completed`(`conversation_id`, `assistant_message_id`, `text`, `audio_status`) 순서예요. TTS 실패 때는 `audio_error` 뒤 `audio_status: failed`인 `turn_completed`를 보내고 AI 메시지는 보존해요. 연결 단절 때는 마지막 이벤트를 받았다고 추정하지 않고 상태 조회로 확인해요. 같은 키의 중복 요청은 현재 상태에 따라 HTTP 409 `TURN_IN_PROGRESS`, `TURN_ALREADY_COMPLETED`, `TURN_FAILED_RETRY_REQUIRED`예요. 앱은 HTTP 청크와 줄 경계가 다를 수 있으므로 증분 UTF-8로 읽고, 세그먼트를 순서대로 재생해요.
+NDJSON 각 줄에는 `event`, 0부터 증가하는 `seq`, `turn_id`, `attempt_id`가 있어요. `turn_started` 뒤 확정 사용자 발화가 있으면 `user_message_committed`를 보내고, 생성 중 `text_delta`와 문장별 `audio_segment`(`segment_index`, `text`, `content_type`, `format`, `base64`)를 보내요. 끝에는 `turn_completed`(`conversation_id`, `assistant_message_id`, `text`, `audio_status`) 또는 `turn_error` 하나를 보내요. TTS 실패 때는 `audio_error` 뒤 `audio_status: failed`인 `turn_completed`를 보내고 AI 메시지는 보존해요. 연결 단절 때는 마지막 이벤트를 받았다고 추정하지 않고 상태 조회로 확인해요. 같은 키의 중복 요청은 현재 상태에 따라 HTTP 409 `TURN_IN_PROGRESS`, `TURN_ALREADY_COMPLETED`, `TURN_FAILED_RETRY_REQUIRED`예요. 앱은 증분 UTF-8로 읽고, 세그먼트를 순서대로 재생해요.
 
-현재 스트림 호출 전환은 주간 추천 시작에만 적용돼요. Free Chat·Roleplay의 다른 시작/이어 말하기와 AI 재시도·오디오 전용 재합성 경로는 [후속 구현 단계](VOICE_STREAMING.md#권장-개발-순서)예요. 기존 JSON 경로는 유지돼요.
+새 모바일 앱은 위 대화 흐름의 스트림 경로를 사용해요. 기존 JSON 경로는 유지돼요. 실패한 AI 답변은 사용자가 재시도 버튼을 누를 때만 다시 생성하고, 음성만 실패하면 저장된 답변의 음성만 다시 합성해요. 실기기·프록시·동시 부하 검증은 [7단계](VOICE_STREAMING.md#권장-개발-순서)예요.
 
 홈은 발행된 주제가 있으면 최근 대화 로딩 상태와 저장된 대화 수에 관계없이 추천 주제를 보여줘요. 이전 주의 발행 주제도 보관되지 않았다면 시작할 수 있어요. 탭 시 검색·사실 확인·Topic Prep은 실행하지 않아요.
 

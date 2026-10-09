@@ -12,7 +12,8 @@ from sqlalchemy.orm import Session
 from domains.conversation.enums import ConversationStatus
 from domains.auth.models import ProfileModel
 from domains.conversation.enums import MessageRole
-from domains.conversation.models import ConversationModel, MessageModel, SuggestedStartModel, WeeklyTopicModel
+from domains.conversation.models import ConversationModel, MessageModel, StreamTurnModel, SuggestedStartModel, WeeklyTopicModel
+from domains.conversation.stream_turns import StreamTurnStore
 from shared.exceptions import AppException, NotFoundException
 from shared.subscription import entitlement_for_user
 
@@ -31,6 +32,10 @@ class ConversationLocked(AppException):
 
 class SuggestedStartInProgress(AppException):
     """같은 요청 ID가 아직 AI의 첫 질문을 생성 중이에요."""
+
+
+class PreviousTurnUnresolved(AppException):
+    """이전 사용자 발화의 AI 응답을 먼저 복구해야 해요."""
 
 
 class ConversationRepository:
@@ -94,7 +99,10 @@ class ConversationRepository:
                 raise NotFoundException("추천 주제를 찾을 수 없어요")
             if enabled:
                 entitlement = self._reconcile_slots_locked(profile)
-            if enabled and self.count_active_conversations(conversation.user_id) >= entitlement["slot_limit"]:
+            if enabled and (
+                self.count_active_conversations(conversation.user_id)
+                + self.count_pending_roleplay_starts(conversation.user_id)
+            ) >= entitlement["slot_limit"]:
                 raise ConversationSlotsFull("추가 대화 이용권이 필요해요")
             conversation.slot_active = enabled
             self.db.add(conversation)
@@ -181,6 +189,14 @@ class ConversationRepository:
     def count_active_conversations(self, user_id: str) -> int:
         return self.db.query(ConversationModel).filter_by(user_id=user_id, slot_active=True).count()
 
+    def count_pending_roleplay_starts(self, user_id: str) -> int:
+        return self.db.query(StreamTurnModel).filter(
+            StreamTurnModel.user_id == user_id,
+            StreamTurnModel.kind == "roleplay_start",
+            StreamTurnModel.status == "pending",
+            StreamTurnModel.deadline_at >= datetime.utcnow(),
+        ).count()
+
     def access_summary(self, user_id: str, *, enabled: bool) -> dict:
         """홈과 대화 탭에서 동일하게 사용하는 생성 권한."""
         used = self.count_conversations(user_id)
@@ -195,7 +211,8 @@ class ConversationRepository:
             }
         _, entitlement = self._locked_entitlement(user_id)
         limit = entitlement["slot_limit"]
-        used = self.count_active_conversations(user_id)
+        active_count = self.count_active_conversations(user_id)
+        used = active_count + self.count_pending_roleplay_starts(user_id)
         active = self.db.query(ConversationModel).filter_by(user_id=user_id, slot_active=True).order_by(desc(ConversationModel.updated_at)).all()
         self.db.commit()
         return {
@@ -204,7 +221,7 @@ class ConversationRepository:
             "used_slots": used,
             "slot_limit": limit,
             "remaining_slots": max(0, limit - used),
-            "locked_count": max(0, self.count_conversations(user_id) - used),
+            "locked_count": max(0, self.count_conversations(user_id) - active_count),
             "plan": entitlement["plan"],
             "active_conversations": [{"id": conversation.id, "title": conversation.title or "Untitled conversation"} for conversation in active],
         }
@@ -219,7 +236,7 @@ class ConversationRepository:
             return self.save(conversation)
         try:
             _, entitlement = self._locked_entitlement(conversation.user_id)
-            used = self.count_active_conversations(conversation.user_id)
+            used = self.count_active_conversations(conversation.user_id) + self.count_pending_roleplay_starts(conversation.user_id)
             if used >= entitlement["slot_limit"]:
                 raise ConversationSlotsFull("추가 대화 이용권이 필요해요")
             conversation.slot_active = True
@@ -227,6 +244,34 @@ class ConversationRepository:
             self.db.commit()
             self.db.refresh(conversation)
             return conversation
+        except Exception:
+            self.db.rollback()
+            raise
+
+    def create_stream_free_chat(
+        self, conversation: ConversationModel, user_message: MessageModel,
+        *, turn_id: str, enabled: bool,
+    ) -> None:
+        """새 대화·확정 발화·turn 연결을 한 트랜잭션에 저장해요."""
+        try:
+            if enabled:
+                _, entitlement = self._locked_entitlement(conversation.user_id)
+                used = (self.count_active_conversations(conversation.user_id)
+                        + self.count_pending_roleplay_starts(conversation.user_id))
+                if used >= entitlement["slot_limit"]:
+                    raise ConversationSlotsFull("추가 대화 이용권이 필요해요")
+            turn = self.db.query(StreamTurnModel).filter_by(
+                id=turn_id, user_id=conversation.user_id, status="pending",
+            ).with_for_update().one()
+            conversation.slot_active = enabled
+            conversation.message_count = 1
+            self.db.add(conversation)
+            self.db.flush()
+            self.db.add(user_message)
+            self.db.flush()
+            turn.conversation_id = conversation.id
+            turn.user_message_id = user_message.id
+            self.db.commit()
         except Exception:
             self.db.rollback()
             raise
@@ -265,10 +310,44 @@ class ConversationRepository:
             if not access["can_send"]:
                 raise ConversationTurnsFull("이 대화의 무료 15턴을 모두 사용했어요")
 
-    def save_user_turn(self, message: MessageModel, user_id: str, *, enabled: bool) -> MessageModel:
+    def assert_no_unresolved_turn(
+        self, conversation_id: str, user_id: str, *, exclude_turn_id: str | None = None
+    ) -> None:
+        candidates = self.db.query(StreamTurnModel).filter(
+            StreamTurnModel.user_id == user_id,
+            StreamTurnModel.conversation_id == conversation_id,
+            StreamTurnModel.status.in_(["pending", "failed"]),
+        ).all()
+        store = StreamTurnStore(self.db)
+        for candidate in candidates:
+            if candidate.id == exclude_turn_id:
+                continue
+            current = store.get(user_id, candidate.id)
+            if current.status in {"pending", "failed"}:
+                raise PreviousTurnUnresolved("이전 답변을 재시도하거나 상태를 확인해 주세요")
+
+    def save_user_turn(
+        self, message: MessageModel, user_id: str, *, enabled: bool,
+        stream_turn_id: str | None = None,
+    ) -> MessageModel:
         """대화 행 잠금 아래에서 사용자 발화 수와 INSERT를 원자적으로 처리해요."""
+        self.assert_no_unresolved_turn(message.conversation_id, user_id,
+                                       exclude_turn_id=stream_turn_id)
         if not enabled:
-            return self.save_message(message)
+            try:
+                self.db.add(message)
+                if stream_turn_id:
+                    self.db.flush()
+                    turn = self.db.query(StreamTurnModel).filter_by(
+                        id=stream_turn_id, user_id=user_id, status="pending",
+                    ).with_for_update().one()
+                    turn.user_message_id = message.id
+                self.db.commit()
+                self.db.refresh(message)
+                return message
+            except Exception:
+                self.db.rollback()
+                raise
         try:
             _, entitlement = self._locked_entitlement(user_id)
             conversation = (
@@ -285,6 +364,12 @@ class ConversationRepository:
             if limit is not None and self.count_user_turns(conversation.id) >= limit:
                 raise ConversationTurnsFull("이 대화의 무료 15턴을 모두 사용했어요")
             self.db.add(message)
+            if stream_turn_id:
+                self.db.flush()
+                turn = self.db.query(StreamTurnModel).filter_by(
+                    id=stream_turn_id, user_id=user_id, status="pending",
+                ).with_for_update().one()
+                turn.user_message_id = message.id
             self.db.commit()
             self.db.refresh(message)
             return message
@@ -299,7 +384,8 @@ class ConversationRepository:
             if conversation.slot_active:
                 self.db.commit()
                 return
-            if self.count_active_conversations(user_id) >= entitlement["slot_limit"]:
+            if (self.count_active_conversations(user_id)
+                    + self.count_pending_roleplay_starts(user_id)) >= entitlement["slot_limit"]:
                 if replace_id is None or replace_id == conversation_id:
                     raise ConversationSlotsFull("교체할 활성 대화를 선택해 주세요")
                 replacing = self.find_by_id(replace_id, user_id)

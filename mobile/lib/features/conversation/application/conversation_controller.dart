@@ -1,10 +1,16 @@
-import 'package:curitalk/features/conversation/application/start_conversation_controller.dart';
+import 'dart:async';
+import 'dart:collection';
+
+import 'package:curitalk/features/conversation/application/conversation_audio_services.dart';
 import 'package:curitalk/features/conversation/data/api_conversation_repository.dart';
+import 'package:curitalk/features/conversation/data/conversation_stream_api.dart';
+import 'package:curitalk/features/conversation/application/start_conversation_controller.dart';
 import 'package:curitalk/features/conversation/data/conversation_access_repository.dart';
 import 'package:curitalk/core/network/api_exception.dart';
 import 'package:curitalk/features/conversation/domain/conversation_models.dart';
 import 'package:curitalk/features/conversation/domain/conversation_repository.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dio/dio.dart';
 
 enum ConversationSendFailureReason {
   textRequestFailed,
@@ -23,6 +29,12 @@ class ConversationState {
     this.failedAudioFile,
     this.failureReason,
     this.assistantAudioStatus,
+    this.failedTurnId,
+    this.audioRetryMessageId,
+    this.pendingTurnId,
+    this.pendingRequestId,
+    this.unconfirmedText,
+    this.unconfirmedAudioFile,
     this.autoPlayAudioMessageIds = const <String>{},
     this.oldestOffset = 0,
     this.isLoadingOlder = false,
@@ -36,6 +48,12 @@ class ConversationState {
       failedAudioFile = null,
       failureReason = null,
       assistantAudioStatus = null,
+      failedTurnId = null,
+      audioRetryMessageId = null,
+      pendingTurnId = null,
+      pendingRequestId = null,
+      unconfirmedText = null,
+      unconfirmedAudioFile = null,
       autoPlayAudioMessageIds = const <String>{},
       oldestOffset = 0,
       isLoadingOlder = false,
@@ -47,6 +65,12 @@ class ConversationState {
   final ConversationAudioFile? failedAudioFile;
   final ConversationSendFailureReason? failureReason;
   final AssistantAudioStatus? assistantAudioStatus;
+  final String? failedTurnId;
+  final String? audioRetryMessageId;
+  final String? pendingTurnId;
+  final String? pendingRequestId;
+  final String? unconfirmedText;
+  final ConversationAudioFile? unconfirmedAudioFile;
   final Set<String> autoPlayAudioMessageIds;
   final int oldestOffset;
   final bool isLoadingOlder;
@@ -64,6 +88,18 @@ class ConversationState {
     ConversationSendFailureReason? failureReason,
     AssistantAudioStatus? assistantAudioStatus,
     bool clearAssistantAudioStatus = false,
+    String? failedTurnId,
+    bool clearFailedTurnId = false,
+    String? audioRetryMessageId,
+    bool clearAudioRetryMessageId = false,
+    String? pendingTurnId,
+    bool clearPendingTurnId = false,
+    String? pendingRequestId,
+    bool clearPendingRequestId = false,
+    String? unconfirmedText,
+    bool clearUnconfirmedText = false,
+    ConversationAudioFile? unconfirmedAudioFile,
+    bool clearUnconfirmedAudioFile = false,
     Set<String>? autoPlayAudioMessageIds,
     int? oldestOffset,
     bool? isLoadingOlder,
@@ -82,6 +118,24 @@ class ConversationState {
       assistantAudioStatus: clearAssistantAudioStatus
           ? null
           : assistantAudioStatus ?? this.assistantAudioStatus,
+      failedTurnId: clearFailedTurnId
+          ? null
+          : failedTurnId ?? this.failedTurnId,
+      audioRetryMessageId: clearAudioRetryMessageId
+          ? null
+          : audioRetryMessageId ?? this.audioRetryMessageId,
+      pendingTurnId: clearPendingTurnId
+          ? null
+          : pendingTurnId ?? this.pendingTurnId,
+      pendingRequestId: clearPendingRequestId
+          ? null
+          : pendingRequestId ?? this.pendingRequestId,
+      unconfirmedText: clearUnconfirmedText
+          ? null
+          : unconfirmedText ?? this.unconfirmedText,
+      unconfirmedAudioFile: clearUnconfirmedAudioFile
+          ? null
+          : unconfirmedAudioFile ?? this.unconfirmedAudioFile,
       autoPlayAudioMessageIds:
           autoPlayAudioMessageIds ?? this.autoPlayAudioMessageIds,
       oldestOffset: oldestOffset ?? this.oldestOffset,
@@ -96,6 +150,23 @@ class ConversationController extends AsyncNotifier<ConversationState> {
 
   final String conversationId;
   static const int _pageSize = 40;
+  CancelToken? _activeStreamToken;
+  final Queue<VoiceAudioResponse> _audioQueue = Queue<VoiceAudioResponse>();
+  bool _playingAudio = false;
+  int _audioGeneration = 0;
+  bool _localPlaybackFailed = false;
+
+  Future<void> cancelActiveStream() async {
+    _activeStreamToken?.cancel('Conversation screen closed');
+    _activeStreamToken = null;
+    _audioGeneration++;
+    _audioQueue.clear();
+    try {
+      await ref.read(conversationAudioPlayerProvider).stop();
+    } on Object {
+      // 화면 종료는 재생 장치 오류와 관계없이 진행해요.
+    }
+  }
 
   Future<PaginatedMessages> _loadLatestPage(
     ConversationRepository repository,
@@ -114,9 +185,9 @@ class ConversationController extends AsyncNotifier<ConversationState> {
 
   @override
   Future<ConversationState> build() async {
-    final PaginatedMessages page = await _loadLatestPage(
-      ref.watch(conversationRepositoryProvider),
-    );
+    ref.onDispose(() => _activeStreamToken?.cancel('Conversation closed'));
+    final repository = ref.watch(conversationRepositoryProvider);
+    final PaginatedMessages page = await _loadLatestPage(repository);
     final InitialAssistantAudio? initialAudio = ref.read(
       initialAssistantAudioProvider(conversationId),
     );
@@ -134,13 +205,50 @@ class ConversationController extends AsyncNotifier<ConversationState> {
     if (initialAudio != null) {
       ref.read(initialAssistantAudioProvider(conversationId).notifier).clear();
     }
+    final recovery = repository is ApiConversationRepository
+        ? await _loadStreamRecovery(repository)
+        : const <StreamTurnStatus>[];
     return ConversationState(
       messages: messages,
       oldestOffset: page.pagination.offset,
       autoPlayAudioMessageIds: initialAutoPlayMessageId == null
           ? const <String>{}
           : <String>{initialAutoPlayMessageId},
+      failedTurnId: _firstTurn(recovery, 'failed')?.turnId,
+      pendingTurnId: _firstTurn(recovery, 'pending')?.turnId,
+      audioRetryMessageId: recovery
+          .where(
+            (turn) =>
+                turn.status == 'completed' && turn.audioStatus == 'failed',
+          )
+          .firstOrNull
+          ?.assistantMessageId,
+      failureReason: _firstTurn(recovery, 'failed') == null
+          ? null
+          : ConversationSendFailureReason.textRequestFailed,
+      assistantAudioStatus:
+          recovery.any(
+            (turn) =>
+                turn.status == 'completed' && turn.audioStatus == 'failed',
+          )
+          ? AssistantAudioStatus.unavailable
+          : null,
     );
+  }
+
+  Future<List<StreamTurnStatus>> _loadStreamRecovery(
+    ApiConversationRepository repository,
+  ) {
+    return ConversationStreamApi(
+      repository.apiClient,
+    ).unresolved(conversationId);
+  }
+
+  StreamTurnStatus? _firstTurn(List<StreamTurnStatus> turns, String status) {
+    for (final turn in turns) {
+      if (turn.status == status) return turn;
+    }
+    return null;
   }
 
   List<ConversationMessage> _attachInitialAssistantAudio(
@@ -200,9 +308,32 @@ class ConversationController extends AsyncNotifier<ConversationState> {
       final PaginatedMessages page = await _loadLatestPage(
         ref.read(conversationRepositoryProvider),
       );
+      final repository = ref.read(conversationRepositoryProvider);
+      final recovery = repository is ApiConversationRepository
+          ? await _loadStreamRecovery(repository)
+          : const <StreamTurnStatus>[];
       return ConversationState(
         messages: page.results,
         oldestOffset: page.pagination.offset,
+        failedTurnId: _firstTurn(recovery, 'failed')?.turnId,
+        pendingTurnId: _firstTurn(recovery, 'pending')?.turnId,
+        audioRetryMessageId: recovery
+            .where(
+              (turn) =>
+                  turn.status == 'completed' && turn.audioStatus == 'failed',
+            )
+            .firstOrNull
+            ?.assistantMessageId,
+        failureReason: _firstTurn(recovery, 'failed') == null
+            ? null
+            : ConversationSendFailureReason.textRequestFailed,
+        assistantAudioStatus:
+            recovery.any(
+              (turn) =>
+                  turn.status == 'completed' && turn.audioStatus == 'failed',
+            )
+            ? AssistantAudioStatus.unavailable
+            : null,
       );
     });
     if (ref.mounted) state = next;
@@ -272,7 +403,16 @@ class ConversationController extends AsyncNotifier<ConversationState> {
     }
     if (!state.hasValue ||
         state.value?.isSending == true ||
-        state.value?.isLoadingOlder == true) {
+        state.value?.isLoadingOlder == true ||
+        state.value?.failedTurnId != null ||
+        state.value?.pendingTurnId != null ||
+        state.value?.pendingRequestId != null) {
+      return;
+    }
+
+    final repository = ref.read(conversationRepositoryProvider);
+    if (repository is ApiConversationRepository) {
+      await _sendStream(repository, text: normalized);
       return;
     }
 
@@ -368,7 +508,16 @@ class ConversationController extends AsyncNotifier<ConversationState> {
     if (audioFile.bytes.isEmpty ||
         !state.hasValue ||
         state.value?.isSending == true ||
-        state.value?.isLoadingOlder == true) {
+        state.value?.isLoadingOlder == true ||
+        state.value?.failedTurnId != null ||
+        state.value?.pendingTurnId != null ||
+        state.value?.pendingRequestId != null) {
+      return;
+    }
+
+    final repository = ref.read(conversationRepositoryProvider);
+    if (repository is ApiConversationRepository) {
+      await _sendStream(repository, audioFile: audioFile);
       return;
     }
 
@@ -454,7 +603,349 @@ class ConversationController extends AsyncNotifier<ConversationState> {
     }
   }
 
+  Future<void> _sendStream(
+    ApiConversationRepository repository, {
+    String? text,
+    ConversationAudioFile? audioFile,
+    String? retryTurnId,
+  }) async {
+    await cancelActiveStream();
+    _localPlaybackFailed = false;
+    final api = ConversationStreamApi(repository.apiClient);
+    final requestId = newConversationRequestId();
+    final token = CancelToken();
+    _activeStreamToken = token;
+    final localUserId = 'local-user-$requestId';
+    final localAssistantId = 'local-assistant-$requestId';
+    final initial = state.requireValue;
+    state = AsyncData(
+      initial.copyWith(
+        messages: text == null || retryTurnId != null
+            ? initial.messages
+            : <ConversationMessage>[
+                ...initial.messages,
+                ConversationMessage(
+                  id: localUserId,
+                  conversationId: conversationId,
+                  role: ConversationMessageRole.user,
+                  content: text,
+                  createdAt: DateTime.now(),
+                  isLocalPending: true,
+                ),
+              ],
+        isSending: true,
+        clearFailedMessage: true,
+        clearFailedAudioFile: true,
+        clearFailedTurnId: true,
+        clearPendingTurnId: true,
+        clearPendingRequestId: true,
+        clearUnconfirmedText: true,
+        clearUnconfirmedAudioFile: true,
+        failureReason: null,
+      ),
+    );
+
+    String? turnId;
+    String? attemptId;
+    var expectedSeq = 0;
+    var nextSegment = 0;
+    var terminal = false;
+    var partial = '';
+    try {
+      final path = retryTurnId != null
+          ? 'conversations/turns/$retryTurnId/retry/stream/'
+          : 'conversations/$conversationId/turn/stream/';
+      final Object? data = retryTurnId != null
+          ? null
+          : audioFile != null
+          ? ConversationStreamApi.audioForm(
+              bytes: audioFile.bytes,
+              filename: audioFile.filename,
+              contentType: audioFile.contentType,
+            )
+          : <String, String>{'text': text!};
+      await for (final event in api.events(
+        path: path,
+        data: data,
+        cancelToken: token,
+        idempotencyKey: requestId,
+        trace: audioFile?.latencyTrace,
+      )) {
+        if (!ref.mounted || token.isCancelled) break;
+        final seq = event['seq'];
+        final currentTurn = event['turn_id'];
+        final currentAttempt = event['attempt_id'];
+        if (seq != expectedSeq ||
+            currentTurn is! String ||
+            currentAttempt is! String ||
+            (turnId != null && currentTurn != turnId) ||
+            (attemptId != null && currentAttempt != attemptId)) {
+          throw const FormatException('Out-of-order conversation event.');
+        }
+        expectedSeq++;
+        turnId = currentTurn;
+        attemptId = currentAttempt;
+        final current = state.requireValue;
+        switch (event['event']) {
+          case 'turn_started':
+            if (seq != 0) throw const FormatException('Duplicate turn start.');
+            break;
+          case 'user_message_committed':
+            final userId = event['user_message_id'];
+            final committedText = event['text'];
+            if (userId is! String || committedText is! String) {
+              throw const FormatException('Invalid committed user message.');
+            }
+            final replacement = ConversationMessage(
+              id: userId,
+              conversationId: conversationId,
+              role: ConversationMessageRole.user,
+              content: committedText,
+              createdAt: DateTime.now(),
+            );
+            final existing = current.messages.any(
+              (message) => message.id == userId,
+            );
+            state = AsyncData(
+              current.copyWith(
+                messages: existing
+                    ? current.messages
+                          .where((message) => message.id != localUserId)
+                          .toList()
+                    : <ConversationMessage>[
+                        ...current.messages.where(
+                          (message) => message.id != localUserId,
+                        ),
+                        replacement,
+                      ],
+              ),
+            );
+            break;
+          case 'text_delta':
+            final delta = event['delta'];
+            if (delta is! String) {
+              throw const FormatException('Invalid text delta.');
+            }
+            partial += delta;
+            final temporary = ConversationMessage(
+              id: localAssistantId,
+              conversationId: conversationId,
+              role: ConversationMessageRole.assistant,
+              content: partial,
+              createdAt: DateTime.now(),
+              isLocalPending: true,
+            );
+            state = AsyncData(
+              current.copyWith(
+                messages: <ConversationMessage>[
+                  ...current.messages.where(
+                    (message) => message.id != localAssistantId,
+                  ),
+                  temporary,
+                ],
+              ),
+            );
+            break;
+          case 'audio_segment':
+            final index = event['segment_index'];
+            if (index != nextSegment) {
+              throw const FormatException('Out-of-order audio segment.');
+            }
+            nextSegment++;
+            if (!_localPlaybackFailed) {
+              _audioQueue.add(VoiceAudioResponse.fromJson(event));
+              unawaited(_playAudioQueue());
+            }
+            break;
+          case 'audio_error':
+            _audioGeneration++;
+            _audioQueue.clear();
+            unawaited(ref.read(conversationAudioPlayerProvider).stop());
+            break;
+          case 'turn_completed':
+            final assistantId = event['assistant_message_id'];
+            final completedText = event['text'];
+            if (assistantId is! String || completedText is! String) {
+              throw const FormatException('Invalid completed turn.');
+            }
+            terminal = true;
+            final audioFailed =
+                event['audio_status'] == 'failed' || _localPlaybackFailed;
+            state = AsyncData(
+              current.copyWith(
+                messages: <ConversationMessage>[
+                  ...current.messages.where(
+                    (message) => message.id != localAssistantId,
+                  ),
+                  ConversationMessage(
+                    id: assistantId,
+                    conversationId: conversationId,
+                    role: ConversationMessageRole.assistant,
+                    content: completedText,
+                    createdAt: DateTime.now(),
+                  ),
+                ],
+                isSending: false,
+                clearFailedTurnId: true,
+                clearPendingTurnId: true,
+                audioRetryMessageId: audioFailed ? assistantId : null,
+                clearAudioRetryMessageId: !audioFailed,
+                assistantAudioStatus: audioFailed
+                    ? AssistantAudioStatus.unavailable
+                    : null,
+                clearAssistantAudioStatus: !audioFailed,
+                failureReason: null,
+              ),
+            );
+            ref.invalidate(conversationTurnAccessProvider(conversationId));
+            break;
+          case 'turn_error':
+            terminal = true;
+            _audioGeneration++;
+            _audioQueue.clear();
+            unawaited(ref.read(conversationAudioPlayerProvider).stop());
+            state = AsyncData(
+              current.copyWith(
+                messages: current.messages
+                    .where((message) => message.id != localAssistantId)
+                    .toList(),
+                isSending: false,
+                failedTurnId: turnId,
+                failureReason: ConversationSendFailureReason.textRequestFailed,
+              ),
+            );
+            break;
+        }
+      }
+      if (!terminal && ref.mounted && !token.isCancelled) {
+        throw const FormatException(
+          'Conversation stream ended without a terminal event.',
+        );
+      }
+    } on Object {
+      if (!ref.mounted || token.isCancelled) return;
+      StreamTurnStatus? status;
+      Object? lookupError;
+      try {
+        status = turnId == null
+            ? await api.statusForRequest(requestId)
+            : await api.status(turnId);
+      } on Object catch (error) {
+        lookupError = error;
+      }
+      if (!ref.mounted) return;
+      if (status != null) {
+        await _recoverFromStatus(repository, status);
+      } else if (lookupError is! ApiException ||
+          lookupError.statusCode != 404) {
+        final current = state.requireValue;
+        state = AsyncData(
+          current.copyWith(
+            messages: current.messages
+                .where((message) => message.id != localAssistantId)
+                .toList(),
+            isSending: false,
+            pendingTurnId: turnId,
+            pendingRequestId: turnId == null ? requestId : null,
+            unconfirmedText: text,
+            unconfirmedAudioFile: audioFile,
+            failureReason: null,
+          ),
+        );
+      } else {
+        final current = state.requireValue;
+        state = AsyncData(
+          current.copyWith(
+            messages: current.messages
+                .where(
+                  (message) =>
+                      message.id != localUserId &&
+                      message.id != localAssistantId,
+                )
+                .toList(),
+            isSending: false,
+            failedMessage: text,
+            failedAudioFile: audioFile,
+            failureReason: audioFile == null
+                ? ConversationSendFailureReason.textRequestFailed
+                : ConversationSendFailureReason.audioRequestFailed,
+          ),
+        );
+      }
+    } finally {
+      if (identical(_activeStreamToken, token)) _activeStreamToken = null;
+    }
+  }
+
+  Future<void> _recoverFromStatus(
+    ApiConversationRepository repository,
+    StreamTurnStatus status,
+  ) async {
+    final page = await _loadLatestPage(repository);
+    if (!ref.mounted) return;
+    state = AsyncData(
+      ConversationState(
+        messages: page.results,
+        oldestOffset: page.pagination.offset,
+        failedTurnId: status.status == 'failed' ? status.turnId : null,
+        pendingTurnId: status.status == 'pending' ? status.turnId : null,
+        audioRetryMessageId:
+            status.status == 'completed' && status.audioStatus == 'failed'
+            ? status.assistantMessageId
+            : null,
+        failureReason: status.status == 'failed'
+            ? ConversationSendFailureReason.textRequestFailed
+            : null,
+        assistantAudioStatus:
+            status.status == 'completed' && status.audioStatus == 'failed'
+            ? AssistantAudioStatus.unavailable
+            : null,
+      ),
+    );
+  }
+
+  Future<void> _playAudioQueue() async {
+    if (_playingAudio) return;
+    _playingAudio = true;
+    final generation = _audioGeneration;
+    try {
+      while (_audioQueue.isNotEmpty && generation == _audioGeneration) {
+        await ref
+            .read(conversationAudioPlayerProvider)
+            .play(_audioQueue.removeFirst());
+      }
+    } on Object {
+      _audioQueue.clear();
+      _localPlaybackFailed = true;
+      if (ref.mounted && state.hasValue) {
+        final current = state.requireValue;
+        final assistantMessages = current.messages.where(
+          (message) =>
+              message.role == ConversationMessageRole.assistant &&
+              !message.isLocalPending,
+        );
+        state = AsyncData(
+          current.copyWith(
+            assistantAudioStatus: AssistantAudioStatus.unavailable,
+            audioRetryMessageId: current.isSending || assistantMessages.isEmpty
+                ? null
+                : assistantMessages.last.id,
+          ),
+        );
+      }
+    } finally {
+      _playingAudio = false;
+      if (_audioQueue.isNotEmpty && ref.mounted) unawaited(_playAudioQueue());
+    }
+  }
+
   Future<void> retryFailedMessage() async {
+    final turnId = state.value?.failedTurnId;
+    final repository = ref.read(conversationRepositoryProvider);
+    if (turnId != null && repository is ApiConversationRepository) {
+      await _sendStream(repository, retryTurnId: turnId);
+      return;
+    }
     final String? message = state.value?.failedMessage;
     if (message == null) {
       return;
@@ -468,6 +959,112 @@ class ConversationController extends AsyncNotifier<ConversationState> {
       return;
     }
     await sendAudio(audioFile);
+  }
+
+  Future<void> retryAssistantAudio() async {
+    final assistantId = state.value?.audioRetryMessageId;
+    final repository = ref.read(conversationRepositoryProvider);
+    if (assistantId == null ||
+        repository is! ApiConversationRepository ||
+        state.value?.isSending == true) {
+      return;
+    }
+    await cancelActiveStream();
+    _localPlaybackFailed = false;
+    final api = ConversationStreamApi(repository.apiClient);
+    final token = CancelToken();
+    _activeStreamToken = token;
+    state = AsyncData(state.requireValue.copyWith(isSending: true));
+    var expectedSeq = 0;
+    var nextSegment = 0;
+    var terminal = false;
+    try {
+      await for (final event in api.events(
+        path: 'conversations/messages/$assistantId/audio/stream/',
+        cancelToken: token,
+      )) {
+        if (!ref.mounted || token.isCancelled) return;
+        if (event['seq'] != expectedSeq++) {
+          throw const FormatException('Out-of-order audio retry event.');
+        }
+        switch (event['event']) {
+          case 'audio_segment':
+            if (event['segment_index'] != nextSegment++) {
+              throw const FormatException('Out-of-order audio retry segment.');
+            }
+            if (!_localPlaybackFailed) {
+              _audioQueue.add(VoiceAudioResponse.fromJson(event));
+              unawaited(_playAudioQueue());
+            }
+            break;
+          case 'audio_completed':
+            terminal = true;
+            state = AsyncData(
+              state.requireValue.copyWith(
+                isSending: false,
+                clearAudioRetryMessageId: !_localPlaybackFailed,
+                clearAssistantAudioStatus: !_localPlaybackFailed,
+              ),
+            );
+            break;
+          case 'audio_error':
+            terminal = true;
+            _audioGeneration++;
+            _audioQueue.clear();
+            state = AsyncData(state.requireValue.copyWith(isSending: false));
+            break;
+        }
+      }
+      if (!terminal) {
+        throw const FormatException(
+          'Audio retry ended without terminal event.',
+        );
+      }
+    } on Object {
+      if (ref.mounted) {
+        state = AsyncData(state.requireValue.copyWith(isSending: false));
+      }
+    } finally {
+      if (identical(_activeStreamToken, token)) _activeStreamToken = null;
+    }
+  }
+
+  Future<void> refreshTurnStatus() async {
+    final current = state.value;
+    final repository = ref.read(conversationRepositoryProvider);
+    final turnId = current?.pendingTurnId ?? current?.failedTurnId;
+    final requestId = current?.pendingRequestId;
+    if ((turnId == null && requestId == null) ||
+        repository is! ApiConversationRepository) {
+      return;
+    }
+    try {
+      final api = ConversationStreamApi(repository.apiClient);
+      final status = turnId == null
+          ? await api.statusForRequest(requestId!)
+          : await api.status(turnId);
+      await _recoverFromStatus(repository, status);
+    } on Object catch (error) {
+      if (error is ApiException && error.statusCode == 404 && ref.mounted) {
+        final current = state.requireValue;
+        state = AsyncData(
+          current.copyWith(
+            messages: current.messages
+                .where((message) => !message.isLocalPending)
+                .toList(),
+            clearPendingRequestId: true,
+            clearPendingTurnId: true,
+            failedMessage: current.unconfirmedText,
+            failedAudioFile: current.unconfirmedAudioFile,
+            clearUnconfirmedText: true,
+            clearUnconfirmedAudioFile: true,
+            failureReason: current.unconfirmedAudioFile == null
+                ? ConversationSendFailureReason.textRequestFailed
+                : ConversationSendFailureReason.audioRequestFailed,
+          ),
+        );
+      }
+    }
   }
 
   void consumeAutoPlayAudio(String messageId) {

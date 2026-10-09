@@ -1,6 +1,9 @@
 """
 OpenRouter LLM Provider
 """
+import json
+from collections.abc import AsyncIterator
+
 import httpx
 
 from config import get_settings
@@ -73,6 +76,54 @@ class OpenRouterProvider(LLMProvider):
             )
         except httpx.HTTPError as e:
             raise ExternalAPIException(f"OpenRouter API call failed: {str(e)}")
+
+    async def chat_completion_stream(self, request: LLMRequest) -> AsyncIterator[str]:
+        messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
+        try:
+            async with self.http_client.stream(
+                "POST", self.base_url,
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "HTTP-Referer": "https://github.com/MoreThanHuman",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": request.model, "messages": messages,
+                    "max_tokens": request.max_tokens, "temperature": request.temperature,
+                    **(request.extra_params or {}), "stream": True,
+                },
+                timeout=60.0,
+            ) as response:
+                response.raise_for_status()
+                done = False
+                async for line in response.aiter_lines():
+                    if not line.startswith("data:"):
+                        continue
+                    payload = line[5:].strip()
+                    if payload == "[DONE]":
+                        done = True
+                        break
+                    if not payload:
+                        continue
+                    data = json.loads(payload)
+                    if data.get("error"):
+                        raise ExternalAPIException("OpenRouter stream returned an error event")
+                    choices = data.get("choices") or []
+                    if not choices:
+                        continue
+                    if choices[0].get("finish_reason") == "length":
+                        raise ExternalAPIException("OpenRouter stream reached the output limit")
+                    delta = choices[0].get("delta", {}).get("content")
+                    if isinstance(delta, str) and delta:
+                        yield delta
+                if not done:
+                    raise ExternalAPIException("OpenRouter stream ended before DONE")
+        except httpx.HTTPStatusError as error:
+            if error.response.status_code == 429:
+                raise RateLimitException("무료 모델의 사용 한도에 도달했습니다. 잠시 후 다시 시도해주세요.") from error
+            raise ExternalAPIException(f"OpenRouter stream failed: status={error.response.status_code}") from error
+        except (httpx.HTTPError, ValueError, KeyError, IndexError) as error:
+            raise ExternalAPIException(f"OpenRouter stream failed: {type(error).__name__}") from error
 
     def validate_config(self) -> bool:
         """OpenRouter 설정 검증"""
