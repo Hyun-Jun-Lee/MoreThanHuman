@@ -500,7 +500,7 @@ class ConversationRepository:
         conversation.title = title
         self.db.commit()
 
-    def delete_by_id(self, conversation_id: str, user_id: str) -> None:
+    def delete_by_id(self, conversation_id: str, user_id: str) -> list[str]:
         """
         대화 삭제
 
@@ -509,11 +509,13 @@ class ConversationRepository:
             user_id: 사용자 ID
         """
         conversation = self.find_by_id(conversation_id, user_id)
+        message_ids = [message.id for message in conversation.messages]
         self.db.query(SuggestedStartModel).filter_by(
             conversation_id=conversation_id, user_id=user_id
         ).delete(synchronize_session=False)
         self.db.delete(conversation)
         self.db.commit()
+        return message_ids
 
     # Message operations
     def save_message(self, message: MessageModel) -> MessageModel:
@@ -592,6 +594,21 @@ class ConversationRepository:
             .offset(offset)
             .all()
         )
+
+    def completed_audio_message_ids(self, message_ids: list[str]) -> set[str]:
+        if not message_ids:
+            return set()
+        return {message_id for (message_id,) in self.db.query(
+            StreamTurnModel.assistant_message_id,
+        ).filter(StreamTurnModel.assistant_message_id.in_(message_ids),
+                 StreamTurnModel.status == "completed").all()}
+
+    def existing_message_ids(self, message_ids: list[str]) -> set[str]:
+        if not message_ids:
+            return set()
+        return {message_id for (message_id,) in self.db.query(MessageModel.id).filter(
+            MessageModel.id.in_(message_ids),
+        ).all()}
 
     def count_messages(self, conversation_id: str) -> int:
         """대화의 전체 메시지 수 조회"""

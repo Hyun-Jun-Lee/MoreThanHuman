@@ -119,7 +119,7 @@ JSON 문자열의 줄바꿈을 escape하고 이벤트 한 개를 한 줄로 구�
 - Free Chat 시작 중 실패하면 대화와 첫 사용자 메시지를 보존하고 같은 대화 안에서 재시도해요. 이 대화는 기존 슬롯을 사용해요. Roleplay 시작은 사용자 메시지가 없으므로 첫 AI 인사가 완성되지 않으면 빈 대화를 목록에 남기지 않고 준비 화면에서 재시도해요.
 - AI 텍스트가 끝까지 생성되어 DB에 저장된 뒤에는 정상 assistant 메시지로 다뤄요. TTS만 실패하거나 이후 연결이 끊기면 같은 저장된 텍스트를 다시 합성하고 AI 답변을 새로 생성하지 않아요. AI 텍스트가 미완성이면 부분 assistant 메시지를 정상 대화 이력에 저장하지 않아요.
 - `GET /api/conversations/turns/{turn_id}/`로 소유자의 현재 상태와 저장된 메시지 ID를 조회해요. 앱은 재연결 시 이 상태만 확인해요. 완료됐다면 대화 이력을 다시 읽고, 실패했다면 재시도 버튼을 표시해요. 자동 답변 재생성과 스트림 이어받기는 첫 버전 범위에 넣지 않아요.
-- `POST /api/conversations/turns/{turn_id}/retry/stream/`는 실패한 turn의 기존 입력·사용자 메시지를 재사용해 새 생성 시도를 시작해요. 진행 중 중복 요청은 409로 막고, 이미 완료된 turn은 새 답변을 만들지 않고 상태 조회를 안내해요. `POST /api/conversations/messages/{assistant_message_id}/audio/stream/`는 저장된 assistant 텍스트의 TTS만 다시 실행해 문장별 오디오 이벤트를 보내고 AI 답변은 재생성하지 않아요.
+- `POST /api/conversations/turns/{turn_id}/retry/stream/`는 실패한 turn의 기존 입력·사용자 메시지를 재사용해 새 생성 시도를 시작해요. 진행 중 중복 요청은 409로 막고, 이미 완료된 turn은 새 답변을 만들지 않고 상태 조회를 안내해요. `POST /api/conversations/messages/{assistant_message_id}/audio/stream/`는 호스트 FS에 저장된 문장별 MP3를 먼저 읽어 같은 오디오 이벤트를 보내요. 파일 누락·손상 시 저장된 assistant 텍스트에서 음성만 다시 합성하고, 중복 생성을 DB lease로 막아요. AI 답변 텍스트는 재생성하지 않아요.
 - 앱은 AI 답변 생성 실패 시 임시 부분 텍스트와 남은 재생 큐를 지우고 사용자 메시지 아래 오류·재시도 버튼을 표시해요. 같은 대화의 다음 발화는 이 실패를 재시도해 해결할 때까지 막아 대화 순서를 지켜요. 이미 들은 일부 음성은 취소할 수 없으므로 재시도 시 새 답변이 생성될 수 있음을 안내해요. Roleplay 첫 인사 실패는 준비 화면에 재시도 버튼을 보여줘요.
 
 ## 문장 분리·품질
@@ -141,7 +141,7 @@ JSON 문자열의 줄바꿈을 escape하고 이벤트 한 개를 한 줄로 구�
 |------|------|
 | `backend/domains/llm/provider.py`, `openrouter.py` | 기존 completion 유지 + 토큰 async iterator |
 | `backend/domains/voice/` | 문장별 합성, 이후 오디오 iterator |
-| `backend/domains/conversation/` | 동시 pipeline, turn 상태·재시도·상태 조회·오디오 재합성, 스트림 전용 POST 경로 |
+| `backend/domains/conversation/` | 동시 pipeline, turn 상태·재시도·상태 조회·호스트 FS 음성 캐시와 누락 시 재합성, 스트림 전용 POST 경로 |
 | `backend/main.py`, `shared/http_clients.py`, `shared/background_tasks.py` | 워커별 풀·문법 task 종료는 구현됨. 향후 스트리밍 응답 닫기·연결 점유·취소 전파를 추가 검증 |
 | `mobile/lib/core/network/` | 증분 요청·이벤트 decoder·취소 |
 | `mobile/lib/features/conversation/` | 부분 텍스트·오디오 큐·실패/취소 UX |

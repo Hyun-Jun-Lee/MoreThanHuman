@@ -29,6 +29,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
   late final TextEditingController _composerController;
   late final ConversationAudioRecorder _recorder;
   late final StartConversationController _startController;
+  late final ConversationController _conversationController;
   Timer? _recordingTimer;
   _VoiceInputState _voiceInput = const _VoiceInputState.idle();
 
@@ -38,6 +39,9 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
     _composerController = TextEditingController();
     _recorder = ref.read(conversationAudioRecorderProvider);
     _startController = ref.read(startConversationControllerProvider.notifier);
+    _conversationController = ref.read(
+      conversationControllerProvider(widget.conversationId).notifier,
+    );
   }
 
   @override
@@ -47,11 +51,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
       unawaited(_recorder.cancel());
     }
     unawaited(_startController.cancelSuggestedStreamFor(widget.conversationId));
-    unawaited(
-      ref
-          .read(conversationControllerProvider(widget.conversationId).notifier)
-          .cancelActiveStream(),
-    );
+    unawaited(_conversationController.cancelActiveStream());
     _composerController.dispose();
     super.dispose();
   }
@@ -425,6 +425,12 @@ class _ConversationMessageListState
           onAutoPlayStarted: () => ref
               .read(conversationControllerProvider(conversationId).notifier)
               .consumeAutoPlayAudio(message.id),
+          onReplayAudio: (messageId) => ref
+              .read(conversationControllerProvider(conversationId).notifier)
+              .playAssistantAudio(messageId),
+          onStopAudio: (messageId) => ref
+              .read(conversationControllerProvider(conversationId).notifier)
+              .stopAssistantAudio(messageId),
         ),
         const SizedBox(height: AppSpacing.md),
       ],

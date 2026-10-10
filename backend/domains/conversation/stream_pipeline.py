@@ -5,6 +5,7 @@ import logging
 from collections.abc import AsyncIterator, Callable
 
 from domains.conversation.stream_audio import SentenceBuffer, event_line
+from domains.conversation.audio_cache_flow import new_writer, persist_writer
 from domains.voice.service import VoiceService
 
 logger = logging.getLogger(__name__)
@@ -91,6 +92,7 @@ async def stream_answer(
     completed = False
     assistant_message_id: str | None = None
     final_text: str | None = None
+    cache_writer = new_writer()
     try:
         yield event_line("turn_started", seq, turn_id, attempt_id,
                          trace_id=trace_id, **({"conversation_id": conversation_id} if conversation_id else {}))
@@ -113,6 +115,13 @@ async def stream_answer(
                                      content_type=audio.content_type, format=audio.format,
                                      base64=audio.base64)
                     seq += 1
+                    if cache_writer is not None:
+                        try:
+                            await cache_writer.add(index, sentence, audio)
+                        except Exception:
+                            logger.exception("Conversation audio cache write failed", extra={"turn_id": turn_id})
+                            await cache_writer.abort()
+                            cache_writer = None
                 elif kind == "audio_error":
                     audio_failed = True
                     yield event_line(kind, seq, turn_id, attempt_id, code=payload)
@@ -131,6 +140,12 @@ async def stream_answer(
                 elif kind == "audio_done":
                     audio_finished = True
                     audio_failed = audio_failed or payload
+            if cache_writer is not None:
+                if not audio_failed and assistant_message_id and final_text:
+                    await persist_writer(cache_writer, assistant_message_id, final_text)
+                else:
+                    await cache_writer.abort()
+                cache_writer = None
             mark_audio("AUDIO_FAILED" if audio_failed else None)
             completed = True
             yield event_line("turn_completed", seq, turn_id, attempt_id,
@@ -156,6 +171,8 @@ async def stream_answer(
                                  code="STREAM_FAILED", retryable=True,
                                  conversation_id=conversation_id, user_message_id=user_message_id)
     finally:
+        if cache_writer is not None:
+            await cache_writer.abort()
         reader.cancel()
         worker.cancel()
         await asyncio.gather(reader, worker, return_exceptions=True)

@@ -63,6 +63,19 @@ class MessageModel(Base):
     grammar_feedback = relationship("GrammarFeedbackModel", back_populates="message", uselist=False, cascade="all, delete-orphan")
 
 
+class ConversationAudioCacheModel(Base):
+    """파일 위치와 생성 lease를 메시지별로 보관해요."""
+
+    __tablename__ = "conversation_audio_cache"
+
+    message_id = Column(String(36), ForeignKey("messages.id", ondelete="CASCADE"), primary_key=True)
+    manifest_json = Column(Text, nullable=True)
+    status = Column(String(16), nullable=False, default="generating")
+    lease_id = Column(String(36), nullable=True)
+    lease_until = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
 class ConversationSlotGrantModel(Base):
     """검증된 영구 단품 구매가 부여한 대화 슬롯."""
 
@@ -131,7 +144,7 @@ class StreamTurnModel(Base):
     input_json = Column(Text, nullable=False)
     conversation_id = Column(String(36), ForeignKey("conversations.id", ondelete="CASCADE"), nullable=True, index=True)
     user_message_id = Column(String(36), ForeignKey("messages.id", ondelete="SET NULL"), nullable=True)
-    assistant_message_id = Column(String(36), ForeignKey("messages.id", ondelete="SET NULL"), nullable=True)
+    assistant_message_id = Column(String(36), ForeignKey("messages.id", ondelete="SET NULL"), nullable=True, index=True)
     status = Column(String(16), nullable=False, default="pending")
     audio_status = Column(String(16), nullable=False, default="pending")
     audio_attempt_id = Column(String(36), nullable=True)

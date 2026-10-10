@@ -201,6 +201,15 @@ class StreamTurnStore:
         self.db.commit()
         return self.get(user_id, turn_id)
 
+    def renew_audio(self, turn_id: str, audio_attempt_id: str) -> bool:
+        now = datetime.utcnow()
+        changed = self.db.query(StreamTurnModel).filter_by(
+            id=turn_id, status="completed", audio_status="pending",
+            audio_attempt_id=audio_attempt_id,
+        ).update({"deadline_at": now + TURN_DEADLINE, "updated_at": now}, synchronize_session=False)
+        self.db.commit()
+        return bool(changed)
+
     def _expire(self, turn: StreamTurnModel) -> None:
         if turn.deadline_at >= datetime.utcnow():
             return

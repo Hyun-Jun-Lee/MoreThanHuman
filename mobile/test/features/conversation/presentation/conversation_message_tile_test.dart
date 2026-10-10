@@ -8,6 +8,108 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('reopened assistant message offers replay and stop', (
+    WidgetTester tester,
+  ) async {
+    final replayCompleter = Completer<void>();
+    final requests = <String>[];
+    final stops = <String>[];
+    await tester.pumpWidget(
+      _app(
+        ConversationMessage(
+          id: 'assistant-message-id',
+          conversationId: 'conversation-id',
+          role: ConversationMessageRole.assistant,
+          content: 'Welcome back.',
+          createdAt: DateTime.utc(2026, 7, 2),
+          audioAvailable: true,
+        ),
+        onReplayAudio: (id) {
+          requests.add(id);
+          return replayCompleter.future;
+        },
+        onStopAudio: (id) async {
+          stops.add(id);
+          replayCompleter.complete();
+        },
+      ),
+    );
+
+    expect(find.byTooltip('Replay response'), findsOneWidget);
+    await tester.tap(find.byTooltip('Replay response'));
+    await tester.pump();
+    expect(requests, <String>['assistant-message-id']);
+    expect(find.byTooltip('Stop audio response'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Stop audio response'));
+    await tester.pump();
+    expect(stops, <String>['assistant-message-id']);
+    expect(find.byTooltip('Replay response'), findsOneWidget);
+  });
+
+  testWidgets('replay failure keeps speaker available for retry', (
+    WidgetTester tester,
+  ) async {
+    var requests = 0;
+    await tester.pumpWidget(
+      _app(
+        ConversationMessage(
+          id: 'assistant-message-id',
+          conversationId: 'conversation-id',
+          role: ConversationMessageRole.assistant,
+          content: 'Welcome back.',
+          createdAt: DateTime.utc(2026, 7, 2),
+          audioAvailable: true,
+        ),
+        onReplayAudio: (_) async {
+          requests++;
+          throw StateError('Replay failed');
+        },
+      ),
+    );
+
+    await tester.tap(find.byTooltip('Replay response'));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Replay response'), findsOneWidget);
+    expect(
+      find.textContaining('Audio for this response is unavailable.'),
+      findsWidgets,
+    );
+    await tester.tap(find.byTooltip('Replay response'));
+    await tester.pumpAndSettle();
+    expect(requests, 2);
+  });
+
+  testWidgets('disposing a replaying tile cancels its audio request', (
+    WidgetTester tester,
+  ) async {
+    final replayCompleter = Completer<void>();
+    final stops = <String>[];
+    await tester.pumpWidget(
+      _app(
+        ConversationMessage(
+          id: 'assistant-message-id',
+          conversationId: 'conversation-id',
+          role: ConversationMessageRole.assistant,
+          content: 'Welcome back.',
+          createdAt: DateTime.utc(2026, 7, 2),
+          audioAvailable: true,
+        ),
+        onReplayAudio: (_) => replayCompleter.future,
+        onStopAudio: (id) async {
+          stops.add(id);
+          replayCompleter.complete();
+        },
+      ),
+    );
+    await tester.tap(find.byTooltip('Replay response'));
+    await tester.pump();
+
+    await tester.pumpWidget(const SizedBox.shrink());
+
+    expect(stops, <String>['assistant-message-id']);
+  });
+
   testWidgets('shows completed no-error feedback as green icon only', (
     WidgetTester tester,
   ) async {
@@ -259,6 +361,8 @@ Widget _app(
   ConversationAudioPlayer? audioPlayer,
   bool autoPlayAudio = false,
   VoidCallback? onAutoPlayStarted,
+  Future<void> Function(String)? onReplayAudio,
+  Future<void> Function(String)? onStopAudio,
 }) {
   return ProviderScope(
     overrides: [
@@ -272,6 +376,8 @@ Widget _app(
           message: message,
           autoPlayAudio: autoPlayAudio,
           onAutoPlayStarted: onAutoPlayStarted,
+          onReplayAudio: onReplayAudio,
+          onStopAudio: onStopAudio,
         ),
       ),
     ),

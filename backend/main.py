@@ -1,6 +1,7 @@
 """
 FastAPI 메인 애플리케이션
 """
+import os
 import re
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -41,6 +42,12 @@ configure_logging()
 async def lifespan(_app: FastAPI):
     """애플리케이션 생명주기 관리"""
     # Startup
+    if settings.audio_cache_dir:
+        cache_dir = Path(settings.audio_cache_dir)
+        if not cache_dir.is_absolute() or not cache_dir.is_dir() or not os.access(cache_dir, os.W_OK):
+            raise RuntimeError("AUDIO_CACHE_DIR must be an existing writable absolute directory")
+        if not settings.is_dev and not os.path.ismount(cache_dir):
+            raise RuntimeError("AUDIO_CACHE_DIR must be a mounted persistent volume in production")
     if settings.auto_create_tables:
         Base.metadata.create_all(bind=engine)
         log_event("app.database.metadata_created")

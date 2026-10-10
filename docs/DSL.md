@@ -420,6 +420,7 @@ module Conversation {
     content: String
     created_at: DateTime
     grammar_feedback?: GrammarFeedback
+    audio_available: Boolean
   }
 
   type ConversationResponse {
@@ -479,7 +480,7 @@ module Conversation {
 
 #### 대화 음성 스트림 v1 (1~6단계)
 
-`20261005_0001` migration은 `stream_turns`와 `stream_attempts`를 추가해요. `20261009_0001`은 오디오 재합성 시도 ID와 대화별 미해결 turn 고유 제약을 추가해요. 사용자·요청 키는 중복 생성을 막고, turn의 `pending/completed/failed`와 별개로 `audio_status`를 기록해요. 기한이 지난 pending 상태는 조회 시 실패로 정리해요. 배포 전 두 migration을 순서대로 적용해야 해요.
+`20261005_0001` migration은 `stream_turns`와 `stream_attempts`를 추가해요. `20261009_0001`은 오디오 재합성 시도 ID와 대화별 미해결 turn 고유 제약을 추가해요. `20261010_0001`은 문장별 MP3 파일의 manifest와 재생성 lease를 저장해요. 사용자·요청 키는 중복 생성을 막고, turn의 `pending/completed/failed`와 별개로 `audio_status`를 기록해요. 기한이 지난 pending 상태는 조회 시 실패로 정리해요. 배포 전 migration을 순서대로 적용해야 해요.
 
 | API | 계약 |
 |-----|------|
@@ -492,11 +493,11 @@ module Conversation {
 | `GET /api/conversations/turns/by-request/{request_id}/` | 첫 이벤트 전 연결이 끊겨 turn ID를 받지 못한 경우 요청 UUID로 상태를 조회해요. |
 | `GET /api/conversations/{id}/turns/` | 대화 소유자에게만 pending·failed turn과 오디오가 failed인 완료 turn을 최신순 JSON envelope로 반환해요. |
 | `POST /api/conversations/turns/{turn_id}/retry/stream/` | 실패한 AI 생성을 저장된 입력으로 다시 시도해요. 새 사용자 발화와 STT는 만들지 않아요. |
-| `POST /api/conversations/messages/{assistant_message_id}/audio/stream/` | 저장된 AI 답변의 TTS만 다시 실행해요. |
+| `POST /api/conversations/messages/{assistant_message_id}/audio/stream/` | 저장된 MP3가 모두 정상이면 재생하고, 파일이 없거나 손상됐으면 저장된 답변에서 TTS를 한 번 다시 생성해요. 소유자 인증을 확인하고 중복 생성은 409예요. |
 
 NDJSON 각 줄에는 `event`, 0부터 증가하는 `seq`, `turn_id`, `attempt_id`가 있어요. `turn_started` 뒤 확정 사용자 발화가 있으면 `user_message_committed`를 보내고, 생성 중 `text_delta`와 문장별 `audio_segment`(`segment_index`, `text`, `content_type`, `format`, `base64`)를 보내요. 끝에는 `turn_completed`(`conversation_id`, `assistant_message_id`, `text`, `audio_status`) 또는 `turn_error` 하나를 보내요. TTS 실패 때는 `audio_error` 뒤 `audio_status: failed`인 `turn_completed`를 보내고 AI 메시지는 보존해요. 연결 단절 때는 마지막 이벤트를 받았다고 추정하지 않고 상태 조회로 확인해요. 같은 키의 중복 요청은 현재 상태에 따라 HTTP 409 `TURN_IN_PROGRESS`, `TURN_ALREADY_COMPLETED`, `TURN_FAILED_RETRY_REQUIRED`예요. 앱은 증분 UTF-8로 읽고, 세그먼트를 순서대로 재생해요.
 
-새 모바일 앱은 위 대화 흐름의 스트림 경로를 사용해요. 기존 JSON 경로는 유지돼요. 실패한 AI 답변은 사용자가 재시도 버튼을 누를 때만 다시 생성하고, 음성만 실패하면 저장된 답변의 음성만 다시 합성해요. 실기기·프록시·동시 부하 검증은 [7단계](VOICE_STREAMING.md#권장-개발-순서)예요.
+새 모바일 앱은 위 대화 흐름의 스트림 경로를 사용해요. 기존 JSON 경로는 유지돼요. `GET /api/conversations/{id}/messages/`의 완료된 스트림 assistant 메시지에는 `audio_available: true`가 포함돼요. 이 값은 재생 경로가 있다는 뜻이며 현재 파일 존재 여부는 뜻하지 않아요. TTS 조각을 정상 전달한 뒤 캐시 기록만 실패하면 음성은 완료로 유지하고 서버에 오류를 기록해요. 다음 재생 요청이 저장된 텍스트로 음성을 다시 생성해요. 실패한 AI 답변은 사용자가 재시도 버튼을 누를 때만 다시 생성하고, 음성 생성·재생 자체가 실패하면 앱에 오류와 다시 시도를 표시해요. 실기기·프록시·동시 부하 검증은 [7단계](VOICE_STREAMING.md#권장-개발-순서)예요.
 이전 turn이 미해결이면 새 발화는 409 `PREVIOUS_TURN_UNRESOLVED`예요. 앱은 `GET /api/conversations/{id}/turns/`에서 이전 turn을 찾아 상태 확인·수동 재시도를 제공하고, 거절된 새 발화를 저장된 메시지로 취급하지 않아요.
 
 홈은 발행된 주제가 있으면 최근 대화 로딩 상태와 저장된 대화 수에 관계없이 추천 주제를 보여줘요. 이전 주의 발행 주제도 보관되지 않았다면 시작할 수 있어요. 탭 시 검색·사실 확인·Topic Prep은 실행하지 않아요.

@@ -126,6 +126,7 @@ class Message(BaseModel):
     content: str
     created_at: datetime
     grammar_feedback: dict | None = None  # GrammarFeedback relationship
+    audio_available: bool = False
 
     class Config:
         from_attributes = True

@@ -1,6 +1,6 @@
 # 운영 가이드
 
-> 최종 갱신: 2026-10-09 · 배포·주간 생성·복구 절차
+> 최종 갱신: 2026-10-10 · 배포·주간 생성·복구 절차
 
 [실행 및 CLI](../README.md) · [환경변수](ENVIRONMENT.md) · [API 계약](DSL.md)
 
@@ -11,6 +11,26 @@
 - DB 백업과 미적용 Alembic revision을 확인해요. API 컨테이너는 시작할 때마다 `alembic upgrade head`를 먼저 실행해요. 스키마 변경이 있는 배포에서는 기존 API 쓰기와 생성 작업을 중지해 구버전 코드의 접근을 막아요.
 - **스낵 v2 revision 20260912_0001은 기존 language_snacks를 삭제해요.** 적용 후 별도 생성 전까지 Home 스낵 목록은 비어 있어요.
 - API 컨테이너의 8010 포트는 내부 네트워크에만 노출돼요. 외부 접근은 nginx의 80/443 포트를 통해 제공해요.
+- 음성 캐시용 호스트 디렉터리를 API 시작 전에 만들어야 해요. Compose는 bind source를 자동 생성하지 않고, API는 영속 마운트가 아니면 시작을 거부해요.
+
+## 대화 음성 파일 운영
+
+첫 배포 전에 호스트에서 전용 디스크의 여유 공간을 확인하고 음성 디렉터리를 만들어요. 다른 위치를 쓰면 `CURITALK_AUDIO_HOST_DIR`을 Compose 실행 환경에 지정해요. 컨테이너 내부 경로는 `/var/lib/curitalk/audio`예요.
+
+```bash
+sudo install -d -m 750 /var/lib/curitalk/audio
+df -h /var/lib/curitalk/audio
+```
+
+`20261010_0001` migration은 파일 manifest와 생성 lease를 DB에 추가하고 메시지 조회 인덱스를 만들어요. MP3 문장 조각을 먼저 임시 디렉터리에 쓰고 모든 조각이 완성되면 공개해요. 메시지 목록의 `audio_available`은 재생 가능한 스트림 메시지라는 표시예요. 재생 때 저장 파일이 없거나 손상됐으면 해당 답변 전체를 다시 합성하고 같은 저장소에 기록해요. 다른 워커가 합성 중이면 409를 반환해요. 대화 삭제 시 관련 파일을 지우며, 파일 삭제에 실패하면 정리 작업이 DB에 없는 메시지 디렉터리를 다음 실행에서 다시 삭제해요.
+
+파일 보관 기간은 `AUDIO_CACHE_RETENTION_DAYS=30`이 기본이에요. 운영 호스트의 cron에서 매일 정리 작업을 등록해요. 아래 경로를 실제 저장소·환경 파일 경로로 바꾸고, `docker compose run --rm audio-cache-cleanup`이 성공하는지 먼저 확인해요.
+
+```cron
+17 4 * * * cd /path/to/MoreThanHuman && CURITALK_ENV_FILE=/secure/path/curitalk.env /usr/bin/docker compose run --rm audio-cache-cleanup >> /var/log/curitalk-audio-cleanup.log 2>&1
+```
+
+`du -sh /var/lib/curitalk/audio`와 `df -h`로 사용량·여유 공간을 확인하고, 남은 공간이 10% 또는 10GB 미만이면 운영 알림을 설정해요. `conversation.audio_cache.hit`·`miss`·`regenerated` 로그의 비율과 정리 작업 종료 코드, `orphaned_audio_messages_removed`·`expired_audio_generations_removed` 결과를 점검해요. 삭제 실패가 있으면 정리 명령은 0이 아닌 종료 코드로 끝나며 다음 실행에서 재시도해요. DB manifest는 만료 뒤에도 남을 수 있으며 파일 누락으로 판정되면 다음 재생 요청에서 다시 생성해요. 디스크를 교체하거나 복구할 때는 경로와 권한을 먼저 복원하고 API를 시작해요. 음성 파일만 잃어도 저장된 대화 텍스트는 유지돼요.
 
 ## Docker 실행
 

@@ -64,6 +64,9 @@
 | `TTS_MAX_OUTPUT_MB` | 아니오 | `5` | base64 인코딩 전 TTS 응답 오디오 최대 크기 |
 | `VOICE_MAX_UPLOAD_MB` | 아니오 | `10` | STT 업로드 음성 파일 최대 크기 |
 | `VOICE_PROVIDER_TIMEOUT_SECONDS` | 아니오 | `60` | STT/TTS provider 요청 timeout |
+| `AUDIO_CACHE_DIR` | 아니오 | 없음 | 호스트 음성 캐시의 컨테이너 내부 절대 경로. Compose는 `/var/lib/curitalk/audio`를 주입해요. 운영에서 설정하면 기존 쓰기 가능한 마운트여야 해요. |
+| `AUDIO_CACHE_RETENTION_DAYS` | 아니오 | `30` | 마지막 생성 후 만료시킬 파일 보관 기간. 정리 작업을 주기적으로 실행해야 해요. |
+| `CURITALK_AUDIO_HOST_DIR` | Compose 전용 | `/var/lib/curitalk/audio` | 호스트 bind mount 원본. API와 정리 작업이 같은 디렉터리를 사용해요. |
 | `SEARCH_SUMMARY_MAX_TOKENS` | 아니오 | `600` | 검색 요약 최대 토큰 |
 | `SEARCH_QUERY_ANALYSIS_MAX_TOKENS` | 아니오 | `500` | 검색어 분석 LLM 최대 토큰 |
 | `SEARCH_QUALITY_JUDGE_MAX_TOKENS` | 아니오 | `1000` | 검색 품질 판정 LLM 최대 토큰 |

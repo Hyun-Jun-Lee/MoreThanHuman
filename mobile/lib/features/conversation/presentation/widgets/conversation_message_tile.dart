@@ -17,12 +17,16 @@ class ConversationMessageTile extends ConsumerWidget {
     required this.message,
     this.autoPlayAudio = false,
     this.onAutoPlayStarted,
+    this.onReplayAudio,
+    this.onStopAudio,
     super.key,
   });
 
   final ConversationMessage message;
   final bool autoPlayAudio;
   final VoidCallback? onAutoPlayStarted;
+  final Future<void> Function(String messageId)? onReplayAudio;
+  final Future<void> Function(String messageId)? onStopAudio;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -47,11 +51,16 @@ class ConversationMessageTile extends ConsumerWidget {
         ChatBubble(
           message: message.content,
           speaker: isUser ? ChatSpeaker.user : ChatSpeaker.assistant,
-          footer: !isUser && message.audio != null
+          footer:
+              !isUser &&
+                  (message.audio != null ||
+                      (message.audioAvailable && onReplayAudio != null))
               ? _AssistantAudioSlot(
                   message: message,
                   autoPlayAudio: autoPlayAudio,
                   onAutoPlayStarted: onAutoPlayStarted,
+                  onReplayAudio: onReplayAudio,
+                  onStopAudio: onStopAudio,
                 )
               : null,
         ),
@@ -77,11 +86,15 @@ class _AssistantAudioSlot extends ConsumerStatefulWidget {
     required this.message,
     required this.autoPlayAudio,
     this.onAutoPlayStarted,
+    this.onReplayAudio,
+    this.onStopAudio,
   });
 
   final ConversationMessage message;
   final bool autoPlayAudio;
   final VoidCallback? onAutoPlayStarted;
+  final Future<void> Function(String messageId)? onReplayAudio;
+  final Future<void> Function(String messageId)? onStopAudio;
 
   @override
   ConsumerState<_AssistantAudioSlot> createState() =>
@@ -91,6 +104,28 @@ class _AssistantAudioSlot extends ConsumerStatefulWidget {
 class _AssistantAudioSlotState extends ConsumerState<_AssistantAudioSlot> {
   _AssistantAudioPhase _phase = _AssistantAudioPhase.idle;
   bool _autoPlayStarted = false;
+
+  @override
+  void dispose() {
+    if (widget.message.audio == null &&
+        (_phase == _AssistantAudioPhase.loading ||
+            _phase == _AssistantAudioPhase.playing)) {
+      final stop = widget.onStopAudio;
+      if (stop != null) unawaited(_stopOnDispose(stop, widget.message.id));
+    }
+    super.dispose();
+  }
+
+  Future<void> _stopOnDispose(
+    Future<void> Function(String messageId) stop,
+    String messageId,
+  ) async {
+    try {
+      await stop(messageId);
+    } on Object {
+      // 화면 이탈 중 재생 취소 실패는 이미 사라진 위젯에 표시하지 않아요.
+    }
+  }
 
   @override
   void initState() {
@@ -111,7 +146,8 @@ class _AssistantAudioSlotState extends ConsumerState<_AssistantAudioSlot> {
   @override
   Widget build(BuildContext context) {
     final VoiceAudioResponse? audio = widget.message.audio;
-    if (audio == null) {
+    if (audio == null &&
+        (!widget.message.audioAvailable || widget.onReplayAudio == null)) {
       return const SizedBox.shrink();
     }
 
@@ -124,7 +160,7 @@ class _AssistantAudioSlotState extends ConsumerState<_AssistantAudioSlot> {
       child: Tooltip(
         message: isBusy ? copy.stopAudioResponseLabel : copy.audioReplayLabel,
         child: IconButton(
-          onPressed: isBusy ? _stop : () => _play(audio),
+          onPressed: isBusy ? _stop : _play,
           iconSize: 20,
           padding: EdgeInsets.zero,
           constraints: const BoxConstraints.tightFor(width: 32, height: 32),
@@ -152,12 +188,12 @@ class _AssistantAudioSlotState extends ConsumerState<_AssistantAudioSlot> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         widget.onAutoPlayStarted?.call();
-        unawaited(_play(audio));
+        unawaited(_play());
       }
     });
   }
 
-  Future<void> _play(VoiceAudioResponse audio) async {
+  Future<void> _play() async {
     if (_phase == _AssistantAudioPhase.loading ||
         _phase == _AssistantAudioPhase.playing) {
       return;
@@ -166,9 +202,10 @@ class _AssistantAudioSlotState extends ConsumerState<_AssistantAudioSlot> {
       _phase = _AssistantAudioPhase.loading;
     });
     try {
-      final Future<void> playFuture = ref
-          .read(conversationAudioPlayerProvider)
-          .play(audio);
+      final VoiceAudioResponse? audio = widget.message.audio;
+      final Future<void> playFuture = audio != null
+          ? ref.read(conversationAudioPlayerProvider).play(audio)
+          : widget.onReplayAudio!(widget.message.id);
       if (!mounted) {
         return;
       }
@@ -177,7 +214,7 @@ class _AssistantAudioSlotState extends ConsumerState<_AssistantAudioSlot> {
       if (mounted) {
         setState(() => _phase = _AssistantAudioPhase.idle);
       }
-    } on ConversationAudioException catch (error) {
+    } on Object catch (error) {
       if (mounted) {
         setState(() {
           _phase = _AssistantAudioPhase.error;
@@ -185,7 +222,11 @@ class _AssistantAudioSlotState extends ConsumerState<_AssistantAudioSlot> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              AppCopy.of(context).failureMessage(error.reason.name),
+              AppCopy.of(context).failureMessage(
+                error is ConversationAudioException
+                    ? error.reason.name
+                    : 'assistantAudioUnavailable',
+              ),
             ),
           ),
         );
@@ -199,13 +240,21 @@ class _AssistantAudioSlotState extends ConsumerState<_AssistantAudioSlot> {
       return;
     }
     try {
-      await ref.read(conversationAudioPlayerProvider).stop();
-    } on ConversationAudioException catch (error) {
+      if (widget.message.audio != null) {
+        await ref.read(conversationAudioPlayerProvider).stop();
+      } else {
+        await widget.onStopAudio?.call(widget.message.id);
+      }
+    } on Object catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              AppCopy.of(context).failureMessage(error.reason.name),
+              AppCopy.of(context).failureMessage(
+                error is ConversationAudioException
+                    ? error.reason.name
+                    : 'assistantAudioUnavailable',
+              ),
             ),
           ),
         );
@@ -219,7 +268,7 @@ class _AssistantAudioSlotState extends ConsumerState<_AssistantAudioSlot> {
 
   String _audioIdentity(ConversationMessage message) {
     final VoiceAudioResponse? audio = message.audio;
-    return '${message.id}:${audio?.contentType}:${audio?.format}:${audio?.base64.hashCode}:${message.audioError?.message}';
+    return '${message.id}:${message.audioAvailable}:${audio?.contentType}:${audio?.format}:${audio?.base64.hashCode}:${message.audioError?.message}';
   }
 }
 

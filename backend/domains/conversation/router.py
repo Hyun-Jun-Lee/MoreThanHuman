@@ -8,7 +8,7 @@ LatencyMiddleware에서 처리해요. JSON 계약은 유지하며 상세는 docs
 import asyncio
 import json
 import logging
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
@@ -43,6 +43,8 @@ from domains.conversation.schemas import (
     UpdateTitleRequest,
 )
 from domains.conversation.service import ConversationService
+from domains.conversation.audio_cache_flow import cache_files, new_writer, persist_writer
+from domains.conversation.audio_cache_store import AudioCacheStore
 from domains.conversation.stream_audio import completed_sentences, event_line
 from domains.conversation.stream_flow import PreparedGeneration, complete_generated_text, prepare_generation
 from domains.conversation.stream_pipeline import stream_answer
@@ -240,6 +242,7 @@ def _saved_question_audio_response(
         seq = 0
         audio_done = False
         audio_status = "completed"
+        cache_writer = new_writer()
         try:
             yield event_line("turn_started", seq, turn_id, attempt_id,
                              trace_id=trace_id, conversation_id=conversation_id)
@@ -256,6 +259,16 @@ def _saved_question_audio_response(
                                  content_type=audio.content_type, format=audio.format,
                                  base64=audio.base64)
                 seq += 1
+                if cache_writer is not None:
+                    try:
+                        await cache_writer.add(segment_index, sentence, audio)
+                    except Exception:
+                        logger.exception("Suggested question audio cache write failed", extra={"turn_id": turn_id})
+                        await cache_writer.abort()
+                        cache_writer = None
+            if cache_writer is not None:
+                await persist_writer(cache_writer, assistant_message_id, text)
+                cache_writer = None
             with SessionLocal() as db:
                 StreamTurnStore(db).complete_audio(turn_id, attempt_id=attempt_id)
             audio_done = True
@@ -268,6 +281,8 @@ def _saved_question_audio_response(
             yield event_line("audio_error", seq, turn_id, attempt_id, code="AUDIO_FAILED")
             seq += 1
         finally:
+            if cache_writer is not None:
+                await cache_writer.abort()
             if not audio_done:
                 with SessionLocal() as db:
                     StreamTurnStore(db).complete_audio(turn_id, error_code="STREAM_DISCONNECTED", attempt_id=attempt_id)
@@ -805,33 +820,87 @@ async def retry_stream_audio(
     current_user: ProfileModel = Depends(get_current_user),
     voice_service: VoiceService = Depends(get_voice_service),
 ):
+    message_id = str(assistant_message_id)
     with SessionLocal() as db:
         turn = db.query(StreamTurnModel).filter_by(
-            user_id=current_user.id, assistant_message_id=str(assistant_message_id),
+            user_id=current_user.id, assistant_message_id=message_id,
         ).one_or_none()
         if turn is None:
             raise HTTPException(status_code=404, detail="음성 turn을 찾을 수 없어요")
         ConversationRepository(db).find_by_id(turn.conversation_id, current_user.id)
-        try:
-            turn = StreamTurnStore(db).retry_audio(user_id=current_user.id, turn_id=turn.id)
-        except StreamTurnConflict as error:
-            raise _access_conflict(error.code, "음성 재시도 상태를 확인해 주세요") from error
         message = db.query(MessageModel).filter_by(
-            id=str(assistant_message_id), conversation_id=turn.conversation_id,
+            id=message_id, conversation_id=turn.conversation_id,
         ).one()
+        turn = StreamTurnStore(db).get(current_user.id, turn.id)
         turn_id, attempt_id = turn.id, turn.attempt_id
-        audio_attempt_id = turn.audio_attempt_id
         text = message.content
+        manifest = AudioCacheStore(db).manifest(message_id)
+        audio_status = turn.audio_status
+
+    if audio_status == "pending":
+        raise _access_conflict("AUDIO_RETRY_IN_PROGRESS", "음성이 생성 중이에요")
+    cache = cache_files()
+    try:
+        cached_audio = await cache.load(message_id, manifest, text) if cache and manifest else None
+    except OSError as error:
+        logger.exception("Conversation audio cache read failed", extra={"message_id": message_id})
+        raise HTTPException(status_code=503, detail={"code": "AUDIO_STORAGE_UNAVAILABLE",
+                                                     "message": "음성 파일을 읽을 수 없어요"}) from error
+    if cached_audio is not None:
+        log_event("conversation.audio_cache.hit")
+        replay_attempt_id = str(uuid4())
+
+        async def cached_events():
+            seq = 0
+            yield event_line("audio_started", seq, turn_id, attempt_id,
+                             assistant_message_id=message_id, audio_attempt_id=replay_attempt_id)
+            seq += 1
+            for index, (sentence, audio) in enumerate(cached_audio):
+                yield event_line("audio_segment", seq, turn_id, attempt_id,
+                                 assistant_message_id=message_id, audio_attempt_id=replay_attempt_id,
+                                 segment_index=index, text=sentence, content_type=audio.content_type,
+                                 format=audio.format, base64=audio.base64)
+                seq += 1
+            yield event_line("audio_completed", seq, turn_id, attempt_id,
+                             assistant_message_id=message_id, audio_attempt_id=replay_attempt_id)
+
+        return StreamingResponse(cached_events(), media_type="application/x-ndjson; charset=utf-8",
+                                 headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
+
+    lease_id = None
+    log_event("conversation.audio_cache.miss")
+    if cache:
+        with SessionLocal() as db:
+            lease_id = AudioCacheStore(db).claim(message_id, expected_manifest=manifest)
+        if lease_id is None:
+            raise _access_conflict("AUDIO_RETRY_IN_PROGRESS", "음성이 생성 중이에요")
+    try:
+        with SessionLocal() as db:
+            turn = StreamTurnStore(db).retry_audio(user_id=current_user.id, turn_id=turn_id)
+            audio_attempt_id = turn.audio_attempt_id
+    except StreamTurnConflict as error:
+        if lease_id:
+            with SessionLocal() as db:
+                AudioCacheStore(db).release(message_id, lease_id)
+        raise _access_conflict(error.code, "음성 재시도 상태를 확인해 주세요") from error
 
     async def events():
         seq = 0
         finished = False
+        cache_writer = new_writer()
+        active_lease_id = lease_id
         try:
             yield event_line("audio_started", seq, turn_id, attempt_id,
                              assistant_message_id=str(assistant_message_id),
                              audio_attempt_id=audio_attempt_id)
             seq += 1
             for index, sentence in enumerate(completed_sentences(text)):
+                if active_lease_id:
+                    with SessionLocal() as db:
+                        if not AudioCacheStore(db).renew(message_id, active_lease_id):
+                            raise RuntimeError("Audio cache generation lease was replaced")
+                        if not StreamTurnStore(db).renew_audio(turn_id, audio_attempt_id):
+                            raise RuntimeError("Audio retry attempt was replaced")
                 audio = await voice_service.synthesize_response(sentence)
                 yield event_line("audio_segment", seq, turn_id, attempt_id,
                                  assistant_message_id=str(assistant_message_id),
@@ -839,6 +908,18 @@ async def retry_stream_audio(
                                  text=sentence, content_type=audio.content_type,
                                  format=audio.format, base64=audio.base64)
                 seq += 1
+                if cache_writer is not None:
+                    try:
+                        await cache_writer.add(index, sentence, audio)
+                    except Exception:
+                        logger.exception("Stored answer audio cache write failed", extra={"turn_id": turn_id})
+                        await cache_writer.abort()
+                        cache_writer = None
+            if cache_writer is not None:
+                await persist_writer(cache_writer, message_id, text, lease_id=active_lease_id)
+                cache_writer = None
+                active_lease_id = None
+            log_event("conversation.audio_cache.regenerated")
             with SessionLocal() as db:
                 StreamTurnStore(db).complete_audio(turn_id, audio_attempt_id=audio_attempt_id)
             finished = True
@@ -856,6 +937,11 @@ async def retry_stream_audio(
                              assistant_message_id=str(assistant_message_id),
                              audio_attempt_id=audio_attempt_id, code="AUDIO_FAILED")
         finally:
+            if cache_writer is not None:
+                await cache_writer.abort()
+            if active_lease_id:
+                with SessionLocal() as db:
+                    AudioCacheStore(db).release(message_id, active_lease_id)
             if not finished:
                 with SessionLocal() as db:
                     StreamTurnStore(db).complete_audio(
@@ -1160,7 +1246,14 @@ def delete_conversation(
 ):
     """대화 삭제"""
     try:
-        service.repository.delete_by_id(str(conversation_id), current_user.id)
+        audio_message_ids = service.repository.delete_by_id(str(conversation_id), current_user.id)
+        cache = cache_files()
+        if cache:
+            for message_id in audio_message_ids:
+                try:
+                    cache.delete_message(message_id)
+                except (ValueError, OSError):
+                    logger.exception("Conversation audio cache deletion failed", extra={"message_id": message_id})
         return SuccessResponse(data={}, message="대화가 삭제되었습니다")
     except NotFoundException as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)

@@ -12,6 +12,13 @@ services:
       ENV: prod
       DEBUG: "false"
       AUTO_CREATE_TABLES: "false"
+      AUDIO_CACHE_DIR: /var/lib/curitalk/audio
+    volumes:
+      - type: bind
+        source: ${CURITALK_AUDIO_HOST_DIR:-/var/lib/curitalk/audio}
+        target: /var/lib/curitalk/audio
+        bind:
+          create_host_path: false
     command: >
       sh -c "alembic upgrade head &&
       uvicorn main:app --host 0.0.0.0 --port 8010 --workers 2 --proxy-headers --forwarded-allow-ips='*' --no-access-log"
@@ -40,6 +47,22 @@ services:
       DEBUG: "false"
       AUTO_CREATE_TABLES: "false"
     command: ["python", "-m", "scripts.generate_language_snacks"]
+    restart: "no"
+
+  audio-cache-cleanup:
+    image: curitalk-api:latest
+    profiles: ["jobs"]
+    env_file:
+      - ${CURITALK_ENV_FILE:-.env}
+    environment:
+      AUDIO_CACHE_DIR: /var/lib/curitalk/audio
+    volumes:
+      - type: bind
+        source: ${CURITALK_AUDIO_HOST_DIR:-/var/lib/curitalk/audio}
+        target: /var/lib/curitalk/audio
+        bind:
+          create_host_path: false
+    command: ["python", "-m", "scripts.cleanup_conversation_audio"]
     restart: "no"
 
   nginx:

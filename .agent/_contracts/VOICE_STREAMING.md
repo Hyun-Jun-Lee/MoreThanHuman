@@ -1,6 +1,6 @@
 # Voice Streaming v1 — REVIEW
 
-> 상태: REVIEW · 갱신: 2026-10-09 · 기준: [음성 스트리밍 설계](../../docs/VOICE_STREAMING.md)
+> 상태: REVIEW · 갱신: 2026-10-10 · 기준: [음성 스트리밍 설계](../../docs/VOICE_STREAMING.md)
 
 이 계약은 대화 화면 전체의 문장별 완성 오디오를 정의해요. 1~6단계의 경로와 앱 연결을 구현했고, 실기기·프록시·동시 부하 검증은 7단계로 남아 있어요. 활성 경로는 [DSL](../../docs/DSL.md)에 있어요.
 
@@ -24,7 +24,7 @@
 | `GET /api/conversations/turns/by-request/{request_id}/` | 첫 이벤트 전 끊긴 요청의 소유자·요청 키 확인 | JSON 상태 | 구현 |
 | `GET /api/conversations/{id}/turns/` | 인증·대화 소유권 확인 | JSON 미완료·실패 turn 목록 | 구현 |
 | `POST /api/conversations/turns/{turn_id}/retry/stream/` | 실패 turn 재시도. STT 전에 실패한 녹음은 원래 시작 경로로 다시 전송 | NDJSON | 구현 |
-| `POST /api/conversations/messages/{assistant_message_id}/audio/stream/` | 저장된 assistant 메시지의 음성만 재합성 | NDJSON | 구현 |
+| `POST /api/conversations/messages/{assistant_message_id}/audio/stream/` | 저장 파일 우선 재생, 누락·손상 시 음성 재생성 | NDJSON | 구현 |
 
 스트림 경로에서는 음성 출력이 필수예요. 기존 요청에 `include_audio_response`가 있어도 스트림 응답은 항상 오디오를 생성해요. 새 앱은 `Accept: application/x-ndjson`을 보내고 성공 응답은 `Content-Type: application/x-ndjson; charset=utf-8`, `Cache-Control: no-store`를 사용해요. 기존 JSON 경로의 입력·출력은 바꾸지 않아요.
 
@@ -53,7 +53,7 @@
 
 `turn_completed`와 `turn_error` 중 하나만 terminal event예요. 인증·입력·권한·슬롯·발화 한도 오류는 스트림 시작 전에 기존 의미의 HTTP 상태와 JSON 오류로 반환해요. 스트림 시작 후에는 HTTP 상태를 변경할 수 없으므로 `turn_error`를 사용해요. 연결이 terminal event 없이 끊기면 앱은 turn 상태를 조회하고 완료를 추정하지 않아요. 이벤트의 `seq`와 `turn_id`·`attempt_id`로 중복·이전 시도 이벤트를 버려요.
 
-오디오 전용 재합성 경로는 동일한 `audio_segment` 내용을 쓰되 모든 이벤트에 `assistant_message_id`, `audio_attempt_id`, `seq`를 넣고 `audio_started` → `audio_segment` 반복 → `audio_completed` 또는 `audio_error`로 끝나요. 이 경로는 assistant 텍스트나 사용자 발화를 추가 저장하지 않아요.
+오디오 전용 경로는 동일한 `audio_segment` 내용을 쓰되 모든 이벤트에 `assistant_message_id`, `audio_attempt_id`, `seq`를 넣고 `audio_started` → `audio_segment` 반복 → `audio_completed` 또는 `audio_error`로 끝나요. 저장 파일이 모두 정상이면 TTS를 호출하지 않아요. 한 파일이라도 없거나 손상됐으면 기존 텍스트에서 전체 음성을 다시 생성해요. 생성 중 중복 요청은 409 `AUDIO_RETRY_IN_PROGRESS`예요. 이 경로는 assistant 텍스트나 사용자 발화를 추가 저장하지 않아요. 메시지 목록의 `audio_available`은 완료된 스트림 assistant 메시지에서 true이며 파일 상태와 무관하게 다시 듣기 가능 여부를 나타내요. TTS 조각 전달은 성공했지만 파일 저장만 실패했다면 `audio_status`는 `completed`예요. 저장 오류는 서버 로그로 관측하고, 사용자가 다시 듣기를 누를 때 재합성으로 복구해요. 앱의 음성 오류 표시는 TTS 생성 또는 재생 자체가 실패한 경우에 사용해요.
 
 ## 저장과 상태 전이
 

@@ -137,7 +137,7 @@ domains/{name}/
 
 `shared/latency.py`의 ASGI middleware는 모든 `/api/` 요청과 `/health`에 요청별 ContextVar를 설정해 최종 body 전송까지 측정해요. 요청마다 JSON stdout 완료 로그 한 건을 내고, 보호 API의 인증 확인과 대화의 auth·STT·LLM·TTS·인코딩 단계를 같은 trace로 연결해요. `shared/logging_config.py`는 허용 필드만 직렬화하고 500 오류의 예외 종류·스택 위치에서 메시지와 지역 변수를 제외해요. nginx는 자체 요청 ID와 upstream 시간을 JSON으로 남기며 Docker가 API·nginx 로그를 회전해요. Flutter의 첫 playing 이벤트 측정은 유지해요. [로그 계약](../docs/OBSERVABILITY.md), [음성 실험](../docs/VOICE_LATENCY.md), [스트리밍 설계·단계별 구현](../docs/VOICE_STREAMING.md)을 참조해요.
 
-대화 음성 스트림은 `stream_turns`·`stream_attempts`에 시도·오디오 상태를 기록해요. 주간 추천은 저장된 첫 질문을 합성하고, Free Chat·Roleplay 시작과 기존 대화의 `/turn/stream/`·`/message/stream/`은 LLM 토큰 reader, 문장 분리, 최대 2개씩 제한된 큐와 단일 TTS worker를 사용해요. 확정된 사용자 발화는 생성 전에 저장하고, 완성된 AI 답변만 저장해요. 연결 중 상태 변경은 독립 DB session에서 처리해요. 앱은 Dio 증분 decoder·단일 재생 큐로 문장 오디오를 순서대로 재생하고, 실패 후 상태 조회·수동 재시도·저장된 답변의 오디오 재합성을 제공해요. 화면 이탈 때 요청과 큐를 취소해요.
+대화 음성 스트림은 `stream_turns`·`stream_attempts`에 시도·오디오 상태를 기록해요. 주간 추천은 저장된 첫 질문을 합성하고, Free Chat·Roleplay 시작과 기존 대화의 `/turn/stream/`·`/message/stream/`은 LLM 토큰 reader, 문장 분리, 최대 2개씩 제한된 큐와 단일 TTS worker를 사용해요. 확정된 사용자 발화는 생성 전에 저장하고, 완성된 AI 답변만 저장해요. 연결 중 상태 변경은 독립 DB session에서 처리해요. 문장별 MP3는 호스트 bind mount의 staging 디렉터리에 쓰고 완료 후 원자적으로 공개해요. `conversation_audio_cache`는 manifest와 다중 워커 생성 lease를 보관해요. 다시 듣기는 파일 전체를 검사한 뒤 캐시를 재생하고, 누락·손상 시 저장된 텍스트에서 재생성해요. 30일 파일 만료는 운영 cron 작업이 실행하며 대화 삭제 시 파일도 제거해요. 앱은 Dio 증분 decoder·단일 재생 큐로 문장 오디오를 순서대로 재생하고, 완료된 assistant 메시지에 다시 듣기 버튼을 표시해요. 화면 이탈 때 요청과 큐를 취소해요.
 
 ### 인증
 

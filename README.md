@@ -62,7 +62,7 @@ Flutter는 서버 .env를 자동으로 읽지 않아요. 위 공개 설정을 �
 docker compose up -d --build --force-recreate --no-deps api
 ```
 
-컨테이너 시작 시 마이그레이션도 실행돼요. API의 8010 포트는 호스트에 직접 공개되지 않으며 nginx를 통해 접근해요. 최초 설치·HTTPS·복구는 [운영 가이드](docs/OPERATIONS.md)를 참고해요.
+컨테이너 시작 시 마이그레이션도 실행돼요. 음성 캐시를 사용할 때는 첫 배포 전에 호스트의 `/var/lib/curitalk/audio` 디렉터리를 만들고 [만료 작업](docs/OPERATIONS.md#대화-음성-파일-운영)을 등록해요. API의 8010 포트는 호스트에 직접 공개되지 않으며 nginx를 통해 접근해요. 최초 설치·HTTPS·복구는 [운영 가이드](docs/OPERATIONS.md)를 참고해요.
 
 ## CLI 명령어
 

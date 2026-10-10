@@ -119,6 +119,14 @@ class Settings(BaseSettings):
     tts_max_output_mb: int = 5
     voice_max_upload_mb: int = 10
     voice_provider_timeout_seconds: float = 60.0
+    audio_cache_dir: str | None = None
+    audio_cache_retention_days: int = Field(30, ge=1)
+
+    @model_validator(mode="after")
+    def validate_audio_cache_format(self) -> "Settings":
+        if self.audio_cache_dir and self.tts_response_format != "mp3":
+            raise ValueError("AUDIO_CACHE_DIR requires TTS_RESPONSE_FORMAT=mp3")
+        return self
 
     @property
     def is_dev(self) -> bool:

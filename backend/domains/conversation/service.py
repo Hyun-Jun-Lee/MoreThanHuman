@@ -550,6 +550,8 @@ class ConversationService:
         # user_id 검증
         self.repository.find_by_id(conversation_id, user_id)
         messages = self.repository.get_messages(conversation_id, limit, offset)
+        assistant_ids = [m.id for m in messages if m.role == MessageRole.ASSISTANT]
+        audio_ids = self.repository.completed_audio_message_ids(assistant_ids)
         results = []
         for m in messages:
             # MessageModel을 dict로 변환
@@ -559,7 +561,8 @@ class ConversationService:
                 "role": m.role,
                 "content": m.content,
                 "created_at": m.created_at,
-                "grammar_feedback": None
+                "grammar_feedback": None,
+                "audio_available": m.id in audio_ids,
             }
 
             # grammar_feedback가 있으면 dict로 변환

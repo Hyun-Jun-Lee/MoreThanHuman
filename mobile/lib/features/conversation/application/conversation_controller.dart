@@ -151,6 +151,7 @@ class ConversationController extends AsyncNotifier<ConversationState> {
   final String conversationId;
   static const int _pageSize = 40;
   CancelToken? _activeStreamToken;
+  String? _activeReplayMessageId;
   final Queue<VoiceAudioResponse> _audioQueue = Queue<VoiceAudioResponse>();
   bool _playingAudio = false;
   int _audioGeneration = 0;
@@ -159,6 +160,7 @@ class ConversationController extends AsyncNotifier<ConversationState> {
   Future<void> cancelActiveStream() async {
     _activeStreamToken?.cancel('Conversation screen closed');
     _activeStreamToken = null;
+    _activeReplayMessageId = null;
     _audioGeneration++;
     _audioQueue.clear();
     try {
@@ -783,6 +785,7 @@ class ConversationController extends AsyncNotifier<ConversationState> {
                     role: ConversationMessageRole.assistant,
                     content: completedText,
                     createdAt: DateTime.now(),
+                    audioAvailable: true,
                   ),
                 ],
                 isSending: false,
@@ -1054,6 +1057,89 @@ class ConversationController extends AsyncNotifier<ConversationState> {
     } finally {
       if (identical(_activeStreamToken, token)) _activeStreamToken = null;
     }
+  }
+
+  Future<void> playAssistantAudio(String assistantId) async {
+    final repository = ref.read(conversationRepositoryProvider);
+    if (repository is! ApiConversationRepository ||
+        state.value?.isSending == true) {
+      throw StateError('Assistant audio is unavailable.');
+    }
+    if (_activeReplayMessageId == assistantId) return;
+    if (_activeReplayMessageId != null) {
+      await stopAssistantAudio(_activeReplayMessageId!);
+    } else if (_playingAudio || _audioQueue.isNotEmpty) {
+      await cancelActiveStream();
+    }
+
+    final token = CancelToken();
+    _activeStreamToken = token;
+    _activeReplayMessageId = assistantId;
+    var expectedSeq = 0;
+    var nextSegment = 0;
+    var started = false;
+    var completed = false;
+    try {
+      await for (final event
+          in ConversationStreamApi(repository.apiClient).events(
+            path: 'conversations/messages/$assistantId/audio/stream/',
+            cancelToken: token,
+          )) {
+        if (!ref.mounted || token.isCancelled) return;
+        if (event['seq'] != expectedSeq++) {
+          throw const FormatException('Out-of-order audio replay event.');
+        }
+        switch (event['event']) {
+          case 'audio_started':
+            if (started || expectedSeq != 1) {
+              throw const FormatException('Duplicate audio replay start.');
+            }
+            started = true;
+            break;
+          case 'audio_segment':
+            if (!started || event['segment_index'] != nextSegment++) {
+              throw const FormatException('Out-of-order audio replay segment.');
+            }
+            await ref
+                .read(conversationAudioPlayerProvider)
+                .play(VoiceAudioResponse.fromJson(event));
+            break;
+          case 'audio_completed':
+            if (!started) {
+              throw const FormatException('Audio replay ended before start.');
+            }
+            completed = true;
+            break;
+          case 'audio_error':
+            throw const ConversationAudioException(
+              'Assistant audio is unavailable.',
+              reason: ConversationAudioExceptionReason.playbackFailed,
+            );
+          default:
+            throw const FormatException('Unknown audio replay event.');
+        }
+      }
+      if (!token.isCancelled && !completed) {
+        throw const FormatException('Audio replay ended without completion.');
+      }
+    } on Object {
+      if (token.isCancelled) return;
+      token.cancel('Audio replay failed');
+      rethrow;
+    } finally {
+      if (identical(_activeStreamToken, token)) {
+        _activeStreamToken = null;
+        _activeReplayMessageId = null;
+      }
+    }
+  }
+
+  Future<void> stopAssistantAudio(String assistantId) async {
+    if (_activeReplayMessageId != assistantId) return;
+    _activeStreamToken?.cancel('Audio replay stopped');
+    _activeStreamToken = null;
+    _activeReplayMessageId = null;
+    await ref.read(conversationAudioPlayerProvider).stop();
   }
 
   Future<void> refreshTurnStatus() async {

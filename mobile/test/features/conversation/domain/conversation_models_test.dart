@@ -2,6 +2,21 @@ import 'package:curitalk/features/conversation/conversation.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('parses replay availability without inline audio', () {
+    final message = ConversationMessage.fromJson(<String, dynamic>{
+      'id': 'assistant-id',
+      'conversation_id': 'conversation-id',
+      'role': 'assistant',
+      'content': 'Hello again.',
+      'created_at': '2026-07-02T00:00:00Z',
+      'audio_available': true,
+    });
+
+    expect(message.audioAvailable, isTrue);
+    expect(message.audio, isNull);
+    expect(message.copyWith(content: 'Updated.').audioAvailable, isTrue);
+  });
+
   test('parses conversation start response', () {
     final ConversationResponse response =
         ConversationResponse.fromJson(<String, dynamic>{

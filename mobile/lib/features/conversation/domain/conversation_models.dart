@@ -357,6 +357,7 @@ class ConversationMessage {
     this.grammarFeedback,
     this.audio,
     this.audioError,
+    this.audioAvailable = false,
     this.isLocalPending = false,
   });
 
@@ -389,6 +390,7 @@ class ConversationMessage {
       grammarFeedback: json['grammar_feedback'] == null
           ? null
           : GrammarFeedback.fromJson(json['grammar_feedback']),
+      audioAvailable: json['audio_available'] == true,
     );
   }
 
@@ -400,6 +402,7 @@ class ConversationMessage {
   final GrammarFeedback? grammarFeedback;
   final VoiceAudioResponse? audio;
   final VoiceAudioError? audioError;
+  final bool audioAvailable;
   final bool isLocalPending;
 
   ConversationMessage copyWith({
@@ -410,6 +413,7 @@ class ConversationMessage {
     GrammarFeedback? grammarFeedback,
     VoiceAudioResponse? audio,
     VoiceAudioError? audioError,
+    bool? audioAvailable,
     bool? isLocalPending,
   }) {
     return ConversationMessage(
@@ -421,6 +425,7 @@ class ConversationMessage {
       grammarFeedback: grammarFeedback ?? this.grammarFeedback,
       audio: audio ?? this.audio,
       audioError: audioError ?? this.audioError,
+      audioAvailable: audioAvailable ?? this.audioAvailable,
       isLocalPending: isLocalPending ?? this.isLocalPending,
     );
   }
