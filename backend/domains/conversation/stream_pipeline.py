@@ -3,10 +3,12 @@
 import asyncio
 import logging
 from collections.abc import AsyncIterator, Callable
+from time import perf_counter
 
 from domains.conversation.stream_audio import SentenceBuffer, event_line
 from domains.conversation.audio_cache_flow import new_writer, persist_writer
 from domains.voice.service import VoiceService
+from shared.logging_config import log_event
 
 logger = logging.getLogger(__name__)
 _DONE = object()
@@ -30,10 +32,35 @@ async def stream_answer(
     """두 문장과 두 결과를 넘지 않도록 생산자를 역압박해요."""
     sentences: asyncio.Queue[object] = asyncio.Queue(maxsize=2)
     results: asyncio.Queue[tuple[str, object]] = asyncio.Queue(maxsize=2)
+    stream_started = perf_counter()
+
+    def milestone(stage: str, *, segment_index: int | None = None) -> None:
+        log_event(
+            "conversation.stream.milestone",
+            stage=stage,
+            duration_ms=round((perf_counter() - stream_started) * 1000, 1),
+            turn_id=turn_id,
+            attempt_id=attempt_id,
+            segment_index=segment_index,
+        )
+
+    def delta_milestone(stage: str, index: int, delta: str) -> None:
+        if index >= 32:
+            return
+        log_event(
+            "conversation.stream.delta",
+            stage=stage,
+            duration_ms=round((perf_counter() - stream_started) * 1000, 1),
+            turn_id=turn_id,
+            attempt_id=attempt_id,
+            delta_index=index,
+            delta_chars=len(delta),
+        )
 
     async def read_llm() -> None:
         buffer = SentenceBuffer()
         parts: list[str] = []
+        first_sentence_ready = False
         try:
             iterator = deltas.__aiter__()
             first_token = True
@@ -44,15 +71,26 @@ async def stream_answer(
                 except StopAsyncIteration:
                     break
                 first_token = False
+                index = len(parts)
+                if not parts:
+                    milestone("first_text_delta")
+                delta_milestone("llm_delta", index, delta)
                 parts.append(delta)
-                await results.put(("text_delta", delta))
+                await results.put(("text_delta", (index, delta)))
                 for sentence in buffer.feed(delta):
+                    if not first_sentence_ready:
+                        first_sentence_ready = True
+                        milestone("first_sentence_ready")
                     await sentences.put(sentence)
             for sentence in buffer.finish():
+                if not first_sentence_ready:
+                    first_sentence_ready = True
+                    milestone("first_sentence_ready")
                 await sentences.put(sentence)
             answer = "".join(parts).strip()
             if not answer:
                 raise ValueError("LLM returned empty text")
+            milestone("llm_text_done")
             await results.put(("text_done", answer))
         except Exception as error:
             logger.exception("Conversation LLM stream failed", extra={"turn_id": turn_id})
@@ -93,6 +131,7 @@ async def stream_answer(
     assistant_message_id: str | None = None
     final_text: str | None = None
     cache_writer = new_writer()
+    first_audio_sent = False
     try:
         yield event_line("turn_started", seq, turn_id, attempt_id,
                          trace_id=trace_id, **({"conversation_id": conversation_id} if conversation_id else {}))
@@ -106,10 +145,15 @@ async def stream_answer(
             while not (text_saved and audio_finished):
                 kind, payload = await asyncio.wait_for(results.get(), timeout=60)
                 if kind == "text_delta":
-                    yield event_line(kind, seq, turn_id, attempt_id, delta=payload)
+                    index, delta = payload
+                    delta_milestone("text_delta_sent", index, delta)
+                    yield event_line(kind, seq, turn_id, attempt_id, delta=delta)
                     seq += 1
                 elif kind == "audio_segment":
                     index, sentence, audio = payload
+                    if not first_audio_sent:
+                        first_audio_sent = True
+                        milestone("first_audio_segment", segment_index=index)
                     yield event_line(kind, seq, turn_id, attempt_id,
                                      segment_index=index, text=sentence,
                                      content_type=audio.content_type, format=audio.format,

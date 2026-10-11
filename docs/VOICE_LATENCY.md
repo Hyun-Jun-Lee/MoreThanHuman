@@ -1,6 +1,6 @@
 # 음성 대화 지연 계측과 반복 실험
 
-> 버전: 1.2 · 갱신: 2026-10-09 · API 구조화 로그와 반복 실험
+> 버전: 1.4 · 갱신: 2026-10-11 · 기존 대화 턴의 델타·화면 프레임 계측
 
 ## 결정과 범위
 
@@ -22,6 +22,8 @@
 | 서버 | `tts` | provider 호출 시작 → 전체 오디오 수신 |
 | 서버 | `audio_encode` | 오디오 Base64 인코딩 + 응답 모델 구성 |
 | 서버 | `server_total` | ASGI 요청 진입 → 최종 응답 body를 서버 전송 계층에 전달 완료 |
+| 서버 | `first_text_delta`, `first_sentence_ready`, `first_audio_segment`, `llm_text_done` | 스트림 시작 → 각 첫 델타·첫 문장 확정·첫 오디오 송출·전체 텍스트 완성. `turn_id`와 `attempt_id`로 시도를 구분해요. |
+| 서버 | `llm_delta`, `text_delta_sent` | 첫 32개 델타의 LLM 수신·NDJSON 송출 시점과 델타 번호·글자 수. 원문은 기록하지 않아요. |
 | 앱 | `recording_ready` | recorder.stop() 호출 → 녹음 파일 읽기·정리 완료 |
 | 앱 | `http_response` | API 호출 → Dio의 응답 수신·JSON 변환 완료 |
 | 앱 | `http_total` | API 호출 → 도메인 응답 파싱까지 완료 또는 실패 |
@@ -29,6 +31,8 @@
 | 앱 | `playback_requested` | 로컬 측정 시작 → 플레이어 재생 요청 직전 |
 | 앱 | `playback_started` | 재생 요청 → 플레이어 playing 이벤트; 첫 재생만 기록 |
 | 앱 | `playback_error` | 로컬 측정 시작 → 재생 실패 |
+| 앱 | `first_text_delta`, `first_audio_segment`, `first_text_frame` | 요청 시작 → 첫 텍스트 수신·첫 오디오 세그먼트 수신·텍스트 첫 프레임 표시 |
+| 앱 | `text_delta`, `turn_completed` | 시작·이어 말하기 첫 32개 델타의 수신 시점·글자 수와 기존 대화 턴의 완료 시점. 텍스트 전송도 고유 `trace_id`로 서버 로그와 연결해요. |
 
 - 서버 `trace_id`는 앱이 보낸 `X-Request-ID`와 같아요. 소문자 16진수 32자리만 허용하고, 누락·잘못된 값은 서버가 새로 만들어요. 응답 헤더에도 돌려줘요. 식별자는 인증이나 멱등성을 제공하지 않아요.
 - 서버 `request_id`는 매 HTTP 요청마다 새 값이에요. 앱의 자동 인증 재시도가 같은 `trace_id`를 써도 서로 다른 시도로 구분할 수 있어요.
@@ -39,10 +43,11 @@
 - LLM 로그에는 모델·입출력 문자 수와 제공되는 경우 입력/출력 토큰 수, STT/TTS에는 입력 크기나 출력 바이트 수를 남겨요. 실패 표본을 성공 표본과 섞어 평균 내지 않아요.
 - `server_total`은 단말의 수신 완료 시간이 아니에요. 앞단 nginx가 버퍼링한 업로드 시간과 클라이언트 재생은 포함하지 않아요. 서버 시작 전 프록시 대기도 측정할 수 없어요.
 - `http_response`와 `http_total`, `server_total`과 개별 stage는 서로 포함 관계예요. 전부 더하지 않아요. 앱 HTTP 시간에서 서버 시간을 뺀 차이에도 전송·프록시·앱 처리 등이 섞여 있으므로 순수 네트워크 지연이라고 부르지 않아요.
-- 현재 API는 비스트리밍이므로 LLM 첫 토큰·첫 문장, TTS 첫 바이트 지연은 아직 측정하지 않아요. provider 시간에는 네트워크·연결 수립·업체 대기열·생성이 모두 포함돼요.
+- `/stream/` 경로는 첫 델타·확정 문장·완성 오디오 송출을 계측해요. `first_audio_segment`는 TTS 첫 바이트가 아니라 첫 완성 문장이 서버 전송 계층으로 넘어가기 직전이에요. 서버와 앱의 단조 시계 값을 직접 빼지 않고 같은 `trace_id` 안에서 각각의 순서와 경과 시간을 비교해요.
+- 같은 `trace_id`에서 서버 `llm_delta` 간격이 짧으면 모델이 몰아서 생성한 것이고, 서버 `text_delta_sent` 간격은 넓지만 앱 `text_delta`가 몰리면 전송 경로의 청크 묶임을 의심해요. 앱의 마지막 `text_delta`가 `first_text_frame`보다 빠르면 한 화면 프레임 안에 답변이 거의 완성된 사례예요. 각 로그에는 델타 번호·글자 수만 넣고 원문은 남기지 않아요.
 - `playing` 이벤트는 실제 스피커 출력의 근사치예요. 앱에서는 재생 완료를 기다리는 기존 `play()` 호출 전후를 첫 재생 지연으로 사용하지 않아요. 이벤트를 받지 못했거나 재생 오류가 난 경우 표본이 누락됐음을 기록하고 성공으로 간주하지 않아요.
 
-음성 단계와 `server_total`의 대상은 `POST /api/conversations/start/free-chat/`, `/start/roleplay/`, `/{id}/turn/`, `/{id}/message/`예요. 모든 API 요청의 전체 시간은 `method`·`route`가 있는 별도 로그에 기록해요. 문법 background task 실패는 별도 오류 로그로 남기고 완료 시간은 `server_total`에 넣지 않아요. 단계 로그는 실행된 단계당 한 번이에요.
+음성 단계와 `server_total`의 대상은 `POST /api/conversations/start/free-chat/`, `/start/roleplay/`, `/{id}/turn/`, `/{id}/message/` 및 각 `/stream/` 경로예요. 모든 API 요청의 전체 시간은 `method`·`route`가 있는 별도 로그에 기록해요. 문법 background task 실패는 별도 오류 로그로 남기고 완료 시간은 `server_total`에 넣지 않아요. 단계 로그는 실행된 단계당 한 번이에요.
 
 ## 로그 확인
 
@@ -64,6 +69,15 @@ flutter run --profile --dart-define-from-file=/absolute/path/mobile-config.json 
 rg '"stage":"(auth|stt|llm|tts|audio_encode|server_total)"' /tmp/convia-server.log
 rg '\[latency\]' /tmp/convia-mobile.log
 ```
+
+기존 대화에서 한 번 답변한 뒤 모바일 로그의 `first_text_delta` 줄에서 `trace_id`를 복사해 같은 요청만 비교해요. 아래 `TRACE_ID`를 복사한 값으로 바꿔요.
+
+```bash
+rg '"trace_id":"TRACE_ID"' /tmp/convia-server.log | rg '"stage":"(llm_delta|text_delta_sent|first_sentence_ready|first_audio_segment|llm_text_done)"'
+rg '"trace_id":"TRACE_ID"' /tmp/convia-mobile.log | rg '"stage":"(text_delta|first_text_frame|first_audio_segment|turn_completed|playback_started)"'
+```
+
+`delta_index`는 0부터 시작하고 `delta_chars`는 원문 대신 글자 수만 기록해요. 서버 `llm_delta`가 여러 시점에 나오는데 `text_delta_sent`가 한꺼번에 나오면 서버 큐·전송 단계, 서버 송출은 벌어져 있는데 앱 `text_delta`가 모이면 프록시·네트워크·Dio 수신 단계를 확인해요. 앱의 `text_delta`가 분산됐는데 `first_text_frame`이 마지막 델타 뒤라면 화면 프레임 또는 렌더링 작업을 확인해요. 델타가 한두 개뿐이거나 모두 첫 프레임 전에 도착했다면 실제 스트림은 빠르지만 화면에서는 완성된 답변처럼 보일 수 있어요. 첫 32개만 기록하므로 `turn_completed.delta_count`가 32보다 크면 이 로그만으로 마지막 델타와 첫 프레임의 순서를 단정하지 않아요.
 
 출력 형식 예시이며 실제 측정값은 아니에요:
 
