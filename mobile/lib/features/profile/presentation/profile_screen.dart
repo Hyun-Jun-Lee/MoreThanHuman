@@ -88,23 +88,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               ),
               const SizedBox(height: AppSpacing.xl),
             ],
-            AppPrimaryButton(
-              label: copy.logOutLabel,
-              isLoading: isLoggingOut,
-              onPressed: isLoggingOut || isSavingLanguage || isSavingAppLocale
-                  ? null
-                  : () async {
-                      setState(() => isLoggingOut = true);
-                      try {
-                        await ref
-                            .read(authControllerProvider.notifier)
-                            .logout();
-                      } finally {
-                        if (mounted) setState(() => isLoggingOut = false);
-                      }
-                    },
-            ),
-            const SizedBox(height: AppSpacing.xl),
             AppSectionLabel(copy.appLanguageSectionLabel),
             const SizedBox(height: AppSpacing.md),
             Wrap(
@@ -183,6 +166,24 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   ),
                 ),
               ),
+            const SizedBox(height: AppSpacing.xl),
+            AppPrimaryButton(
+              label: copy.logOutLabel,
+              isLoading: isLoggingOut,
+              onPressed: isLoggingOut || isSavingLanguage || isSavingAppLocale
+                  ? null
+                  : () async {
+                      setState(() => isLoggingOut = true);
+                      try {
+                        await ref
+                            .read(authControllerProvider.notifier)
+                            .logout();
+                      } finally {
+                        if (mounted) setState(() => isLoggingOut = false);
+                      }
+                    },
+            ),
+            const SizedBox(height: AppSpacing.xl),
           ],
         ),
       ),

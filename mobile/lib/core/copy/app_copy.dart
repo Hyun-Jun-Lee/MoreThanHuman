@@ -369,7 +369,7 @@ class AppCopy {
       isKorean ? '대화를 업데이트하는 중' : 'Updating conversations';
   String get accountLabel => isKorean ? '계정' : 'Account';
   String get languagePairSectionLabel =>
-      isKorean ? '학습 언어 선택' : 'Select Learning Language';
+      isKorean ? '학습 언어' : 'Learning Language';
   String get logOutLabel => isKorean ? '로그아웃' : 'LOG OUT';
   String get languagePairSaveFailed =>
       isKorean ? '언어쌍을 저장하지 못했어요.' : 'Language pair could not be saved.';

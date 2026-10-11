@@ -105,7 +105,11 @@ void main() {
     expect(find.text('Learner Kim'), findsOneWidget);
     expect(find.text('learner@example.com'), findsOneWidget);
     expect(find.text('LOG OUT'), findsOneWidget);
-    expect(find.text('SELECT LEARNING LANGUAGE'), findsOneWidget);
+    expect(find.text('LEARNING LANGUAGE'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('LOG OUT')).dy,
+      greaterThan(tester.getTopLeft(find.text('LEARNING LANGUAGE')).dy),
+    );
     expect(
       find.text(
         'Applies to new conversations. Existing conversations keep the language pair they started with.',
@@ -603,6 +607,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await tester.ensureVisible(find.text('LOG OUT'));
     await tester.tap(find.text('LOG OUT'));
     await tester.pumpAndSettle();
 
@@ -631,6 +636,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await tester.ensureVisible(find.text('LOG OUT'));
     await tester.tap(find.text('LOG OUT'));
     await tester.pumpAndSettle();
 

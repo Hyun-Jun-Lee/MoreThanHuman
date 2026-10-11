@@ -25,11 +25,11 @@ void main() {
     test('labels the profile language section', () {
       expect(
         AppCopy.forLocale(const Locale('ko')).languagePairSectionLabel,
-        '학습 언어 선택',
+        '학습 언어',
       );
       expect(
         AppCopy.forLocale(const Locale('en')).languagePairSectionLabel,
-        'Select Learning Language',
+        'Learning Language',
       );
     });
     test('localizes the debug basket reset tooltip', () {
