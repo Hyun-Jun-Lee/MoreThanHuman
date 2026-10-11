@@ -176,8 +176,8 @@ Splash → Onboarding(최초 1회) → Google 또는 iOS Apple Login → Home
 - 테스트용 로컬 리셋 v1 (2026-09-20): 기본 `flutter run` 디버그 빌드에서는 열람 수 왼쪽의 restart 아이콘으로 같은 카드 묶음을 유지한 채 토마토 3개·0/12로 초기화해요. 서버 호출·운영 키 없이 기기에 저장되며 다른 기기에는 영향을 주지 않아요. 팝업·모션 중에는 비활성화하고 `--release`/`--profile` 빌드에서는 표시하지 않아요.
 - 설명은 영어 학습자에게 한국어, 한국어 학습자에게 영어로 제공하며 앱 chrome locale과 분리해요. 미지원 유형·버전은 건너뛰고 알려진 유형의 손상된 응답은 캐시로 복원해요. 운영 키나 생성 기능은 앱에 포함하지 않아요.
 - Home Navigation v2 (2026-09-22, 2026-10-05 갱신): 홈은 언어 스낵 → `오늘의 토마토` 제목과 최근 대화 2개(파스텔 카드) → `＋ 새 대화` 순서예요. 제목은 16px 글자 크기·좌우 8px 여백을 사용하고 가운데 정렬하며 오른쪽 `전체 보기` 버튼은 표시하지 않아요.
-- 대화 권한 v2 (2026-10-04): 서버 정책이 켜지면 무료 계정은 활성 대화 1개·대화별 15회, Advance·Plus는 각각 5개·10개와 무제한 발화를 사용해요. 초과 대화는 실제 기록에 읽기 전용으로 표시하고 전체 대화 화면에서 활성 대화를 교체·해제해요. iOS paywall은 App Store 가격과 구매·복원·구독 관리를 제공해요. Android에서는 구매 버튼을 숨겨요.
-- Account: 하단 `내 정보` 탭의 독립 화면에서 이름/email, 활성 언어쌍 변경, `LOG OUT`을 표시해요. 홈 헤더 오른쪽에는 현재 언어쌍 배지를 표시해요. 언어쌍 변경은 새 대화부터 적용되고 기존 대화는 시작 시점 언어쌍을 유지한다고 안내하며, 저장 후 현재 탭을 유지하며 profile과 Home의 활성 언어쌍을 갱신해요. 로그아웃 시 앱 token 삭제·서버 revoke·Google sign out을 best-effort로 처리해요.
+- 대화 권한 v2 (2026-10-04): 서버 정책이 켜지면 무료 계정은 활성 대화 1개·대화별 15회, Advance·Plus는 각각 5개·10개와 무제한 발화를 사용해요. 초과 대화는 실제 기록에 읽기 전용으로 표시하고 전체 대화 화면에서 활성 대화를 교체·해제해요. iOS paywall은 이름만 표시하는 Free 카드, `전체 대화 슬롯의 절반 해금` Advance 카드, `전체 대화 슬롯 해금`·`비즈니스 대화 모드` Plus 카드를 순서대로 표시해요. 서버에서 확인한 현재 플랜 카드만 `#A7BF93` 배경과 제목 바로 옆 34dp 크기의 왼쪽을 향한 채운 세모를 사용하며 세모는 2dp 아래로 배치해요. 나머지 카드는 `#BBC87C` 배경을 사용해요. 권한 확인 전에는 모두 `#BBC87C` 배경으로 표시하고 세모를 숨겨요. 유료 카드의 혜택 문구 앞에는 글머리표 `•`를 표시해요. 비즈니스 대화 모드는 향후 Plus 전용으로 구현할 계획이며 현재 동작은 제공하지 않아요. App Store 가격과 구매·복원·구독 관리를 제공해요. Android에서는 구매 버튼을 숨겨요.
+- Account: 하단 `내 정보` 탭의 독립 화면에서 이름/email, 앱·학습 언어 설정을 표시하고, `LOG OUT` 버튼은 설정 아래 마지막에 배치해요. 홈 헤더 오른쪽에는 현재 언어쌍 배지를 표시해요. 언어쌍 변경은 새 대화부터 적용되고 기존 대화는 시작 시점 언어쌍을 유지해요. 저장 후 현재 탭을 유지하며 profile과 Home의 활성 언어쌍을 갱신해요. 로그아웃 시 앱 token 삭제·서버 revoke·Google sign out을 best-effort로 처리해요.
 - Free Chat: 홈·전체 대화 화면의 공통 시작 sheet에서 Topic Input → Topic Prep으로 이동한 뒤 첫 답변으로 대화를 시작
 - Roleplay: 홈·전체 대화 화면의 공통 시작 sheet에서 Roleplay Setup으로 이동한 뒤 상황을 골라 롤플레이 대화를 시작
 - Conversations: 홈에서는 최근 대화 2개를 표시하며 기존 대화 카드에서 다시 진입
@@ -230,7 +230,7 @@ Topic Prep 화면은 전달받은 topic으로 `POST /api/search/topic-prep/`를 
 | preset 상황 | 선택 즉시 Start Roleplay CTA 활성화 |
 | custom 상황 | 2자 이상 입력 시 Start Roleplay CTA 활성화 |
 
-Start Roleplay를 누르면 선택 결과를 백엔드 계약에 맞는 `role_character` 문자열로 합성하고 `POST /api/conversations/start/roleplay/stream/`를 호출해요. AI 첫 인사가 완료되면 Conversation 화면으로 이동해요. Custom 입력은 사용자의 상황이나 사용자 역할을 설명하는 값으로 보고, AI는 그 상황의 상대역을 맡도록 prompt를 합성해요. 서버는 conversation snapshot의 target language로 roleplay scenario examples를 고르고, feedback language는 필요한 설명에만 사용해요. Roleplay 첫 인사의 `assistant_message_id`는 사용자 문법 피드백 polling 대상이 아니에요.
+Start Roleplay를 누르면 선택 결과를 백엔드 계약에 맞는 `role_character` 문자열로 합성하고 `POST /api/conversations/start/roleplay/stream/`를 호출해요. `turn_started`에서 임시 대화 화면으로 이동해 AI 첫 인사를 생성 중에 표시하고, 완료되면 영속 Conversation 화면으로 전환해요. Custom 입력은 사용자의 상황이나 사용자 역할을 설명하는 값으로 보고, AI는 그 상황의 상대역을 맡도록 prompt를 합성해요. 서버는 conversation snapshot의 target language로 roleplay scenario examples를 고르고, feedback language는 필요한 설명에만 사용해요. Roleplay 첫 인사의 `assistant_message_id`는 사용자 문법 피드백 polling 대상이 아니에요.
 
 ## Conversation 흐름
 
@@ -238,7 +238,7 @@ Start Roleplay를 누르면 선택 결과를 백엔드 계약에 맞는 `role_ch
 
 Conversation 화면은 Free Chat 시작, Roleplay 시작, Home 최근 대화 진입이 합류하는 대화 화면이에요. 상단에는 명시적인 뒤로가기 버튼을 두고, navigation stack이 없을 때는 홈으로 이동해요.
 
-모든 대화 생성 경로는 문장별 음성 NDJSON을 받아요. 주간 추천 시작은 `POST /api/conversations/start/free-chat/suggested/stream/`에 주제·요청 UUID를 보내고 `turn_started`의 대화 ID로 화면을 열어요. 다른 흐름은 AI 텍스트를 임시 표시하고 `audio_segment`를 증분 UTF-8 decoder와 단일 재생 큐로 순서대로 재생해요. 확정 사용자 발화는 남기고 미완성 AI 답변은 실패 안내와 재시도 버튼으로 바꿔요. 연결이 끊기면 상태만 조회하고 사용자가 버튼을 눌렀을 때 다시 생성해요. TTS 또는 재생 실패에는 저장된 답변의 음성 다시 듣기 버튼을 보여줘요. 화면 이탈 때 스트림과 큐를 취소해요.
+모든 대화 생성 경로는 문장별 음성 NDJSON을 받아요. 주간 추천 시작은 `POST /api/conversations/start/free-chat/suggested/stream/`에 주제·요청 UUID를 보내고 `turn_started`의 대화 ID로 화면을 열어요. Free Chat은 확정된 사용자 발화에서 대화 화면에 들어가고, Roleplay는 `turn_started`에서 요청 ID 기반 임시 대화 화면에 들어가 첫 인사 델타를 보여줘요. 임시 화면은 텍스트 첫 프레임 뒤 음성을 재생하고, `turn_completed`에서 영속 대화 ID로 바꿔요. `audio_segment`는 증분 UTF-8 decoder와 단일 재생 큐로 순서대로 재생해요. 확정 사용자 발화는 남기고 미완성 AI 답변은 실패 안내와 재시도 버튼으로 바꿔요. 연결이 끊기면 상태만 조회하고 사용자가 버튼을 눌렀을 때 다시 생성해요. TTS 또는 재생 실패에는 저장된 답변의 음성 다시 듣기 버튼을 보여줘요. 화면 이탈 때 스트림과 큐를 취소해요.
 
 이전 turn 때문에 새 텍스트 전송이 409로 거절되면 앱은 그 대화의 미해결 turn을 다시 조회해 이전 답변의 상태 확인·재시도 버튼을 보여줘요. 거절된 텍스트는 서버 메시지로 표시하지 않고 입력창에 복원해요.
 
