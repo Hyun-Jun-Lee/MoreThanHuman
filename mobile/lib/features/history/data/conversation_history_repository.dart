@@ -26,6 +26,7 @@ class ApiConversationHistoryRepository
   Future<ConversationPage> list({int offset = 0, int limit = 20}) async {
     final response = await client.get<ConversationPage>(
       'conversations/',
+      diagnosticSource: 'history_list',
       queryParameters: {'limit': limit, 'offset': offset},
       decodeData: (json) {
         if (json is! Map<String, dynamic> ||

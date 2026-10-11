@@ -100,6 +100,55 @@ void main() {
     );
   });
 
+  test(
+    'GET requests use distinct trace IDs without logging resource IDs',
+    () async {
+      final ApiClient client = ApiClient(
+        Dio(BaseOptions(baseUrl: 'https://example.com/api/')),
+      );
+      final _FakeHttpClientAdapter adapter = _FakeHttpClientAdapter(
+        response: <String, dynamic>{'success': true, 'data': true},
+      );
+      client.dio.httpClientAdapter = adapter;
+      addTearDown(client.close);
+
+      final List<String> logs = <String>[];
+      final List<Object?> traces = await runZoned<Future<List<Object?>>>(
+        () async {
+          await client.get<bool>(
+            'conversations/private-id/messages/',
+            diagnosticSource: 'conversation_messages',
+            decodeData: (Object? json) => json! as bool,
+          );
+          final Object? firstTrace =
+              adapter.lastRequest?.headers['X-Request-ID'];
+          await client.get<bool>(
+            'conversations/private-id/messages/',
+            diagnosticSource: 'conversation_messages',
+            decodeData: (Object? json) => json! as bool,
+          );
+          return <Object?>[
+            firstTrace,
+            adapter.lastRequest?.headers['X-Request-ID'],
+          ];
+        },
+        zoneSpecification: ZoneSpecification(
+          print: (_, _, _, String line) => logs.add(line),
+        ),
+      );
+      final Object? firstTrace = traces[0];
+      final Object? secondTrace = traces[1];
+      expect(
+        firstTrace,
+        isA<String>().having((value) => value.length, 'length', 32),
+      );
+      expect(secondTrace, isNot(firstTrace));
+      expect(logs.join(), contains('"request_source":"conversation_messages"'));
+      expect(logs.join(), contains('"operation":"message_list"'));
+      expect(logs.join(), isNot(contains('private-id')));
+    },
+  );
+
   test('ApiClient can explicitly skip authentication', () async {
     final ApiClient client = ApiClient.create(
       tokenProvider: _FakeSessionProvider(accessToken: 'supabase-access-token'),

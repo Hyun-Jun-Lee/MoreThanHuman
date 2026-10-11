@@ -117,6 +117,7 @@ class ApiConversationRepository
     final ApiResponse<PaginatedMessages> response = await apiClient
         .get<PaginatedMessages>(
           'conversations/$conversationId/messages/',
+          diagnosticSource: 'conversation_messages',
           queryParameters: <String, Object?>{'limit': limit, 'offset': offset},
           decodeData: PaginatedMessages.fromJson,
         );

@@ -15,6 +15,7 @@ class ApiHomeRepository implements HomeRepository {
     final ApiResponse<List<ConversationSummary>> response = await apiClient
         .get<List<ConversationSummary>>(
           'conversations/',
+          diagnosticSource: 'home_recent',
           queryParameters: <String, dynamic>{'limit': limit, 'offset': 0},
           decodeData: (Object? json) {
             if (json is! Map<String, dynamic> || json['results'] is! List) {

@@ -2,6 +2,7 @@
 Conversation Repository Layer
 데이터 접근 및 CRUD 연산
 """
+from contextlib import nullcontext
 from datetime import datetime, timedelta
 from uuid import uuid4
 
@@ -184,7 +185,8 @@ class ConversationRepository:
         return entitlement
 
     def _locked_entitlement(self, user_id: str) -> tuple[ProfileModel, dict]:
-        profile = self.db.query(ProfileModel).filter_by(id=user_id).with_for_update().one()
+        with latency_span("entitlement_lock"):
+            profile = self.db.query(ProfileModel).filter_by(id=user_id).with_for_update().one()
         return profile, self._reconcile_slots_locked(profile)
 
     def reconcile_slots_for_list(self, user_id: str) -> None:
@@ -220,11 +222,12 @@ class ConversationRepository:
                 "locked_count": 0,
             }
         _, entitlement = self._locked_entitlement(user_id)
-        limit = entitlement["slot_limit"]
-        active_count = self.count_active_conversations(user_id)
-        used = active_count + self.count_pending_roleplay_starts(user_id)
-        active = self.db.query(ConversationModel).filter_by(user_id=user_id, slot_active=True).order_by(desc(ConversationModel.updated_at)).all()
-        self.db.commit()
+        with latency_span("entitlement_held_after_reconcile"):
+            limit = entitlement["slot_limit"]
+            active_count = self.count_active_conversations(user_id)
+            used = active_count + self.count_pending_roleplay_starts(user_id)
+            active = self.db.query(ConversationModel).filter_by(user_id=user_id, slot_active=True).order_by(desc(ConversationModel.updated_at)).all()
+            self.db.commit()
         return {
             "enabled": True,
             "can_create": used < limit,
@@ -314,12 +317,13 @@ class ConversationRepository:
             _, entitlement = self._locked_entitlement(user_id)
         else:
             entitlement = {"turn_limit": None}
-        conversation = self.find_by_id(conversation_id, user_id)
-        used = self.count_user_turns(conversation_id)
-        locked = enabled and not conversation.slot_active
+        with latency_span("entitlement_held_after_reconcile") if enabled else nullcontext():
+            conversation = self.find_by_id(conversation_id, user_id)
+            used = self.count_user_turns(conversation_id)
+            locked = enabled and not conversation.slot_active
+            if enabled:
+                self.db.commit()
         limit = entitlement["turn_limit"]
-        if enabled:
-            self.db.commit()
         return {
             "enabled": enabled,
             "user_turns": used,

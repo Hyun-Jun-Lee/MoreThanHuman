@@ -475,12 +475,14 @@ class ConversationService:
         )
 
     def get_access(self, user_id: str) -> dict:
-        return self.repository.access_summary(user_id, enabled=settings.conversation_access_enabled)
+        with latency_span("access_summary"):
+            return self.repository.access_summary(user_id, enabled=settings.conversation_access_enabled)
 
     def get_turn_access(self, conversation_id: str, user_id: str) -> dict:
-        return self.repository.turn_access(
-            conversation_id, user_id, enabled=settings.conversation_access_enabled
-        )
+        with latency_span("turn_access"):
+            return self.repository.turn_access(
+                conversation_id, user_id, enabled=settings.conversation_access_enabled
+            )
 
     def assert_can_create(self, user_id: str) -> None:
         if settings.conversation_access_enabled:

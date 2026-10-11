@@ -19,6 +19,7 @@ class ApiConversationAccessRepository implements ConversationAccessRepository {
   Future<ConversationAccess> getAccess() async {
     final response = await client.get<ConversationAccess>(
       'conversations/access/',
+      diagnosticSource: 'conversation_access',
       decodeData: ConversationAccess.fromJson,
     );
     return response.data;
@@ -28,6 +29,7 @@ class ApiConversationAccessRepository implements ConversationAccessRepository {
   Future<ConversationTurnAccess> getTurnAccess(String conversationId) async {
     final response = await client.get<ConversationTurnAccess>(
       'conversations/$conversationId/access/',
+      diagnosticSource: 'conversation_turn_access',
       decodeData: ConversationTurnAccess.fromJson,
     );
     return response.data;

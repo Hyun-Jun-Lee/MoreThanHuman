@@ -1,12 +1,18 @@
 import asyncio
 import json
+import sqlite3
+import time
 from io import BytesIO
+from threading import Event, Thread
 
 import httpx
 import pytest
 from fastapi import FastAPI
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import Session
 from starlette.responses import JSONResponse
 
+from shared.db_latency import DbRequestStats, TimedQueuePool, db_request_stats, install_db_latency
 from shared.latency import LatencyMiddleware, latency_span
 from domains.voice.service import VoiceService
 from domains.voice.schemas import VoiceSynthesisResult, VoiceTranscriptionResult
@@ -91,6 +97,91 @@ async def test_health_requests_are_instrumented(capsys):
     assert len(rows) == 1
     assert rows[0]["method"] == "GET"
     assert rows[0]["route"] == "/health"
+
+
+@pytest.mark.asyncio
+async def test_get_records_db_and_response_timeline_without_query_values(capsys):
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=TimedQueuePool)
+    install_db_latency(engine)
+    app = FastAPI()
+    app.add_middleware(LatencyMiddleware)
+
+    @app.get("/api/items/{item_id}/")
+    async def item(item_id: str):
+        with latency_span("handler", operation="item_lookup"):
+            with Session(engine) as db:
+                db.execute(text("SELECT :private_value"), {"private_value": "secret-sql-value"}).scalar_one()
+                db.commit()
+        return {"ok": True}
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="http://test") as client:
+        response = await client.get("/api/items/private-id/?token=private-token")
+
+    assert response.status_code == 200
+    rows = events(capsys)
+    completed = next(row for row in rows if row.get("method") == "GET")
+    handler = next(row for row in rows if row.get("stage") == "handler")
+    assert completed["db_query_count"] == 1
+    assert completed["db_checkout_count"] >= 1
+    assert completed["db_acquire_total_ms"] >= 0
+    assert completed["db_connect_count"] == 1
+    assert completed["db_pool_wait_count"] == 0
+    assert completed["db_acquire_other_ms"] >= 0
+    assert completed["db_commit_count"] == 1
+    assert completed["response_start_ms"] <= completed["response_body_ms"]
+    assert handler["start_offset_ms"] <= completed["response_start_ms"]
+    assert handler["operation"] == "item_lookup"
+    assert "secret-sql-value" not in json.dumps(rows)
+    assert "private-token" not in json.dumps(rows)
+    assert "private-id" not in json.dumps(rows)
+
+
+def test_pool_wait_and_new_connection_have_separate_timings():
+    def creator():
+        time.sleep(0.03)
+        return sqlite3.connect(":memory:", check_same_thread=False)
+
+    engine = create_engine("sqlite://", creator=creator, poolclass=TimedQueuePool,
+                           pool_size=1, max_overflow=0)
+    new_connection = DbRequestStats()
+    token = db_request_stats.set(new_connection)
+    try:
+        with engine.connect():
+            pass
+    finally:
+        db_request_stats.reset(token)
+    created = new_connection.finish()
+    assert created["db_connect_count"] == 1
+    assert created["db_connect_total_ms"] >= 20
+    assert created["db_pool_wait_count"] == 0
+    assert created["db_acquire_total_ms"] >= created["db_connect_total_ms"]
+
+    held = engine.connect()
+    waiting = Event()
+    waited = DbRequestStats()
+
+    def checkout_when_available():
+        worker_token = db_request_stats.set(waited)
+        try:
+            waiting.set()
+            with engine.connect():
+                pass
+        finally:
+            db_request_stats.reset(worker_token)
+
+    worker = Thread(target=checkout_when_available)
+    worker.start()
+    assert waiting.wait(timeout=1)
+    time.sleep(0.05)
+    held.close()
+    worker.join(timeout=1)
+    assert not worker.is_alive()
+    reused = waited.finish()
+    assert reused["db_pool_wait_count"] == 1
+    assert reused["db_pool_wait_total_ms"] >= 30
+    assert reused["db_connect_count"] == 0
+    assert reused["db_acquire_total_ms"] >= reused["db_pool_wait_total_ms"]
+    engine.dispose()
 
 
 @pytest.mark.asyncio

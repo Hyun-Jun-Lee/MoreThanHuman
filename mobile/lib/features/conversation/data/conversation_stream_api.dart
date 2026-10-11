@@ -126,6 +126,7 @@ class ConversationStreamApi {
   Future<StreamTurnStatus> status(String turnId) async {
     final response = await client.get<StreamTurnStatus>(
       'conversations/turns/$turnId/',
+      diagnosticSource: 'turn_recovery',
       decodeData: StreamTurnStatus.fromJson,
     );
     return response.data;
@@ -134,6 +135,7 @@ class ConversationStreamApi {
   Future<StreamTurnStatus> statusForRequest(String requestId) async {
     final response = await client.get<StreamTurnStatus>(
       'conversations/turns/by-request/$requestId/',
+      diagnosticSource: 'turn_recovery',
       decodeData: StreamTurnStatus.fromJson,
     );
     return response.data;
@@ -142,6 +144,7 @@ class ConversationStreamApi {
   Future<List<StreamTurnStatus>> unresolved(String conversationId) async {
     final response = await client.get<List<StreamTurnStatus>>(
       'conversations/$conversationId/turns/',
+      diagnosticSource: 'turn_recovery',
       decodeData: (value) {
         if (value is! List) throw const FormatException('Invalid turn list.');
         return value.map(StreamTurnStatus.fromJson).toList(growable: false);

@@ -43,8 +43,10 @@ async def get_current_user(
     """현재 인증된 프로필 반환 (Supabase Bearer 토큰 검증)"""
     try:
         with latency_span("auth"):
-            claims = await verifier.verify_access_token(credentials.credentials)
-            profile = service.get_or_create_profile_from_claims(claims)
+            with latency_span("auth.remote_user"):
+                claims = await verifier.verify_access_token(credentials.credentials)
+            with latency_span("auth.profile"):
+                profile = service.get_or_create_profile_from_claims(claims)
         if not profile.is_active:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -75,8 +77,10 @@ async def get_current_user_from_token_param(
     """쿼리 파라미터로 전달된 Supabase token에서 프로필 반환 (SSE 엔드포인트용)"""
     try:
         with latency_span("auth"):
-            claims = await verifier.verify_access_token(token)
-            profile = service.get_or_create_profile_from_claims(claims)
+            with latency_span("auth.remote_user"):
+                claims = await verifier.verify_access_token(token)
+            with latency_span("auth.profile"):
+                profile = service.get_or_create_profile_from_claims(claims)
         if not profile.is_active:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,

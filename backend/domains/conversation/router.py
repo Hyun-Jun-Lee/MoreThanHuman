@@ -52,7 +52,7 @@ from domains.conversation.stream_turns import StreamTurnConflict, StreamTurnStor
 from domains.voice.schemas import VoiceAudioError, VoiceAudioResponse, VoiceInputMode
 from domains.voice.service import VoiceService
 from shared.language import ensure_language_context, language_context_to_dict
-from shared.latency import current_trace_id
+from shared.latency import current_trace_id, latency_span
 from shared.exceptions import (
     AppException,
     ExternalAPIException,
@@ -602,10 +602,11 @@ async def get_stream_turn(
     current_user: ProfileModel = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    turn = StreamTurnStore(db).get(current_user.id, str(turn_id))
-    if turn is None:
-        raise HTTPException(status_code=404, detail="turn을 찾을 수 없어요")
-    return SuccessResponse(data=turn_status(turn))
+    with latency_span("handler", operation="turn_status"):
+        turn = StreamTurnStore(db).get(current_user.id, str(turn_id))
+        if turn is None:
+            raise HTTPException(status_code=404, detail="turn을 찾을 수 없어요")
+        return SuccessResponse(data=turn_status(turn))
 
 
 @router.get("/turns/by-request/{request_id}/", response_model=SuccessResponse[dict])
@@ -614,12 +615,13 @@ async def get_stream_turn_by_request(
     current_user: ProfileModel = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    turn = db.query(StreamTurnModel).filter_by(
-        user_id=current_user.id, request_id=str(request_id),
-    ).one_or_none()
-    if turn is None:
-        raise HTTPException(status_code=404, detail="turn을 찾을 수 없어요")
-    return SuccessResponse(data=turn_status(StreamTurnStore(db).get(current_user.id, turn.id)))
+    with latency_span("handler", operation="turn_by_request"):
+        turn = db.query(StreamTurnModel).filter_by(
+            user_id=current_user.id, request_id=str(request_id),
+        ).one_or_none()
+        if turn is None:
+            raise HTTPException(status_code=404, detail="turn을 찾을 수 없어요")
+        return SuccessResponse(data=turn_status(StreamTurnStore(db).get(current_user.id, turn.id)))
 
 
 @router.get("/{conversation_id}/turns/", response_model=SuccessResponse[list[dict]])
@@ -628,16 +630,17 @@ async def list_stream_turns(
     current_user: ProfileModel = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    conversation = db.query(ConversationModel).filter_by(id=str(conversation_id), user_id=current_user.id).one_or_none()
-    if conversation is None:
-        raise HTTPException(status_code=404, detail="대화를 찾을 수 없어요")
-    turns = StreamTurnStore(db).unresolved(current_user.id, str(conversation_id))
-    log_event(
-        "conversation.stream.unresolved",
-        pending_count=sum(turn.status == "pending" for turn in turns),
-        failed_count=sum(turn.status == "failed" for turn in turns),
-    )
-    return SuccessResponse(data=[turn_status(turn) for turn in turns])
+    with latency_span("handler", operation="turn_list"):
+        conversation = db.query(ConversationModel).filter_by(id=str(conversation_id), user_id=current_user.id).one_or_none()
+        if conversation is None:
+            raise HTTPException(status_code=404, detail="대화를 찾을 수 없어요")
+        turns = StreamTurnStore(db).unresolved(current_user.id, str(conversation_id))
+        log_event(
+            "conversation.stream.unresolved",
+            pending_count=sum(turn.status == "pending" for turn in turns),
+            failed_count=sum(turn.status == "failed" for turn in turns),
+        )
+        return SuccessResponse(data=[turn_status(turn) for turn in turns])
 
 
 _STREAM_RESPONSES = {200: {"content": {"application/x-ndjson": {"schema": {"type": "string"}}}}}
@@ -1106,7 +1109,8 @@ def get_conversation_access(
     service: ConversationService = Depends(get_conversation_service),
 ):
     """계정의 새 대화 생성 권한을 반환해요."""
-    return SuccessResponse(data=ConversationAccess(**service.get_access(current_user.id)))
+    with latency_span("handler", operation="access_summary"):
+        return SuccessResponse(data=ConversationAccess(**service.get_access(current_user.id)))
 
 
 @router.get("/{conversation_id}/access/", response_model=SuccessResponse[ConversationTurnAccess])
@@ -1117,9 +1121,10 @@ def get_conversation_turn_access(
 ):
     """대화별 사용자 발화 한도를 반환해요."""
     try:
-        return SuccessResponse(
-            data=ConversationTurnAccess(**service.get_turn_access(str(conversation_id), current_user.id))
-        )
+        with latency_span("handler", operation="turn_access"):
+            return SuccessResponse(
+                data=ConversationTurnAccess(**service.get_turn_access(str(conversation_id), current_user.id))
+            )
     except NotFoundException as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
 
@@ -1165,8 +1170,9 @@ def get_conversations(
 ):
     """대화 목록 조회"""
     try:
-        conversations = service.get_conversations(current_user.id, limit, offset)
-        return SuccessResponse(data=conversations)
+        with latency_span("handler", operation="conversation_list"):
+            conversations = service.get_conversations(current_user.id, limit, offset)
+            return SuccessResponse(data=conversations)
     except AppException as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
 
@@ -1197,8 +1203,9 @@ def get_messages(
 ):
     """메시지 목록 조회"""
     try:
-        messages = service.get_messages(str(conversation_id), current_user.id, limit, offset)
-        return SuccessResponse(data=messages)
+        with latency_span("handler", operation="message_list"):
+            messages = service.get_messages(str(conversation_id), current_user.id, limit, offset)
+            return SuccessResponse(data=messages)
     except NotFoundException as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
     except AppException as e:

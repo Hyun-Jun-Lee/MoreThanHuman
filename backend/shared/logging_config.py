@@ -23,6 +23,15 @@ _allowed_fields = {
     "source_count", "accepted_count", "rejected_count", "response_chars",
     "recency_intent", "sufficient", "pending_count", "failed_count",
     "db_sqlstate", "db_constraint", "db_table", "db_column",
+    "turn_id", "attempt_id", "segment_index", "delta_index", "delta_chars",
+    "start_offset_ms", "response_start_ms", "response_body_ms",
+    "db_query_count", "db_query_total_ms", "db_max_query_ms",
+    "db_checkout_count", "db_commit_count", "db_commit_total_ms",
+    "db_acquire_total_ms", "db_max_acquire_ms",
+    "db_pool_wait_count", "db_pool_wait_total_ms", "db_pool_wait_max_ms",
+    "db_connect_count", "db_connect_total_ms", "db_connect_max_ms",
+    "db_acquire_other_ms",
+    "query_kind", "operation",
 }
 
 
