@@ -79,7 +79,7 @@ def get_me(
     service: AuthService = Depends(get_auth_service),
 ):
     """현재 사용자 프로필 조회"""
-    profile = service.get_profile(current_user.id)
+    profile = service.get_profile(current_user)
     return SuccessResponse(data=profile)
 
 
@@ -89,7 +89,7 @@ def get_language_preferences(
     service: AuthService = Depends(get_auth_service),
 ):
     """현재 사용자 언어 선호 조회"""
-    preferences = service.get_language_preferences(current_user.id)
+    preferences = service.get_language_preferences(current_user)
     return SuccessResponse(data=preferences)
 
 

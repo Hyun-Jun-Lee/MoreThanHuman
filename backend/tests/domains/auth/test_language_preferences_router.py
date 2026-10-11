@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+import pytest
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -26,13 +27,18 @@ class FakeVerifier:
         return self.claims
 
 
-def _client() -> TestClient:
+def _client(selects: list[str] | None = None) -> TestClient:
     engine = create_engine(
         "sqlite:///:memory:",
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
     Base.metadata.create_all(bind=engine)
+    if selects is not None:
+        @event.listens_for(engine, "before_cursor_execute")
+        def count_selects(connection, cursor, statement, parameters, context, executemany):
+            if statement.lstrip().upper().startswith("SELECT"):
+                selects.append(statement)
     session_factory = sessionmaker(bind=engine)
 
     def override_db():
@@ -62,6 +68,23 @@ def test_me_includes_default_language_preferences():
         "target_language": "en",
         "feedback_language": "ko",
     }
+
+
+@pytest.mark.parametrize("path", ["/api/auth/me", "/api/auth/me/language-preferences"])
+def test_profile_get_reuses_profile_loaded_during_auth(path):
+    selects: list[str] = []
+    client = _client(selects)
+    headers = {"Authorization": "Bearer token"}
+    assert client.get("/api/auth/me", headers=headers).status_code == 200
+    selects.clear()
+
+    response = client.get(path, headers=headers)
+
+    assert response.status_code == 200
+    assert len(selects) == 1
+    data = response.json()["data"]
+    language = data["language"] if path == "/api/auth/me" else data
+    assert language == {"native_language": "ko", "target_language": "en", "feedback_language": "ko"}
 
 
 def test_language_preferences_update_is_narrow_and_idempotent():

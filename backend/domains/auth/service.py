@@ -91,14 +91,12 @@ class AuthService:
             expires_in=expires_in,
         )
 
-    def get_profile(self, profile_id: str) -> UserProfile:
-        """사용자 프로필 조회"""
-        profile = self.repository.find_by_id(profile_id)
+    def get_profile(self, profile: ProfileModel) -> UserProfile:
+        """인증 단계에서 읽은 프로필을 응답 형식으로 변환해요."""
         return UserProfile.model_validate(profile)
 
-    def get_language_preferences(self, profile_id: str) -> LanguagePreferencesResponse:
-        """현재 사용자 언어 선호 조회"""
-        profile = self.repository.find_by_id(profile_id)
+    def get_language_preferences(self, profile: ProfileModel) -> LanguagePreferencesResponse:
+        """인증 단계에서 읽은 프로필의 언어 선호를 응답 형식으로 변환해요."""
         return LanguagePreferencesResponse.model_validate(language_context_to_dict(profile.language))
 
     def update_language_preferences(
