@@ -71,6 +71,8 @@ API와 nginx는 JSON을 stdout에 기록하고 Docker `json-file`이 각 컨테�
 
 테스트 계정이 Supabase email/password 로그인을 사용할 수 있으면 Swagger에서 `POST /api/auth/swagger/token`으로 `access_token`을 발급받을 수 있어요. 이 helper는 `ENV=dev`에서는 기본 활성화되고, 그 외 환경에서는 `SWAGGER_TOKEN_ISSUER_ENABLED=true`와 `SWAGGER_TOKEN_ISSUER_SECRET`이 모두 설정되어야 해요. 운영에서 열 때는 nginx docs basic auth와 별개로 요청 body의 `secret`도 맞아야 합니다.
 
+로컬 대화 목록의 반복 지연 측정은 별도의 Supabase 이메일·비밀번호 개발 계정을 키체인에 등록하고 `backend/scripts/benchmark_conversation_list.py`로 실행해요. 준비 요청·중앙값·p95·느린 요청 ID와 키체인 명령은 [API 로그 문서](OBSERVABILITY.md#개발-계정으로-대화-목록-반복-측정)에 있어요. 이 측정 도구는 로컬 HTTP 주소만 허용해요.
+
 ```text
 Flutter App
 → Google Sign-In SDK로 로그인

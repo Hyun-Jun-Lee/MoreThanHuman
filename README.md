@@ -122,6 +122,8 @@ uv run python -m scripts.generate_weekly_topics --pair all
 
 ### 테스트
 
+로컬 대화 목록 API의 중앙값·p95를 반복 측정하려면 [API 로그 문서의 개발 계정 절차](docs/OBSERVABILITY.md#개발-계정으로-대화-목록-반복-측정)를 따라주세요.
+
 백엔드:
 
 ```bash
