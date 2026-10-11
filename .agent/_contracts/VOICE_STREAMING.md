@@ -1,6 +1,6 @@
 # Voice Streaming v1 — REVIEW
 
-> 상태: REVIEW · 갱신: 2026-10-10 · 기준: [음성 스트리밍 설계](../../docs/VOICE_STREAMING.md)
+> 상태: REVIEW · 갱신: 2026-10-11 · 기준: [음성 스트리밍 설계](../../docs/VOICE_STREAMING.md)
 
 이 계약은 대화 화면 전체의 문장별 완성 오디오를 정의해요. 1~6단계의 경로와 앱 연결을 구현했고, 실기기·프록시·동시 부하 검증은 7단계로 남아 있어요. 활성 경로는 [DSL](../../docs/DSL.md)에 있어요.
 
@@ -10,6 +10,8 @@
 - 기존 JSON 경로는 유지하고 각 경로의 `/stream/` 형제 경로가 `application/x-ndjson`을 반환해요. 한 줄이 이벤트 하나이며 오디오는 완성된 문장별 Base64예요.
 - 확정된 사용자 발화는 AI 생성 실패 후에도 남아요. 미완성 assistant 텍스트는 정상 메시지로 저장하지 않아요. 앱은 자동 재생성하지 않고 사용자의 재시도 입력을 기다려요.
 - 완성된 assistant 텍스트의 TTS만 실패하면 assistant 메시지는 유지하고 저장된 같은 텍스트의 오디오만 다시 합성해요.
+- Free Chat은 시작 스트림의 대화 ID가 확인되면 대화 화면에 진입해 확정 발화와 임시 AI 텍스트를 표시해요. Roleplay는 `turn_started`에서 요청 ID로 임시 화면에 진입하고, `turn_completed`에서 대화 ID를 받으면 같은 재생 세션을 영속 화면에 연결해요. 시작 오디오는 대응 문장의 텍스트가 화면 프레임에 표시되기 전에는 재생하지 않으며, 임시 화면의 실패·이탈 시 부분 텍스트와 재생 큐를 정리해요.
+- 앱은 요청별 메모리에서 `text_delta`의 생성 텍스트와 화면에 공개한 텍스트를 분리해요. 문장별 `audio_segment`가 재생 차례가 되면 해당 문장까지만 타이핑 형태로 공개하고 첫 글자가 그려진 프레임 뒤 음성을 시작해요. 이전 문장이 재생되는 동안 다음 문장은 숨겨요. `turn_completed`는 저장 확인만 처리하며 남은 문장을 미리 공개하지 않아요. TTS 또는 기기 재생이 실패하면 숨겨 둔 생성 텍스트를 공개하고 음성 재시도 상태를 표시해요. 임시 메시지가 완료 메시지 ID로 바뀌어도 표시 중인 글자 수를 이어 가요.
 
 ## 경로
 
@@ -45,7 +47,7 @@
 |--------|-----------|-----------|
 | `turn_started` | `trace_id` | 첫 이벤트. 저장된 대화가 아직 없으면 `conversation_id`를 생략해요. |
 | `user_message_committed` | `conversation_id`, `user_message_id`, `text`, `input_mode: text\|audio` | 텍스트 입력 또는 STT 전사가 저장된 뒤 한 번. Roleplay·주간 추천 시작에는 없어요. |
-| `text_delta` | `delta` | 생성된 임시 텍스트. 주간 추천은 저장된 첫 질문을 표시하는 데 사용해요. |
+| `text_delta` | `delta` | 앱 메모리에 누적할 생성 텍스트. 주간 추천은 저장된 첫 질문을 같은 방식으로 전달해요. |
 | `audio_segment` | `segment_index`, `text`, `content_type`, `format`, `base64` | 한 문장 전체의 합성이 끝나면 순서대로 보내요. |
 | `audio_error` | `segment_index?`, `code` | 텍스트는 완성됐지만 오디오 합성·전송에 실패했을 때 보내요. |
 | `turn_completed` | `conversation_id`, `assistant_message_id`, `text`, `audio_status: completed\|failed` | assistant 텍스트가 DB에 저장되고 TTS가 완료되거나 실패로 확정된 뒤 한 번. |

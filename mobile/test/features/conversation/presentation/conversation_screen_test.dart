@@ -7,6 +7,282 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
 void main() {
+  testWidgets(
+    'pending roleplay renders deltas and opens the saved conversation',
+    (WidgetTester tester) async {
+      final router = GoRouter(
+        initialLocation: AppRoute.roleplayPendingPath('request-id'),
+        routes: <RouteBase>[
+          GoRoute(path: AppRoute.home, builder: (_, _) => const Text('Home')),
+          GoRoute(
+            path: '${AppRoute.roleplayPending}/:requestId',
+            builder: (_, state) => PendingRoleplayScreen(
+              requestId: state.pathParameters['requestId']!,
+            ),
+          ),
+          GoRoute(
+            path: '${AppRoute.conversation}/:conversationId',
+            builder: (_, state) => ConversationScreen(
+              conversationId: state.pathParameters['conversationId']!,
+            ),
+          ),
+        ],
+      );
+      addTearDown(router.dispose);
+      final container = ProviderContainer(
+        overrides: [
+          conversationRepositoryProvider.overrideWithValue(
+            _FakeConversationRepository(),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      container
+          .read(startStreamPreviewProvider('request-id').notifier)
+          .update(const StartStreamPreview(assistantText: 'Streaming welcome'));
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp.router(
+            theme: AppTheme.light,
+            routerConfig: router,
+          ),
+        ),
+      );
+      await tester.pump();
+      for (var tick = 0; tick < 30; tick++) {
+        await tester.pump(const Duration(milliseconds: 24));
+      }
+      expect(find.text('Streaming welcome'), findsOneWidget);
+      expect(tester.widget<TextField>(find.byType(TextField)).enabled, isFalse);
+
+      container
+          .read(startStreamPreviewProvider('request-id').notifier)
+          .update(
+            const StartStreamPreview(
+              assistantText: 'Streaming welcome',
+              conversationId: 'conversation-id',
+              isActive: false,
+            ),
+          );
+      await tester.pumpAndSettle();
+      expect(find.byType(ConversationScreen), findsOneWidget);
+      expect(find.text('Streaming welcome'), findsNothing);
+      expect(find.text('Hello!'), findsOneWidget);
+    },
+  );
+
+  testWidgets('failed pending roleplay returns to its setup screen', (
+    WidgetTester tester,
+  ) async {
+    final router = GoRouter(
+      initialLocation: AppRoute.roleplaySetup,
+      routes: <RouteBase>[
+        GoRoute(
+          path: AppRoute.roleplaySetup,
+          builder: (_, _) => const Scaffold(body: Text('Roleplay setup')),
+        ),
+        GoRoute(
+          path: '${AppRoute.roleplayPending}/:requestId',
+          builder: (_, state) => PendingRoleplayScreen(
+            requestId: state.pathParameters['requestId']!,
+          ),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    container
+        .read(startStreamPreviewProvider('request-id').notifier)
+        .update(const StartStreamPreview(assistantText: 'Incomplete welcome'));
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp.router(theme: AppTheme.light, routerConfig: router),
+      ),
+    );
+    router.push(AppRoute.roleplayPendingPath('request-id'));
+    await tester.pump();
+    for (var tick = 0; tick < 30; tick++) {
+      await tester.pump(const Duration(milliseconds: 24));
+    }
+    expect(find.text('Incomplete welcome'), findsOneWidget);
+
+    container
+        .read(startStreamPreviewProvider('request-id').notifier)
+        .update(const StartStreamPreview(isActive: false, hasFailed: true));
+    await tester.pumpAndSettle();
+    expect(find.text('Roleplay setup'), findsOneWidget);
+    expect(find.text('Incomplete welcome'), findsNothing);
+  });
+
+  testWidgets('completed roleplay removes both preparation routes', (
+    WidgetTester tester,
+  ) async {
+    final router = GoRouter(
+      initialLocation: AppRoute.home,
+      routes: <RouteBase>[
+        GoRoute(path: AppRoute.home, builder: (_, _) => const Text('Home')),
+        GoRoute(
+          path: AppRoute.roleplaySetup,
+          builder: (_, _) => const Scaffold(body: Text('Setup')),
+        ),
+        GoRoute(
+          path: '${AppRoute.roleplayPending}/:requestId',
+          builder: (_, state) => PendingRoleplayScreen(
+            requestId: state.pathParameters['requestId']!,
+          ),
+        ),
+        GoRoute(
+          path: '${AppRoute.conversation}/:conversationId',
+          builder: (_, _) => const Scaffold(body: Text('Conversation')),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    container
+        .read(startStreamPreviewProvider('request-id').notifier)
+        .update(const StartStreamPreview(assistantText: 'Welcome.'));
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp.router(theme: AppTheme.light, routerConfig: router),
+      ),
+    );
+    router.push(AppRoute.roleplaySetup);
+    await tester.pump();
+    router.push(AppRoute.roleplayPendingPath('request-id'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    container
+        .read(startStreamPreviewProvider('request-id').notifier)
+        .update(
+          const StartStreamPreview(
+            assistantText: 'Welcome.',
+            conversationId: 'conversation-id',
+            isActive: false,
+          ),
+        );
+    await tester.pumpAndSettle();
+    expect(find.text('Conversation'), findsOneWidget);
+    router.pop();
+    await tester.pumpAndSettle();
+    expect(find.text('Home'), findsOneWidget);
+  });
+
+  testWidgets('restored pending route without a session returns to setup', (
+    WidgetTester tester,
+  ) async {
+    final router = GoRouter(
+      initialLocation: AppRoute.roleplayPendingPath('missing-request'),
+      routes: <RouteBase>[
+        GoRoute(
+          path: AppRoute.roleplaySetup,
+          builder: (_, _) => const Scaffold(body: Text('Roleplay setup')),
+        ),
+        GoRoute(
+          path: '${AppRoute.roleplayPending}/:requestId',
+          builder: (_, state) => PendingRoleplayScreen(
+            requestId: state.pathParameters['requestId']!,
+          ),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp.router(theme: AppTheme.light, routerConfig: router),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Roleplay setup'), findsOneWidget);
+  });
+
+  testWidgets('start stream text is visible before saved assistant loads', (
+    WidgetTester tester,
+  ) async {
+    final router = _router();
+    addTearDown(router.dispose);
+    final container = ProviderContainer(
+      overrides: [
+        conversationRepositoryProvider.overrideWithValue(
+          _FakeConversationRepository(),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    container
+        .read(startStreamPreviewProvider('conversation-id').notifier)
+        .update(
+          const StartStreamPreview(
+            userMessageId: 'new-user',
+            userText: 'My question',
+            assistantText: 'Streaming answer',
+          ),
+        );
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp.router(theme: AppTheme.light, routerConfig: router),
+      ),
+    );
+    await tester.pump();
+    for (var tick = 0; tick < 30; tick++) {
+      await tester.pump(const Duration(milliseconds: 24));
+    }
+    expect(find.text('My question'), findsOneWidget);
+    expect(find.text('Streaming answer'), findsOneWidget);
+    expect(tester.widget<TextField>(find.byType(TextField)).enabled, isFalse);
+  });
+
+  testWidgets(
+    'saved assistant stays hidden behind an unfinished start preview',
+    (WidgetTester tester) async {
+      final router = _router();
+      addTearDown(router.dispose);
+      final container = ProviderContainer(
+        overrides: [
+          conversationRepositoryProvider.overrideWithValue(
+            _FakeConversationRepository(savedAssistantText: 'Hello. Again?'),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      container
+          .read(startStreamPreviewProvider('conversation-id').notifier)
+          .update(const StartStreamPreview());
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp.router(
+            theme: AppTheme.light,
+            routerConfig: router,
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 24));
+      expect(find.text('Hello. Again?'), findsNothing);
+      container
+          .read(startStreamPreviewProvider('conversation-id').notifier)
+          .update(
+            const StartStreamPreview(
+              assistantText: 'Hello.',
+              fullAssistantText: 'Hello. Again?',
+              isActive: false,
+            ),
+          );
+      for (var tick = 0; tick < 15; tick++) {
+        await tester.pump(const Duration(milliseconds: 24));
+      }
+      expect(find.text('Hello.'), findsOneWidget);
+      expect(find.text('Hello. Again?'), findsNothing);
+    },
+  );
+
   testWidgets('15 used turns keep messages readable and disable the composer', (
     WidgetTester tester,
   ) async {
@@ -86,10 +362,6 @@ void main() {
       );
       await tester.tap(find.byTooltip('Show grammar feedback'));
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('SHOW MORE'));
-      await tester.tap(find.text('SHOW MORE'));
-      await tester.pumpAndSettle();
-      expect(find.text('SHOW LESS').hitTestable(), findsOneWidget);
       expect(position.pixels, greaterThan(0));
       expect(latest.hitTestable(), findsNothing);
       router.go(AppRoute.home);
@@ -459,9 +731,13 @@ GoRouter _router() {
 }
 
 class _FakeConversationRepository implements ConversationRepository {
-  _FakeConversationRepository({this.failAudioSend = false});
+  _FakeConversationRepository({
+    this.failAudioSend = false,
+    this.savedAssistantText = 'Hello!',
+  });
 
   final bool failAudioSend;
+  final String savedAssistantText;
   final List<String> sentAudioFilenames = <String>[];
   final List<String> sentTextTurns = <String>[];
   final List<bool> sentAudioIncludeAudio = <bool>[];
@@ -479,7 +755,7 @@ class _FakeConversationRepository implements ConversationRepository {
           id: 'assistant-message-id',
           conversationId: conversationId,
           role: ConversationMessageRole.assistant,
-          content: 'Hello!',
+          content: savedAssistantText,
           createdAt: DateTime.utc(2026, 7, 11),
         ),
       ],

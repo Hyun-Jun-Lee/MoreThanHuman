@@ -19,6 +19,9 @@ class ConversationMessageTile extends ConsumerWidget {
     this.onAutoPlayStarted,
     this.onReplayAudio,
     this.onStopAudio,
+    this.revealText = false,
+    this.minVisibleChars = 0,
+    this.onVisibleChars,
     super.key,
   });
 
@@ -27,6 +30,9 @@ class ConversationMessageTile extends ConsumerWidget {
   final VoidCallback? onAutoPlayStarted;
   final Future<void> Function(String messageId)? onReplayAudio;
   final Future<void> Function(String messageId)? onStopAudio;
+  final bool revealText;
+  final int minVisibleChars;
+  final ValueChanged<int>? onVisibleChars;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -51,6 +57,9 @@ class ConversationMessageTile extends ConsumerWidget {
         ChatBubble(
           message: message.content,
           speaker: isUser ? ChatSpeaker.user : ChatSpeaker.assistant,
+          typing: !isUser && revealText,
+          minVisibleChars: minVisibleChars,
+          onVisibleChars: onVisibleChars,
           footer:
               !isUser &&
                   (message.audio != null ||

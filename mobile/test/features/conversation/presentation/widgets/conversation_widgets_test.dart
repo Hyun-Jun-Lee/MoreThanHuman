@@ -216,6 +216,45 @@ void main() {
     expect(find.text('What can I get started for you today?'), findsOneWidget);
   });
 
+  testWidgets(
+    'streamed assistant text types forward and exposes a ready sentence',
+    (WidgetTester tester) async {
+      final visibleCounts = <int>[];
+      await tester.pumpWidget(
+        _themedApp(
+          ChatBubble(
+            message: 'Hello. How are you?',
+            speaker: ChatSpeaker.assistant,
+            typing: true,
+            onVisibleChars: visibleCounts.add,
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(find.text('Hello.'), findsNothing);
+      expect(visibleCounts.first, 1);
+
+      await tester.pumpWidget(
+        _themedApp(
+          ChatBubble(
+            message: 'Hello. How are you?',
+            speaker: ChatSpeaker.assistant,
+            typing: true,
+            minVisibleChars: 'Hello.'.length,
+            onVisibleChars: visibleCounts.add,
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(find.text('Hello.'), findsOneWidget);
+      expect(visibleCounts.last, greaterThanOrEqualTo('Hello.'.length));
+      for (var tick = 0; tick < 30; tick++) {
+        await tester.pump(const Duration(milliseconds: 24));
+      }
+      expect(find.text('How are you?'), findsOneWidget);
+    },
+  );
+
   testWidgets('GrammarFeedbackCard highlights corrected text only', (
     WidgetTester tester,
   ) async {

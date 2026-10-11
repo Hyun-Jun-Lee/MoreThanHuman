@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:collection';
 
+import 'package:curitalk/core/diagnostics/latency_trace.dart';
 import 'package:curitalk/features/conversation/application/conversation_audio_services.dart';
 import 'package:curitalk/features/conversation/data/api_conversation_repository.dart';
 import 'package:curitalk/features/conversation/data/conversation_stream_api.dart';
 import 'package:curitalk/features/conversation/application/start_conversation_controller.dart';
+import 'package:curitalk/features/conversation/application/stream_sentence_boundary.dart';
 import 'package:curitalk/features/conversation/data/conversation_access_repository.dart';
 import 'package:curitalk/core/network/api_exception.dart';
 import 'package:curitalk/features/conversation/domain/conversation_models.dart';
@@ -36,6 +38,8 @@ class ConversationState {
     this.unconfirmedText,
     this.unconfirmedAudioFile,
     this.autoPlayAudioMessageIds = const <String>{},
+    this.revealingAssistantId,
+    this.minVisibleAssistantChars = 0,
     this.oldestOffset = 0,
     this.isLoadingOlder = false,
     this.olderMessagesFailed = false,
@@ -55,6 +59,8 @@ class ConversationState {
       unconfirmedText = null,
       unconfirmedAudioFile = null,
       autoPlayAudioMessageIds = const <String>{},
+      revealingAssistantId = null,
+      minVisibleAssistantChars = 0,
       oldestOffset = 0,
       isLoadingOlder = false,
       olderMessagesFailed = false;
@@ -72,6 +78,8 @@ class ConversationState {
   final String? unconfirmedText;
   final ConversationAudioFile? unconfirmedAudioFile;
   final Set<String> autoPlayAudioMessageIds;
+  final String? revealingAssistantId;
+  final int minVisibleAssistantChars;
   final int oldestOffset;
   final bool isLoadingOlder;
   final bool olderMessagesFailed;
@@ -101,6 +109,9 @@ class ConversationState {
     ConversationAudioFile? unconfirmedAudioFile,
     bool clearUnconfirmedAudioFile = false,
     Set<String>? autoPlayAudioMessageIds,
+    String? revealingAssistantId,
+    bool clearRevealingAssistant = false,
+    int? minVisibleAssistantChars,
     int? oldestOffset,
     bool? isLoadingOlder,
     bool? olderMessagesFailed,
@@ -138,6 +149,11 @@ class ConversationState {
           : unconfirmedAudioFile ?? this.unconfirmedAudioFile,
       autoPlayAudioMessageIds:
           autoPlayAudioMessageIds ?? this.autoPlayAudioMessageIds,
+      revealingAssistantId: clearRevealingAssistant
+          ? null
+          : revealingAssistantId ?? this.revealingAssistantId,
+      minVisibleAssistantChars:
+          minVisibleAssistantChars ?? this.minVisibleAssistantChars,
       oldestOffset: oldestOffset ?? this.oldestOffset,
       isLoadingOlder: isLoadingOlder ?? this.isLoadingOlder,
       olderMessagesFailed: olderMessagesFailed ?? this.olderMessagesFailed,
@@ -152,17 +168,79 @@ class ConversationController extends AsyncNotifier<ConversationState> {
   static const int _pageSize = 40;
   CancelToken? _activeStreamToken;
   String? _activeReplayMessageId;
-  final Queue<VoiceAudioResponse> _audioQueue = Queue<VoiceAudioResponse>();
+  final Queue<({VoiceAudioResponse audio, int? textEnd})> _audioQueue =
+      Queue<({VoiceAudioResponse audio, int? textEnd})>();
   bool _playingAudio = false;
   int _audioGeneration = 0;
   bool _localPlaybackFailed = false;
+  LatencyTrace? _activeStreamTrace;
+  String? _activeStreamAssistantId;
+  bool _firstTextFrameSeen = false;
+  int _visibleAssistantChars = 0;
+  int _lastAudioTextEnd = 0;
+  int _releasedAssistantChars = 0;
+  String _bufferedAssistantText = '';
+  String? _completedAssistantText;
+  String? _completedAssistantId;
+  Completer<void>? _assistantFrameWaiter;
+  int _assistantFrameThreshold = 0;
+
+  void onAssistantTextFrameReady(String assistantMessageId, int visibleChars) {
+    if (_activeStreamAssistantId != assistantMessageId) {
+      return;
+    }
+    if (!_firstTextFrameSeen && visibleChars > 0) {
+      _firstTextFrameSeen = true;
+      _activeStreamTrace?.mark('first_text_frame');
+    }
+    if (visibleChars > _visibleAssistantChars) {
+      _visibleAssistantChars = visibleChars;
+      if (visibleChars > _assistantFrameThreshold) {
+        final waiter = _assistantFrameWaiter;
+        if (waiter != null && !waiter.isCompleted) waiter.complete();
+      }
+    }
+    final current = state.value;
+    if (current != null &&
+        !current.isSending &&
+        current.revealingAssistantId == assistantMessageId &&
+        _completedAssistantText != null &&
+        _releasedAssistantChars >= _completedAssistantText!.length &&
+        _audioQueue.isEmpty &&
+        !_playingAudio &&
+        current.messages.any(
+          (message) =>
+              message.id == assistantMessageId &&
+              message.content.length <= visibleChars,
+        )) {
+      state = AsyncData(current.copyWith(clearRevealingAssistant: true));
+    }
+  }
 
   Future<void> cancelActiveStream() async {
+    final completedText = _completedAssistantText;
+    if (completedText != null &&
+        _releasedAssistantChars < completedText.length) {
+      _showAssistantPrefix(completedText.length);
+    }
     _activeStreamToken?.cancel('Conversation screen closed');
     _activeStreamToken = null;
     _activeReplayMessageId = null;
     _audioGeneration++;
     _audioQueue.clear();
+    _activeStreamTrace = null;
+    _activeStreamAssistantId = null;
+    _firstTextFrameSeen = false;
+    _visibleAssistantChars = 0;
+    _lastAudioTextEnd = 0;
+    _releasedAssistantChars = 0;
+    _bufferedAssistantText = '';
+    _completedAssistantText = null;
+    _completedAssistantId = null;
+    if (_assistantFrameWaiter?.isCompleted == false) {
+      _assistantFrameWaiter!.complete();
+    }
+    _assistantFrameWaiter = null;
     try {
       await ref.read(conversationAudioPlayerProvider).stop();
     } on Object {
@@ -619,6 +697,11 @@ class ConversationController extends AsyncNotifier<ConversationState> {
     _activeStreamToken = token;
     final localUserId = 'local-user-$requestId';
     final localAssistantId = 'local-assistant-$requestId';
+    final requestTrace = (audioFile?.latencyTrace ?? LatencyTrace())
+        .claimRequest();
+    _activeStreamTrace = requestTrace;
+    _activeStreamAssistantId = localAssistantId;
+    _firstTextFrameSeen = false;
     final initial = state.requireValue;
     state = AsyncData(
       initial.copyWith(
@@ -643,6 +726,8 @@ class ConversationController extends AsyncNotifier<ConversationState> {
         clearPendingRequestId: true,
         clearUnconfirmedText: true,
         clearUnconfirmedAudioFile: true,
+        clearRevealingAssistant: true,
+        minVisibleAssistantChars: 0,
         failureReason: null,
       ),
     );
@@ -653,6 +738,8 @@ class ConversationController extends AsyncNotifier<ConversationState> {
     var nextSegment = 0;
     var terminal = false;
     var partial = '';
+    var deltaCount = 0;
+    var firstAudioSeen = false;
     try {
       final path = retryTurnId != null
           ? 'conversations/turns/$retryTurnId/retry/stream/'
@@ -671,7 +758,7 @@ class ConversationController extends AsyncNotifier<ConversationState> {
         data: data,
         cancelToken: token,
         idempotencyKey: requestId,
-        trace: audioFile?.latencyTrace,
+        trace: requestTrace,
       )) {
         if (!ref.mounted || token.isCancelled) break;
         final seq = event['seq'];
@@ -729,24 +816,19 @@ class ConversationController extends AsyncNotifier<ConversationState> {
               throw const FormatException('Invalid text delta.');
             }
             partial += delta;
-            final temporary = ConversationMessage(
-              id: localAssistantId,
-              conversationId: conversationId,
-              role: ConversationMessageRole.assistant,
-              content: partial,
-              createdAt: DateTime.now(),
-              isLocalPending: true,
-            );
-            state = AsyncData(
-              current.copyWith(
-                messages: <ConversationMessage>[
-                  ...current.messages.where(
-                    (message) => message.id != localAssistantId,
-                  ),
-                  temporary,
-                ],
-              ),
-            );
+            _bufferedAssistantText = partial;
+            if (deltaCount == 0) requestTrace.mark('first_text_delta');
+            if (deltaCount < 32) {
+              requestTrace.mark(
+                'text_delta',
+                fields: <String, Object?>{
+                  'delta_index': deltaCount,
+                  'delta_chars': delta.length,
+                },
+              );
+            }
+            deltaCount++;
+            if (_localPlaybackFailed) _showAssistantPrefix(partial.length);
             break;
           case 'audio_segment':
             final index = event['segment_index'];
@@ -754,15 +836,36 @@ class ConversationController extends AsyncNotifier<ConversationState> {
               throw const FormatException('Out-of-order audio segment.');
             }
             nextSegment++;
+            if (!firstAudioSeen) {
+              firstAudioSeen = true;
+              requestTrace.mark('first_audio_segment');
+            }
             if (!_localPlaybackFailed) {
-              _audioQueue.add(VoiceAudioResponse.fromJson(event));
-              unawaited(_playAudioQueue());
+              final sentence = event['text'];
+              if (sentence is! String) {
+                throw const FormatException('Invalid audio segment text.');
+              }
+              final textEnd = streamSentenceEnd(
+                partial,
+                sentence,
+                _lastAudioTextEnd,
+              );
+              if (textEnd == null) {
+                _failStreamAudio();
+              } else {
+                _lastAudioTextEnd = textEnd;
+                _audioQueue.add((
+                  audio: requestTrace.duringDecode(
+                    () => VoiceAudioResponse.fromJson(event),
+                  ),
+                  textEnd: textEnd,
+                ));
+                unawaited(_playAudioQueue());
+              }
             }
             break;
           case 'audio_error':
-            _audioGeneration++;
-            _audioQueue.clear();
-            unawaited(ref.read(conversationAudioPlayerProvider).stop());
+            _failStreamAudio();
             break;
           case 'turn_completed':
             final assistantId = event['assistant_message_id'];
@@ -771,24 +874,46 @@ class ConversationController extends AsyncNotifier<ConversationState> {
               throw const FormatException('Invalid completed turn.');
             }
             terminal = true;
+            _completedAssistantText = completedText;
+            _bufferedAssistantText = completedText;
+            _completedAssistantId = assistantId;
+            _activeStreamAssistantId = assistantId;
+            requestTrace.mark(
+              'turn_completed',
+              fields: <String, Object?>{'delta_count': deltaCount},
+            );
             final audioFailed =
-                event['audio_status'] == 'failed' || _localPlaybackFailed;
+                event['audio_status'] == 'failed' ||
+                _localPlaybackFailed ||
+                (nextSegment == 0 && completedText.isNotEmpty);
+            if (audioFailed) _failStreamAudio();
+            final visibleText = audioFailed
+                ? completedText
+                : completedText.substring(
+                    0,
+                    _releasedAssistantChars.clamp(0, completedText.length),
+                  );
             state = AsyncData(
               current.copyWith(
                 messages: <ConversationMessage>[
                   ...current.messages.where(
                     (message) => message.id != localAssistantId,
                   ),
-                  ConversationMessage(
-                    id: assistantId,
-                    conversationId: conversationId,
-                    role: ConversationMessageRole.assistant,
-                    content: completedText,
-                    createdAt: DateTime.now(),
-                    audioAvailable: true,
-                  ),
+                  if (visibleText.isNotEmpty)
+                    ConversationMessage(
+                      id: assistantId,
+                      conversationId: conversationId,
+                      role: ConversationMessageRole.assistant,
+                      content: visibleText,
+                      createdAt: DateTime.now(),
+                      audioAvailable: true,
+                    ),
                 ],
                 isSending: false,
+                revealingAssistantId: visibleText.isNotEmpty
+                    ? assistantId
+                    : null,
+                clearRevealingAssistant: visibleText.isEmpty,
                 clearFailedTurnId: true,
                 clearPendingTurnId: true,
                 audioRetryMessageId: audioFailed ? assistantId : null,
@@ -800,12 +925,18 @@ class ConversationController extends AsyncNotifier<ConversationState> {
                 failureReason: null,
               ),
             );
+            if (!audioFailed && !_playingAudio && _audioQueue.isEmpty) {
+              _finishAssistantReveal();
+            }
             ref.invalidate(conversationTurnAccessProvider(conversationId));
             break;
           case 'turn_error':
             terminal = true;
             _audioGeneration++;
             _audioQueue.clear();
+            if (_assistantFrameWaiter?.isCompleted == false) {
+              _assistantFrameWaiter!.complete();
+            }
             unawaited(ref.read(conversationAudioPlayerProvider).stop());
             state = AsyncData(
               current.copyWith(
@@ -813,6 +944,7 @@ class ConversationController extends AsyncNotifier<ConversationState> {
                     .where((message) => message.id != localAssistantId)
                     .toList(),
                 isSending: false,
+                clearRevealingAssistant: true,
                 failedTurnId: turnId,
                 failureReason: ConversationSendFailureReason.textRequestFailed,
               ),
@@ -940,32 +1072,106 @@ class ConversationController extends AsyncNotifier<ConversationState> {
     final generation = _audioGeneration;
     try {
       while (_audioQueue.isNotEmpty && generation == _audioGeneration) {
-        await ref
-            .read(conversationAudioPlayerProvider)
-            .play(_audioQueue.removeFirst());
+        final item = _audioQueue.removeFirst();
+        if (item.textEnd case final textEnd?) {
+          final priorEnd = _releasedAssistantChars;
+          _showAssistantPrefix(textEnd, minVisibleChars: priorEnd);
+          _assistantFrameThreshold = streamSentenceLeadingSpaceEnd(
+            _completedAssistantText ?? _bufferedAssistantText,
+            priorEnd,
+            textEnd,
+          );
+          if (_visibleAssistantChars <= _assistantFrameThreshold) {
+            final waiter = Completer<void>();
+            _assistantFrameWaiter = waiter;
+            await waiter.future;
+            _assistantFrameWaiter = null;
+          }
+        }
+        if (generation != _audioGeneration || !ref.mounted) break;
+        await ref.read(conversationAudioPlayerProvider).play(item.audio);
       }
     } on Object {
-      _audioQueue.clear();
-      _localPlaybackFailed = true;
-      if (ref.mounted && state.hasValue) {
-        final current = state.requireValue;
-        final assistantMessages = current.messages.where(
-          (message) =>
-              message.role == ConversationMessageRole.assistant &&
-              !message.isLocalPending,
-        );
-        state = AsyncData(
-          current.copyWith(
-            assistantAudioStatus: AssistantAudioStatus.unavailable,
-            audioRetryMessageId: current.isSending || assistantMessages.isEmpty
-                ? null
-                : assistantMessages.last.id,
-          ),
-        );
-      }
+      if (generation == _audioGeneration) _failStreamAudio();
     } finally {
       _playingAudio = false;
-      if (_audioQueue.isNotEmpty && ref.mounted) unawaited(_playAudioQueue());
+      if (generation == _audioGeneration && ref.mounted) {
+        _finishAssistantReveal();
+      }
+      if (_audioQueue.isNotEmpty && ref.mounted) {
+        unawaited(_playAudioQueue());
+      }
+    }
+  }
+
+  void _showAssistantPrefix(int end, {int? minVisibleChars}) {
+    if (!ref.mounted || !state.hasValue) return;
+    final text = _completedAssistantText ?? _bufferedAssistantText;
+    final safeEnd = end.clamp(0, text.length);
+    if (safeEnd <= _releasedAssistantChars && minVisibleChars == null) return;
+    _releasedAssistantChars = safeEnd;
+    final id = _completedAssistantId ?? _activeStreamAssistantId;
+    if (id == null || safeEnd == 0) return;
+    final current = state.requireValue;
+    final existing = current.messages
+        .where((message) => message.id == id)
+        .firstOrNull;
+    final message =
+        existing?.copyWith(content: text.substring(0, safeEnd)) ??
+        ConversationMessage(
+          id: id,
+          conversationId: conversationId,
+          role: ConversationMessageRole.assistant,
+          content: text.substring(0, safeEnd),
+          createdAt: DateTime.now(),
+          isLocalPending: _completedAssistantId == null,
+          audioAvailable: _completedAssistantId != null,
+        );
+    state = AsyncData(
+      current.copyWith(
+        messages: <ConversationMessage>[
+          ...current.messages.where((item) => item.id != id),
+          message,
+        ],
+        revealingAssistantId: id,
+        minVisibleAssistantChars:
+            minVisibleChars ?? current.minVisibleAssistantChars,
+      ),
+    );
+  }
+
+  void _failStreamAudio() {
+    _audioGeneration++;
+    _audioQueue.clear();
+    _localPlaybackFailed = true;
+    if (_assistantFrameWaiter?.isCompleted == false) {
+      _assistantFrameWaiter!.complete();
+    }
+    if (!ref.mounted) return;
+    unawaited(ref.read(conversationAudioPlayerProvider).stop());
+    _showAssistantPrefix(
+      (_completedAssistantText ?? _bufferedAssistantText).length,
+    );
+    if (!ref.mounted || !state.hasValue) return;
+    final current = state.requireValue;
+    state = AsyncData(
+      current.copyWith(
+        assistantAudioStatus: AssistantAudioStatus.unavailable,
+        audioRetryMessageId: _completedAssistantId,
+        clearAudioRetryMessageId: _completedAssistantId == null,
+      ),
+    );
+  }
+
+  void _finishAssistantReveal() {
+    final complete = _completedAssistantText;
+    if (complete == null || _audioQueue.isNotEmpty || _localPlaybackFailed) {
+      return;
+    }
+    _showAssistantPrefix(complete.length);
+    final current = state.value;
+    if (current != null && _visibleAssistantChars >= complete.length) {
+      state = AsyncData(current.copyWith(clearRevealingAssistant: true));
     }
   }
 
@@ -1023,7 +1229,10 @@ class ConversationController extends AsyncNotifier<ConversationState> {
               throw const FormatException('Out-of-order audio retry segment.');
             }
             if (!_localPlaybackFailed) {
-              _audioQueue.add(VoiceAudioResponse.fromJson(event));
+              _audioQueue.add((
+                audio: VoiceAudioResponse.fromJson(event),
+                textEnd: null,
+              ));
               unawaited(_playAudioQueue());
             }
             break;

@@ -74,10 +74,18 @@ class _RoleplaySetupScreenState extends ConsumerState<RoleplaySetupScreen> {
                   if (payload == null) {
                     return;
                   }
+                  var pendingOpened = false;
                   final ConversationResponse? response = await ref
                       .read(startConversationControllerProvider.notifier)
-                      .startRoleplay(roleCharacter: payload.roleCharacter);
-                  if (!context.mounted || response == null) {
+                      .startRoleplay(
+                        roleCharacter: payload.roleCharacter,
+                        onStreamStarted: (requestId) {
+                          if (!context.mounted) return;
+                          pendingOpened = true;
+                          openPendingRoleplay(context, requestId);
+                        },
+                      );
+                  if (!context.mounted || response == null || pendingOpened) {
                     return;
                   }
                   openStartedConversation(context, response.conversationId);

@@ -25,11 +25,15 @@ abstract final class AppRoute {
   static const String topicInput = '/topic-input';
   static const String topicPrep = '/topic-prep';
   static const String roleplaySetup = '/roleplay-setup';
+  static const String roleplayPending = '/roleplay-start';
   static const String conversation = '/conversation';
 
   static String conversationPath(String conversationId) {
     return '$conversation/${Uri.encodeComponent(conversationId)}';
   }
+
+  static String roleplayPendingPath(String requestId) =>
+      '$roleplayPending/${Uri.encodeComponent(requestId)}';
 }
 
 final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
@@ -153,6 +157,12 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
         builder: (context, state) => const RoleplaySetupScreen(),
       ),
       GoRoute(
+        path: '${AppRoute.roleplayPending}/:requestId',
+        builder: (context, state) => PendingRoleplayScreen(
+          requestId: state.pathParameters['requestId']!,
+        ),
+      ),
+      GoRoute(
         path: '${AppRoute.conversation}/:conversationId',
         builder: (context, state) {
           final String? conversationId = state.pathParameters['conversationId'];
@@ -206,24 +216,26 @@ void openStartedConversation(BuildContext context, String conversationId) {
   while (router.canPop()) {
     final path =
         router.routerDelegate.currentConfiguration.last.matchedLocation;
-    if (!{
-      AppRoute.topicInput,
-      AppRoute.topicPrep,
-      AppRoute.roleplaySetup,
-    }.contains(path)) {
+    if (!_isPreparationPath(path)) {
       break;
     }
     router.pop();
   }
   final location =
       router.routerDelegate.currentConfiguration.last.matchedLocation;
-  if ({
-    AppRoute.topicInput,
-    AppRoute.topicPrep,
-    AppRoute.roleplaySetup,
-  }.contains(location)) {
+  if (_isPreparationPath(location)) {
     // 직접 준비 화면을 연 경우에도 돌아갈 목적지를 구성해요.
     router.go(AppRoute.home);
   }
   unawaited(router.push(AppRoute.conversationPath(conversationId)));
 }
+
+void openPendingRoleplay(BuildContext context, String requestId) {
+  unawaited(context.push(AppRoute.roleplayPendingPath(requestId)));
+}
+
+bool _isPreparationPath(String path) =>
+    path == AppRoute.topicInput ||
+    path == AppRoute.topicPrep ||
+    path == AppRoute.roleplaySetup ||
+    path.startsWith('${AppRoute.roleplayPending}/');

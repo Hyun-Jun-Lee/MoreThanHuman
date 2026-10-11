@@ -3,6 +3,8 @@ import 'dart:collection';
 import 'dart:math';
 
 import 'package:curitalk/features/conversation/application/conversation_audio_services.dart';
+import 'package:curitalk/features/conversation/application/conversation_controller.dart';
+import 'package:curitalk/features/conversation/application/stream_sentence_boundary.dart';
 import 'package:curitalk/core/diagnostics/latency_trace.dart';
 import 'package:curitalk/features/conversation/data/api_conversation_repository.dart';
 import 'package:curitalk/features/conversation/data/conversation_stream_api.dart';
@@ -44,6 +46,68 @@ class InitialAssistantAudioController extends Notifier<InitialAssistantAudio?> {
   }
 }
 
+class StartStreamPreview {
+  const StartStreamPreview({
+    this.userMessageId,
+    this.userText,
+    this.assistantText = '',
+    this.fullAssistantText,
+    this.minVisibleAssistantChars = 0,
+    this.isTextFullyDisplayed = false,
+    this.isActive = true,
+    this.conversationId,
+    this.hasFailed = false,
+  });
+
+  final String? userMessageId;
+  final String? userText;
+  final String assistantText;
+  final String? fullAssistantText;
+  final int minVisibleAssistantChars;
+  final bool isTextFullyDisplayed;
+  final bool isActive;
+  final String? conversationId;
+  final bool hasFailed;
+
+  StartStreamPreview copyWith({
+    String? userMessageId,
+    String? userText,
+    String? assistantText,
+    String? fullAssistantText,
+    int? minVisibleAssistantChars,
+    bool? isTextFullyDisplayed,
+    bool? isActive,
+    String? conversationId,
+    bool? hasFailed,
+  }) => StartStreamPreview(
+    userMessageId: userMessageId ?? this.userMessageId,
+    userText: userText ?? this.userText,
+    assistantText: assistantText ?? this.assistantText,
+    fullAssistantText: fullAssistantText ?? this.fullAssistantText,
+    minVisibleAssistantChars:
+        minVisibleAssistantChars ?? this.minVisibleAssistantChars,
+    isTextFullyDisplayed: isTextFullyDisplayed ?? this.isTextFullyDisplayed,
+    isActive: isActive ?? this.isActive,
+    conversationId: conversationId ?? this.conversationId,
+    hasFailed: hasFailed ?? this.hasFailed,
+  );
+}
+
+class StartStreamPreviewController extends Notifier<StartStreamPreview?> {
+  StartStreamPreviewController(this.conversationId);
+
+  final String conversationId;
+
+  @override
+  StartStreamPreview? build() => null;
+
+  void update(StartStreamPreview preview) => state = preview;
+
+  void clear() {
+    if (ref.mounted) state = null;
+  }
+}
+
 enum StartConversationFailureReason {
   freeChatRequestFailed,
   roleplayRequestFailed,
@@ -81,10 +145,20 @@ class StartConversationController extends Notifier<StartConversationState> {
   CancelToken? _suggestedCancelToken;
   LatencyTrace? _suggestedTrace;
   StreamSubscription<Map<String, dynamic>>? _suggestedSubscription;
-  final Queue<VoiceAudioResponse> _suggestedAudioQueue =
-      Queue<VoiceAudioResponse>();
+  final Queue<({VoiceAudioResponse audio, int textEnd})> _suggestedAudioQueue =
+      Queue<({VoiceAudioResponse audio, int textEnd})>();
   bool _playingSuggestedAudio = false;
   int _playGeneration = 0;
+  String? _readyConversationId;
+  int _visibleStartChars = 0;
+  int _lastAudioTextEnd = 0;
+  int _releasedStartChars = 0;
+  String _bufferedStartText = '';
+  String? _completedStartText;
+  bool _startAudioFailed = false;
+  Completer<void>? _startFrameWaiter;
+  int _startFrameThreshold = 0;
+  int _suggestedDeltaCount = 0;
   String? _failedGeneratedStartTurnId;
   String? _failedGeneratedStartFingerprint;
   String? _pendingGeneratedStartRequestId;
@@ -202,6 +276,7 @@ class StartConversationController extends Notifier<StartConversationState> {
     _suggestedTerminalSeen = false;
     _expectedSeq = 0;
     _nextSegmentIndex = 0;
+    _suggestedDeltaCount = 0;
     final stream = retryTurnId == null
         ? SuggestedConversationStream(repository.apiClient).start(
             topicId: topicId,
@@ -266,12 +341,33 @@ class StartConversationController extends Notifier<StartConversationState> {
           throw const FormatException('Missing conversation ID.');
         }
         _activeSuggestedConversationId = conversationId;
+        ref
+            .read(startStreamPreviewProvider(conversationId).notifier)
+            .update(const StartStreamPreview());
         _pendingSuggestedTopic = null;
         _pendingSuggestedRequestId = null;
         _suggestedRequestSent = false;
         _refreshRecentConversations();
         state = const StartConversationState();
         started.complete(conversationId);
+        break;
+      case 'text_delta':
+        final delta = event['delta'] as String;
+        if (_suggestedDeltaCount == 0) {
+          _suggestedTrace?.mark('first_text_delta');
+        }
+        if (_suggestedDeltaCount < 32) {
+          _suggestedTrace?.mark(
+            'text_delta',
+            fields: <String, Object?>{
+              'delta_index': _suggestedDeltaCount,
+              'delta_chars': delta.length,
+            },
+          );
+        }
+        _suggestedDeltaCount++;
+        _bufferedStartText += delta;
+        if (_startAudioFailed) _showStartPrefix(_bufferedStartText.length);
         break;
       case 'audio_segment':
         final int? index = event['segment_index'] as int?;
@@ -281,15 +377,28 @@ class StartConversationController extends Notifier<StartConversationState> {
         _nextSegmentIndex++;
         if (index == 0) _suggestedTrace?.mark('first_audio_segment');
         final trace = _suggestedTrace;
-        _suggestedAudioQueue.add(
-          trace == null
-              ? VoiceAudioResponse.fromJson(event)
-              : trace.duringDecode(() => VoiceAudioResponse.fromJson(event)),
-        );
-        unawaited(_playSuggestedAudio());
+        if (!_startAudioFailed) {
+          final textEnd = _requiredAudioTextChars(
+            _bufferedStartText,
+            event['text'] as String?,
+          );
+          if (textEnd == null) {
+            _failStartAudio();
+          } else {
+            _suggestedAudioQueue.add((
+              audio: trace == null
+                  ? VoiceAudioResponse.fromJson(event)
+                  : trace.duringDecode(
+                      () => VoiceAudioResponse.fromJson(event),
+                    ),
+              textEnd: textEnd,
+            ));
+            unawaited(_playSuggestedAudio());
+          }
+        }
         break;
       case 'audio_error':
-        _suggestedAudioQueue.clear();
+        _failStartAudio();
         final conversationId = _activeSuggestedConversationId;
         if (conversationId != null) {
           ref
@@ -299,8 +408,33 @@ class StartConversationController extends Notifier<StartConversationState> {
         break;
       case 'turn_completed':
         _suggestedTerminalSeen = true;
+        _completedStartText = event['text'] as String? ?? _bufferedStartText;
+        _bufferedStartText = _completedStartText!;
+        if (event['audio_status'] == 'failed' ||
+            (_suggestedAudioQueue.isEmpty &&
+                !_playingSuggestedAudio &&
+                _completedStartText!.isNotEmpty &&
+                _releasedStartChars == 0)) {
+          _failStartAudio();
+        }
+        final conversationId = _activeSuggestedConversationId;
+        if (conversationId != null) {
+          final previous = ref.read(startStreamPreviewProvider(conversationId));
+          ref
+              .read(startStreamPreviewProvider(conversationId).notifier)
+              .update(
+                (previous ?? const StartStreamPreview()).copyWith(
+                  assistantText: _startAudioFailed
+                      ? _completedStartText
+                      : previous?.assistantText,
+                  fullAssistantText: _completedStartText,
+                  isActive: false,
+                ),
+              );
+          _finishStartReveal();
+          ref.invalidate(conversationControllerProvider(conversationId));
+        }
         if (event['audio_status'] == 'failed') {
-          final conversationId = _activeSuggestedConversationId;
           if (conversationId != null) {
             ref
                 .read(suggestedAudioFailureProvider(conversationId).notifier)
@@ -322,6 +456,7 @@ class StartConversationController extends Notifier<StartConversationState> {
     } else {
       final conversationId = _activeSuggestedConversationId;
       if (conversationId != null) {
+        ref.read(startStreamPreviewProvider(conversationId).notifier).clear();
         ref
             .read(suggestedAudioFailureProvider(conversationId).notifier)
             .setFailed();
@@ -330,25 +465,37 @@ class StartConversationController extends Notifier<StartConversationState> {
   }
 
   Future<void> _playSuggestedAudio() async {
-    if (_playingSuggestedAudio) return;
+    if (_playingSuggestedAudio || _activeSuggestedConversationId == null) {
+      return;
+    }
     _playingSuggestedAudio = true;
     final generation = _playGeneration;
     try {
       while (_suggestedAudioQueue.isNotEmpty && generation == _playGeneration) {
-        final audio = _suggestedAudioQueue.removeFirst();
-        await ref.read(conversationAudioPlayerProvider).play(audio);
+        final item = _suggestedAudioQueue.removeFirst();
+        final priorEnd = _releasedStartChars;
+        _showStartPrefix(item.textEnd, minVisibleChars: priorEnd);
+        _startFrameThreshold = streamSentenceLeadingSpaceEnd(
+          _completedStartText ?? _bufferedStartText,
+          priorEnd,
+          item.textEnd,
+        );
+        if (_visibleStartChars <= _startFrameThreshold ||
+            _readyConversationId != _activeSuggestedConversationId) {
+          final waiter = Completer<void>();
+          _startFrameWaiter = waiter;
+          await waiter.future;
+          _startFrameWaiter = null;
+        }
+        if (generation != _playGeneration || !ref.mounted) break;
+        await ref.read(conversationAudioPlayerProvider).play(item.audio);
       }
     } on Object {
-      _suggestedAudioQueue.clear();
-      final conversationId = _activeSuggestedConversationId;
-      if (conversationId != null) {
-        ref
-            .read(suggestedAudioFailureProvider(conversationId).notifier)
-            .setFailed();
-      }
+      if (generation == _playGeneration) _failStartAudio();
     } finally {
       _playingSuggestedAudio = false;
-      if (_suggestedAudioQueue.isNotEmpty) {
+      if (generation == _playGeneration) _finishStartReveal();
+      if (_suggestedAudioQueue.isNotEmpty && ref.mounted) {
         unawaited(_playSuggestedAudio());
       }
     }
@@ -357,6 +504,16 @@ class StartConversationController extends Notifier<StartConversationState> {
   Future<void> cancelSuggestedStream() async {
     _playGeneration++;
     _suggestedAudioQueue.clear();
+    _readyConversationId = null;
+    _visibleStartChars = 0;
+    _lastAudioTextEnd = 0;
+    _releasedStartChars = 0;
+    _bufferedStartText = '';
+    _completedStartText = null;
+    _startAudioFailed = false;
+    if (_startFrameWaiter?.isCompleted == false) _startFrameWaiter!.complete();
+    _startFrameWaiter = null;
+    _suggestedDeltaCount = 0;
     _activeSuggestedConversationId = null;
     final started = _suggestedStartCompleter;
     if (started != null && !started.isCompleted) started.complete(null);
@@ -380,6 +537,86 @@ class StartConversationController extends Notifier<StartConversationState> {
   Future<void> cancelSuggestedStreamFor(String conversationId) async {
     if (_activeSuggestedConversationId == conversationId) {
       await cancelSuggestedStream();
+    }
+  }
+
+  int? _requiredAudioTextChars(String text, String? sentence) {
+    if (sentence == null) return null;
+    final end = streamSentenceEnd(text, sentence, _lastAudioTextEnd);
+    if (end != null) _lastAudioTextEnd = end;
+    return end;
+  }
+
+  void onConversationFrameReady(String conversationId, [int? visibleChars]) {
+    if (_activeSuggestedConversationId != conversationId) return;
+    if (_readyConversationId == null) _suggestedTrace?.mark('first_text_frame');
+    _readyConversationId = conversationId;
+    final preview = ref.read(startStreamPreviewProvider(conversationId));
+    _visibleStartChars = max(
+      _visibleStartChars,
+      visibleChars ?? preview?.assistantText.length ?? 0,
+    );
+    if (_visibleStartChars > _startFrameThreshold &&
+        _startFrameWaiter?.isCompleted == false) {
+      _startFrameWaiter!.complete();
+    }
+    if (preview != null) _finishStartReveal();
+  }
+
+  void _showStartPrefix(int end, {int? minVisibleChars}) {
+    final conversationId = _activeSuggestedConversationId;
+    if (conversationId == null || !ref.mounted) return;
+    final text = _completedStartText ?? _bufferedStartText;
+    final safeEnd = end.clamp(0, text.length);
+    if (safeEnd <= _releasedStartChars && minVisibleChars == null) return;
+    _releasedStartChars = safeEnd;
+    final controller = ref.read(
+      startStreamPreviewProvider(conversationId).notifier,
+    );
+    final previous = ref.read(startStreamPreviewProvider(conversationId));
+    controller.update(
+      (previous ?? const StartStreamPreview()).copyWith(
+        assistantText: text.substring(0, safeEnd),
+        minVisibleAssistantChars:
+            minVisibleChars ?? previous?.minVisibleAssistantChars ?? 0,
+      ),
+    );
+  }
+
+  void _failStartAudio() {
+    _playGeneration++;
+    _suggestedAudioQueue.clear();
+    _startAudioFailed = true;
+    if (_startFrameWaiter?.isCompleted == false) _startFrameWaiter!.complete();
+    if (!ref.mounted) return;
+    unawaited(_stopSuggestedAudio());
+    _showStartPrefix((_completedStartText ?? _bufferedStartText).length);
+    final conversationId = _activeSuggestedConversationId;
+    if (conversationId != null) {
+      ref
+          .read(suggestedAudioFailureProvider(conversationId).notifier)
+          .setFailed();
+    }
+  }
+
+  void _finishStartReveal() {
+    final conversationId = _activeSuggestedConversationId;
+    final complete = _completedStartText;
+    if (conversationId == null ||
+        complete == null ||
+        _suggestedAudioQueue.isNotEmpty ||
+        _playingSuggestedAudio) {
+      return;
+    }
+    _showStartPrefix(complete.length);
+    final preview = ref.read(startStreamPreviewProvider(conversationId));
+    if (preview != null &&
+        !preview.isActive &&
+        _visibleStartChars >= complete.length &&
+        !preview.isTextFullyDisplayed) {
+      ref
+          .read(startStreamPreviewProvider(conversationId).notifier)
+          .update(preview.copyWith(isTextFullyDisplayed: true));
     }
   }
 
@@ -528,6 +765,7 @@ class StartConversationController extends Notifier<StartConversationState> {
   Future<ConversationResponse?> startRoleplay({
     required String roleCharacter,
     String? searchContext,
+    void Function(String requestId)? onStreamStarted,
   }) async {
     state = const StartConversationState(isStarting: true);
     try {
@@ -543,6 +781,7 @@ class StartConversationController extends Notifier<StartConversationState> {
           fingerprint: 'roleplay:$roleCharacter:$searchContext',
           type: ConversationType.rolePlaying,
           roleCharacter: roleCharacter,
+          onStreamStarted: onStreamStarted,
         );
       }
       final ConversationResponse response = await repository.startRoleplay(
@@ -572,6 +811,42 @@ class StartConversationController extends Notifier<StartConversationState> {
     required ConversationType type,
     String? roleCharacter,
     LatencyTrace? trace,
+    void Function(String requestId)? onStreamStarted,
+  }) {
+    final started = Completer<ConversationResponse?>();
+    unawaited(
+      _runGeneratedStream(
+        repository,
+        path: path,
+        data: data,
+        fingerprint: fingerprint,
+        type: type,
+        roleCharacter: roleCharacter,
+        trace: trace,
+        onStreamStarted: onStreamStarted,
+        started: started,
+      ).then(
+        (result) {
+          if (!started.isCompleted) started.complete(result);
+        },
+        onError: (Object error, StackTrace stack) {
+          if (!started.isCompleted) started.complete(null);
+        },
+      ),
+    );
+    return started.future;
+  }
+
+  Future<ConversationResponse?> _runGeneratedStream(
+    ApiConversationRepository repository, {
+    required String path,
+    required Object data,
+    required String fingerprint,
+    required ConversationType type,
+    String? roleCharacter,
+    LatencyTrace? trace,
+    void Function(String requestId)? onStreamStarted,
+    required Completer<ConversationResponse?> started,
   }) async {
     await cancelSuggestedStream();
     final api = ConversationStreamApi(repository.apiClient);
@@ -626,7 +901,8 @@ class StartConversationController extends Notifier<StartConversationState> {
     _pendingGeneratedStartFingerprint = fingerprint;
     final token = CancelToken();
     _suggestedCancelToken = token;
-    _suggestedTrace = trace;
+    final requestTrace = trace ?? LatencyTrace();
+    _suggestedTrace = requestTrace;
     final retryId = _failedGeneratedStartFingerprint == fingerprint
         ? _failedGeneratedStartTurnId
         : null;
@@ -639,6 +915,23 @@ class StartConversationController extends Notifier<StartConversationState> {
     var expectedSeq = 0;
     var nextSegment = 0;
     var terminal = false;
+    var firstTextSeen = false;
+    var deltaCount = 0;
+    var firstAudioSeen = false;
+    void openConversation() {
+      if (conversationId == null || started.isCompleted) return;
+      state = const StartConversationState();
+      started.complete(
+        ConversationResponse(
+          conversationId: conversationId,
+          messageId: userMessageId ?? assistantId ?? '',
+          conversationType: type,
+          roleCharacter: roleCharacter,
+          response: responseText,
+        ),
+      );
+    }
+
     try {
       await for (final event in api.events(
         path: retryId == null
@@ -647,7 +940,7 @@ class StartConversationController extends Notifier<StartConversationState> {
         data: retryId == null ? data : null,
         idempotencyKey: requestId,
         cancelToken: token,
-        trace: trace ?? LatencyTrace(),
+        trace: requestTrace,
       )) {
         if (token.isCancelled) break;
         final currentTurn = event['turn_id'];
@@ -664,32 +957,147 @@ class StartConversationController extends Notifier<StartConversationState> {
         switch (event['event']) {
           case 'turn_started':
             conversationId = event['conversation_id'] as String?;
-            _activeSuggestedConversationId = conversationId;
+            if (type == ConversationType.rolePlaying &&
+                conversationId == null) {
+              _activeSuggestedConversationId = requestId;
+              ref
+                  .read(startStreamPreviewProvider(requestId).notifier)
+                  .update(const StartStreamPreview());
+              onStreamStarted?.call(requestId);
+            } else {
+              _activeSuggestedConversationId = conversationId;
+            }
             break;
           case 'user_message_committed':
             conversationId = event['conversation_id'] as String?;
             userMessageId = event['user_message_id'] as String?;
             _activeSuggestedConversationId = conversationId;
+            if (conversationId != null) {
+              ref
+                  .read(startStreamPreviewProvider(conversationId).notifier)
+                  .update(
+                    StartStreamPreview(
+                      userMessageId: userMessageId,
+                      userText: event['text'] as String?,
+                      assistantText: responseText,
+                    ),
+                  );
+              openConversation();
+            }
             break;
           case 'text_delta':
-            responseText += event['delta'] as String;
+            final delta = event['delta'] as String;
+            responseText += delta;
+            _bufferedStartText = responseText;
+            if (!firstTextSeen) {
+              firstTextSeen = true;
+              requestTrace.mark('first_text_delta');
+            }
+            if (deltaCount < 32) {
+              requestTrace.mark(
+                'text_delta',
+                fields: <String, Object?>{
+                  'delta_index': deltaCount,
+                  'delta_chars': delta.length,
+                },
+              );
+            }
+            deltaCount++;
+            if (_startAudioFailed) _showStartPrefix(responseText.length);
             break;
           case 'audio_segment':
             if (event['segment_index'] != nextSegment++) {
               throw const FormatException('Invalid start audio segment order.');
             }
-            _suggestedAudioQueue.add(VoiceAudioResponse.fromJson(event));
-            unawaited(_playSuggestedAudio());
+            if (!firstAudioSeen) {
+              firstAudioSeen = true;
+              requestTrace.mark('first_audio_segment');
+            }
+            if (!_startAudioFailed) {
+              final textEnd = _requiredAudioTextChars(
+                responseText,
+                event['text'] as String?,
+              );
+              if (textEnd == null) {
+                _failStartAudio();
+              } else {
+                _suggestedAudioQueue.add((
+                  audio: requestTrace.duringDecode(
+                    () => VoiceAudioResponse.fromJson(event),
+                  ),
+                  textEnd: textEnd,
+                ));
+                unawaited(_playSuggestedAudio());
+              }
+            }
             break;
           case 'audio_error':
-            _suggestedAudioQueue.clear();
+            _failStartAudio();
             break;
           case 'turn_completed':
             terminal = true;
             conversationId = event['conversation_id'] as String?;
             assistantId = event['assistant_message_id'] as String?;
             responseText = event['text'] as String? ?? responseText;
+            _completedStartText = responseText;
+            _bufferedStartText = responseText;
+            if (event['audio_status'] == 'failed' ||
+                (_suggestedAudioQueue.isEmpty &&
+                    !_playingSuggestedAudio &&
+                    responseText.isNotEmpty &&
+                    _releasedStartChars == 0)) {
+              _failStartAudio();
+            }
+            final pendingPreview = type == ConversationType.rolePlaying
+                ? ref.read(startStreamPreviewProvider(requestId))
+                : null;
+            if (_readyConversationId == requestId) {
+              _readyConversationId = conversationId;
+            }
             _activeSuggestedConversationId = conversationId;
+            if (conversationId != null) {
+              final previous = ref.read(
+                startStreamPreviewProvider(conversationId),
+              );
+              ref
+                  .read(startStreamPreviewProvider(conversationId).notifier)
+                  .update(
+                    (previous ?? pendingPreview ?? const StartStreamPreview())
+                        .copyWith(
+                          assistantText: _startAudioFailed
+                              ? responseText
+                              : previous?.assistantText ??
+                                    pendingPreview?.assistantText ??
+                                    '',
+                          fullAssistantText: responseText,
+                          minVisibleAssistantChars: max(
+                            previous?.minVisibleAssistantChars ??
+                                pendingPreview?.minVisibleAssistantChars ??
+                                0,
+                            _visibleStartChars,
+                          ),
+                          isActive: false,
+                        ),
+                  );
+              if (pendingPreview != null) {
+                ref
+                    .read(startStreamPreviewProvider(requestId).notifier)
+                    .update(
+                      pendingPreview.copyWith(
+                        assistantText: _startAudioFailed
+                            ? responseText
+                            : pendingPreview.assistantText,
+                        fullAssistantText: responseText,
+                        conversationId: conversationId,
+                        isActive: false,
+                      ),
+                    );
+              }
+              openConversation();
+              unawaited(_playSuggestedAudio());
+              _finishStartReveal();
+              ref.invalidate(conversationControllerProvider(conversationId));
+            }
             if (event['audio_status'] == 'failed' && conversationId != null) {
               ref
                   .read(suggestedAudioFailureProvider(conversationId).notifier)
@@ -698,13 +1106,37 @@ class StartConversationController extends Notifier<StartConversationState> {
             break;
           case 'turn_error':
             terminal = true;
+            _playGeneration++;
             _suggestedAudioQueue.clear();
+            unawaited(_stopSuggestedAudio());
             conversationId =
                 event['conversation_id'] as String? ?? conversationId;
             userMessageId =
                 event['user_message_id'] as String? ?? userMessageId;
             _failedGeneratedStartTurnId = turnId;
             _failedGeneratedStartFingerprint = fingerprint;
+            if (conversationId != null) {
+              ref
+                  .read(startStreamPreviewProvider(conversationId).notifier)
+                  .clear();
+              openConversation();
+              ref.invalidate(conversationControllerProvider(conversationId));
+            } else if (type == ConversationType.rolePlaying) {
+              state = const StartConversationState(
+                failureReason:
+                    StartConversationFailureReason.roleplayRequestFailed,
+              );
+              final pending = ref.read(startStreamPreviewProvider(requestId));
+              ref
+                  .read(startStreamPreviewProvider(requestId).notifier)
+                  .update(
+                    (pending ?? const StartStreamPreview()).copyWith(
+                      assistantText: '',
+                      isActive: false,
+                      hasFailed: true,
+                    ),
+                  );
+            }
             break;
         }
       }
@@ -721,8 +1153,10 @@ class StartConversationController extends Notifier<StartConversationState> {
         );
         return null;
       }
-      _failedGeneratedStartTurnId = null;
-      _failedGeneratedStartFingerprint = null;
+      if (_failedGeneratedStartTurnId != turnId) {
+        _failedGeneratedStartTurnId = null;
+        _failedGeneratedStartFingerprint = null;
+      }
       _pendingGeneratedStartRequestId = null;
       _pendingGeneratedStartFingerprint = null;
       _refreshRecentConversations();
@@ -735,6 +1169,16 @@ class StartConversationController extends Notifier<StartConversationState> {
         response: responseText,
       );
     } on Object {
+      if (token.isCancelled) {
+        if (state.failureReason == null) {
+          state = const StartConversationState();
+        }
+        return null;
+      }
+      if (started.isCompleted && conversationId != null) {
+        ref.read(startStreamPreviewProvider(conversationId).notifier).clear();
+        ref.invalidate(conversationControllerProvider(conversationId));
+      }
       StreamTurnStatus? status;
       try {
         status = turnId == null
@@ -764,11 +1208,56 @@ class StartConversationController extends Notifier<StartConversationState> {
           );
         }
       }
+      if (status != null &&
+          status.status == 'completed' &&
+          status.conversationId != null) {
+        final completedId = status.conversationId!;
+        if (_readyConversationId == requestId) {
+          _readyConversationId = completedId;
+        }
+        _activeSuggestedConversationId = completedId;
+        unawaited(_playSuggestedAudio());
+        if (type == ConversationType.rolePlaying) {
+          final preview = ref.read(startStreamPreviewProvider(requestId));
+          ref
+              .read(startStreamPreviewProvider(requestId).notifier)
+              .update(
+                (preview ?? const StartStreamPreview()).copyWith(
+                  conversationId: completedId,
+                  isActive: false,
+                ),
+              );
+        }
+        _pendingGeneratedStartRequestId = null;
+        _pendingGeneratedStartFingerprint = null;
+        _refreshRecentConversations();
+        state = const StartConversationState();
+        return ConversationResponse(
+          conversationId: completedId,
+          messageId: status.userMessageId ?? status.assistantMessageId ?? '',
+          conversationType: type,
+          roleCharacter: roleCharacter,
+          response: responseText,
+        );
+      }
       state = StartConversationState(
         failureReason: type == ConversationType.rolePlaying
             ? StartConversationFailureReason.roleplayRequestFailed
             : StartConversationFailureReason.freeChatRequestFailed,
       );
+      if (type == ConversationType.rolePlaying &&
+          _activeSuggestedConversationId == requestId) {
+        final pending = ref.read(startStreamPreviewProvider(requestId));
+        ref
+            .read(startStreamPreviewProvider(requestId).notifier)
+            .update(
+              (pending ?? const StartStreamPreview()).copyWith(
+                assistantText: '',
+                isActive: false,
+                hasFailed: true,
+              ),
+            );
+      }
       return null;
     } finally {
       if (identical(_suggestedCancelToken, token)) _suggestedCancelToken = null;
@@ -827,6 +1316,13 @@ final initialAssistantAudioProvider =
       InitialAssistantAudio?,
       String
     >(InitialAssistantAudioController.new);
+
+final startStreamPreviewProvider =
+    NotifierProvider.family<
+      StartStreamPreviewController,
+      StartStreamPreview?,
+      String
+    >(StartStreamPreviewController.new);
 
 final startConversationControllerProvider =
     NotifierProvider<StartConversationController, StartConversationState>(

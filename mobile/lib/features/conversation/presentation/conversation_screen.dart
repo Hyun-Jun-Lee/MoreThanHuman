@@ -29,7 +29,8 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
   late final TextEditingController _composerController;
   late final ConversationAudioRecorder _recorder;
   late final StartConversationController _startController;
-  late final ConversationController _conversationController;
+  late final StartStreamPreviewController _startPreviewController;
+  ConversationController? _conversationController;
   Timer? _recordingTimer;
   _VoiceInputState _voiceInput = const _VoiceInputState.idle();
 
@@ -39,8 +40,8 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
     _composerController = TextEditingController();
     _recorder = ref.read(conversationAudioRecorderProvider);
     _startController = ref.read(startConversationControllerProvider.notifier);
-    _conversationController = ref.read(
-      conversationControllerProvider(widget.conversationId).notifier,
+    _startPreviewController = ref.read(
+      startStreamPreviewProvider(widget.conversationId).notifier,
     );
   }
 
@@ -51,7 +52,12 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
       unawaited(_recorder.cancel());
     }
     unawaited(_startController.cancelSuggestedStreamFor(widget.conversationId));
-    unawaited(_conversationController.cancelActiveStream());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _startPreviewController.clear();
+    });
+    if (_conversationController case final controller?) {
+      unawaited(controller.cancelActiveStream());
+    }
     _composerController.dispose();
     super.dispose();
   }
@@ -61,8 +67,26 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
     final AsyncValue<ConversationState> conversation = ref.watch(
       conversationControllerProvider(widget.conversationId),
     );
+    _conversationController = ref.read(
+      conversationControllerProvider(widget.conversationId).notifier,
+    );
     final AppCopy copy = AppCopy.of(context);
-    final bool isSending = conversation.value?.isSending == true;
+    final StartStreamPreview? startPreview = ref.watch(
+      startStreamPreviewProvider(widget.conversationId),
+    );
+    if (startPreview?.isTextFullyDisplayed == true &&
+        conversation.value?.messages.any(
+              (message) =>
+                  message.role == ConversationMessageRole.assistant &&
+                  message.content == startPreview!.fullAssistantText,
+            ) ==
+            true) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _startPreviewController.clear();
+      });
+    }
+    final bool isSending =
+        conversation.value?.isSending == true || startPreview?.isActive == true;
     final bool suggestedAudioFailed = ref.watch(
       suggestedAudioFailureProvider(widget.conversationId),
     );
@@ -89,6 +113,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
               conversation.value?.failedTurnId == null &&
               conversation.value?.pendingTurnId == null &&
               conversation.value?.pendingRequestId == null &&
+              startPreview?.isActive != true &&
               !turnLimitReached,
           isSending: isSending,
           isRecording: _voiceInput.phase == _VoiceInputPhase.recording,
@@ -105,7 +130,21 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
         ),
       ),
       body: conversation.when(
-        loading: () => AppAsyncStateView.loading(message: copy.loadingMessages),
+        loading: () => startPreview == null
+            ? AppAsyncStateView.loading(message: copy.loadingMessages)
+            : _ConversationMessageList(
+                key: ValueKey(widget.conversationId),
+                conversationId: widget.conversationId,
+                state: _withStartPreview(
+                  const ConversationState.empty(),
+                  startPreview,
+                ),
+                voiceFailureReason: null,
+                canLoadOlder: false,
+                turnLimitReached: false,
+                locked: false,
+                suggestedAudioFailed: false,
+              ),
         error: (_, _) => AppAsyncStateView.error(
           title: copy.loadConversationFailedTitle,
           message: copy.connectionRetryMessage,
@@ -118,7 +157,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
         data: (ConversationState state) => _ConversationMessageList(
           key: ValueKey(widget.conversationId),
           conversationId: widget.conversationId,
-          state: state,
+          state: _withStartPreview(state, startPreview),
           voiceFailureReason: _voiceInput.failureReason,
           canLoadOlder: !_voiceInput.isRecordingActive && !_voiceInput.isBusy,
           turnLimitReached: turnLimitReached,
@@ -126,6 +165,50 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
           suggestedAudioFailed: suggestedAudioFailed,
         ),
       ),
+    );
+  }
+
+  ConversationState _withStartPreview(
+    ConversationState state,
+    StartStreamPreview? preview,
+  ) {
+    if (preview == null) return state;
+    final messages = <ConversationMessage>[...state.messages];
+    if (preview.userText != null &&
+        !messages.any((message) => message.id == preview.userMessageId)) {
+      messages.add(
+        ConversationMessage(
+          id: preview.userMessageId ?? 'start-user',
+          conversationId: widget.conversationId,
+          role: ConversationMessageRole.user,
+          content: preview.userText!,
+          createdAt: DateTime.now(),
+          isLocalPending: true,
+        ),
+      );
+    }
+    messages.removeWhere(
+      (message) => message.role == ConversationMessageRole.assistant,
+    );
+    if (preview.assistantText.isNotEmpty) {
+      messages.add(
+        ConversationMessage(
+          id: 'start-assistant',
+          conversationId: widget.conversationId,
+          role: ConversationMessageRole.assistant,
+          content: preview.assistantText,
+          createdAt: DateTime.now(),
+          isLocalPending: preview.isActive,
+        ),
+      );
+    }
+    return state.copyWith(
+      messages: messages,
+      isSending: preview.isActive || state.isSending,
+      revealingAssistantId: preview.assistantText.isNotEmpty
+          ? 'start-assistant'
+          : null,
+      minVisibleAssistantChars: preview.minVisibleAssistantChars,
     );
   }
 
@@ -419,8 +502,29 @@ class _ConversationMessageListState
       ],
       for (final ConversationMessage message in state.messages) ...<Widget>[
         ConversationMessageTile(
-          key: ValueKey(message.id),
+          key: message.id == state.revealingAssistantId
+              ? const ValueKey('streaming-assistant')
+              : ValueKey(message.id),
           message: message,
+          revealText: message.id == state.revealingAssistantId,
+          minVisibleChars: state.minVisibleAssistantChars,
+          onVisibleChars: message.id == state.revealingAssistantId
+              ? (count) {
+                  if (message.id == 'start-assistant') {
+                    ref
+                        .read(startConversationControllerProvider.notifier)
+                        .onConversationFrameReady(conversationId, count);
+                  } else {
+                    ref
+                        .read(
+                          conversationControllerProvider(
+                            conversationId,
+                          ).notifier,
+                        )
+                        .onAssistantTextFrameReady(message.id, count);
+                  }
+                }
+              : null,
           autoPlayAudio: state.autoPlayAudioMessageIds.contains(message.id),
           onAutoPlayStarted: () => ref
               .read(conversationControllerProvider(conversationId).notifier)
