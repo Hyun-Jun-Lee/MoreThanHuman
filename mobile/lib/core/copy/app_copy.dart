@@ -171,9 +171,14 @@ class AppCopy {
   String get purchaseIosOnly => isKorean
       ? '현재 iOS에서만 구독할 수 있어요.'
       : 'Subscriptions are currently available on iOS.';
-  String planBenefits(bool plus) => isKorean
-      ? '활성 대화 최대 ${plus ? 10 : 5}개 · 발화 무제한'
-      : 'Up to ${plus ? 10 : 5} active conversations · Unlimited turns';
+  String planBenefits(bool plus) => switch ((isKorean, plus)) {
+    (true, true) => '전체 대화 슬롯 해금',
+    (true, false) => '전체 대화 슬롯의 절반 해금',
+    (false, true) => 'Unlock all conversation slots',
+    (false, false) => 'Unlock half of all conversation slots',
+  };
+  String get plusBusinessConversationBenefit =>
+      isKorean ? '비즈니스 대화 모드' : 'Business Conversation Mode';
   String get priceUnavailable => isKorean ? '가격을 불러오는 중이에요.' : 'Loading price';
   String monthlyPrice(String price) =>
       isKorean ? '$price / 월' : '$price / month';

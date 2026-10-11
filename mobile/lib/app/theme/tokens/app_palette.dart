@@ -24,6 +24,8 @@ abstract final class AppPalette {
   static const Color blockCoral = Color(0xFFFFB694);
   static const Color blockPink = Color(0xFFFBDCCD);
   static const Color blockNavy = Color(0xFF2A303D);
+  static const Color subscriptionOther = Color(0xFFBBC87C);
+  static const Color subscriptionCurrent = Color(0xFFA7BF93);
   static const Color accentTerracotta = Color(0xFF8D4926);
   static const Color semanticSuccess = Color(0xFF2E7D32);
   static const Color semanticWarning = Color(0xFF7C5800);
