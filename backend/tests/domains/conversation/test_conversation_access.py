@@ -4,7 +4,7 @@ import importlib
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -19,6 +19,7 @@ from domains.conversation.repository import (
     ConversationTurnsFull,
 )
 from domains.conversation.service import ConversationService
+from domains.conversation.stream_turns import StreamTurnStore
 from scripts import initialize_conversation_slots
 
 
@@ -188,6 +189,107 @@ def test_initialization_selects_one_existing_conversation(monkeypatch):
     assert initialize_conversation_slots.initialize() == 1
     repository.db.expire_all()
     assert repository.db.query(ProfileModel).filter_by(id=user_id).one().slot_limit_snapshot == 1
+
+
+def test_conversation_list_skips_access_summary_queries_when_slots_are_current(monkeypatch):
+    service_module = importlib.import_module("domains.conversation.service")
+    repository, user_id = _setup()
+    active = repository.save(_conversation(user_id))
+    inactive = repository.save(_conversation(user_id))
+    active.slot_active = True
+    repository.db.get(ProfileModel, user_id).slot_limit_snapshot = 1
+    repository.db.commit()
+    active_id, inactive_id = active.id, inactive.id
+    monkeypatch.setattr(service_module.settings, "conversation_access_enabled", True)
+    statements = []
+
+    def capture(_connection, _cursor, statement, _parameters, _context, _many):
+        statements.append(statement)
+
+    engine = repository.db.get_bind()
+    event.listen(engine, "before_cursor_execute", capture)
+    try:
+        page = ConversationService(repository).get_conversations(user_id)
+    finally:
+        event.remove(engine, "before_cursor_execute", capture)
+
+    assert page.pagination.total_count == 2
+    assert {str(item.id): item.locked for item in page.results} == {
+        active_id: False, inactive_id: True,
+    }
+    assert len(statements) == 4  # 프로필 잠금·구독·목록·페이지 전체 개수
+    assert not any("stream_turns" in statement for statement in statements)
+
+
+def test_conversation_list_reconciles_locked_rows_after_slot_limit_drops(monkeypatch):
+    service_module = importlib.import_module("domains.conversation.service")
+    repository, user_id = _setup()
+    first = repository.save(_conversation(user_id))
+    second = repository.save(_conversation(user_id))
+    first.slot_active = True
+    second.slot_active = True
+    repository.db.get(ProfileModel, user_id).slot_limit_snapshot = 5
+    repository.db.commit()
+    monkeypatch.setattr(service_module.settings, "conversation_access_enabled", True)
+
+    page = ConversationService(repository).get_conversations(user_id)
+
+    assert page.pagination.total_count == 2
+    assert sorted(item.locked for item in page.results) == [False, True]
+    assert repository.db.get(ProfileModel, user_id).slot_limit_snapshot == 1
+    assert repository.count_active_conversations(user_id) == 1
+
+
+def test_create_precheck_only_queries_slot_capacity_and_releases_lock():
+    repository, user_id = _setup()
+    repository.db.get(ProfileModel, user_id).slot_limit_snapshot = 1
+    repository.db.commit()
+    statements = []
+    engine = repository.db.get_bind()
+
+    def capture(_connection, _cursor, statement, _parameters, _context, _many):
+        statements.append(statement)
+
+    event.listen(engine, "before_cursor_execute", capture)
+    try:
+        repository.assert_can_create(user_id, enabled=True)
+    finally:
+        event.remove(engine, "before_cursor_execute", capture)
+
+    assert len(statements) == 4  # 프로필 잠금·구독·활성 대화 수·진행 중 시작 수
+    assert sum("count" in statement.lower() for statement in statements) == 2
+    assert not repository.db.in_transaction()
+
+
+def test_create_precheck_counts_pending_roleplay_and_closes_transaction():
+    repository, user_id = _setup()
+    repository.db.get(ProfileModel, user_id).slot_limit_snapshot = 1
+    repository.db.commit()
+    StreamTurnStore(repository.db).reserve(
+        user_id=user_id, request_id=str(uuid4()), kind="roleplay_start", input_data={},
+    )
+
+    with pytest.raises(ConversationSlotsFull):
+        repository.assert_can_create(user_id, enabled=True)
+
+    assert not repository.db.in_transaction()
+
+
+def test_create_precheck_persists_slot_reconciliation_when_full():
+    repository, user_id = _setup()
+    first = repository.save(_conversation(user_id))
+    second = repository.save(_conversation(user_id))
+    first.slot_active = True
+    second.slot_active = True
+    repository.db.get(ProfileModel, user_id).slot_limit_snapshot = 5
+    repository.db.commit()
+
+    with pytest.raises(ConversationSlotsFull):
+        repository.assert_can_create(user_id, enabled=True)
+
+    assert not repository.db.in_transaction()
+    assert repository.db.get(ProfileModel, user_id).slot_limit_snapshot == 1
+    assert repository.count_active_conversations(user_id) == 1
 
 
 def test_api_returns_machine_readable_limit_conflicts(monkeypatch):

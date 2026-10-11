@@ -15,6 +15,7 @@ from domains.conversation.enums import MessageRole
 from domains.conversation.models import ConversationModel, MessageModel, StreamTurnModel, SuggestedStartModel, WeeklyTopicModel
 from domains.conversation.stream_turns import StreamTurnStore
 from shared.exceptions import AppException, NotFoundException
+from shared.latency import latency_span
 from shared.subscription import entitlement_for_user
 
 
@@ -186,6 +187,15 @@ class ConversationRepository:
         profile = self.db.query(ProfileModel).filter_by(id=user_id).with_for_update().one()
         return profile, self._reconcile_slots_locked(profile)
 
+    def reconcile_slots_for_list(self, user_id: str) -> None:
+        """목록의 잠금 상태만 최신 한도에 맞추고 트랜잭션을 닫아요."""
+        try:
+            self._locked_entitlement(user_id)
+            self.db.commit()
+        except Exception:
+            self.db.rollback()
+            raise
+
     def count_active_conversations(self, user_id: str) -> int:
         return self.db.query(ConversationModel).filter_by(user_id=user_id, slot_active=True).count()
 
@@ -227,7 +237,23 @@ class ConversationRepository:
         }
 
     def assert_can_create(self, user_id: str, *, enabled: bool) -> None:
-        if enabled and not self.access_summary(user_id, enabled=True)["can_create"]:
+        """생성 사전 검사는 슬롯 용량만 조회하고 잠금을 즉시 해제해요.
+
+        저장 단계의 잠금 아래 한도 검사가 동시 생성의 최종 판정이에요.
+        """
+        if not enabled:
+            return
+        try:
+            _, entitlement = self._locked_entitlement(user_id)
+            with latency_span("entitlement_held_after_reconcile"):
+                used = self.count_active_conversations(user_id) + self.count_pending_roleplay_starts(user_id)
+                can_create = used < entitlement["slot_limit"]
+                # 한도 변경에 따른 슬롯 재조정은 생성 불가일 때도 저장해요.
+                self.db.commit()
+        except Exception:
+            self.db.rollback()
+            raise
+        if not can_create:
             raise ConversationSlotsFull("추가 대화 이용권이 필요해요")
 
     def create_with_access(self, conversation: ConversationModel, *, enabled: bool) -> ConversationModel:
