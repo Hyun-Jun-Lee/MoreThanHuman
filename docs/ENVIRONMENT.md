@@ -29,9 +29,9 @@
 | `GRAMMAR_OPENROUTER_MODEL` | 아니오 | `OPENROUTER_MODEL` | 문법 체크 전용 OpenRouter 모델 |
 | `GRAMMAR_OLLAMA_MODEL` | 아니오 | `OLLAMA_MODEL` | 문법 체크 전용 Ollama 모델 |
 | `SUPABASE_URL` | 예 | 없음 | Supabase project URL |
-| `SUPABASE_PUBLISHABLE_KEY` | 예 | 없음 | Supabase Auth `/user` 검증에 사용하는 publishable key |
-| `SUPABASE_AUTH_VERIFY_MODE` | 아니오 | `remote` | FastAPI bearer token 검증 방식. 현재는 Supabase `/auth/v1/user` 검증 |
-| `SUPABASE_AUTH_TIMEOUT_SECONDS` | 아니오 | `5` | Supabase Auth 검증 요청 timeout |
+| `SUPABASE_PUBLISHABLE_KEY` | 예 | 없음 | 원격 Supabase Auth `/user` 검증에 사용하는 publishable key |
+| `SUPABASE_AUTH_VERIFY_MODE` | 아니오 | `auto` | ES256 token을 JWKS 공개 키로 검증하고 그 외 token은 `/user`로 검증해요. `remote`는 모든 token을 `/user`로 검증해요 |
+| `SUPABASE_AUTH_TIMEOUT_SECONDS` | 아니오 | `5` | Supabase Auth `/user`와 JWKS 조회 timeout |
 | `SWAGGER_TOKEN_ISSUER_ENABLED` | 아니오 | `false` | `ENV`가 dev가 아닐 때 Swagger token helper를 명시적으로 활성화 |
 | `SWAGGER_TOKEN_ISSUER_SECRET` | 운영 helper 활성화 시 | 없음 | dev 외 환경에서 `/api/auth/swagger/token` 요청 body의 `secret`과 비교할 shared secret |
 | `LANGUAGE_SNACKS_OPERATIONS_KEY` | 운영 API 사용 시 | 없음 | v2 POST/PATCH의 X-Operations-Key와 비교. Flutter에 포함 금지. CLI는 DB 직접 접근 |

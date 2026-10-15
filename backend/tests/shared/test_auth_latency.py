@@ -78,7 +78,7 @@ async def test_all_protected_auth_paths_share_request_context_without_tokens(cap
                          and row["route"] == route and row["status_code"] != 403)
         stages = [row for row in rows if "stage" in row
                   and row["request_id"] == completed["request_id"]]
-        expected = {"auth", "auth.remote_user", "auth.profile"} if route in (
+        expected = {"auth", "auth.verify_token", "auth.profile"} if route in (
             "/api/bearer/", "/api/sse/"
         ) else {"auth"}
         assert {stage["stage"] for stage in stages} == expected

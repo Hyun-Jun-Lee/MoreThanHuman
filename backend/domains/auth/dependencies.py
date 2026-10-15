@@ -3,7 +3,7 @@ Auth 의존성 (라우트 보호)
 """
 import httpx
 
-from fastapi import Depends, HTTPException, Query, status
+from fastapi import Depends, HTTPException, Query, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
@@ -29,10 +29,11 @@ def get_auth_service(
 
 
 def get_supabase_auth_verifier(
+    request: Request,
     http_client: httpx.AsyncClient = Depends(get_auth_http_client),
 ) -> SupabaseAuthVerifier:
     """Supabase Auth verifier 의존성"""
-    return SupabaseAuthVerifier(http_client)
+    return getattr(request.app.state, "supabase_auth_verifier", None) or SupabaseAuthVerifier(http_client)
 
 
 async def get_current_user(
@@ -43,7 +44,7 @@ async def get_current_user(
     """현재 인증된 프로필 반환 (Supabase Bearer 토큰 검증)"""
     try:
         with latency_span("auth"):
-            with latency_span("auth.remote_user"):
+            with latency_span("auth.verify_token"):
                 claims = await verifier.verify_access_token(credentials.credentials)
             with latency_span("auth.profile"):
                 profile = service.get_or_create_profile_from_claims(claims)
@@ -77,7 +78,7 @@ async def get_current_user_from_token_param(
     """쿼리 파라미터로 전달된 Supabase token에서 프로필 반환 (SSE 엔드포인트용)"""
     try:
         with latency_span("auth"):
-            with latency_span("auth.remote_user"):
+            with latency_span("auth.verify_token"):
                 claims = await verifier.verify_access_token(token)
             with latency_span("auth.profile"):
                 profile = service.get_or_create_profile_from_claims(claims)

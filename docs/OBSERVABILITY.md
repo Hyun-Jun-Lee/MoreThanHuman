@@ -31,7 +31,7 @@ nginx `request_time`은 nginx가 요청을 읽기 시작한 때부터 응답 전
 
 ### 음성 없는 GET 요청의 구간별 계측
 
-- `auth.remote_user`는 Supabase `/user` 호출, `auth.profile`은 프로필 조회·최초 생성, 기존 `auth`는 둘을 포함한 전체 인증 시간이에요.
+- `auth.verify_token`은 전체 token 검증, `auth.remote_user`는 원격 Supabase `/user` 호출, `auth.jwks_fetch`는 공개 키 조회, `auth.profile`은 프로필 조회·최초 생성 시간이에요. `auth`는 전체 인증 시간이에요.
 - `GET /api/auth/me`와 `GET /api/auth/me/language-preferences`는 인증 의존성이 같은 요청에서 읽은 프로필을 응답 변환에 재사용해요. 기존 프로필 기준 별도의 핸들러 SELECT를 수행하지 않으며, 토큰 검증과 `auth.profile` 조회는 요청마다 유지해요. 언어 설정 수정 PUT의 저장 경로는 이 최적화와 별개예요.
 - 단계 로그의 `start_offset_ms`는 해당 HTTP 요청이 ASGI에 들어온 뒤 단계가 시작되기까지의 단조 시계 시간이에요. `response_start_ms`는 첫 응답 헤더를 전송한 시점, `response_body_ms`는 최종 본문을 전송한 시점이에요. `handler` 단계는 지정한 GET 엔드포인트의 실행 시간이며, 요청 시작부터 `handler` 시작 전까지에는 의존성 처리와 스레드풀 대기가 함께 포함될 수 있어요.
 - 요청 완료 로그의 `db_query_count`, `db_query_total_ms`, `db_max_query_ms`는 SQLAlchemy 커서 실행 횟수·누적·최장 시간이고, `db_checkout_count`는 풀 연결 체크아웃 횟수예요. PostgreSQL의 `db_acquire_total_ms`, `db_max_acquire_ms`는 QueuePool에서 커넥션을 받는 전체 시간이에요. `db_pool_wait_count`, `db_pool_wait_total_ms`, `db_pool_wait_max_ms`는 풀이 포화되어 연결 반환을 기다릴 수 있는 블로킹 큐 조회의 시도·누적·최장 시간이에요. 즉시 반환된 경우에는 소량의 큐 처리 시간도 포함돼요. `db_connect_count`, `db_connect_total_ms`, `db_connect_max_ms`는 새 DBAPI 연결을 여는 시도·누적·최장 시간이며, 연결 실패 시도도 포함해요. `db_acquire_other_ms`는 전체 획득 시간에서 두 시간을 뺀 나머지로 체크아웃 검사·풀 내부 처리 등이 포함돼요. 수치는 요청별 합계이고 반올림 오차가 있을 수 있어요. `db_commit_count`와 `db_commit_total_ms`는 ORM commit 호출 구간이에요. 커서 시간에는 PostgreSQL 행 잠금 대기가 포함될 수 있지만 연결 풀 대기·결과 fetch·ORM 객체 생성은 포함하지 않아요.

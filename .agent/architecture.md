@@ -159,12 +159,14 @@ domains/{name}/
              → refresh가 실패하거나 세션이 없으면 unauthenticated 전환
 
 [FastAPI] → Authorization: Bearer <supabase_access_token>
-          → Supabase Auth /user 검증
+          → auto 모드의 ES256 token은 캐시된 Supabase JWKS 공개 키로 검증
+          → 그 외 token 또는 remote 모드는 Supabase Auth /user 검증
           → 최초 요청에서만 profile 생성, 이후 인증은 조회 + language defaults
           → current_user.id를 ownership boundary로 사용
 ```
 
 인증이 필요한 API는 `Authorization: Bearer <supabase_access_token>` 헤더를 사용해요. 모바일은 Google native sign-in과 iOS Apple native sign-in을 제공해요.
+`auto` 모드는 워커마다 JWKS를 5분 캐시하고 키 ID가 없으면 갱신을 시도해요. 서명·발급자·대상·역할·만료 검증이 실패하면 요청을 거절해요. 로컬 검증은 토큰 유효 기간 중 Supabase 사용자 상태 변경을 즉시 확인하지 못하므로 즉시 폐기 확인이 필요한 운영에서는 `remote` 모드를 사용해요.
 언어 선호는 profile 기본값(`native_language`, `target_language`, `feedback_language`)으로 저장하고, 기존 값이 없으면 `ko -> en`과 feedback `ko`로 보정해요.
 인증된 API 요청은 기존 profile의 필드와 `updated_at`을 변경하지 않아요. 언어 선호와 앱 표시 언어의 명시적 변경 API에서만 해당 설정을 저장해요. Supabase의 이름·사진 등 metadata 변경은 현재 자동 동기화하지 않아요.
 

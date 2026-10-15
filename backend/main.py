@@ -17,6 +17,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from config import get_settings
 from database import Base, engine
 from domains.auth.models import ProfileModel  # noqa: F401 - 테이블 생성용 import
+from domains.auth.supabase import SupabaseAuthVerifier
 from shared.subscription import AppleSubscriptionModel, AppleNotificationModel  # noqa: F401 - 테이블 생성용 import
 from domains.auth.router import router as auth_router
 from domains.conversation.router import router as conversation_router
@@ -57,6 +58,7 @@ async def lifespan(_app: FastAPI):
 
     async with http_clients(settings) as clients:
         _app.state.http_clients = clients
+        _app.state.supabase_auth_verifier = SupabaseAuthVerifier(clients.auth)
         tasks = BackgroundTaskRegistry()
         _app.state.background_tasks = tasks
         try:
