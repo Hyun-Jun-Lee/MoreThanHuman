@@ -512,6 +512,8 @@ NDJSON 각 줄에는 `event`, 0부터 증가하는 `seq`, `turn_id`, `attempt_id
 
 `GET /api/conversations/access/`는 `used_slots`(활성 수), `slot_limit`, `remaining_slots`, `locked_count`, `plan`, `active_conversations`(`id`·`title`)을 반환해요. 목록 항목에는 `locked`가 포함되고 `GET /api/conversations/{id}/access/`에는 `can_send`, `locked`, `user_turns`, `turn_limit`이 포함돼요. `POST /api/conversations/{id}/activate/`는 선택적으로 `{ "replace_conversation_id": "UUID" }`를 받아 가득 찬 슬롯을 원자적으로 교체해요. `POST /api/conversations/{id}/deactivate/`는 슬롯을 해제해요.
 
+대화 목록의 `locked`는 저장된 `slot_active`를 반영해요. 목록 조회는 구독 상태를 갱신하거나 슬롯을 재조정하지 않아요. 구독 갱신 작업이 지연되면 표시가 잠시 이전 상태일 수 있으나 생성·발화·활성화 요청은 현재 권한을 다시 검사해요.
+
 `GET /api/billing/entitlement/`는 인증 계정의 검증된 `plan`, `status`, `expires_at`, `slot_limit`, `turn_limit`을 반환해요. iOS 앱은 App Store 제품 ID `Advance`·`Plus`의 표시 가격을 직접 불러와요. `POST /api/billing/apple/verify/`는 인증 계정의 `{ "signed_transaction": "Apple StoreKit 2 JWS" }`를 받아 Apple 서명 및 App Store Server API의 현재 상태를 검증하고 권한을 반환해요. 다른 계정에 묶인 구매는 HTTP 409 `PURCHASE_ACCOUNT_CONFLICT`, 잘못된 거래는 HTTP 400 `INVALID_APPLE_PURCHASE`예요. `POST /api/billing/apple/notifications/`는 Apple Server Notifications V2의 `{ "signedPayload": "..." }`를 받아 서명을 검증하고 Apple의 현재 상태를 다시 조회해요. 알림 ID로 중복 처리를 막아요.
 
 멀티모달 대화 API는 아래 다섯 가지 요청 형태를 기본 계약으로 사용해요.

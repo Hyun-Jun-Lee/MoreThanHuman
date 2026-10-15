@@ -191,7 +191,7 @@ def test_initialization_selects_one_existing_conversation(monkeypatch):
     assert repository.db.query(ProfileModel).filter_by(id=user_id).one().slot_limit_snapshot == 1
 
 
-def test_conversation_list_skips_access_summary_queries_when_slots_are_current(monkeypatch):
+def test_conversation_list_only_queries_rows_and_count(monkeypatch):
     service_module = importlib.import_module("domains.conversation.service")
     repository, user_id = _setup()
     active = repository.save(_conversation(user_id))
@@ -217,11 +217,11 @@ def test_conversation_list_skips_access_summary_queries_when_slots_are_current(m
     assert {str(item.id): item.locked for item in page.results} == {
         active_id: False, inactive_id: True,
     }
-    assert len(statements) == 4  # 프로필 잠금·구독·목록·페이지 전체 개수
+    assert len(statements) == 2  # 목록·페이지 전체 개수
     assert not any("stream_turns" in statement for statement in statements)
 
 
-def test_conversation_list_reconciles_locked_rows_after_slot_limit_drops(monkeypatch):
+def test_conversation_list_reads_persisted_lock_state_until_reconciled(monkeypatch):
     service_module = importlib.import_module("domains.conversation.service")
     repository, user_id = _setup()
     first = repository.save(_conversation(user_id))
@@ -235,7 +235,13 @@ def test_conversation_list_reconciles_locked_rows_after_slot_limit_drops(monkeyp
     page = ConversationService(repository).get_conversations(user_id)
 
     assert page.pagination.total_count == 2
-    assert sorted(item.locked for item in page.results) == [False, True]
+    assert [item.locked for item in page.results] == [False, False]
+    assert repository.db.get(ProfileModel, user_id).slot_limit_snapshot == 5
+    assert repository.count_active_conversations(user_id) == 2
+
+    repository.reconcile_slots_for_list(user_id)
+    updated_page = ConversationService(repository).get_conversations(user_id)
+    assert sorted(item.locked for item in updated_page.results) == [False, True]
     assert repository.db.get(ProfileModel, user_id).slot_limit_snapshot == 1
     assert repository.count_active_conversations(user_id) == 1
 

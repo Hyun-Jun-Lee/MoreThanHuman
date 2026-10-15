@@ -521,9 +521,6 @@ class ConversationService:
         Returns:
             대화 목록
         """
-        if settings.conversation_access_enabled:
-            with latency_span("slot_reconcile"):
-                self.repository.reconcile_slots_for_list(user_id)
         conversations = self.repository.find_all(user_id, limit, offset)
         total_count = self.repository.count_conversations(user_id)
         results = [Conversation.model_validate(c).model_copy(
