@@ -51,6 +51,7 @@ dependencies:
   in_app_purchase_storekit: ^0.4.13
   url_launcher: ^6.3.3
   text_ko: ^0.1.2
+  randino: ^1.6.0
 
 dev_dependencies:
   flutter_test:

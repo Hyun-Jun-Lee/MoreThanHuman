@@ -765,6 +765,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.2.0"
+  randino:
+    dependency: "direct main"
+    description:
+      name: randino
+      sha256: "394dbe243db897f046099ad95c7499a455a4b8f2c6d1f869c4364814b99c43ed"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.6.0"
   realtime_client:
     dependency: transitive
     description:

@@ -8,6 +8,7 @@ import 'package:curitalk/features/auth/auth.dart';
 import 'package:curitalk/features/home/home.dart';
 import 'package:curitalk/features/language/language.dart';
 import 'package:curitalk/features/onboarding/onboarding.dart';
+import 'package:curitalk/features/profile/presentation/nickname_dialog.dart';
 import 'package:curitalk/features/topic_prep/topic_prep.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
@@ -18,6 +19,8 @@ void main() {
   testWidgets('new account must save a nickname after session restore', (
     WidgetTester tester,
   ) async {
+    tester.platformDispatcher.localesTestValue = const <Locale>[Locale('en')];
+    addTearDown(tester.platformDispatcher.clearLocalesTestValue);
     final repository = _FakeAuthRepository()
       ..user = UserProfile(
         id: 'new-user',
@@ -39,9 +42,16 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Choose a nickname'), findsOneWidget);
+    final suggestedNickname = tester
+        .widget<TextField>(find.byKey(const ValueKey('nickname-input')))
+        .controller!
+        .text;
+    expect(suggestedNickname, matches(RegExp(r'^[가-힣]{1,20}$')));
+    expect(repository.user.nickname, isNull);
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
     expect(find.text('Choose a nickname'), findsOneWidget);
+    await tester.enterText(find.byKey(const ValueKey('nickname-input')), '');
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
     expect(find.text('Enter a nickname of 1–20 characters.'), findsOneWidget);
@@ -68,6 +78,13 @@ void main() {
     expect(find.text('Tomato'), findsOneWidget);
     await tester.tap(find.byTooltip('Edit nickname'));
     await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const ValueKey('nickname-input')))
+          .controller!
+          .text,
+      'Tomato',
+    );
     await tester.enterText(
       find.byKey(const ValueKey('nickname-input')),
       'Fresh Name',
@@ -76,6 +93,51 @@ void main() {
     await tester.pumpAndSettle();
     expect(repository.user.nickname, 'Fresh Name');
     expect(find.text('Fresh Name'), findsOneWidget);
+  });
+
+  testWidgets('Korean system locale suggests an English nickname', (
+    WidgetTester tester,
+  ) async {
+    tester.platformDispatcher.localesTestValue = const <Locale>[Locale('ko')];
+    addTearDown(tester.platformDispatcher.clearLocalesTestValue);
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(
+          locale: Locale('en'),
+          home: Scaffold(body: NicknameDialog(requiredSetup: true)),
+        ),
+      ),
+    );
+
+    final suggestedNickname = tester
+        .widget<TextField>(find.byKey(const ValueKey('nickname-input')))
+        .controller!
+        .text;
+    expect(suggestedNickname, matches(RegExp(r'^[A-Za-z]{1,20}$')));
+  });
+
+  testWidgets('other system locales suggest a Korean nickname', (
+    WidgetTester tester,
+  ) async {
+    tester.platformDispatcher.localesTestValue = const <Locale>[
+      Locale('fr'),
+      Locale('ko'),
+    ];
+    addTearDown(tester.platformDispatcher.clearLocalesTestValue);
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(
+          locale: Locale('ko'),
+          home: Scaffold(body: NicknameDialog(requiredSetup: true)),
+        ),
+      ),
+    );
+
+    final suggestedNickname = tester
+        .widget<TextField>(find.byKey(const ValueKey('nickname-input')))
+        .controller!
+        .text;
+    expect(suggestedNickname, matches(RegExp(r'^[가-힣]{1,20}$')));
   });
 
   testWidgets('iOS Apple login creates a Supabase session and opens Home', (

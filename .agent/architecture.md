@@ -143,7 +143,7 @@ domains/{name}/
 
 ### 인증
 
-첫 앱 프로필은 `nickname=NULL`로 생성해요. 기존 프로필은 migration에서 현재 `name`을 닉네임으로 이관해 이전 표시 이름을 유지해요. 앱은 인증 후 `/api/auth/me`의 닉네임이 null이면 Home 위에 필수 입력 팝업을 띄우고, `PUT /api/auth/me/nickname` 저장이 성공해야 닫아요. 저장 실패 시 입력을 유지하며 앱 재시작 후에도 다시 표시해요. 내 정보에서 닉네임을 수정할 수 있고, 닉네임은 계정 식별자가 아니므로 중복을 허용해요.
+첫 앱 프로필은 `nickname=NULL`로 생성해요. 기존 프로필은 migration에서 현재 `name`을 닉네임으로 이관해 이전 표시 이름을 유지해요. 앱은 인증 후 `/api/auth/me`의 닉네임이 null이면 Home 위에 필수 입력 팝업을 띄워요. 이때 기기의 우선 시스템 언어가 한국어면 영어, 그 외에는 한국어 randino 닉네임을 입력 칸에 미리 채우며 앱 표시 언어와 학습 언어쌍은 사용하지 않아요. `PUT /api/auth/me/nickname` 저장이 성공해야 팝업을 닫아요. 저장 실패 시 입력을 유지하며 앱 재시작 후에도 다시 표시해요. 내 정보에서 닉네임을 수정할 수 있고, 닉네임은 계정 식별자가 아니므로 중복을 허용해요.
 
 ```text
 [Flutter 앱] → Google Sign-In SDK로 Google id_token 획득

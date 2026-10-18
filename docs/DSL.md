@@ -186,6 +186,7 @@ module Auth {
 `PUT /api/auth/me/language-preferences`는 profile default만 갱신해요. 모바일 Account UX는 변경값이 새 대화부터 적용되고 기존 conversation은 생성 시점 snapshot을 유지한다고 안내해야 해요.
 `PUT /api/auth/me/app-locale`는 앱 chrome 표시 언어만 저장해요. 값이 없는 기존 profile은 기기 system locale을 따르며 학습 언어쌍과 기존 conversation snapshot은 바꾸지 않아요.
 `PUT /api/auth/me/nickname`은 인증된 사용자 본인의 닉네임만 저장하고 `{ success, data: UserProfile }`을 반환해요. 앞뒤 공백 제거와 NFC 정규화 후 1~20자이며 줄바꿈·제어 문자는 허용하지 않아요. 닉네임 중복은 허용하고 UNIQUE 제약이나 중복 조회는 없어요. `nickname: null`은 신규 앱 프로필의 첫 설정이 끝나지 않았음을 뜻해요. 기존 프로필은 migration에서 현재 `name`을 닉네임으로 이관해요. 화면 표시에는 `nickname`을 우선 사용하고 `name`은 OAuth 원본으로 보존해요.
+첫 설정 팝업은 기기의 우선 시스템 언어가 한국어면 영어, 영어를 포함한 그 밖의 언어면 한국어 닉네임을 기기에서 생성해 입력 칸에 미리 채워요. 사용자는 수정할 수 있으며 저장 전에는 서버에 전송하지 않아요. 내 정보의 닉네임 수정 팝업은 현재 값을 유지해요.
 
 ## 5. Language Snack 모듈
 

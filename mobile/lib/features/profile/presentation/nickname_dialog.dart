@@ -2,6 +2,7 @@ import 'package:curitalk/core/copy/copy.dart';
 import 'package:curitalk/features/auth/auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:randino/randino.dart';
 
 Future<void> showNicknameDialog(
   BuildContext context, {
@@ -40,7 +41,21 @@ class _NicknameDialogState extends ConsumerState<NicknameDialog> {
   @override
   void initState() {
     super.initState();
-    _controller = TextEditingController(text: widget.initialNickname ?? '');
+    final String initialNickname;
+    if (widget.requiredSetup && widget.initialNickname == null) {
+      final locales = WidgetsBinding.instance.platformDispatcher.locales;
+      final language = locales.isNotEmpty && locales.first.languageCode == 'ko'
+          ? WordLanguage.en
+          : WordLanguage.ko;
+      initialNickname = randNickname(
+        language: language,
+        vocabulary: RandVocabulary.basic,
+        maxLength: 20,
+      ).single;
+    } else {
+      initialNickname = widget.initialNickname ?? '';
+    }
+    _controller = TextEditingController(text: initialNickname);
   }
 
   @override
