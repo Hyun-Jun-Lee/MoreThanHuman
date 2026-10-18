@@ -158,12 +158,14 @@ module Auth {
     PUT  /api/auth/me/language-preferences
                                             -> updateLanguagePreferences
     PUT  /api/auth/me/app-locale            -> updateAppLocale
+    PUT  /api/auth/me/nickname              -> updateNickname
   }
 
   type UserProfile {
     id: UUID
     email: String
     name: String
+    nickname?: String
     is_active: Boolean
     oauth_provider?: String
     avatar_url?: String
@@ -174,14 +176,16 @@ module Auth {
   type LanguagePreferencesRequest extends LearningLanguageContext
   type LanguagePreferencesResponse extends LearningLanguageContext
   type AppLocaleRequest { app_locale: "ko" | "en" }
+  type NicknameRequest { nickname: String }
 }
 ```
 
-모바일 앱은 Supabase Auth로 Google 또는 iOS Apple 로그인을 완료한 뒤 Supabase `access_token`을 FastAPI 보호 API의 `Authorization: Bearer` 헤더에 전달해요. `GET /api/auth/me`는 Supabase token을 검증하고, `profiles` row를 생성 또는 갱신한 뒤 기존 envelope 형식으로 `UserProfile`을 반환해요.
+모바일 앱은 Supabase Auth로 Google 또는 iOS Apple 로그인을 완료한 뒤 Supabase `access_token`을 FastAPI 보호 API의 `Authorization: Bearer` 헤더에 전달해요. `GET /api/auth/me`는 Supabase token을 검증하고, `profiles` row가 없으면 생성하며 기존 row는 변경하지 않고 envelope 형식으로 `UserProfile`을 반환해요.
 `POST /api/auth/swagger/token`은 Swagger 수동 테스트를 위한 Supabase email/password token helper예요. `ENV=dev`에서는 사용할 수 있고, dev 외 환경에서는 `SWAGGER_TOKEN_ISSUER_ENABLED=true`와 `SWAGGER_TOKEN_ISSUER_SECRET`을 설정한 뒤 요청 body의 `secret`이 일치해야 해요. 발급된 `access_token`을 Swagger `Authorize`에 `Bearer <access_token>` 형식으로 넣어요.
 언어 선호는 프로필 기본값이며 새 대화 시작 시 `conversations` row에 snapshot으로 저장돼요. 기존 값이 없으면 `ko -> en`, feedback `ko`로 보정해요.
 `PUT /api/auth/me/language-preferences`는 profile default만 갱신해요. 모바일 Account UX는 변경값이 새 대화부터 적용되고 기존 conversation은 생성 시점 snapshot을 유지한다고 안내해야 해요.
 `PUT /api/auth/me/app-locale`는 앱 chrome 표시 언어만 저장해요. 값이 없는 기존 profile은 기기 system locale을 따르며 학습 언어쌍과 기존 conversation snapshot은 바꾸지 않아요.
+`PUT /api/auth/me/nickname`은 인증된 사용자 본인의 닉네임만 저장하고 `{ success, data: UserProfile }`을 반환해요. 앞뒤 공백 제거와 NFC 정규화 후 1~20자이며 줄바꿈·제어 문자는 허용하지 않아요. 닉네임 중복은 허용하고 UNIQUE 제약이나 중복 조회는 없어요. `nickname: null`은 신규 앱 프로필의 첫 설정이 끝나지 않았음을 뜻해요. 기존 프로필은 migration에서 현재 `name`을 닉네임으로 이관해요. 화면 표시에는 `nickname`을 우선 사용하고 `name`은 OAuth 원본으로 보존해요.
 
 ## 5. Language Snack 모듈
 

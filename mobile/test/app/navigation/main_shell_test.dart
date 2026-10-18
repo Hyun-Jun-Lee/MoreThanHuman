@@ -2,7 +2,9 @@ import 'package:curitalk/app/navigation/main_shell.dart';
 import 'package:curitalk/app/router/app_router.dart';
 import 'package:curitalk/app/theme/app_theme.dart';
 import 'package:curitalk/core/widgets/main_tab_scope.dart';
+import 'package:curitalk/features/auth/auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
@@ -12,9 +14,7 @@ void main() {
   ) async {
     final router = _router();
     addTearDown(router.dispose);
-    await tester.pumpWidget(
-      MaterialApp.router(theme: AppTheme.light, routerConfig: router),
-    );
+    await tester.pumpWidget(_testApp(router));
     await tester.pumpAndSettle();
     await tester.drag(find.byType(ListView), const Offset(0, -700));
     await tester.pumpAndSettle();
@@ -40,9 +40,7 @@ void main() {
         (tester) async {
           final router = _router(initialLocation: origin);
           addTearDown(router.dispose);
-          await tester.pumpWidget(
-            MaterialApp.router(theme: AppTheme.light, routerConfig: router),
-          );
+          await tester.pumpWidget(_testApp(router));
           await tester.pumpAndSettle();
           router.push(preparation);
           await tester.pumpAndSettle();
@@ -87,9 +85,7 @@ void main() {
   ) async {
     final router = _router();
     addTearDown(router.dispose);
-    await tester.pumpWidget(
-      MaterialApp.router(theme: AppTheme.light, routerConfig: router),
-    );
+    await tester.pumpWidget(_testApp(router));
     await tester.pumpAndSettle();
     router.push(AppRoute.history);
     await tester.pumpAndSettle();
@@ -155,3 +151,13 @@ GoRouter _router({String initialLocation = AppRoute.home}) => GoRouter(
     ),
   ],
 );
+
+Widget _testApp(GoRouter router) => ProviderScope(
+  overrides: [authControllerProvider.overrideWith(_ShellAuthController.new)],
+  child: MaterialApp.router(theme: AppTheme.light, routerConfig: router),
+);
+
+class _ShellAuthController extends AuthController {
+  @override
+  Future<AuthSession> build() async => const AuthSession.unauthenticated();
+}

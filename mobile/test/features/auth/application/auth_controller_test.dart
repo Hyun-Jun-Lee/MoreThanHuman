@@ -175,6 +175,24 @@ void main() {
     );
   });
 
+  test('saving a nickname updates the authenticated profile', () async {
+    final supabaseAuth = _FakeSupabaseAuthService(hasSession: true);
+    final repository = _FakeAuthRepository(user: _user);
+    final container = _createContainer(supabaseAuth, repository);
+    addTearDown(container.dispose);
+    await container.read(authControllerProvider.future);
+
+    await container
+        .read(authControllerProvider.notifier)
+        .updateNickname('Tomato');
+
+    expect(repository.updatedNickname, 'Tomato');
+    expect(
+      container.read(authControllerProvider).requireValue.user?.nickname,
+      'Tomato',
+    );
+  });
+
   test(
     'session expiration immediately publishes unauthenticated state',
     () async {
@@ -382,13 +400,15 @@ class _FakeLanguagePreferencesRepository
   }
 }
 
-class _FakeAuthRepository implements AuthRepository, AppLocaleRepository {
+class _FakeAuthRepository
+    implements AuthRepository, AppLocaleRepository, NicknameRepository {
   _FakeAuthRepository({this.user, this.profileError});
 
   final UserProfile? user;
   final Object? profileError;
   int profileRequestCount = 0;
   String? updatedAppLocale;
+  String? updatedNickname;
 
   @override
   Future<UserProfile> getCurrentUser() async {
@@ -403,6 +423,12 @@ class _FakeAuthRepository implements AuthRepository, AppLocaleRepository {
   Future<UserProfile> updateAppLocale(String appLocale) async {
     updatedAppLocale = appLocale;
     return (user ?? _user).copyWith(appLocale: appLocale);
+  }
+
+  @override
+  Future<UserProfile> updateNickname(String nickname) async {
+    updatedNickname = nickname;
+    return (user ?? _user).copyWith(nickname: nickname);
   }
 }
 

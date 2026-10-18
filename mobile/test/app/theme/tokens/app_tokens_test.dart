@@ -25,18 +25,20 @@ void main() {
     });
 
     test('uses bundled font families and mobile type values', () {
-      expect(AppTypography.sansFontFamily, 'Pretendard');
-      expect(AppTypography.displayFontFamily, 'Newsreader');
-      expect(AppTypography.monoFontFamily, 'JetBrains Mono');
+      expect(AppTypography.fontFamily, 'Freesentation');
       expect(AppTypography.displayXl.fontSize, 48);
-      expect(AppTypography.displayXl.fontWeight, FontWeight.w800);
-      expect(AppTypography.displayLg.fontFamily, 'Newsreader');
-      expect(AppTypography.headlineLg.fontFamily, 'Pretendard');
-      expect(AppTypography.headlineMd.fontFamily, 'Pretendard');
+      expect(AppTypography.displayXl.fontWeight, FontWeight.w700);
+      expect(AppTypography.displayLg.fontFamily, 'Freesentation');
+      expect(AppTypography.headlineLg.fontFamily, 'Freesentation');
+      expect(AppTypography.headlineMd.fontFamily, 'Freesentation');
       expect(AppTypography.body.fontSize, 18);
-      expect(AppTypography.body.fontFamily, 'Pretendard');
-      expect(AppTypography.button.fontFamily, 'Pretendard');
-      expect(AppTypography.labelMono.letterSpacing, 0.7);
+      expect(AppTypography.body.fontFamily, 'Freesentation');
+      expect(AppTypography.body.fontWeight, FontWeight.w400);
+      expect(AppTypography.button.fontFamily, 'Freesentation');
+      expect(AppTypography.button.fontWeight, FontWeight.w700);
+      expect(AppTypography.label.fontWeight, FontWeight.w700);
+      expect(AppTypography.label.letterSpacing, 0.35);
+      expect(AppTypography.caption.fontWeight, FontWeight.w500);
     });
 
     test('keeps interactive sizes at accessible minimums', () {

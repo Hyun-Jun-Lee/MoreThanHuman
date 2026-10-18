@@ -1,7 +1,5 @@
 # Bundled Font Licenses
 
-- Pretendard: `Pretendard-OFL.txt` · https://github.com/orioncactus/pretendard
-- Newsreader: `Newsreader-OFL.txt` · https://github.com/productiontype/Newsreader
-- JetBrains Mono: `JetBrainsMono-LICENSE.txt` · https://github.com/JetBrains/JetBrainsMono
+- Freesentation: `Freesentation-OFL.txt` · https://github.com/Freesentation/freesentation
 
-세 font는 SIL Open Font License 1.1에 따라 앱 asset으로 포함해요.
+Freesentation은 SIL Open Font License 1.1에 따라 앱 asset으로 포함해요.

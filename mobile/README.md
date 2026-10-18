@@ -81,7 +81,7 @@ lib/
         └── presentation/     # Topic Input, Topic Prep 화면과 widgets
 
 assets/
-├── fonts/                   # Pretendard, Newsreader, JetBrains Mono variable font
+├── fonts/                   # Freesentation Light, Regular, Medium, Bold
 └── licenses/                # 번들 font 라이선스
 ```
 
@@ -94,7 +94,7 @@ assets/
 | 토큰 | 역할 |
 |------|------|
 | `AppPalette` | monochrome core, pastel block, 상태 색상 |
-| `AppTypography` | Pretendard·Newsreader·JetBrains Mono 기반 TextStyle |
+| `AppTypography` | Freesentation 4종 굵기 기반 TextStyle |
 | `AppSpacing` | 8px 기반 간격과 화면 padding |
 | `AppRadius` | 입력창, 카드, pill radius |
 | `AppBorderWidth` | 기본·focus 테두리 굵기 |

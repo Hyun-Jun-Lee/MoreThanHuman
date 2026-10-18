@@ -165,7 +165,7 @@ class _RecentConversationCardState extends State<RecentConversationCard> {
                         widget.category,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: AppTypography.captionMono.copyWith(
+                        style: AppTypography.caption.copyWith(
                           color: AppPalette.ink,
                         ),
                       ),

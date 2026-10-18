@@ -31,65 +31,65 @@ colors:
   overlay-scrim: '#000000'
 typography:
   display-xl:
-    fontFamily: Pretendard
+    fontFamily: Freesentation
     fontSize: 48px
-    fontWeight: '800'
+    fontWeight: '700'
     lineHeight: '1.0'
     letterSpacing: -1.44px
   display-lg:
-    fontFamily: Newsreader
+    fontFamily: Freesentation
     fontSize: 40px
     fontWeight: '700'
     lineHeight: '1.05'
     letterSpacing: 0
   headline-lg:
-    fontFamily: Pretendard
+    fontFamily: Freesentation
     fontSize: 32px
     fontWeight: '700'
     lineHeight: '1.15'
     letterSpacing: -0.32px
   headline-md:
-    fontFamily: Pretendard
+    fontFamily: Freesentation
     fontSize: 26px
     fontWeight: '700'
     lineHeight: '1.25'
     letterSpacing: -0.26px
   body-lg:
-    fontFamily: Pretendard
+    fontFamily: Freesentation
     fontSize: 20px
     fontWeight: '400'
     lineHeight: '1.4'
     letterSpacing: -0.14px
   body:
-    fontFamily: Pretendard
+    fontFamily: Freesentation
     fontSize: 18px
     fontWeight: '400'
     lineHeight: '1.45'
     letterSpacing: -0.14px
   body-sm:
-    fontFamily: Pretendard
+    fontFamily: Freesentation
     fontSize: 16px
     fontWeight: '400'
     lineHeight: '1.45'
     letterSpacing: 0
   button:
-    fontFamily: Pretendard
+    fontFamily: Freesentation
     fontSize: 16px
-    fontWeight: '600'
+    fontWeight: '700'
     lineHeight: '1.25'
     letterSpacing: 0
-  label-mono:
-    fontFamily: JetBrains Mono
+  label:
+    fontFamily: Freesentation
     fontSize: 14px
-    fontWeight: '600'
+    fontWeight: '700'
     lineHeight: '1.2'
-    letterSpacing: 0.7px
-  caption-mono:
-    fontFamily: JetBrains Mono
+    letterSpacing: 0.35px
+  caption:
+    fontFamily: Freesentation
     fontSize: 12px
     fontWeight: '500'
     lineHeight: '1.4'
-    letterSpacing: 1.2px
+    letterSpacing: 0
 spacing:
   hair: 1px
   xxs: 4px
@@ -133,7 +133,8 @@ motion:
 - 움직이는 주간 주제 카드는 실제 카드 너비와 높이를 고정하고 문구를 가운데 배치해요. 표시 문구는 공백 기준 두 어절마다 줄바꿈하고 최대 세 줄로 표시해요. 원문과 접근성 이름에는 표시용 줄바꿈을 넣지 않아요.
 - 전체 대화 화면은 간결한 행 목록과 상단 `＋`로 구성해요. 기존 API의 페이지 조회를 연결하고 하단 탭을 숨겨요.
 - 홈과 전체 대화 화면의 새 대화 버튼은 동일한 방식 선택 시트를 열어요. 준비·대화 중에는 탭을 숨기고 복귀 시 출발 화면을 유지해요.
-- 내 정보는 기존 계정·언어 설정을 독립 화면으로 제공해요. 홈 헤더의 오른쪽에는 원형 프로필 아이콘 대신 현재 언어 쌍 배지를 표시해요.
+- 내 정보는 기존 계정·언어 설정을 독립 화면으로 제공해요. 계정 영역에는 제목과 이메일 없이 프로필 원과 한 줄 사용자 이름만 표시하고, 이름은 20px Bold로 원 높이 안에 맞춰요. 구독·앱 언어·학습 언어 제목과 바로 아래 콘텐츠 사이에는 동일한 16px 간격을 사용해요. 세 섹션의 콘텐츠 글자는 앱 언어 버튼 기준인 Freesentation 12px Medium(500)으로 맞춰요. iOS 구독 영역은 현재 플랜을 첫 글자만 대문자인 영문(`Free`, `Advance`, `Plus`)의 검은색 상태 칩으로 표시하고, 옆의 흰색 `더 보기` 칩으로 구독 상세 화면을 열어요. 영어 UI의 해당 칩은 `Show more`, 앱 언어 칩은 `Korean`과 `English`로 첫 글자만 대문자로 표시해요. 학습 언어는 `한국어 → 영어`와 `영어 → 한국어` 두 옵션만 앱 언어와 같은 내용 폭 칩으로 가로 배치해요. 영어 UI에서는 칩 폭을 위해 `KR → EN`과 `EN → KR`로 축약하고 확인 팝업에는 전체 언어 이름을 표시해요. 앱 언어·학습 언어 변경 확인 팝업의 영문 확인 버튼은 `CHANGE`로 표시해요. 좁은 화면이나 큰 글씨에서는 다음 줄로 넘어갈 수 있어요. 온보딩의 언어쌍 카드 구성은 유지해요. 로그아웃은 화면 하단에 옅은 회색 `로그 아웃` 텍스트 버튼으로 표시하고 배경이나 외곽선은 두지 않아요. 홈 헤더의 오른쪽에는 원형 프로필 아이콘 대신 현재 언어 쌍 배지를 표시해요.
+- iOS 구독 화면 하단의 이용약관·개인정보처리방침 링크는 내 정보의 로그아웃과 같은 Freesentation 12px Medium, 옅은 회색 텍스트 버튼으로 표시해요. 링크 위의 월간 자동 갱신 안내 문단은 표시하지 않아요.
 - 탭 라벨은 기본 UI 서체로 항상 표시하고, 2개 항목의 너비와 터치 영역을 동일하게 유지해요. 탭 사이에는 슬라이드 전환을 넣지 않아요.
 
 ## 1. 시스템 방향
@@ -148,7 +149,7 @@ tomatalk은 Figma 마케팅 시스템의 편집형 대비와 컬러 블록 문�
 - Lime, Lilac, Cream, Mint 계열, Blue, Coral, Pink는 콘텐츠를 구분하는 큰 면으로 사용해요.
 - 버튼은 pill, 주요 카드와 패널은 24px 이상의 큰 radius를 사용해요.
 - 그림자와 gradient보다 색상 면, 여백, 테두리 굵기로 계층을 만들어요.
-- Pretendard 본문, 제한적인 Newsreader display, uppercase JetBrains Mono 레이블을 함께 사용해 편집형 리듬을 만들어요.
+- Freesentation의 Regular 본문과 Bold 제목·CTA, Medium 보조 정보로 계층을 만들어요.
 
 ## 2. 기준 자료와 우선순위
 
@@ -212,26 +213,37 @@ Primary CTA, 앱 배경, 전체 화면 theme에는 사용하지 않아요.
 
 ### 4.1 Font Family
 
-- **Pretendard**: 앱 기본 산세리프 폰트. display-xl, headline, body, button에 사용해 한글·영문 본문 가독성을 담당해요.
-- **Newsreader**: 서브 디스플레이 폰트. 1차 적용 범위는 `display-lg`로 제한하고 Login hero, Home greeting처럼 짧은 강조 문구에만 사용해요.
-- **JetBrains Mono**: category, eyebrow, caption, metadata
+- **Freesentation**: 앱의 모든 텍스트에 쓰는 기본 폰트예요. Light(300), Regular(400), Medium(500), Bold(700) 네 파일을 번들해요.
 
-`headline-lg`와 `headline-md`는 실사용 화면 제목에 자주 등장하므로 Newsreader로 확장하지 않고 Pretendard를 유지해요. Stitch 산출물에 포함된 Quicksand 같은 화면별 임시 font는 구현 기준에 포함하지 않아요.
+본문은 Regular, 작은 보조 정보는 Medium, 제목과 CTA는 Bold를 사용해요. Light는 파일을 등록하지만 현재 텍스트 계층에는 배정하지 않아요. 화면별 Stitch HTML의 임시 font는 구현 기준에 포함하지 않아요.
 
 ### 4.2 사용 규칙
 
-- display-xl: 온보딩과 핵심 empty state의 짧은 제목. 현재는 Pretendard를 유지해요.
-- display-lg: Login hero, Home 인사말처럼 짧고 브랜드감 있는 opener. Splash는 제공 이미지로 표시해요.
+- display-xl: 온보딩과 핵심 empty state의 짧은 제목
+- display-lg: Login hero처럼 짧고 브랜드감 있는 opener. Splash는 제공 이미지로 표시해요.
 - headline-lg: 화면 제목과 큰 카드 제목
 - headline-md: 대화 주제, 준비 카드, bottom sheet 제목
 - body-lg: 온보딩 설명과 핵심 학습 문장
 - body: 기본 대화·설명 문장
 - body-sm: 카드 설명, 보조 정보
 - button: 모든 text CTA
-- label-mono: 버튼의 기술적 레이블, category chip
-- caption-mono: metadata, 진행 단계, 작은 상태 레이블
+- label: 섹션 제목, category chip
+- caption: metadata, 진행 단계, 작은 상태 레이블
 
-Mono 역할은 항상 uppercase를 기본으로 하며 문장형 본문에는 사용하지 않아요. Newsreader는 긴 문장형 본문이나 입력/채팅 텍스트에 사용하지 않아요. Display는 두 줄에서 세 줄 이내로 유지하고, 큰 제목일수록 line height를 더 촘촘하게 사용해요.
+섹션 제목 컴포넌트는 영문을 uppercase로 표시해요. Display는 두 줄에서 세 줄 이내로 유지하고, 큰 제목일수록 line height를 더 촘촘하게 사용해요.
+
+| 계층 | 크기 / 굵기 | 주 용도 |
+|---|---:|---|
+| `displayXl` | 48 / Bold 700 | 가장 큰 강조 제목 |
+| `displayLg` | 40 / Bold 700 | 로그인 대표 문구 |
+| `headlineLg` | 32 / Bold 700 | 화면 제목, 큰 카드 제목 |
+| `headlineMd` | 26 / Bold 700 | 카드·시트 제목 |
+| `bodyLg` | 20 / Regular 400 | 큰 본문 |
+| `body` | 18 / Regular 400 | 기본 설명·대화 문장 |
+| `bodySm` | 16 / Regular 400 | 보조 설명, 입력·채팅 텍스트 |
+| `button` | 16 / Bold 700 | 버튼·CTA |
+| `label` | 14 / Bold 700 | 섹션·카테고리 레이블 |
+| `caption` | 12 / Medium 500 | 메타데이터·작은 상태 표시 |
 
 ## 5. Layout & Spacing
 
@@ -403,7 +415,7 @@ Color block 자체에는 그림자를 추가하지 않아요. focus와 pressed �
 - Black Primary CTA를 화면의 가장 중요한 행동 하나에만 사용해요.
 - 하나의 정보 묶음에는 하나의 pastel block을 충분히 크게 사용해요.
 - 화면 사이에 White canvas를 남겨 color block이 의도적으로 보이게 해요.
-- Pretendard의 크기와 weight, Newsreader의 제한적인 display 대비, JetBrains Mono의 taxonomy 대비로 계층을 만들어요.
+- Freesentation의 크기와 Regular·Medium·Bold 굵기 대비로 계층을 만들어요.
 - 버튼과 선택 chip은 pill 형태를 유지해요.
 - 대화와 문법 피드백에는 앱 전용 semantic color 역할을 사용해요.
 
@@ -412,7 +424,7 @@ Color block 자체에는 그림자를 추가하지 않아요. focus와 pressed �
 - 앱 전체를 Terracotta 또는 Sand surface로 덮지 않아요.
 - 여러 pastel 색상을 하나의 카드 안에서 장식적으로 섞지 않아요.
 - Color block에 gradient나 강한 shadow를 추가하지 않아요.
-- Mono font를 문장형 본문이나 긴 설명에 사용하지 않아요.
+- 작은 글씨에는 Light(300)를 사용하지 않아요.
 - 화면별 Stitch HTML의 임시 theme map을 Flutter에 그대로 복사하지 않아요.
 - 상태를 색상 하나로만 전달하지 않아요.
 
@@ -421,7 +433,7 @@ Color block 자체에는 그림자를 추가하지 않아요. focus와 pressed �
 - Material 3 ColorScheme에는 monochrome core와 semantic status를 연결해요.
 - Pastel block, conversation, grammar feedback 색상은 ThemeExtension으로 분리해요.
 - spacing, radius, size는 immutable token class로 관리해요.
-- typography는 TextTheme에 매핑하고 Mono 역할은 별도 extension으로 제공해요.
+- typography는 `AppTypography` 토큰과 기본 `ThemeData.fontFamily`로 적용해요.
 - v1은 light theme만 구현하며 system dynamic color는 사용하지 않아요.
 - 폰트는 앱 asset에 포함해 네트워크 상태와 관계없이 동일하게 렌더링해요.
 - 화면 코드에는 raw Hex, 임의 spacing, 임의 radius를 직접 작성하지 않아요.

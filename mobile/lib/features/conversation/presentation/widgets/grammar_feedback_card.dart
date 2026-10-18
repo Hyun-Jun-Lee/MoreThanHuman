@@ -107,7 +107,7 @@ class _ReasonBlock extends StatelessWidget {
             ),
             child: Text(
               label.toUpperCase(),
-              style: AppTypography.captionMono.copyWith(
+              style: AppTypography.caption.copyWith(
                 color: colors.onGrammarSuggestion,
               ),
             ),

@@ -67,7 +67,7 @@ void main() {
         same(AppSemanticColors.light),
       );
       expect(theme.materialTapTargetSize, MaterialTapTargetSize.padded);
-      expect(theme.textTheme.bodyMedium?.fontFamily, 'Pretendard');
+      expect(theme.textTheme.bodyMedium?.fontFamily, 'Freesentation');
     });
 
     testWidgets('is applied at the Curitalk app root', (

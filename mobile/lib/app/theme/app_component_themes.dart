@@ -63,6 +63,14 @@ abstract final class AppComponentThemes {
     ),
   );
 
+  static final ButtonStyle mutedTextButton = TextButton.styleFrom(
+    foregroundColor: AppPalette.inkSecondary.withValues(alpha: 0.8),
+    disabledForegroundColor: AppPalette.inkSecondary.withValues(alpha: 0.8),
+    textStyle: AppTypography.caption,
+    padding: EdgeInsets.zero,
+    minimumSize: const Size(0, AppSize.touchTarget),
+  );
+
   static final IconButtonThemeData iconButton = IconButtonThemeData(
     style: IconButton.styleFrom(
       backgroundColor: AppPalette.surfaceSoft,
@@ -122,8 +130,8 @@ abstract final class AppComponentThemes {
       width: AppBorderWidth.hairline,
     ),
     shape: const StadiumBorder(),
-    labelStyle: AppTypography.captionMono.copyWith(color: AppPalette.ink),
-    secondaryLabelStyle: AppTypography.captionMono.copyWith(
+    labelStyle: AppTypography.caption.copyWith(color: AppPalette.ink),
+    secondaryLabelStyle: AppTypography.caption.copyWith(
       color: AppSemanticColors.light.onSelected,
     ),
     elevation: 0,
@@ -169,7 +177,7 @@ abstract final class AppComponentThemes {
       if (states.contains(WidgetState.selected)) {
         return AppTypography.bodySm.copyWith(
           fontSize: 12,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w700,
           color: AppPalette.ink,
         );
       }

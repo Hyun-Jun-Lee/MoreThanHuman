@@ -5,6 +5,7 @@ class UserProfile {
     required this.id,
     required this.email,
     required this.name,
+    this.nickname,
     required this.isActive,
     required this.createdAt,
     required this.updatedAt,
@@ -21,6 +22,7 @@ class UserProfile {
     final Object? id = json['id'];
     final Object? email = json['email'];
     final Object? name = json['name'];
+    final Object? nickname = json['nickname'];
     final Object? isActive = json['is_active'];
     final Object? oauthProvider = json['oauth_provider'];
     final Object? appLocale = json['app_locale'];
@@ -34,6 +36,9 @@ class UserProfile {
     }
     if (name is! String || name.isEmpty) {
       throw const FormatException('User profile name is missing.');
+    }
+    if (nickname != null && nickname is! String) {
+      throw const FormatException('User profile nickname is invalid.');
     }
     if (isActive is! bool) {
       throw const FormatException('User profile active state is invalid.');
@@ -55,6 +60,7 @@ class UserProfile {
       id: id,
       email: email,
       name: name,
+      nickname: nickname as String?,
       isActive: isActive,
       oauthProvider: oauthProvider as String?,
       appLocale: appLocale as String?,
@@ -67,6 +73,9 @@ class UserProfile {
   final String id;
   final String email;
   final String name;
+  final String? nickname;
+  String get displayName =>
+      nickname?.trim().isNotEmpty == true ? nickname!.trim() : name.trim();
   final bool isActive;
   final String? oauthProvider;
   final String? appLocale;
@@ -74,11 +83,12 @@ class UserProfile {
   final DateTime createdAt;
   final DateTime updatedAt;
 
-  UserProfile copyWith({String? appLocale}) {
+  UserProfile copyWith({String? appLocale, String? nickname}) {
     return UserProfile(
       id: id,
       email: email,
       name: name,
+      nickname: nickname ?? this.nickname,
       isActive: isActive,
       oauthProvider: oauthProvider,
       language: language,

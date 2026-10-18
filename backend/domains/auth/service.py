@@ -13,6 +13,7 @@ from domains.auth.schemas import (
     LanguagePreferencesRequest,
     LanguagePreferencesResponse,
     AppLocaleRequest,
+    NicknameRequest,
     TokenResponse,
     UserProfile,
 )
@@ -118,5 +119,13 @@ class AuthService:
         profile = self.repository.update_app_locale(
             profile_id=profile_id,
             app_locale=request.app_locale.value,
+        )
+        return UserProfile.model_validate(profile)
+
+    def update_nickname(self, profile_id: str, request: NicknameRequest) -> UserProfile:
+        """현재 사용자 닉네임을 저장한 최신 프로필을 반환해요."""
+        profile = self.repository.update_nickname(
+            profile_id=profile_id,
+            nickname=request.nickname,
         )
         return UserProfile.model_validate(profile)

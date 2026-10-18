@@ -284,7 +284,7 @@ class _LanguagePairBadge extends StatelessWidget {
         ),
         child: Text(
           contextLanguage.shortPairLabel(),
-          style: AppTypography.captionMono.copyWith(
+          style: AppTypography.caption.copyWith(
             color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
           overflow: TextOverflow.ellipsis,

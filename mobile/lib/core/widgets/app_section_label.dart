@@ -15,7 +15,7 @@ class AppSectionLabel extends StatelessWidget {
     return Text(
       label.toUpperCase(),
       textAlign: textAlign,
-      style: AppTypography.labelMono.copyWith(color: foreground),
+      style: AppTypography.label.copyWith(color: foreground),
     );
   }
 }

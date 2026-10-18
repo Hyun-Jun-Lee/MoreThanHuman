@@ -3,7 +3,8 @@ import 'package:curitalk/features/auth/domain/auth_repository.dart';
 import 'package:curitalk/features/auth/domain/user_profile.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class ApiAuthRepository implements AuthRepository, AppLocaleRepository {
+class ApiAuthRepository
+    implements AuthRepository, AppLocaleRepository, NicknameRepository {
   const ApiAuthRepository(this.apiClient);
 
   final ApiClient apiClient;
@@ -24,6 +25,18 @@ class ApiAuthRepository implements AuthRepository, AppLocaleRepository {
           'auth/me/app-locale',
           method: 'PUT',
           data: <String, String>{'app_locale': appLocale},
+          decodeData: UserProfile.fromJson,
+        );
+    return response.data;
+  }
+
+  @override
+  Future<UserProfile> updateNickname(String nickname) async {
+    final ApiResponse<UserProfile> response = await apiClient
+        .request<UserProfile>(
+          'auth/me/nickname',
+          method: 'PUT',
+          data: <String, String>{'nickname': nickname},
           decodeData: UserProfile.fromJson,
         );
     return response.data;

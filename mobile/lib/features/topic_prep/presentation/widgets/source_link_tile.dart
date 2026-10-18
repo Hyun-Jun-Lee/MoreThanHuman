@@ -51,7 +51,7 @@ class SourceLinkTile extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: AppTypography.bodySm.copyWith(
                             color: theme.colorScheme.onSurface,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
                         const SizedBox(height: AppSpacing.xxs),
@@ -59,7 +59,7 @@ class SourceLinkTile extends StatelessWidget {
                           _displayHost,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: AppTypography.captionMono.copyWith(
+                          style: AppTypography.caption.copyWith(
                             color: theme.colorScheme.onSurfaceVariant,
                           ),
                         ),

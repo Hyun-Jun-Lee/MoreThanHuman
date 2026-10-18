@@ -181,7 +181,7 @@ class _LanguageSnackCarouselState extends State<LanguageSnackCarousel>
                       ? Center(
                           child: Text(
                             '${_currentIndex + 1} / ${widget.snacks.length}',
-                            style: AppTypography.captionMono,
+                            style: AppTypography.caption,
                           ),
                         )
                       : Row(

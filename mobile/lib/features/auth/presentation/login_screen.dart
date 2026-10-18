@@ -196,7 +196,7 @@ class _GoogleMark extends StatelessWidget {
       ),
       child: Text(
         'G',
-        style: AppTypography.captionMono.copyWith(
+        style: AppTypography.caption.copyWith(
           color: Theme.of(context).colorScheme.onSurface,
         ),
       ),

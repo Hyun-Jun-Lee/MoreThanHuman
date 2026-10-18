@@ -161,3 +161,36 @@ def test_language_preferences_reject_overposted_profile_fields():
     )
 
     assert response.status_code == 422
+
+
+def test_nickname_update_returns_profile_and_survives_auth_read():
+    client = _client()
+    headers = {"Authorization": "Bearer token"}
+    assert client.get("/api/auth/me", headers=headers).json()["data"]["nickname"] is None
+
+    updated = client.put(
+        "/api/auth/me/nickname", headers=headers, json={"nickname": "  토마토  "}
+    )
+
+    assert updated.status_code == 200
+    assert updated.json()["data"]["nickname"] == "토마토"
+    assert client.get("/api/auth/me", headers=headers).json()["data"]["nickname"] == "토마토"
+
+
+@pytest.mark.parametrize("nickname", ["", "   ", "a" * 21, "hello\nworld"])
+def test_nickname_update_rejects_invalid_input(nickname):
+    client = _client()
+    headers = {"Authorization": "Bearer token"}
+
+    response = client.put(
+        "/api/auth/me/nickname", headers=headers, json={"nickname": nickname}
+    )
+
+    assert response.status_code == 422
+    assert client.get("/api/auth/me", headers=headers).json()["data"]["nickname"] is None
+
+
+def test_nickname_update_requires_authentication():
+    client = _client()
+    response = client.put("/api/auth/me/nickname", json={"nickname": "Learner"})
+    assert response.status_code in {401, 403}

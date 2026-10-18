@@ -94,9 +94,7 @@ void main() {
     expect(selectedType, ConversationStartType.roleplay);
   });
 
-  testWidgets('full slot blocks creating another conversation', (
-    tester,
-  ) async {
+  testWidgets('full slot blocks creating another conversation', (tester) async {
     await tester.pumpWidget(
       _historyApp(
         conversations: <ConversationSummary>[_conversation],
@@ -111,11 +109,16 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Osaka food trip'), findsOneWidget);
-    expect(find.byKey(const ValueKey('locked-additional-conversation')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('locked-additional-conversation')),
+      findsNothing,
+    );
     await tester.tap(find.byTooltip('New conversation'));
     await tester.pumpAndSettle();
     expect(
-      find.text('All active conversation slots are in use. Release a slot in History or subscribe.'),
+      find.text(
+        'All active conversation slots are in use. Release a slot in Conversations or subscribe.',
+      ),
       findsWidgets,
     );
     expect(find.text('Free Chat'), findsNothing);
@@ -147,7 +150,10 @@ void main() {
     );
     await tester.tap(find.text('Load more conversations'));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('locked-additional-conversation')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('locked-additional-conversation')),
+      findsNothing,
+    );
   });
 }
 
@@ -232,7 +238,10 @@ class _FakeConversationAccessRepository
       const ConversationTurnAccess.disabled();
 
   @override
-  Future<void> activate(String conversationId, {String? replaceConversationId}) async {}
+  Future<void> activate(
+    String conversationId, {
+    String? replaceConversationId,
+  }) async {}
 
   @override
   Future<void> deactivate(String conversationId) async {}

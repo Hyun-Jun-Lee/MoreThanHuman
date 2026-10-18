@@ -25,7 +25,7 @@ class LanguageSnackContent extends StatelessWidget {
             children: [
               Text(
                 AppCopy.of(context).languageSnackTypeLabel(snack.contentType),
-                style: AppTypography.captionMono,
+                style: AppTypography.caption,
               ),
               const SizedBox(height: AppSpacing.md),
               if (stacked)
@@ -69,8 +69,7 @@ class _Expression extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (item.label != null)
-          Text(item.label!, style: AppTypography.captionMono),
+        if (item.label != null) Text(item.label!, style: AppTypography.caption),
         Text(item.expression, style: AppTypography.headlineMd),
         if (item.usage != null || item.meaning != null) ...[
           const SizedBox(height: AppSpacing.xs),

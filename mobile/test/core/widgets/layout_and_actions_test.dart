@@ -88,14 +88,15 @@ void main() {
     expect(find.text('Action'), findsOneWidget);
   });
 
-  testWidgets('AppSectionLabel uses uppercase mono text', (
+  testWidgets('AppSectionLabel uses uppercase label text', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(_themedApp(const AppSectionLabel('Recent')));
 
     final Text text = tester.widget<Text>(find.text('RECENT'));
 
-    expect(text.style?.fontFamily, AppTypography.monoFontFamily);
+    expect(text.style?.fontFamily, AppTypography.fontFamily);
+    expect(text.style?.fontWeight, FontWeight.w700);
   });
 
   testWidgets('AppColorBlockCard applies color and tap behavior', (

@@ -13,6 +13,7 @@ from domains.auth.schemas import (
     LanguagePreferencesRequest,
     LanguagePreferencesResponse,
     AppLocaleRequest,
+    NicknameRequest,
     SwaggerTokenRequest,
     TokenResponse,
     UserProfile,
@@ -112,4 +113,15 @@ def update_app_locale(
 ):
     """현재 사용자의 앱 표시 언어 갱신"""
     profile = service.update_app_locale(current_user.id, request)
+    return SuccessResponse(data=profile)
+
+
+@router.put("/me/nickname", response_model=SuccessResponse[UserProfile])
+def update_nickname(
+    request: NicknameRequest,
+    current_user: ProfileModel = Depends(get_current_user),
+    service: AuthService = Depends(get_auth_service),
+):
+    """현재 사용자의 닉네임을 저장해요."""
+    profile = service.update_nickname(current_user.id, request)
     return SuccessResponse(data=profile)

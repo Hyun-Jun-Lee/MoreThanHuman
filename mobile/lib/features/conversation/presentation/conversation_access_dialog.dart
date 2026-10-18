@@ -1,5 +1,4 @@
 import 'package:curitalk/core/copy/copy.dart';
-import 'dart:io';
 import 'package:curitalk/app/router/app_router.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -13,13 +12,13 @@ Future<void> showConversationAccessDialog(BuildContext context) {
       title: Text(copy.additionalConversationLabel),
       content: Text(copy.additionalConversationLocked),
       actions: [
-        if (Platform.isIOS)
+        if (Theme.of(dialogContext).platform == TargetPlatform.iOS)
           FilledButton(
             onPressed: () {
               Navigator.of(dialogContext).pop();
               context.push(AppRoute.paywall);
             },
-            child: Text(copy.subscriptionTitle),
+            child: Text(copy.subscriptionDialogActionLabel),
           ),
         TextButton(
           onPressed: () => Navigator.of(dialogContext).pop(),

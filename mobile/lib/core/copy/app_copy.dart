@@ -161,6 +161,7 @@ class AppCopy {
 
   String get retryLabel => isKorean ? '다시 시도' : 'Retry';
   String get subscriptionTitle => isKorean ? '구독' : 'Subscription';
+  String get subscriptionDialogActionLabel => isKorean ? '구독' : 'SUBSCRIPT';
   String get subscriptionIntro =>
       isKorean ? '원하는 만큼 대화를 이어가세요' : 'Keep the conversation going';
   String currentPlan(String plan) => isKorean
@@ -186,9 +187,6 @@ class AppCopy {
       isKorean ? '$plan 구독하기' : 'Subscribe to $plan';
   String get restorePurchases => isKorean ? '구매 복원' : 'Restore purchases';
   String get manageSubscription => isKorean ? '구독 관리' : 'Manage subscription';
-  String get subscriptionDisclosure => isKorean
-      ? '월간 자동 갱신 구독이에요. 현재 결제 기간이 끝나기 전까지 언제든 취소할 수 있어요.'
-      : 'Monthly auto-renewing subscription. You can cancel before the current billing period ends.';
   String get termsOfUse => isKorean ? '이용약관' : 'Terms of Use';
   String get privacyPolicy => isKorean ? '개인정보처리방침' : 'Privacy Policy';
   String billingMessage(String code) => switch ((isKorean, code)) {
@@ -220,8 +218,8 @@ class AppCopy {
   String get additionalConversationLabel =>
       isKorean ? '추가 대화' : 'Additional conversation';
   String get additionalConversationLocked => isKorean
-      ? '활성 대화 슬롯이 모두 사용 중이에요. 기록에서 대화 슬롯을 해제하거나 구독해 주세요.'
-      : 'All active conversation slots are in use. Release a slot in History or subscribe.';
+      ? '활성 대화 슬롯이 모두 사용 중이에요. 대화 목록에서 슬롯을 해제하거나 구독해 주세요.'
+      : 'All active conversation slots are in use. Release a slot in Conversations or subscribe.';
   String get additionalConversationLockedSemantic =>
       isKorean ? '읽기 전용 대화' : 'Read-only conversation';
   String get switchConversationTitle =>
@@ -292,6 +290,18 @@ class AppCopy {
   String get chatLabel => isKorean ? '대화' : 'Chat';
   String get historyLabel => isKorean ? '기록' : 'History';
   String get profileLabel => isKorean ? '내 정보' : 'Profile';
+  String get nicknameSetupTitle =>
+      isKorean ? '닉네임을 정해주세요' : 'Choose a nickname';
+  String get nicknameEditTitle => isKorean ? '닉네임 변경' : 'Change nickname';
+  String get nicknameHint => isKorean ? '닉네임' : 'Nickname';
+  String get nicknameSaveLabel => isKorean ? '저장' : 'Save';
+  String get nicknameEditLabel => isKorean ? '닉네임 수정' : 'Edit nickname';
+  String get nicknameInvalid => isKorean
+      ? '닉네임은 1~20자로 입력해 주세요.'
+      : 'Enter a nickname of 1–20 characters.';
+  String get nicknameSaveFailed => isKorean
+      ? '닉네임을 저장하지 못했어요. 다시 시도해 주세요.'
+      : 'Could not save your nickname. Please try again.';
   String get conversationOptionsLabel =>
       isKorean ? '대화 옵션' : 'Conversation options';
   String get conversationsLabel => isKorean ? '대화' : 'Conversations';
@@ -313,7 +323,7 @@ class AppCopy {
       : 'Change the app language to $language?';
   String changeLanguagePairMessage(String pair) =>
       isKorean ? '언어쌍을 $pair로 변경할까요?' : 'Change the language pair to $pair?';
-  String get confirmChangeLabel => isKorean ? '변경' : 'Change';
+  String get confirmChangeLabel => isKorean ? '변경' : 'CHANGE';
   String get startConversationLabel =>
       isKorean ? '대화 시작하기' : 'START CONVERSATION';
   String get startConversationTooltip =>
@@ -364,13 +374,13 @@ class AppCopy {
       isKorean ? '대화 시작을 준비하고 있어요...' : 'Getting your conversation ready...';
   String get showAllLabel => isKorean ? '모두 보기' : 'SHOW ALL';
   String get showLessLabel => isKorean ? '접기' : 'SHOW LESS';
-  String get showMoreLabel => isKorean ? '더 보기' : 'SHOW MORE';
+  String get showMoreLabel => isKorean ? '더 보기' : 'Show more';
   String get updatingConversationsSemanticLabel =>
       isKorean ? '대화를 업데이트하는 중' : 'Updating conversations';
   String get accountLabel => isKorean ? '계정' : 'Account';
   String get languagePairSectionLabel =>
       isKorean ? '학습 언어' : 'Learning Language';
-  String get logOutLabel => isKorean ? '로그아웃' : 'LOG OUT';
+  String get logOutLabel => isKorean ? '로그 아웃' : 'LOG OUT';
   String get languagePairSaveFailed =>
       isKorean ? '언어쌍을 저장하지 못했어요.' : 'Language pair could not be saved.';
   String get startConversationTitle =>

@@ -15,15 +15,12 @@ void main() {
     await (FontLoader(
       'MaterialIcons',
     )..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'))).load();
-    for (final entry in {
-      'Pretendard': 'Pretendard',
-      'JetBrains Mono': 'JetBrainsMono',
-    }.entries) {
-      await (FontLoader(entry.key)..addFont(
-            rootBundle.load('assets/fonts/${entry.value}Variable.ttf'),
-          ))
-          .load();
-    }
+    await (FontLoader('Freesentation')
+          ..addFont(rootBundle.load('assets/fonts/Freesentation-3Light.ttf'))
+          ..addFont(rootBundle.load('assets/fonts/Freesentation-4Regular.ttf'))
+          ..addFont(rootBundle.load('assets/fonts/Freesentation-5Medium.ttf'))
+          ..addFont(rootBundle.load('assets/fonts/Freesentation-7Bold.ttf')))
+        .load();
   });
   for (final width in [320.0, 390.0, 768.0]) {
     testWidgets('debug reset control fits at $width with large text', (

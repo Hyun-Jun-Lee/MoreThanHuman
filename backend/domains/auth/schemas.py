@@ -3,8 +3,9 @@ Auth 도메인 Pydantic 스키마
 """
 from datetime import datetime
 from enum import Enum
+import unicodedata
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from shared.language import LearningLanguageContext
 
@@ -88,6 +89,7 @@ class UserProfile(BaseModel):
     id: str
     email: str
     name: str
+    nickname: str | None = None
     is_active: bool
     oauth_provider: str | None = None
     avatar_url: str | None = None
@@ -118,3 +120,21 @@ class AppLocaleRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     app_locale: AppLocaleCode
+
+
+class NicknameRequest(BaseModel):
+    """현재 사용자 닉네임 수정 요청"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    nickname: str
+
+    @field_validator("nickname")
+    @classmethod
+    def validate_nickname(cls, value: str) -> str:
+        nickname = unicodedata.normalize("NFC", value.strip())
+        if not 1 <= len(nickname) <= 20:
+            raise ValueError("Nickname must be 1 to 20 characters.")
+        if any(unicodedata.category(char) == "Cc" for char in nickname):
+            raise ValueError("Nickname cannot contain control characters.")
+        return nickname

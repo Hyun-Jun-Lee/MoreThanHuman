@@ -18,6 +18,7 @@ class ProfileModel(Base):
     id = Column(String(36), primary_key=True)
     email = Column(String(255), unique=True, index=True, nullable=False)
     name = Column(String(100), nullable=False)
+    nickname = Column(String(100), nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
     oauth_provider = Column(String(50), nullable=True)
     avatar_url = Column(String(500), nullable=True)

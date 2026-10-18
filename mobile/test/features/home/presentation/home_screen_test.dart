@@ -2,10 +2,12 @@ import 'dart:async';
 import 'package:curitalk/features/profile/presentation/profile_screen.dart';
 
 import 'package:curitalk/app/theme/app_theme.dart';
+import 'package:curitalk/app/theme/app_semantic_colors.dart';
 import 'package:curitalk/app/theme/tokens/tokens.dart';
 import 'package:curitalk/core/storage/storage.dart';
 import 'package:curitalk/core/widgets/app_color_block_card.dart';
 import 'package:curitalk/features/auth/auth.dart';
+import 'package:curitalk/features/billing/billing_repository.dart';
 import 'package:curitalk/features/conversation/conversation.dart';
 import 'package:curitalk/features/home/home.dart';
 import 'package:curitalk/features/home/application/weekly_topics_controller.dart';
@@ -14,12 +16,76 @@ import 'package:curitalk/features/home/presentation/widgets/weekly_topic_loop.da
 import 'package:curitalk/features/language/language.dart';
 import 'package:curitalk/features/onboarding/onboarding.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../snack_test_fixtures.dart';
 import 'package:curitalk/features/home/data/snack_basket_reset_repository.dart';
 
 void main() {
+  for (final plan in <String>['free', 'advance', 'plus']) {
+    testWidgets('iOS profile shows $plan beside subscription details', (
+      WidgetTester tester,
+    ) async {
+      tester.view.physicalSize = const Size(320, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        _homeApp(
+          profile: true,
+          locale: const Locale('ko'),
+          platform: TargetPlatform.iOS,
+          billingPlan: plan,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final subscription = find.byKey(
+        const ValueKey('profile-subscription-options'),
+      );
+      final planChip = tester.widget<Chip>(
+        find.descendant(of: subscription, matching: find.byType(Chip)),
+      );
+      final moreChip = tester.widget<ActionChip>(
+        find.descendant(of: subscription, matching: find.byType(ActionChip)),
+      );
+      final displayPlan = '${plan[0].toUpperCase()}${plan.substring(1)}';
+      expect(find.text(displayPlan), findsOneWidget);
+      expect(find.text('더 보기'), findsOneWidget);
+      expect(find.textContaining('현재 플랜'), findsNothing);
+      expect(planChip.backgroundColor, AppSemanticColors.light.selectedSurface);
+      expect(planChip.labelStyle?.color, AppSemanticColors.light.onSelected);
+      expect(moreChip.backgroundColor, AppPalette.canvas);
+      expect(moreChip.labelStyle?.color, AppPalette.ink);
+      expect(moreChip.onPressed, isNotNull);
+      expect(
+        tester.getTopLeft(find.text(displayPlan)).dy,
+        tester.getTopLeft(find.text('더 보기')).dy,
+      );
+    });
+  }
+
+  testWidgets('English profile uses sentence case for settings chips', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      _homeApp(
+        profile: true,
+        platform: TargetPlatform.iOS,
+        billingPlan: 'free',
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Free'), findsOneWidget);
+    expect(find.text('Show more'), findsOneWidget);
+    expect(find.text('Korean'), findsOneWidget);
+    expect(find.text('English'), findsOneWidget);
+    expect(find.text('SHOW MORE'), findsNothing);
+    expect(find.text('KOREAN'), findsNothing);
+    expect(find.text('ENGLISH'), findsNothing);
+  });
+
   testWidgets('home delegates navigation to the shared shell', (tester) async {
     await tester.pumpWidget(
       _homeApp(conversations: _recentConversations(count: 5)),
@@ -58,6 +124,7 @@ void main() {
     (tester) async {
       await tester.pumpWidget(
         _homeApp(
+          platform: TargetPlatform.iOS,
           conversations: _recentConversations(count: 1),
           access: const ConversationAccess(
             enabled: true,
@@ -84,10 +151,12 @@ void main() {
       await tester.pumpAndSettle();
       expect(
         find.text(
-          'All active conversation slots are in use. Release a slot in History or subscribe.',
+          'All active conversation slots are in use. Release a slot in Conversations or subscribe.',
         ),
         findsWidgets,
       );
+      expect(find.widgetWithText(FilledButton, 'SUBSCRIPT'), findsOneWidget);
+      expect(find.text('Subscription'), findsNothing);
       expect(find.text('Free Chat'), findsNothing);
     },
   );
@@ -95,17 +164,70 @@ void main() {
   testWidgets('profile displays account and language settings', (
     WidgetTester tester,
   ) async {
+    tester.view.physicalSize = const Size(320, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
     await tester.pumpWidget(_homeApp(profile: true));
     await tester.pumpAndSettle();
 
     expect(find.byIcon(Icons.menu_rounded), findsNothing);
 
-    expect(find.text('ACCOUNT'), findsOneWidget);
+    expect(find.text('ACCOUNT'), findsNothing);
     expect(find.text('CANCEL'), findsNothing);
     expect(find.text('Learner Kim'), findsOneWidget);
-    expect(find.text('learner@example.com'), findsOneWidget);
+    expect(find.text('learner@example.com'), findsNothing);
+    final accountName = tester.widget<Text>(find.text('Learner Kim'));
+    expect(accountName.style?.fontSize, AppTypography.bodyLg.fontSize);
+    expect(accountName.maxLines, 1);
+    expect(accountName.overflow, TextOverflow.ellipsis);
+    expect(
+      tester.getSize(find.text('Learner Kim')).height,
+      lessThanOrEqualTo(tester.getSize(find.byType(CircleAvatar)).height),
+    );
     expect(find.text('LOG OUT'), findsOneWidget);
+    final logout = find.widgetWithText(TextButton, 'LOG OUT');
+    expect(logout, findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'LOG OUT'), findsNothing);
+    expect(
+      tester.widget<TextButton>(logout).style?.foregroundColor?.resolve({}),
+      AppPalette.inkSecondary.withValues(alpha: 0.8),
+    );
+    final scrollView = find.byType(SingleChildScrollView);
+    expect(
+      tester.getBottomLeft(scrollView).dy - tester.getBottomLeft(logout).dy,
+      AppSpacing.xl,
+    );
     expect(find.text('LEARNING LANGUAGE'), findsOneWidget);
+    final languageOptions = find.byKey(
+      const ValueKey('profile-language-pair-options'),
+    );
+    final appLanguageGap =
+        tester.getTopLeft(find.byType(Wrap).first).dy -
+        tester.getBottomLeft(find.text('APP LANGUAGE')).dy;
+    final learningLanguageGap =
+        tester.getTopLeft(languageOptions).dy -
+        tester.getBottomLeft(find.text('LEARNING LANGUAGE')).dy;
+    expect(appLanguageGap, AppSpacing.md);
+    expect(learningLanguageGap, AppSpacing.md);
+    final appLanguageStyle = DefaultTextStyle.of(
+      tester.element(find.text('Korean')),
+    ).style;
+    final pairStyle = DefaultTextStyle.of(
+      tester.element(find.text('KR → EN')),
+    ).style;
+    expect(pairStyle.fontFamily, appLanguageStyle.fontFamily);
+    expect(pairStyle.fontSize, appLanguageStyle.fontSize);
+    expect(pairStyle.fontWeight, appLanguageStyle.fontWeight);
+    final pairChips = find.descendant(
+      of: languageOptions,
+      matching: find.byType(ChoiceChip),
+    );
+    expect(pairChips, findsNWidgets(2));
+    expect(find.textContaining('CHINESE'), findsNothing);
+    expect(
+      tester.getTopLeft(find.text('KR → EN')).dy,
+      tester.getTopLeft(find.text('EN → KR')).dy,
+    );
     expect(
       tester.getTopLeft(find.text('LOG OUT')).dy,
       greaterThan(tester.getTopLeft(find.text('LEARNING LANGUAGE')).dy),
@@ -115,6 +237,27 @@ void main() {
         'Applies to new conversations. Existing conversations keep the language pair they started with.',
       ),
       findsNothing,
+    );
+  });
+
+  testWidgets('profile shows only two Korean language pair chips', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      _homeApp(profile: true, locale: const Locale('ko')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('한국어 → 영어'), findsOneWidget);
+    expect(find.text('영어 → 한국어'), findsOneWidget);
+    expect(find.widgetWithText(TextButton, '로그 아웃'), findsOneWidget);
+    expect(find.textContaining('중국어'), findsNothing);
+    expect(
+      tester.getTopLeft(find.text('한국어 → 영어')).dy,
+      tester.getTopLeft(find.text('영어 → 한국어')).dy,
     );
   });
 
@@ -136,12 +279,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.ensureVisible(find.text('English -> Korean'));
+    await tester.ensureVisible(find.text('EN → KR'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('English -> Korean'));
+    await tester.tap(find.text('EN → KR'));
     await tester.pumpAndSettle();
     expect(find.text('Save this change?'), findsOneWidget);
-    await tester.tap(find.text('Change'));
+    await tester.tap(find.text('CHANGE'));
     await tester.pumpAndSettle();
 
     expect(find.text('Profile'), findsOneWidget);
@@ -164,11 +307,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.ensureVisible(find.text('English -> Korean'));
+    await tester.ensureVisible(find.text('EN → KR'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('English -> Korean'));
+    await tester.tap(find.text('EN → KR'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Change'));
+    await tester.tap(find.text('CHANGE'));
     await tester.pumpAndSettle();
 
     expect(find.text('Language pair could not be saved.'), findsOneWidget);
@@ -193,8 +336,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.ensureVisible(find.text('English -> Korean'));
-    await tester.tap(find.text('English -> Korean'));
+    await tester.ensureVisible(find.text('EN → KR'));
+    await tester.tap(find.text('EN → KR'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('CANCEL'));
     await tester.pumpAndSettle();
@@ -203,7 +346,7 @@ void main() {
       languageRepository.currentLanguage,
       LearningLanguageContext.defaultContext,
     );
-    expect(find.text('ACCOUNT'), findsOneWidget);
+    expect(find.text('ACCOUNT'), findsNothing);
   });
 
   testWidgets('app language saves immediately after confirmation', (
@@ -215,15 +358,16 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('KOREAN'));
+    await tester.tap(find.text('Korean'));
     await tester.pumpAndSettle();
 
     expect(find.text('Change the app language to Korean?'), findsOneWidget);
-    await tester.tap(find.text('Change'));
+    expect(find.widgetWithText(FilledButton, 'CHANGE'), findsOneWidget);
+    await tester.tap(find.text('CHANGE'));
     await tester.pumpAndSettle();
 
     expect(authRepository.appLocale, 'ko');
-    expect(find.text('ACCOUNT'), findsOneWidget);
+    expect(find.text('ACCOUNT'), findsNothing);
   });
 
   testWidgets('Home add button opens start conversation sheet', (
@@ -668,6 +812,9 @@ final Finder _refreshIndicator = find.byKey(
 
 Widget _homeApp({
   bool profile = false,
+  Locale locale = const Locale('en'),
+  TargetPlatform? platform,
+  String? billingPlan,
   _MemoryTokenStorage? tokenStorage,
   _FakeAuthRepository? authRepository,
   _FakeLanguagePreferencesRepository? languagePreferencesRepository,
@@ -728,13 +875,24 @@ Widget _homeApp({
         _FakeConversationAccessRepository(access),
       ),
       conversationAccessProvider.overrideWith((ref) async => access),
+      if (billingPlan != null)
+        billingEntitlementProvider.overrideWith(
+          (ref) async =>
+              BillingEntitlement(plan: billingPlan, status: 'active'),
+        ),
       weeklyTopicsControllerProvider.overrideWith(
         () => _FixedWeeklyTopicsController(weeklyTopics),
       ),
     ],
     child: MaterialApp(
-      theme: AppTheme.light,
-      locale: const Locale('en'),
+      theme: AppTheme.light.copyWith(platform: platform),
+      locale: locale,
+      supportedLocales: const <Locale>[Locale('ko'), Locale('en')],
+      localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
+        GlobalMaterialLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+      ],
       home: profile
           ? const ProfileScreen()
           : HomeScreen(

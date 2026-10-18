@@ -97,3 +97,14 @@ class AuthRepository:
         self.db.commit()
         self.db.refresh(profile)
         return profile
+
+    def update_nickname(self, *, profile_id: str, nickname: str) -> ProfileModel:
+        """현재 사용자 프로필의 닉네임을 저장해요."""
+        profile = self.find_by_id(profile_id)
+        if profile.nickname == nickname:
+            return profile
+        profile.nickname = nickname
+        profile.updated_at = datetime.utcnow()
+        self.db.commit()
+        self.db.refresh(profile)
+        return profile

@@ -81,15 +81,16 @@ flutter:
     - assets/images/splash/toma_talk.png
 
   fonts:
-    - family: Pretendard
+    - family: Freesentation
       fonts:
-        - asset: assets/fonts/PretendardVariable.ttf
-    - family: Newsreader
-      fonts:
-        - asset: assets/fonts/NewsreaderVariable.ttf
-    - family: JetBrains Mono
-      fonts:
-        - asset: assets/fonts/JetBrainsMonoVariable.ttf
+        - asset: assets/fonts/Freesentation-3Light.ttf
+          weight: 300
+        - asset: assets/fonts/Freesentation-4Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Freesentation-5Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Freesentation-7Bold.ttf
+          weight: 700
 
   # To add assets to your application, add an assets section, like this:
   # assets:

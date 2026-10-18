@@ -205,7 +205,7 @@ class _SnackTomatoBasketState extends State<SnackTomatoBasket>
                 ),
               Text(
                 '$consumed / 12',
-                style: AppTypography.captionMono.copyWith(letterSpacing: 0),
+                style: AppTypography.caption.copyWith(letterSpacing: 0),
               ),
             ],
           ),
@@ -247,7 +247,7 @@ class _SnackTomatoBasketState extends State<SnackTomatoBasket>
                             ),
                             child: Text(
                               '${tomato + 1} / 3',
-                              style: AppTypography.captionMono.copyWith(
+                              style: AppTypography.caption.copyWith(
                                 color: ink,
                                 letterSpacing: 0,
                               ),

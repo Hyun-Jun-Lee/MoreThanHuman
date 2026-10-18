@@ -33,6 +33,7 @@ def test_get_or_create_profile_creates_profile_from_supabase_identity():
     assert profile.native_language == "ko"
     assert profile.target_language == "en"
     assert profile.feedback_language == "ko"
+    assert profile.nickname is None
 
 
 def test_get_or_create_profile_keeps_existing_profile_unchanged():
@@ -130,3 +131,22 @@ def test_profile_settings_update_timestamp_only_when_values_change():
     changed_at = changed_locale.updated_at
     repository.update_app_locale(profile_id=profile_id, app_locale="en")
     assert repository.find_by_id(profile_id).updated_at == changed_at
+
+
+def test_nickname_is_preserved_on_auth_and_can_be_shared_between_users():
+    repository = _repository()
+    first = repository.get_or_create_profile(
+        profile_id="first", email="first@example.com", name="First", oauth_provider="google"
+    )
+    second = repository.get_or_create_profile(
+        profile_id="second", email="second@example.com", name="Second", oauth_provider="apple"
+    )
+
+    repository.update_nickname(profile_id=first.id, nickname="토마토")
+    repository.update_nickname(profile_id=second.id, nickname="토마토")
+    refreshed = repository.get_or_create_profile(
+        profile_id=first.id, email="changed@example.com", name="Changed", oauth_provider="google"
+    )
+
+    assert refreshed.nickname == "토마토"
+    assert second.nickname == "토마토"

@@ -23,6 +23,7 @@ void main() {
 
     await tester.tap(find.text('Chinese -> English'));
     expect(changed, isNull);
+    expect(find.textContaining('Conversation:'), findsWidgets);
 
     await tester.tap(find.text('English -> Korean'));
     expect(

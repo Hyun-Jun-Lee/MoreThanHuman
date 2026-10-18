@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:curitalk/app/theme/tokens/tokens.dart';
+import 'package:curitalk/app/theme/app_component_themes.dart';
 import 'package:curitalk/core/config/app_config.dart';
 import 'package:curitalk/core/copy/copy.dart';
 import 'package:curitalk/features/billing/billing_controller.dart';
@@ -94,11 +95,11 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
               child: Text(copy.manageSubscription),
             ),
             const SizedBox(height: AppSpacing.md),
-            Text(copy.subscriptionDisclosure, style: AppTypography.bodySm),
             Wrap(
               alignment: WrapAlignment.center,
               children: [
                 TextButton(
+                  style: AppComponentThemes.mutedTextButton,
                   onPressed: () => launchUrl(
                     Uri.parse(AppConfig.subscriptionTermsUrl),
                     mode: LaunchMode.externalApplication,
@@ -106,6 +107,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                   child: Text(copy.termsOfUse),
                 ),
                 TextButton(
+                  style: AppComponentThemes.mutedTextButton,
                   onPressed: AppConfig.privacyPolicyUrl.isEmpty
                       ? null
                       : () => launchUrl(

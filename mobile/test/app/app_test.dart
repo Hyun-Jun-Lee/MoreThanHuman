@@ -15,6 +15,69 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('new account must save a nickname after session restore', (
+    WidgetTester tester,
+  ) async {
+    final repository = _FakeAuthRepository()
+      ..user = UserProfile(
+        id: 'new-user',
+        email: 'new@example.com',
+        name: 'OAuth Name',
+        appLocale: 'en',
+        isActive: true,
+        createdAt: DateTime.utc(2026, 10, 18),
+        updatedAt: DateTime.utc(2026, 10, 18),
+      );
+    await tester.pumpWidget(
+      _appScope(
+        tokenStorage: _MemoryTokenStorage(),
+        onboardingStorage: _MemoryOnboardingStorage(true),
+        authRepository: repository,
+        supabaseAuth: _FakeSupabaseAuthService(hasSession: true),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Choose a nickname'), findsOneWidget);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text('Choose a nickname'), findsOneWidget);
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(find.text('Enter a nickname of 1–20 characters.'), findsOneWidget);
+    await tester.enterText(
+      find.byKey(const ValueKey('nickname-input')),
+      'Tomato',
+    );
+    repository.failNicknameUpdate = true;
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Could not save your nickname. Please try again.'),
+      findsOneWidget,
+    );
+    expect(find.text('Tomato'), findsOneWidget);
+    repository.failNicknameUpdate = false;
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Choose a nickname'), findsNothing);
+    expect(repository.user.nickname, 'Tomato');
+    await tester.tap(find.text('Profile'));
+    await tester.pumpAndSettle();
+    expect(find.text('Tomato'), findsOneWidget);
+    await tester.tap(find.byTooltip('Edit nickname'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('nickname-input')),
+      'Fresh Name',
+    );
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(repository.user.nickname, 'Fresh Name');
+    expect(find.text('Fresh Name'), findsOneWidget);
+  });
+
   testWidgets('iOS Apple login creates a Supabase session and opens Home', (
     WidgetTester tester,
   ) async {
@@ -325,9 +388,9 @@ void main() {
       container.read(appRouterProvider).routeInformationProvider.value.uri.path,
       AppRoute.profile,
     );
-    await tester.tap(find.text('KOREAN'));
+    await tester.tap(find.text('Korean'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Change'));
+    await tester.tap(find.text('CHANGE'));
     await tester.pumpAndSettle();
     expect(find.text('내 정보'), findsNWidgets(2));
     expect(
@@ -376,6 +439,7 @@ final UserProfile _user = UserProfile(
   id: 'user-id',
   email: 'learner@example.com',
   name: 'Learner Kim',
+  nickname: 'Learner Kim',
   isActive: true,
   oauthProvider: 'google',
   createdAt: DateTime.utc(2026, 6, 24),
@@ -450,13 +514,21 @@ class _FakeGoogleIdentityService implements GoogleIdentityService {
   Future<void> signOut() async {}
 }
 
-class _FakeAuthRepository implements AuthRepository, AppLocaleRepository {
+class _FakeAuthRepository
+    implements AuthRepository, AppLocaleRepository, NicknameRepository {
   UserProfile user = _user;
+  bool failNicknameUpdate = false;
   @override
   Future<UserProfile> getCurrentUser() async => user;
   @override
   Future<UserProfile> updateAppLocale(String appLocale) async =>
       user = user.copyWith(appLocale: appLocale);
+
+  @override
+  Future<UserProfile> updateNickname(String nickname) async {
+    if (failNicknameUpdate) throw StateError('offline');
+    return user = user.copyWith(nickname: nickname);
+  }
 }
 
 class _FakeSupabaseAuthService implements SupabaseAuthService {

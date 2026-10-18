@@ -150,6 +150,22 @@ class AuthController extends AsyncNotifier<AuthSession> {
     state = AsyncData<AuthSession>(AuthSession.authenticated(updated));
   }
 
+  Future<void> updateNickname(String nickname) async {
+    final UserProfile? currentUser = state.value?.user;
+    if (currentUser == null) {
+      throw StateError('A signed-in user is required to update nickname.');
+    }
+    final AuthRepository repository = _repository;
+    if (repository is! NicknameRepository) {
+      throw StateError('Nickname updates are unavailable for this repository.');
+    }
+    final UserProfile updated = await (repository as NicknameRepository)
+        .updateNickname(nickname);
+    if (ref.mounted && state.value?.user?.id == currentUser.id) {
+      state = AsyncData<AuthSession>(AuthSession.authenticated(updated));
+    }
+  }
+
   Future<AuthSession> _restoreSession() async {
     final bool hasSession = await _supabaseAuthService.hasCurrentSession();
     if (!hasSession) {

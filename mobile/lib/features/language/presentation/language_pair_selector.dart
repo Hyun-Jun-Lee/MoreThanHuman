@@ -59,9 +59,7 @@ class LanguagePairSelector extends StatelessWidget {
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
-      semanticLabel: isAvailable
-          ? null
-          : '$title, ${copy.comingSoonLabel}',
+      semanticLabel: isAvailable ? null : '$title, ${copy.comingSoonLabel}',
     );
   }
 

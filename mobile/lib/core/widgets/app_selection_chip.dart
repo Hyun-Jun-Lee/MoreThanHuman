@@ -5,17 +5,19 @@ class AppSelectionChip extends StatelessWidget {
     required this.label,
     required this.selected,
     required this.onSelected,
+    this.uppercaseLabel = true,
     super.key,
   });
 
   final String label;
   final bool selected;
   final ValueChanged<bool>? onSelected;
+  final bool uppercaseLabel;
 
   @override
   Widget build(BuildContext context) {
     return ChoiceChip(
-      label: Text(label.toUpperCase()),
+      label: Text(uppercaseLabel ? label.toUpperCase() : label),
       selected: selected,
       onSelected: onSelected,
     );

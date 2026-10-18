@@ -41,7 +41,7 @@ class ConversationMessageTile extends ConsumerWidget {
         child: Text(
           message.content,
           textAlign: TextAlign.center,
-          style: AppTypography.captionMono.copyWith(
+          style: AppTypography.caption.copyWith(
             color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
         ),
