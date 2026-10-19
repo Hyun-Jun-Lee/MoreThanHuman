@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
 from database import get_db
-from domains.auth.dependencies import get_current_user
+from domains.auth.dependencies import AuthenticatedUser, get_current_profile, get_current_user
 from domains.auth.models import ProfileModel
 from domains.language_snacks.basket_reset import (
     BasketResetRepository,
@@ -43,7 +43,7 @@ def get_snack_generator(
 
 
 @router.get("/api/language-snacks/", response_model=SuccessResponse[list])
-def legacy_list(_user: Annotated[ProfileModel, Depends(get_current_user)]):
+def legacy_list(_user: Annotated[AuthenticatedUser, Depends(get_current_user)]):
     return SuccessResponse(data=[])
 
 
@@ -59,7 +59,7 @@ def legacy_create():
     "/api/v2/language-snacks/", response_model=SuccessResponse[list[LanguageSnack]]
 )
 def list_language_snacks(
-    user: Annotated[ProfileModel, Depends(get_current_user)],
+    user: Annotated[ProfileModel, Depends(get_current_profile)],
     db: Annotated[Session, Depends(get_db)],
     limit: int = Query(12, ge=1, le=30),
     order: Literal["latest", "random"] = Query("latest"),
@@ -94,7 +94,7 @@ def reset_snack_basket(
 )
 def read_snack_basket_reset(
     response: Response,
-    user: Annotated[ProfileModel, Depends(get_current_user)],
+    user: Annotated[ProfileModel, Depends(get_current_profile)],
     db: Annotated[Session, Depends(get_db)],
 ):
     response.headers["Cache-Control"] = "no-store"

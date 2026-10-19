@@ -581,6 +581,10 @@ class _FakeAuthRepository
   UserProfile user = _user;
   bool failNicknameUpdate = false;
   @override
+  Future<UserProfile> bootstrap(LearningLanguageContext? pendingLanguage) =>
+      getCurrentUser();
+
+  @override
   Future<UserProfile> getCurrentUser() async => user;
   @override
   Future<UserProfile> updateAppLocale(String appLocale) async =>

@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from database import get_db
-from domains.auth.dependencies import get_current_user
+from domains.auth.dependencies import get_current_profile, get_current_user
 from domains.auth.models import ProfileModel
 from domains.language_snacks.basket_reset import BasketResetRepository
 from domains.language_snacks.dependencies import get_language_snack_operations_key
@@ -29,6 +29,7 @@ def reset_client(repository):
     app.include_router(router)
     app.dependency_overrides[get_db] = lambda: repository.db
     app.dependency_overrides[get_current_user] = lambda: current[0]
+    app.dependency_overrides[get_current_profile] = lambda: current[0]
     app.dependency_overrides[get_language_snack_operations_key] = lambda: (
         "test-operations-key"
     )

@@ -266,6 +266,10 @@ class _FakeAuthRepository implements AuthRepository {
   const _FakeAuthRepository();
 
   @override
+  Future<UserProfile> bootstrap(LearningLanguageContext? pendingLanguage) =>
+      getCurrentUser();
+
+  @override
   Future<UserProfile> getCurrentUser() async => _user;
 }
 

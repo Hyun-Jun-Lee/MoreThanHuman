@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from database import get_db
-from domains.auth.dependencies import get_current_user
+from domains.auth.dependencies import get_current_profile, get_current_user
 from domains.language_snacks.dependencies import get_language_snack_operations_key
 from domains.language_snacks.generation_schemas import DedupeResult, QualityResult
 from domains.language_snacks.generation_service import SnackGenerator
@@ -31,6 +31,7 @@ def client(repository):
     user = SimpleNamespace(target_language="en")
     app.dependency_overrides[get_db] = lambda: repository.db
     app.dependency_overrides[get_current_user] = lambda: user
+    app.dependency_overrides[get_current_profile] = lambda: user
     app.dependency_overrides[get_language_snack_operations_key] = lambda: (
         "operations-key"
     )

@@ -108,6 +108,14 @@ class LanguagePreferencesRequest(LearningLanguageContext):
     model_config = ConfigDict(extra="forbid", use_enum_values=False)
 
 
+class BootstrapRequest(BaseModel):
+    """로그인 초기화 시 적용할 선택적 학습 언어."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    language: LanguagePreferencesRequest | None = None
+
+
 class LanguagePreferencesResponse(LearningLanguageContext):
     """현재 사용자 언어 선호 응답"""
 

@@ -5,7 +5,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from domains.auth.dependencies import get_current_user
+from domains.auth.dependencies import get_current_profile, get_current_user
 from domains.conversation.enums import ConversationType
 from domains.conversation.router import (
     _enforce_voice_content_length_limit,
@@ -144,6 +144,7 @@ def _conversation_app_with_overrides(conversation_service, voice_service) -> Fas
             feedback_language="en",
         ),
     )
+    app.dependency_overrides[get_current_profile] = app.dependency_overrides[get_current_user]
     app.dependency_overrides[get_conversation_service] = lambda: conversation_service
     app.dependency_overrides[get_voice_service] = lambda: voice_service
     return app

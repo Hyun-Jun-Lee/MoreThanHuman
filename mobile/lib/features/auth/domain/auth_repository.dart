@@ -1,6 +1,8 @@
 import 'package:curitalk/features/auth/domain/user_profile.dart';
+import 'package:curitalk/features/language/domain/learning_language.dart';
 
 abstract interface class AuthRepository {
+  Future<UserProfile> bootstrap(LearningLanguageContext? pendingLanguage);
   Future<UserProfile> getCurrentUser();
 }
 

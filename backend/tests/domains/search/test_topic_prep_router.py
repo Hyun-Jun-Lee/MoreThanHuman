@@ -4,7 +4,7 @@ from types import SimpleNamespace
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from domains.auth.dependencies import get_current_user
+from domains.auth.dependencies import get_current_profile
 from domains.search.router import get_search_service, router
 from domains.search.schemas import (
     ConversationDirection,
@@ -19,7 +19,7 @@ from shared.language import LearningLanguageContext
 def _app_with_overrides(service) -> FastAPI:
     app = FastAPI()
     app.include_router(router)
-    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(
+    app.dependency_overrides[get_current_profile] = lambda: SimpleNamespace(
         id="user-1",
         language=LearningLanguageContext(
             native_language="zh",

@@ -1,6 +1,8 @@
 """
 Auth 의존성 (라우트 보호)
 """
+from dataclasses import dataclass
+
 import httpx
 
 from fastapi import Depends, HTTPException, Query, Request, status
@@ -10,7 +12,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from domains.auth.models import ProfileModel
 from domains.auth.repository import AuthRepository
-from domains.auth.service import AuthService
+from domains.auth.service import AuthService, SupabaseUserClaims
 from domains.auth.supabase import SupabaseAuthVerifier
 from shared.exceptions import AuthenticationException, NotFoundException
 from shared.latency import latency_span
@@ -18,6 +20,13 @@ from shared.logging_config import log_exception
 from shared.http_clients import get_auth_http_client
 
 security = HTTPBearer()
+
+
+@dataclass(frozen=True)
+class AuthenticatedUser:
+    """프로필 조회 없이 검증된 토큰에서 얻은 사용자 ID."""
+
+    id: str
 
 
 def get_auth_service(
@@ -36,24 +45,15 @@ def get_supabase_auth_verifier(
     return getattr(request.app.state, "supabase_auth_verifier", None) or SupabaseAuthVerifier(http_client)
 
 
-async def get_current_user(
+async def get_verified_claims(
     credentials: HTTPAuthorizationCredentials = Depends(security),
-    service: AuthService = Depends(get_auth_service),
     verifier: SupabaseAuthVerifier = Depends(get_supabase_auth_verifier),
-) -> ProfileModel:
-    """현재 인증된 프로필 반환 (Supabase Bearer 토큰 검증)"""
+) -> SupabaseUserClaims:
+    """Bearer 토큰을 검증해 Supabase 사용자 claim을 반환해요."""
     try:
         with latency_span("auth"):
             with latency_span("auth.verify_token"):
-                claims = await verifier.verify_access_token(credentials.credentials)
-            with latency_span("auth.profile"):
-                profile = service.get_or_create_profile_from_claims(claims)
-        if not profile.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="비활성화된 계정입니다",
-            )
-        return profile
+                return await verifier.verify_access_token(credentials.credentials)
     except AuthenticationException as e:
         log_exception(e, status_code=401, error_code="AUTHENTICATION_FAILED")
         raise HTTPException(
@@ -61,42 +61,49 @@ async def get_current_user(
             detail=e.message,
             headers={"WWW-Authenticate": "Bearer"},
         )
-    except NotFoundException as e:
-        log_exception(e, status_code=401, error_code="NOT_FOUND")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="사용자를 찾을 수 없습니다",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+
+
+def get_current_user(
+    claims: SupabaseUserClaims = Depends(get_verified_claims),
+) -> AuthenticatedUser:
+    """프로필 조회 없이 인증된 사용자 ID를 반환해요."""
+    return AuthenticatedUser(id=claims.sub)
+
+
+def get_current_profile(
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    service: AuthService = Depends(get_auth_service),
+) -> ProfileModel:
+    """학습 언어 등 최신 프로필 필드가 필요한 요청에 사용해요."""
+    try:
+        with latency_span("auth.profile"):
+            return service.repository.find_by_id(current_user.id)
+    except NotFoundException as exc:
+        raise HTTPException(status_code=409, detail="프로필 초기화가 필요합니다") from exc
+
+
+def get_legacy_profile(
+    claims: SupabaseUserClaims = Depends(get_verified_claims),
+    service: AuthService = Depends(get_auth_service),
+) -> ProfileModel:
+    """전환 기간 동안 기존 모바일의 로그인 API에서 프로필을 생성해요."""
+    with latency_span("auth.profile"):
+        return service.get_or_create_profile_from_claims(claims)
 
 
 async def get_current_user_from_token_param(
     token: str = Query(..., description="Supabase access token"),
-    service: AuthService = Depends(get_auth_service),
     verifier: SupabaseAuthVerifier = Depends(get_supabase_auth_verifier),
-) -> ProfileModel:
-    """쿼리 파라미터로 전달된 Supabase token에서 프로필 반환 (SSE 엔드포인트용)"""
+) -> AuthenticatedUser:
+    """SSE 쿼리 토큰을 검증하고 사용자 ID만 반환해요."""
     try:
         with latency_span("auth"):
             with latency_span("auth.verify_token"):
                 claims = await verifier.verify_access_token(token)
-            with latency_span("auth.profile"):
-                profile = service.get_or_create_profile_from_claims(claims)
-        if not profile.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="비활성화된 계정입니다",
-            )
-        return profile
+        return AuthenticatedUser(id=claims.sub)
     except AuthenticationException as e:
         log_exception(e, status_code=401, error_code="AUTHENTICATION_FAILED")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=e.message,
-        )
-    except NotFoundException as e:
-        log_exception(e, status_code=401, error_code="NOT_FOUND")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="사용자를 찾을 수 없습니다",
         )

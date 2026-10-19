@@ -326,6 +326,7 @@ def test_api_returns_machine_readable_limit_conflicts(monkeypatch):
     app = FastAPI()
     app.include_router(router_module.router)
     app.dependency_overrides[router_module.get_current_user] = lambda: profile
+    app.dependency_overrides[router_module.get_current_profile] = lambda: profile
     app.dependency_overrides[router_module.get_conversation_service] = (
         lambda: ConversationService(repository)
     )

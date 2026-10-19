@@ -12,6 +12,7 @@ from domains.auth.repository import AuthRepository
 from domains.auth.schemas import (
     LanguagePreferencesRequest,
     LanguagePreferencesResponse,
+    BootstrapRequest,
     AppLocaleRequest,
     NicknameRequest,
     TokenResponse,
@@ -39,7 +40,9 @@ class AuthService:
         self.http_client = http_client
         self.repository = repository
 
-    def get_or_create_profile_from_claims(self, claims: SupabaseUserClaims) -> ProfileModel:
+    def get_or_create_profile_from_claims(
+        self, claims: SupabaseUserClaims, language: LanguagePreferencesRequest | None = None,
+    ) -> ProfileModel:
         """Supabase claim 기반으로 앱 프로필을 조회하거나 처음 생성해요."""
         if not claims.sub:
             raise AuthenticationException("Invalid Supabase token: missing subject")
@@ -52,6 +55,12 @@ class AuthService:
             name=claims.name or claims.email.split("@")[0],
             oauth_provider=claims.oauth_provider,
             avatar_url=claims.avatar_url,
+            language=language,
+        )
+
+    def bootstrap_profile(self, claims: SupabaseUserClaims, request: BootstrapRequest) -> UserProfile:
+        return UserProfile.model_validate(
+            self.get_or_create_profile_from_claims(claims, request.language)
         )
 
     async def issue_swagger_token(self, *, email: str, password: str) -> TokenResponse:

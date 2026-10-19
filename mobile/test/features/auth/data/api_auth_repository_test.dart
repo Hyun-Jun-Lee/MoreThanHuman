@@ -3,10 +3,38 @@ import 'dart:typed_data';
 
 import 'package:curitalk/core/network/network.dart';
 import 'package:curitalk/features/auth/auth.dart';
+import 'package:curitalk/features/language/language.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'bootstrap sends pending learning language and returns the profile',
+    () async {
+      final client = ApiClient.create(
+        tokenProvider: const _StaticSessionProvider('supabase-access-token'),
+        sessionRefreshProvider: const _StaticSessionProvider(
+          'supabase-access-token',
+        ),
+        baseUrl: 'https://example.com/api/',
+      );
+      final adapter = _AuthHttpClientAdapter();
+      client.dio.httpClientAdapter = adapter;
+      addTearDown(client.close);
+
+      final profile = await ApiAuthRepository(
+        client,
+      ).bootstrap(LearningLanguageContext.defaultContext);
+
+      expect(profile.id, 'user-id');
+      expect(adapter.requests.single.uri.path, '/api/auth/bootstrap');
+      expect(adapter.requests.single.method, 'POST');
+      expect(adapter.requests.single.data, <String, dynamic>{
+        'language': LearningLanguageContext.defaultContext.toJson(),
+      });
+    },
+  );
+
   test(
     'auth repository fetches the backend profile with Supabase bearer token',
     () async {

@@ -17,7 +17,6 @@ class AuthController extends AsyncNotifier<AuthSession> {
   late AuthRepository _repository;
   late SupabaseAuthService _supabaseAuthService;
   late GoogleIdentityService _googleIdentityService;
-  late LanguagePreferencesRepository _languagePreferencesRepository;
   late OnboardingStorage _onboardingStorage;
   late AuthSessionCoordinator _sessionCoordinator;
   StreamSubscription<SupabaseSessionChange>? _authSubscription;
@@ -27,9 +26,6 @@ class AuthController extends AsyncNotifier<AuthSession> {
     _repository = ref.watch(authRepositoryProvider);
     _supabaseAuthService = ref.watch(supabaseAuthServiceProvider);
     _googleIdentityService = ref.watch(googleIdentityServiceProvider);
-    _languagePreferencesRepository = ref.watch(
-      languagePreferencesRepositoryProvider,
-    );
     _onboardingStorage = ref.watch(onboardingStorageProvider);
     final AuthSessionCoordinator sessionCoordinator = ref.watch(
       authSessionCoordinatorProvider,
@@ -77,10 +73,11 @@ class AuthController extends AsyncNotifier<AuthSession> {
       );
       debugPrint('CuritalkAuth controller: Supabase sign-in completed');
       _sessionCoordinator.activateSession();
-      debugPrint('CuritalkAuth controller: requesting /auth/me');
-      await _syncPendingLanguageContext();
-      final UserProfile user = await _repository.getCurrentUser();
-      debugPrint('CuritalkAuth controller: /auth/me success userId=${user.id}');
+      debugPrint('CuritalkAuth controller: requesting /auth/bootstrap');
+      final UserProfile user = await _bootstrapProfile();
+      debugPrint(
+        'CuritalkAuth controller: bootstrap success userId=${user.id}',
+      );
       state = AsyncData<AuthSession>(AuthSession.authenticated(user));
     } on Object catch (error, stackTrace) {
       debugPrint('CuritalkAuth controller sign-in failed: $error');
@@ -111,8 +108,7 @@ class AuthController extends AsyncNotifier<AuthSession> {
         rawNonce: tokens.rawNonce.trim(),
       );
       _sessionCoordinator.activateSession();
-      await _syncPendingLanguageContext();
-      final UserProfile user = await _repository.getCurrentUser();
+      final UserProfile user = await _bootstrapProfile();
       state = AsyncData<AuthSession>(AuthSession.authenticated(user));
     } on Object catch (error, stackTrace) {
       await _signOutSafely();
@@ -174,8 +170,7 @@ class AuthController extends AsyncNotifier<AuthSession> {
     }
 
     try {
-      await _syncPendingLanguageContext();
-      final UserProfile user = await _repository.getCurrentUser();
+      final UserProfile user = await _bootstrapProfile();
       _sessionCoordinator.activateSession();
       return AuthSession.authenticated(user);
     } on ApiException catch (error) {
@@ -212,14 +207,14 @@ class AuthController extends AsyncNotifier<AuthSession> {
     }
   }
 
-  Future<void> _syncPendingLanguageContext() async {
+  Future<UserProfile> _bootstrapProfile() async {
     final LearningLanguageContext? pending = await _onboardingStorage
         .readPendingLanguageContext();
-    if (pending == null) {
-      return;
+    final UserProfile profile = await _repository.bootstrap(pending);
+    if (pending != null) {
+      await _onboardingStorage.clearPendingLanguageContext();
     }
-    await _languagePreferencesRepository.updateLanguagePreferences(pending);
-    await _onboardingStorage.clearPendingLanguageContext();
+    return profile;
   }
 }
 

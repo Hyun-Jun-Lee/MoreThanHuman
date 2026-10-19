@@ -786,6 +786,10 @@ class _FakeHomeRepository implements HomeRepository {
 
 class _FakeAuthRepository implements AuthRepository {
   @override
+  Future<UserProfile> bootstrap(LearningLanguageContext? pendingLanguage) =>
+      getCurrentUser();
+
+  @override
   Future<UserProfile> getCurrentUser() async {
     return UserProfile(
       id: 'user-id',

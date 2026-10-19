@@ -1,6 +1,6 @@
 # tomatalk Backend DSL
 
-> 최종 갱신: 2026-10-09 · 범위: FastAPI 백엔드 API + Flutter 모바일 연동
+> 최종 갱신: 2026-10-19 · 범위: FastAPI 백엔드 API + Flutter 모바일 연동
 
 사용자 클라이언트는 `mobile/`의 Flutter 기반 모바일 앱으로 개발해요. 이 문서는 모바일 앱이 연동할 백엔드 도메인, 데이터 모델, API 계약을 정의해요.
 
@@ -152,6 +152,7 @@ supported LearningLanguagePairs = [
 module Auth {
   router AuthRouter {
     POST /api/auth/swagger/token        -> issueSwaggerToken
+    POST /api/auth/bootstrap            -> initializeProfile
     GET  /api/auth/me                    -> getCurrentUser
     GET  /api/auth/me/language-preferences
                                             -> getLanguagePreferences
@@ -174,13 +175,15 @@ module Auth {
   }
 
   type LanguagePreferencesRequest extends LearningLanguageContext
+  type BootstrapRequest { language?: LearningLanguageContext }
   type LanguagePreferencesResponse extends LearningLanguageContext
   type AppLocaleRequest { app_locale: "ko" | "en" }
   type NicknameRequest { nickname: String }
 }
 ```
 
-모바일 앱은 Supabase Auth로 Google 또는 iOS Apple 로그인을 완료한 뒤 Supabase `access_token`을 FastAPI 보호 API의 `Authorization: Bearer` 헤더에 전달해요. `GET /api/auth/me`는 Supabase token을 검증하고, `profiles` row가 없으면 생성하며 기존 row는 변경하지 않고 envelope 형식으로 `UserProfile`을 반환해요.
+모바일 앱은 Supabase Auth로 Google 또는 iOS Apple 로그인을 완료한 뒤 Supabase `access_token`을 FastAPI 보호 API의 `Authorization: Bearer` 헤더에 전달해요. `POST /api/auth/bootstrap`은 세션 시작·복원 시 `{ "language": LearningLanguageContext }` 또는 빈 객체를 받아 프로필을 조회하거나 생성하고 최종 `UserProfile`을 반환해요. `language`가 있으면 프로필의 학습 언어 기본값에 적용하고, 없으면 기존 값을 유지해요. 기존 앱과의 전환 기간 동안 `GET /api/auth/me` 및 로그인 직후 `PUT /api/auth/me/language-preferences`에서도 프로필을 생성할 수 있어요.
+일반 보호 API는 토큰에서 사용자 ID를 검증하며, 언어 등 프로필 값이 필요한 API만 기존 프로필을 조회해요. 프로필 없이 후자에 접근하면 409 `프로필 초기화가 필요합니다`를 반환해요. `is_active`는 현재 인증 차단 정책에 사용하지 않지만 기존 응답 필드로 유지해요.
 `POST /api/auth/swagger/token`은 Swagger 수동 테스트를 위한 Supabase email/password token helper예요. `ENV=dev`에서는 사용할 수 있고, dev 외 환경에서는 `SWAGGER_TOKEN_ISSUER_ENABLED=true`와 `SWAGGER_TOKEN_ISSUER_SECRET`을 설정한 뒤 요청 body의 `secret`이 일치해야 해요. 발급된 `access_token`을 Swagger `Authorize`에 `Bearer <access_token>` 형식으로 넣어요.
 언어 선호는 프로필 기본값이며 새 대화 시작 시 `conversations` row에 snapshot으로 저장돼요. 기존 값이 없으면 `ko -> en`, feedback `ko`로 보정해요.
 `PUT /api/auth/me/language-preferences`는 profile default만 갱신해요. 모바일 Account UX는 변경값이 새 대화부터 적용되고 기존 conversation은 생성 시점 snapshot을 유지한다고 안내해야 해요.
