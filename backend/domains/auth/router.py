@@ -7,7 +7,7 @@ import secrets
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from config import get_settings
-from domains.auth.dependencies import get_auth_service, get_current_user
+from domains.auth.dependencies import get_auth_service, get_current_profile, get_legacy_profile, get_verified_claims
 from domains.auth.models import ProfileModel
 from domains.auth.schemas import (
     LanguagePreferencesRequest,
@@ -17,8 +17,9 @@ from domains.auth.schemas import (
     SwaggerTokenRequest,
     TokenResponse,
     UserProfile,
+    BootstrapRequest,
 )
-from domains.auth.service import AuthService
+from domains.auth.service import AuthService, SupabaseUserClaims
 from shared.exceptions import AuthenticationException
 from shared.logging_config import log_exception
 from shared.types import SuccessResponse
@@ -76,7 +77,7 @@ async def issue_swagger_token(
 
 @router.get("/me", response_model=SuccessResponse[UserProfile])
 def get_me(
-    current_user: ProfileModel = Depends(get_current_user),
+    current_user: ProfileModel = Depends(get_legacy_profile),
     service: AuthService = Depends(get_auth_service),
 ):
     """현재 사용자 프로필 조회"""
@@ -84,9 +85,19 @@ def get_me(
     return SuccessResponse(data=profile)
 
 
+@router.post("/bootstrap", response_model=SuccessResponse[UserProfile])
+def bootstrap_profile(
+    request: BootstrapRequest,
+    claims: SupabaseUserClaims = Depends(get_verified_claims),
+    service: AuthService = Depends(get_auth_service),
+):
+    """로그인·세션 복원 시 프로필을 준비하고 pending 언어를 적용해요."""
+    return SuccessResponse(data=service.bootstrap_profile(claims, request))
+
+
 @router.get("/me/language-preferences", response_model=SuccessResponse[LanguagePreferencesResponse])
 def get_language_preferences(
-    current_user: ProfileModel = Depends(get_current_user),
+    current_user: ProfileModel = Depends(get_current_profile),
     service: AuthService = Depends(get_auth_service),
 ):
     """현재 사용자 언어 선호 조회"""
@@ -97,7 +108,7 @@ def get_language_preferences(
 @router.put("/me/language-preferences", response_model=SuccessResponse[LanguagePreferencesResponse])
 def update_language_preferences(
     request: LanguagePreferencesRequest,
-    current_user: ProfileModel = Depends(get_current_user),
+    current_user: ProfileModel = Depends(get_legacy_profile),
     service: AuthService = Depends(get_auth_service),
 ):
     """현재 사용자 언어 선호 갱신"""
@@ -108,7 +119,7 @@ def update_language_preferences(
 @router.put("/me/app-locale", response_model=SuccessResponse[UserProfile])
 def update_app_locale(
     request: AppLocaleRequest,
-    current_user: ProfileModel = Depends(get_current_user),
+    current_user: ProfileModel = Depends(get_current_profile),
     service: AuthService = Depends(get_auth_service),
 ):
     """현재 사용자의 앱 표시 언어 갱신"""
@@ -119,7 +130,7 @@ def update_app_locale(
 @router.put("/me/nickname", response_model=SuccessResponse[UserProfile])
 def update_nickname(
     request: NicknameRequest,
-    current_user: ProfileModel = Depends(get_current_user),
+    current_user: ProfileModel = Depends(get_current_profile),
     service: AuthService = Depends(get_auth_service),
 ):
     """현재 사용자의 닉네임을 저장해요."""

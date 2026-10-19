@@ -6,7 +6,7 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
-from domains.auth.dependencies import get_current_user
+from domains.auth.dependencies import get_current_profile
 from domains.auth.models import ProfileModel
 from domains.search.schemas import (
     CustomFocusQuestionsRequest,
@@ -44,7 +44,7 @@ def get_search_service(http_client: httpx.AsyncClient = Depends(get_ai_http_clie
 @router.post("/", response_model=SuccessResponse[SearchResult])
 async def search(
     request: SearchRequest,
-    current_user: ProfileModel = Depends(get_current_user),
+    current_user: ProfileModel = Depends(get_current_profile),
     service: SearchService = Depends(get_search_service),
 ):
     """검색 실행"""
@@ -62,7 +62,7 @@ async def search(
 @router.post("/topic-prep/", response_model=SuccessResponse[TopicPrepResult])
 async def prepare_topic(
     request: TopicPrepRequest,
-    current_user: ProfileModel = Depends(get_current_user),
+    current_user: ProfileModel = Depends(get_current_profile),
     service: SearchService = Depends(get_search_service),
 ):
     """대화 전 주제 준비 카드 생성"""
@@ -80,7 +80,7 @@ async def prepare_topic(
 @router.post("/topic-prep/custom-questions/", response_model=SuccessResponse[CustomFocusQuestionsResult])
 async def prepare_custom_focus_questions(
     request: CustomFocusQuestionsRequest,
-    current_user: ProfileModel = Depends(get_current_user),
+    current_user: ProfileModel = Depends(get_current_profile),
     service: SearchService = Depends(get_search_service),
 ):
     """직접 입력한 대화 방향의 첫 질문 생성"""
@@ -99,7 +99,7 @@ async def prepare_custom_focus_questions(
 @router.post("/topic-prep/directions/", response_model=SuccessResponse[TopicPrepDirectionsResult])
 async def regenerate_topic_prep_directions(
     request: TopicPrepDirectionsRequest,
-    current_user: ProfileModel = Depends(get_current_user),
+    current_user: ProfileModel = Depends(get_current_profile),
     service: SearchService = Depends(get_search_service),
 ):
     """현재 주제의 새로운 추천 대화 방향 생성"""

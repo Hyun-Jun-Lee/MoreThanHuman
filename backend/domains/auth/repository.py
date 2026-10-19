@@ -4,10 +4,12 @@ Auth Repository Layer
 """
 from datetime import datetime
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from domains.auth.models import ProfileModel
 from shared.exceptions import NotFoundException
+from shared.language import LearningLanguageContext
 
 
 class AuthRepository:
@@ -42,26 +44,54 @@ class AuthRepository:
         name: str,
         oauth_provider: str | None,
         avatar_url: str | None = None,
+        language: LearningLanguageContext | None = None,
     ) -> ProfileModel:
-        """Supabase Auth claim으로 첫 프로필만 생성하고 기존 프로필은 조회해요."""
+        """Supabase claim으로 프로필을 준비하고 선택한 학습 언어를 적용해요."""
         profile = self.db.query(ProfileModel).filter(ProfileModel.id == profile_id).first()
-        if profile is not None:
+        if profile is None:
+            now = datetime.utcnow()
+            profile = ProfileModel(
+                id=profile_id,
+                email=email,
+                name=name,
+                oauth_provider=oauth_provider,
+                avatar_url=avatar_url,
+                created_at=now,
+                updated_at=now,
+            )
+            self.db.add(profile)
+            self._apply_language(profile, language)
+            try:
+                self.db.commit()
+            except IntegrityError:
+                self.db.rollback()
+                profile = self.db.query(ProfileModel).filter(ProfileModel.id == profile_id).first()
+                if profile is None:
+                    raise
+                if self._apply_language(profile, language):
+                    self.db.commit()
+            self.db.refresh(profile)
             return profile
 
-        now = datetime.utcnow()
-        profile = ProfileModel(
-            id=profile_id,
-            email=email,
-            name=name,
-            oauth_provider=oauth_provider,
-            avatar_url=avatar_url,
-            created_at=now,
-            updated_at=now,
-        )
-        self.db.add(profile)
-        self.db.commit()
-        self.db.refresh(profile)
+        if self._apply_language(profile, language):
+            self.db.commit()
+            self.db.refresh(profile)
         return profile
+
+    @staticmethod
+    def _apply_language(profile: ProfileModel, language: LearningLanguageContext | None) -> bool:
+        if language is None:
+            return False
+        values = (
+            language.native_language.value,
+            language.target_language.value,
+            language.feedback_language.value,
+        )
+        if (profile.native_language, profile.target_language, profile.feedback_language) == values:
+            return False
+        profile.native_language, profile.target_language, profile.feedback_language = values
+        profile.updated_at = datetime.utcnow()
+        return True
 
     def update_language_preferences(
         self,

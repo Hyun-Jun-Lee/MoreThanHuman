@@ -21,12 +21,12 @@ class Verifier:
     async def verify_access_token(self, token):
         if token != "private-token":
             raise ValueError("invalid token")
-        return {"sub": "user"}
+        return SimpleNamespace(sub="user")
 
 
 class AuthService:
     def get_or_create_profile_from_claims(self, claims):
-        return SimpleNamespace(id=claims["sub"], is_active=True)
+        return SimpleNamespace(id=claims.sub, is_active=True)
 
 
 class FailingAppleGateway:
@@ -44,6 +44,10 @@ async def test_all_protected_auth_paths_share_request_context_without_tokens(cap
 
     @app.get("/api/bearer/")
     async def bearer(user=Depends(get_current_user)):
+        return {"id": user.id}
+
+    @app.get("/api/identity/")
+    async def identity(user=Depends(get_current_user)):
         return {"id": user.id}
 
     @app.get("/api/sse/")
@@ -64,6 +68,7 @@ async def test_all_protected_auth_paths_share_request_context_without_tokens(cap
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="http://test") as client:
         responses = [
             await client.get("/api/bearer/", headers={"Authorization": "Bearer private-token"}),
+            await client.get("/api/identity/", headers={"Authorization": "Bearer private-token"}),
             await client.get("/api/sse/?token=private-token"),
             await client.post("/api/operations/", headers={"X-Operations-Key": "operations-secret"}),
             await client.post("/api/apple/"),
@@ -72,14 +77,14 @@ async def test_all_protected_auth_paths_share_request_context_without_tokens(cap
 
     rows = [json.loads(line) for line in capsys.readouterr().out.splitlines()
             if line.startswith("{")]
-    assert [response.status_code for response in responses] == [200, 200, 200, 400, 403]
-    for route in ("/api/bearer/", "/api/sse/", "/api/operations/", "/api/apple/"):
+    assert [response.status_code for response in responses] == [200, 200, 200, 200, 400, 403]
+    for route in ("/api/bearer/", "/api/identity/", "/api/sse/", "/api/operations/", "/api/apple/"):
         completed = next(row for row in rows if "method" in row
                          and row["route"] == route and row["status_code"] != 403)
         stages = [row for row in rows if "stage" in row
                   and row["request_id"] == completed["request_id"]]
-        expected = {"auth", "auth.verify_token", "auth.profile"} if route in (
-            "/api/bearer/", "/api/sse/"
+        expected = {"auth", "auth.verify_token"} if route in (
+            "/api/bearer/", "/api/identity/", "/api/sse/"
         ) else {"auth"}
         assert {stage["stage"] for stage in stages} == expected
     forbidden = next(row for row in rows if "method" in row

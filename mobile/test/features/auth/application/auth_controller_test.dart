@@ -45,6 +45,8 @@ void main() {
       expect(session.isAuthenticated, isTrue);
       expect(session.user?.email, 'learner@example.com');
       expect(repository.profileRequestCount, 1);
+      expect(repository.bootstrapRequestCount, 1);
+      expect(repository.getCurrentUserCount, 0);
     },
   );
 
@@ -143,13 +145,23 @@ void main() {
           );
 
       expect(
-        languageRepository.updated.single.targetLanguage,
+        repository.bootstrapLanguage?.targetLanguage,
         LearningLanguageCode.ko,
       );
+      expect(languageRepository.updated, isEmpty);
       expect(onboardingStorage.pendingLanguage, isNull);
       expect(
         container.read(authControllerProvider).requireValue.isAuthenticated,
         isTrue,
+      );
+      expect(
+        container
+            .read(authControllerProvider)
+            .requireValue
+            .user
+            ?.language
+            .targetLanguage,
+        LearningLanguageCode.ko,
       );
     },
   );
@@ -231,9 +243,13 @@ void main() {
           message: 'offline',
         ),
       );
+      final _FakeOnboardingStorage onboardingStorage = _FakeOnboardingStorage(
+        pendingLanguage: LearningLanguageContext.defaultContext,
+      );
       final ProviderContainer container = _createContainer(
         supabaseAuth,
         repository,
+        onboardingStorage: onboardingStorage,
       );
       addTearDown(container.dispose);
       final Completer<Object?> errorCompleter = Completer<Object?>();
@@ -253,6 +269,7 @@ void main() {
 
       expect(error, isA<ApiException>());
       expect(supabaseAuth.hasSession, isTrue);
+      expect(onboardingStorage.pendingLanguage, isNotNull);
     },
   );
 
@@ -407,16 +424,45 @@ class _FakeAuthRepository
   final UserProfile? user;
   final Object? profileError;
   int profileRequestCount = 0;
+  int bootstrapRequestCount = 0;
+  int getCurrentUserCount = 0;
+  LearningLanguageContext? bootstrapLanguage;
   String? updatedAppLocale;
   String? updatedNickname;
 
   @override
   Future<UserProfile> getCurrentUser() async {
     profileRequestCount += 1;
+    getCurrentUserCount += 1;
     if (profileError case final Object error) {
       throw error;
     }
     return user ?? _user;
+  }
+
+  @override
+  Future<UserProfile> bootstrap(
+    LearningLanguageContext? pendingLanguage,
+  ) async {
+    profileRequestCount += 1;
+    bootstrapRequestCount += 1;
+    bootstrapLanguage = pendingLanguage;
+    if (profileError case final Object error) {
+      throw error;
+    }
+    final current = user ?? _user;
+    return UserProfile(
+      id: current.id,
+      email: current.email,
+      name: current.name,
+      nickname: current.nickname,
+      isActive: current.isActive,
+      createdAt: current.createdAt,
+      updatedAt: current.updatedAt,
+      language: pendingLanguage ?? current.language,
+      appLocale: current.appLocale,
+      oauthProvider: current.oauthProvider,
+    );
   }
 
   @override

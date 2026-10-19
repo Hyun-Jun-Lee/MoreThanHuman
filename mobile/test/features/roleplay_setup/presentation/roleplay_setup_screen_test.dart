@@ -165,6 +165,10 @@ class _FakeAuthRepository implements AuthRepository {
   final LearningLanguageContext language;
 
   @override
+  Future<UserProfile> bootstrap(LearningLanguageContext? pendingLanguage) =>
+      getCurrentUser();
+
+  @override
   Future<UserProfile> getCurrentUser() async {
     return UserProfile(
       id: 'user-id',

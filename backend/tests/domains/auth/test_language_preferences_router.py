@@ -181,6 +181,7 @@ def test_nickname_update_returns_profile_and_survives_auth_read():
 def test_nickname_update_rejects_invalid_input(nickname):
     client = _client()
     headers = {"Authorization": "Bearer token"}
+    assert client.get("/api/auth/me", headers=headers).status_code == 200
 
     response = client.put(
         "/api/auth/me/nickname", headers=headers, json={"nickname": nickname}

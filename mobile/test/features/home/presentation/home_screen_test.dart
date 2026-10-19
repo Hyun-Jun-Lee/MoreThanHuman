@@ -968,6 +968,10 @@ class _FakeAuthRepository implements AuthRepository, AppLocaleRepository {
   String? appLocale;
 
   @override
+  Future<UserProfile> bootstrap(LearningLanguageContext? pendingLanguage) =>
+      getCurrentUser();
+
+  @override
   Future<UserProfile> getCurrentUser() async {
     return _userWithLanguage(
       languageProvider?.call() ?? LearningLanguageContext.defaultContext,

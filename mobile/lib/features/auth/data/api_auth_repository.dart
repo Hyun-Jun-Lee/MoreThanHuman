@@ -1,6 +1,7 @@
 import 'package:curitalk/core/network/network.dart';
 import 'package:curitalk/features/auth/domain/auth_repository.dart';
 import 'package:curitalk/features/auth/domain/user_profile.dart';
+import 'package:curitalk/features/language/domain/learning_language.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class ApiAuthRepository
@@ -8,6 +9,22 @@ class ApiAuthRepository
   const ApiAuthRepository(this.apiClient);
 
   final ApiClient apiClient;
+
+  @override
+  Future<UserProfile> bootstrap(
+    LearningLanguageContext? pendingLanguage,
+  ) async {
+    final ApiResponse<UserProfile> response = await apiClient
+        .request<UserProfile>(
+          'auth/bootstrap',
+          method: 'POST',
+          data: <String, dynamic>{
+            if (pendingLanguage != null) 'language': pendingLanguage.toJson(),
+          },
+          decodeData: UserProfile.fromJson,
+        );
+    return response.data;
+  }
 
   @override
   Future<UserProfile> getCurrentUser() async {

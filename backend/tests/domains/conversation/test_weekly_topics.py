@@ -189,8 +189,9 @@ def test_api_lists_pair_topics_and_starts_ai_first(db, monkeypatch):
     app = FastAPI()
     app.include_router(topic_router.router)
     app.include_router(conversation_router.router)
-    app.dependency_overrides[topic_router.get_current_user] = lambda: profile
+    app.dependency_overrides[topic_router.get_current_profile] = lambda: profile
     app.dependency_overrides[conversation_router.get_current_user] = lambda: profile
+    app.dependency_overrides[conversation_router.get_current_profile] = lambda: profile
     app.dependency_overrides[get_db] = lambda: db
     app.dependency_overrides[conversation_router.get_conversation_service] = lambda: service
     app.dependency_overrides[conversation_router.get_voice_service] = lambda: object()

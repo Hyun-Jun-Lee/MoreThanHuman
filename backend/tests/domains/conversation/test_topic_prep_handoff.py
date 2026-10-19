@@ -4,7 +4,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from domains.auth.dependencies import get_current_user
+from domains.auth.dependencies import get_current_profile
 from domains.conversation.enums import ConversationType
 from domains.conversation.router import get_conversation_service, router
 from domains.conversation.service import ConversationService
@@ -16,7 +16,7 @@ def _conversation_app_with_overrides(service) -> FastAPI:
     app = FastAPI()
     app.dependency_overrides[get_ai_http_client] = lambda: None
     app.include_router(router)
-    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(
+    app.dependency_overrides[get_current_profile] = lambda: SimpleNamespace(
         id="user-1",
         language=LearningLanguageContext(
             native_language="en",

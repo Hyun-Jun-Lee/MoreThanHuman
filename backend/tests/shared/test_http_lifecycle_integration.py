@@ -13,6 +13,7 @@ from sqlalchemy.pool import StaticPool
 
 from config import get_settings
 from database import Base, get_db
+from domains.auth.router import router as auth_router
 from domains.conversation.router import router as conversation_router
 from domains.grammar.models import GrammarFeedbackModel
 from main import lifespan
@@ -74,10 +75,15 @@ def test_real_conversation_chain_uses_lifespan_clients_and_task_owned_db(monkeyp
 
     monkeypatch.setattr(http_module.httpx, "AsyncClient", make_client)
     app = FastAPI(lifespan=lifespan)
+    app.include_router(auth_router)
     app.include_router(conversation_router)
     app.dependency_overrides[get_db] = request_db
     try:
         with TestClient(app) as client:
+            initialized = client.post(
+                "/api/auth/bootstrap", headers={"Authorization": "Bearer test-token"}, json={},
+            )
+            assert initialized.status_code == 200, initialized.text
             for _ in range(2):
                 response = client.post(
                     "/api/conversations/start/free-chat/",
@@ -91,8 +97,8 @@ def test_real_conversation_chain_uses_lifespan_clients_and_task_owned_db(monkeyp
                 assert all(not outbound.is_closed for outbound in created_clients)
         assert all(outbound.is_closed for outbound in created_clients)
         assert all(pool == (1 if path.endswith("/user") else 0) for pool, path in requests)
-        # 요청 2개와 문법 저장 2개가 각각 자신의 session을 생성·종료해요.
-        assert len(sessions) == len(closed) == 4
+        # 초기화 1개, 대화 요청 2개와 문법 저장 2개가 각자의 session을 닫아요.
+        assert len(sessions) == len(closed) == 5
         with Session(engine) as db:
             assert len(db.scalars(select(GrammarFeedbackModel)).all()) == 2
     finally:

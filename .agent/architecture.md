@@ -1,6 +1,6 @@
 # 시스템 아키텍처
 
-> 프로젝트: MoreThanHuman (서비스명: tomatalk) · 버전: 0.1.10 · 최종 갱신: 2026-10-09
+> 프로젝트: MoreThanHuman (서비스명: tomatalk) · 버전: 0.1.10 · 최종 갱신: 2026-10-19
 
 ---
 
@@ -99,7 +99,7 @@ Home의 `language_snacks`는 최근 대화와 독립된 학습 콘텐츠 흐름�
 
 운영 POST·PATCH와 CLI 쓰기는 같은 PostgreSQL session advisory lock을 획득해 직렬화해요. 전용 direct/session 연결에 잠금을 유지하고 LLM 대기 중 ORM 트랜잭션은 열어두지 않아요. 잠금 연결을 잃으면 추가 저장을 중지해요. SQLite 잠금은 단일 프로세스 개발용이에요. 전체 이력 크기를 넘으면 과거 항목을 생략하지 않고 중단하며 LLM 의미·품질 판정에는 오차가 남아요. API는 구버전 GET에 빈 목록, 구버전 POST에 410을 제공해요. 상세 외부 계약은 [DSL](../docs/DSL.md), 파괴적 migration·cron 설치·롤백은 [운영 가이드](../docs/OPERATIONS.md), 환경변수는 [환경 설정](../docs/ENVIRONMENT.md)이 기준이에요. [README](../README.md)는 실행·CLI 진입점으로 유지해요.
 
-Flutter 앱 시작은 `Splash → Onboarding(최초 1회) → Google 또는 iOS Apple Login → Home` 순서예요. `go_router`가 onboarding 완료 상태와 Riverpod 인증 상태를 함께 관찰하며, 인증 복원 중에는 Splash를 유지하고 로그인 성공 또는 세션 만료 시 Home/Login으로 redirect해요. `AppCopy`는 system locale이 `ko`일 때 한국어, 그 밖에는 영어로 app chrome·접근성 label·클라이언트 오류를 표시하고 학습 언어 context를 바꾸지 않아요. Onboarding은 기기 locale로 `ko -> en`, `en -> ko` 기본값을 고르고, 중국어가 포함된 언어쌍은 화면에 표시하되 선택은 막아요. 사용자가 현재 선택 가능한 지원 언어쌍(`ko -> en`, `en -> ko`) 중 하나를 확정하면 pending language context를 secure storage에 저장해요. 인증이 생기면 `authControllerProvider`가 `PUT /api/auth/me/language-preferences`로 pending 값을 서버에 동기화하고 `/api/auth/me`로 profile language를 hydration한 뒤 Home을 표시해요. Home은 활성 언어쌍과 `/api/conversations/?limit=5&offset=0` 최근 대화 중 최대 2개를 표시해요. 내 정보 탭의 `학습 언어` 설정은 profile default만 갱신하며 새 대화부터 적용돼요. 기존 conversation은 snapshot을 유지하고, 화면의 별도 정책 설명문은 표시하지 않아요. Free Chat 선택 시 `Topic Input → Topic Prep`으로 이어져 `POST /api/search/topic-prep/`의 ready/low-quality/error 상태를 보여주고, 첫 답변 제출 후 `POST /api/conversations/start/free-chat/stream/`로 Conversation 화면에 진입해요. Topic Input 정적 예시 검색어는 system locale이 아니라 native language로 고르고 그대로 검색 요청에 보내요. Roleplay 선택 시 `Roleplay Setup`에서 target language에 맞는 preset/custom 상황을 고르고 `role_character`로 `POST /api/conversations/start/roleplay/stream/`를 호출해요. `turn_started`에서 요청 ID 기반 임시 대화 화면으로 들어가 첫 인사 델타와 음성을 표시·재생하고, `turn_completed`에서 영속 대화 ID로 화면을 교체해요. Topic Prep과 Roleplay 콘텐츠 선택은 target language를 따르고, retry guidance나 짧은 설명은 feedback language를 따르는 정책을 유지해요. Backend LLM prompt policy도 같은 원칙을 써서 target language가 conversation, roleplay, grammar, Topic Prep의 연습·교정 기준을 정하고 feedback language는 설명·retry 안내 언어만 정해요. 이 정책은 STT/TTS나 provider/model routing을 변경하지 않아요. Home 최근 대화 카드도 `/conversation/:conversationId`로 이동해 기존 메시지를 이어가요.
+Flutter 앱 시작은 `Splash → Onboarding(최초 1회) → Google 또는 iOS Apple Login → Home` 순서예요. `go_router`가 onboarding 완료 상태와 Riverpod 인증 상태를 함께 관찰하며, 인증 복원 중에는 Splash를 유지하고 로그인 성공 또는 세션 만료 시 Home/Login으로 redirect해요. `AppCopy`는 system locale이 `ko`일 때 한국어, 그 밖에는 영어로 app chrome·접근성 label·클라이언트 오류를 표시하고 학습 언어 context를 바꾸지 않아요. Onboarding은 기기 locale로 `ko -> en`, `en -> ko` 기본값을 고르고, 중국어가 포함된 언어쌍은 화면에 표시하되 선택은 막아요. 사용자가 현재 선택 가능한 지원 언어쌍(`ko -> en`, `en -> ko`) 중 하나를 확정하면 pending language context를 secure storage에 저장해요. 인증이 생기면 `authControllerProvider`가 pending 값을 `POST /api/auth/bootstrap`에 함께 보내 프로필 생성·언어 적용·최종 프로필 응답을 한 요청으로 마친 뒤 Home을 표시해요. Home은 활성 언어쌍과 `/api/conversations/?limit=5&offset=0` 최근 대화 중 최대 2개를 표시해요. 내 정보 탭의 `학습 언어` 설정은 profile default만 갱신하며 새 대화부터 적용돼요. 기존 conversation은 snapshot을 유지하고, 화면의 별도 정책 설명문은 표시하지 않아요. Free Chat 선택 시 `Topic Input → Topic Prep`으로 이어져 `POST /api/search/topic-prep/`의 ready/low-quality/error 상태를 보여주고, 첫 답변 제출 후 `POST /api/conversations/start/free-chat/stream/`로 Conversation 화면에 진입해요. Topic Input 정적 예시 검색어는 system locale이 아니라 native language로 고르고 그대로 검색 요청에 보내요. Roleplay 선택 시 `Roleplay Setup`에서 target language에 맞는 preset/custom 상황을 고르고 `role_character`로 `POST /api/conversations/start/roleplay/stream/`를 호출해요. `turn_started`에서 요청 ID 기반 임시 대화 화면으로 들어가 첫 인사 델타와 음성을 표시·재생하고, `turn_completed`에서 영속 대화 ID로 화면을 교체해요. Topic Prep과 Roleplay 콘텐츠 선택은 target language를 따르고, retry guidance나 짧은 설명은 feedback language를 따르는 정책을 유지해요. Backend LLM prompt policy도 같은 원칙을 써서 target language가 conversation, roleplay, grammar, Topic Prep의 연습·교정 기준을 정하고 feedback language는 설명·retry 안내 언어만 정해요. 이 정책은 STT/TTS나 provider/model routing을 변경하지 않아요. Home 최근 대화 카드도 `/conversation/:conversationId`로 이동해 기존 메시지를 이어가요.
 
 Splash의 Flutter 화면은 제공된 Toma Talk 이미지를 흰 배경 중앙에 표시하고 진입 시 한 번 0.96배로 줄였다가 650ms 안에 원래 크기로 되돌려요. 인증·onboarding 확인이 먼저 끝나도 모션 완료까지 Splash에 머물러요. 동작 줄이기 설정에서는 모션을 생략하고 즉시 화면 이동을 허용해요. 별도 제목·설명·로딩 문구를 표시하지 않고 인증 또는 onboarding 확인 오류일 때만 하단 재시도 아이콘을 표시해요.
 
@@ -143,7 +143,7 @@ domains/{name}/
 
 ### 인증
 
-첫 앱 프로필은 `nickname=NULL`로 생성해요. 기존 프로필은 migration에서 현재 `name`을 닉네임으로 이관해 이전 표시 이름을 유지해요. 앱은 인증 후 `/api/auth/me`의 닉네임이 null이면 Home 위에 필수 입력 팝업을 띄워요. 이때 기기의 우선 시스템 언어가 한국어면 영어, 그 외에는 한국어 randino 닉네임을 입력 칸에 미리 채우며 앱 표시 언어와 학습 언어쌍은 사용하지 않아요. `PUT /api/auth/me/nickname` 저장이 성공해야 팝업을 닫아요. 저장 실패 시 입력을 유지하며 앱 재시작 후에도 다시 표시해요. 내 정보에서 닉네임을 수정할 수 있고, 닉네임은 계정 식별자가 아니므로 중복을 허용해요.
+첫 앱 프로필은 `nickname=NULL`로 생성해요. 기존 프로필은 migration에서 현재 `name`을 닉네임으로 이관해 이전 표시 이름을 유지해요. 앱은 초기화 응답의 닉네임이 null이면 Home 위에 필수 입력 팝업을 띄워요. 이때 기기의 우선 시스템 언어가 한국어면 영어, 그 외에는 한국어 randino 닉네임을 입력 칸에 미리 채우며 앱 표시 언어와 학습 언어쌍은 사용하지 않아요. `PUT /api/auth/me/nickname` 저장이 성공해야 팝업을 닫아요. 저장 실패 시 입력을 유지하며 앱 재시작 후에도 다시 표시해요. 내 정보에서 닉네임을 수정할 수 있고, 닉네임은 계정 식별자가 아니므로 중복을 허용해요.
 
 ```text
 [Flutter 앱] → Google Sign-In SDK로 Google id_token 획득
@@ -165,14 +165,15 @@ domains/{name}/
 [FastAPI] → Authorization: Bearer <supabase_access_token>
           → auto 모드의 ES256 token은 캐시된 Supabase JWKS 공개 키로 검증
           → 그 외 token 또는 remote 모드는 Supabase Auth /user 검증
-          → 최초 요청에서만 profile 생성, 이후 인증은 조회 + language defaults
+          → 로그인 초기화 요청에서 profile 생성·선택적 언어 적용
+          → 일반 요청은 ID만 사용하고 언어가 필요한 요청만 profile 조회
           → current_user.id를 ownership boundary로 사용
 ```
 
 인증이 필요한 API는 `Authorization: Bearer <supabase_access_token>` 헤더를 사용해요. 모바일은 Google native sign-in과 iOS Apple native sign-in을 제공해요.
 `auto` 모드는 워커마다 JWKS를 5분 캐시하고 키 ID가 없으면 갱신을 시도해요. 서명·발급자·대상·역할·만료 검증이 실패하면 요청을 거절해요. 로컬 검증은 토큰 유효 기간 중 Supabase 사용자 상태 변경을 즉시 확인하지 못하므로 즉시 폐기 확인이 필요한 운영에서는 `remote` 모드를 사용해요.
 언어 선호는 profile 기본값(`native_language`, `target_language`, `feedback_language`)으로 저장하고, 기존 값이 없으면 `ko -> en`과 feedback `ko`로 보정해요.
-인증된 API 요청은 기존 profile의 필드와 `updated_at`을 변경하지 않아요. 언어 선호와 앱 표시 언어의 명시적 변경 API에서만 해당 설정을 저장해요. Supabase의 이름·사진 등 metadata 변경은 현재 자동 동기화하지 않아요.
+일반 인증 요청은 기존 profile의 필드와 `updated_at`을 변경하지 않아요. 초기화 요청에 pending 언어가 있거나 언어 선호·앱 표시 언어 변경 API를 호출할 때만 해당 설정을 저장해요. `is_active`는 인증 차단 정책에서 제외하고 기존 저장·응답 필드로 유지해요. Supabase의 이름·사진 등 metadata 변경은 현재 자동 동기화하지 않아요.
 
 ### 대화
 
