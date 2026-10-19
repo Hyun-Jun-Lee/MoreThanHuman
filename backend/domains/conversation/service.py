@@ -547,9 +547,8 @@ class ConversationService:
         Returns:
             메시지 목록
         """
-        # user_id 검증
-        self.repository.find_by_id(conversation_id, user_id)
-        messages = self.repository.get_messages(conversation_id, limit, offset)
+        total_count = self.repository.count_owned_messages(conversation_id, user_id)
+        messages = self.repository.get_messages(conversation_id, user_id, limit, offset)
         assistant_ids = [m.id for m in messages if m.role == MessageRole.ASSISTANT]
         audio_ids = self.repository.completed_audio_message_ids(assistant_ids)
         results = []
@@ -572,7 +571,6 @@ class ConversationService:
 
             results.append(Message.model_validate(msg_dict))
 
-        total_count = self.repository.count_messages(conversation_id)
         pagination = self._build_pagination(
             limit=limit,
             offset=offset,

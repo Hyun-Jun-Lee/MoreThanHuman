@@ -91,11 +91,12 @@ class Settings(BaseSettings):
     search_summary_max_tokens: int = 600
     search_query_analysis_max_tokens: int = 500
     search_quality_judge_max_tokens: int = 1000
+    search_quality_judge_model: str = "google/gemini-3.1-flash-lite"
     search_region: str = "kr-kr"
     search_safesearch: str = "moderate"
     search_recent_timelimit: str = "m"
     search_backend: str = "auto"
-    search_max_results: int = 12
+    search_max_results: int = 6
     search_min_relevant_results: int = 2
 
     # Conversation Settings

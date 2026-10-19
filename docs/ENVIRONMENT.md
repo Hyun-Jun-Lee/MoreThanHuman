@@ -70,11 +70,12 @@
 | `SEARCH_SUMMARY_MAX_TOKENS` | 아니오 | `600` | 검색 요약 최대 토큰 |
 | `SEARCH_QUERY_ANALYSIS_MAX_TOKENS` | 아니오 | `500` | 검색어 분석 LLM 최대 토큰 |
 | `SEARCH_QUALITY_JUDGE_MAX_TOKENS` | 아니오 | `1000` | 검색 품질 판정 LLM 최대 토큰 |
+| `SEARCH_QUALITY_JUDGE_MODEL` | 아니오 | `google/gemini-3.1-flash-lite` | 검색 출처 품질 판정 전용 OpenRouter 모델. 검색어 분석·카드 생성·대화 모델에는 적용하지 않아요. |
 | `SEARCH_REGION` | 아니오 | `kr-kr` | ddgs 검색 지역 |
 | `SEARCH_SAFESEARCH` | 아니오 | `moderate` | ddgs safe search 옵션 |
 | `SEARCH_RECENT_TIMELIMIT` | 아니오 | `m` | 최신성 의도 쿼리에 적용할 ddgs 기간 옵션 |
 | `SEARCH_BACKEND` | 아니오 | `auto` | ddgs 검색 backend |
-| `SEARCH_MAX_RESULTS` | 아니오 | `12` | 필터링 전 수집할 검색 결과 수 |
+| `SEARCH_MAX_RESULTS` | 아니오 | `6` | 필터링 전 수집할 검색 결과 수. 최소 관련 출처 2개를 확보하지 못할 수 있어 품질 지표를 함께 확인해요. |
 | `SEARCH_MIN_RELEVANT_RESULTS` | 아니오 | `2` | LLM judge가 accept해야 하는 최소 출처 수 |
 | `MAX_HISTORY_TURNS` | 아니오 | `10` | 대화 기록 최대 턴 |
 | `CONVERSATION_ACCESS_ENABLED` | 아니오 | `false` | 무료 1개·15회, Advance 5개·무제한, Plus 10개·무제한 정책을 서버에서 집행. 운영은 Apple Sandbox 검증과 기존 대화 초기화 후 활성화 |

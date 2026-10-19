@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 
 import pytest
 
+from config import Settings
 from domains.search.query import build_rule_query_analysis
 from domains.search.schemas import SearchQuality, SearchResultItem
 from domains.search.service import SearchService
@@ -134,7 +135,11 @@ async def test_quality_judge_prompt_includes_current_date_and_timezone(monkeypat
             captured["request"] = request
             return FakeResponse()
 
-    monkeypatch.setattr("domains.search.service.LLMProviderFactory.create_provider", lambda **kwargs: FakeProvider())
+    def fake_provider(**kwargs):
+        captured["provider_type"] = kwargs.get("provider_type")
+        return FakeProvider()
+
+    monkeypatch.setattr("domains.search.service.LLMProviderFactory.create_provider", fake_provider)
 
     accepted_sources, quality = await service._judge_search_quality(
         "최근 애플 발표",
@@ -155,6 +160,8 @@ async def test_quality_judge_prompt_includes_current_date_and_timezone(monkeypat
     assert "at least 2 independent accepted sources" in system_prompt
     assert "one short sentence" in system_prompt
     assert captured["request"].max_tokens == 1000
+    assert captured["provider_type"] == "openrouter"
+    assert captured["request"].model == "google/gemini-3.1-flash-lite"
     assert captured["request"].extra_params["response_format"]["type"] == "json_schema"
     assert (
         captured["request"].extra_params["response_format"]["json_schema"]["name"]
@@ -166,6 +173,12 @@ async def test_quality_judge_prompt_includes_current_date_and_timezone(monkeypat
     assert "Required phrases:" in user_prompt
     assert "Exclude terms:" in user_prompt
     assert "Source 1" in user_prompt
+
+
+def test_quality_judge_model_can_be_overridden_from_environment(monkeypatch):
+    monkeypatch.setenv("SEARCH_QUALITY_JUDGE_MODEL", "openai/gpt-4.1-nano")
+
+    assert Settings(_env_file=None, grammar_model_provider="openrouter").search_quality_judge_model == "openai/gpt-4.1-nano"
 
 
 def test_quality_finalizer_rejects_contradictory_sufficient_result():

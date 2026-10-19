@@ -1,3 +1,4 @@
+import json
 from datetime import UTC, datetime
 
 import pytest
@@ -13,6 +14,7 @@ from domains.search.schemas import (
 from domains.search.query import build_rule_query_analysis
 from domains.search.service import PreparedSearchResult, SearchService, resolve_topic_display_language
 from shared.language import LanguageCode, LearningLanguageContext
+from shared.logging_config import request_context
 
 
 @pytest.mark.parametrize(
@@ -120,6 +122,76 @@ def _direction_payload() -> list[dict]:
         }
         for direction in ConversationDirection
     ]
+
+
+@pytest.mark.asyncio
+async def test_topic_prep_logs_each_stage_without_topic_text(monkeypatch, capsys):
+    service = SearchService()
+    topic = "private coffee topic"
+
+    async def fake_analyze(_query, **_kwargs):
+        return build_rule_query_analysis(topic, current_date="2026-06-04")
+
+    async def fake_search(_query, _analysis, **_kwargs):
+        return [_raw_result(index) for index in range(1, 4)]
+
+    async def fake_judge(_query, sources, _analysis, **_kwargs):
+        return sources, _prepared(topic, sources).quality
+
+    async def fake_card(_topic, sources, _analysis, **_kwargs):
+        return _card(topic, sources)
+
+    monkeypatch.setattr(service, "_analyze_query", fake_analyze)
+    monkeypatch.setattr(service, "_search_duckduckgo", fake_search)
+    monkeypatch.setattr(service, "_judge_search_quality", fake_judge)
+    monkeypatch.setattr(service, "_generate_topic_prep_card", fake_card)
+    token = request_context.set({"trace_id": "a" * 32, "request_id": "b" * 32})
+    try:
+        result = await service.prepare_topic(topic)
+    finally:
+        request_context.reset(token)
+
+    rows = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line.startswith("{")]
+    stages = {row.get("stage"): row for row in rows if row.get("duration_ms") is not None}
+    assert result.ready is True
+    assert set(stages) >= {
+        "topic_prep.total", "search.query_analysis", "search.provider_search",
+        "search.quality_judge", "topic_prep.card_generation",
+    }
+    assert all(stages[name]["status"] == "ok" for name in (
+        "topic_prep.total", "search.query_analysis", "search.provider_search",
+        "search.quality_judge", "topic_prep.card_generation",
+    ))
+    assert all(stages[name]["trace_id"] == "a" * 32 for name in stages)
+    assert topic not in json.dumps(rows)
+
+
+@pytest.mark.asyncio
+async def test_topic_prep_logs_failed_stage_and_preserves_exception(monkeypatch, capsys):
+    service = SearchService()
+
+    async def fake_analyze(query, **_kwargs):
+        return build_rule_query_analysis(query, current_date="2026-06-04")
+
+    async def fake_search(_query, _analysis, **_kwargs):
+        raise RuntimeError("private upstream payload")
+
+    monkeypatch.setattr(service, "_analyze_query", fake_analyze)
+    monkeypatch.setattr(service, "_search_duckduckgo", fake_search)
+    token = request_context.set({"trace_id": "a" * 32, "request_id": "b" * 32})
+    try:
+        with pytest.raises(RuntimeError, match="private upstream payload"):
+            await service.prepare_topic("private search topic")
+    finally:
+        request_context.reset(token)
+
+    rows = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line.startswith("{")]
+    stages = {row["stage"]: row for row in rows if row.get("stage") in {
+        "topic_prep.total", "search.query_analysis", "search.provider_search",
+    }}
+    assert stages["search.provider_search"]["status"] == "error"
+    assert stages["topic_prep.total"]["status"] == "error"
+    assert "private upstream payload" not in json.dumps(rows)
 
 
 @pytest.mark.asyncio

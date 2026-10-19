@@ -4,6 +4,7 @@ Search provider adapter
 from typing import Any
 
 from shared.exceptions import ExternalAPIException
+from shared.latency import latency_span
 
 
 def _load_ddgs_class():
@@ -25,7 +26,6 @@ class DuckDuckGoSearchProvider:
 
     def text(self, query: str, *, use_recency_timelimit: bool, region: str | None = None) -> list[dict]:
         """ddgs text 검색 결과를 서비스 내부 shape로 정규화"""
-        ddgs_class = _load_ddgs_class()
         options: dict[str, Any] = {
             "region": region or self.settings.search_region,
             "safesearch": self.settings.search_safesearch,
@@ -35,19 +35,33 @@ class DuckDuckGoSearchProvider:
         if use_recency_timelimit:
             options["timelimit"] = self.settings.search_recent_timelimit
 
+        with latency_span("search.provider_load", provider="ddgs"):
+            ddgs_class = _load_ddgs_class()
         try:
-            ddgs = ddgs_class()
-            if hasattr(ddgs, "__enter__"):
-                with ddgs as search_client:
-                    results = search_client.text(query, **options)
-            else:
-                results = ddgs.text(query, **options)
+            with latency_span("search.provider_client", provider="ddgs"):
+                ddgs = ddgs_class()
+            with latency_span(
+                "search.provider_request", provider="ddgs",
+                backend=options["backend"], region=options["region"],
+                requested_results=options["max_results"],
+                recency_intent=use_recency_timelimit,
+            ) as fields:
+                try:
+                    if hasattr(ddgs, "__enter__"):
+                        with ddgs as search_client:
+                            results = search_client.text(query, **options)
+                    else:
+                        results = ddgs.text(query, **options)
+                    fields["result_count"] = len(results or [])
+                except Exception as exc:
+                    fields["exception_type"] = type(exc).__name__
+                    raise
+            with latency_span("search.provider_normalize", provider="ddgs"):
+                return [self._normalize_result(result) for result in (results or [])]
         except ExternalAPIException:
             raise
         except Exception as exc:
             raise ExternalAPIException(f"DuckDuckGo search failed: {str(exc)}") from exc
-
-        return [self._normalize_result(result) for result in (results or [])]
 
     def _normalize_result(self, result: dict) -> dict:
         """ddgs 결과를 title/href/body dict로 정규화"""

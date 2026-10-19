@@ -21,6 +21,7 @@ _allowed_fields = {
     "output_chars", "input_bytes", "output_bytes", "prompt_tokens",
     "completion_tokens", "logger", "file", "function", "line",
     "source_count", "accepted_count", "rejected_count", "response_chars",
+    "backend", "region", "requested_results", "result_count",
     "recency_intent", "sufficient", "pending_count", "failed_count",
     "db_sqlstate", "db_constraint", "db_table", "db_column",
     "turn_id", "attempt_id", "segment_index", "delta_index", "delta_chars",

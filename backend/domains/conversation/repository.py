@@ -601,12 +601,15 @@ class ConversationRepository:
         if not message:
             raise NotFoundException(f"Message {message_id} not found")
 
-    def get_messages(self, conversation_id: str, limit: int = 50, offset: int = 0) -> list[MessageModel]:
+    def get_messages(
+        self, conversation_id: str, user_id: str, limit: int = 50, offset: int = 0,
+    ) -> list[MessageModel]:
         """
         대화의 메시지 조회
 
         Args:
             conversation_id: 대화 ID
+            user_id: 대화 소유자 ID
             limit: 조회 개수
             offset: 시작 위치
 
@@ -618,7 +621,8 @@ class ConversationRepository:
         return (
             self.db.query(MessageModel)
             .options(joinedload(MessageModel.grammar_feedback))
-            .filter(MessageModel.conversation_id == conversation_id)
+            .join(ConversationModel, MessageModel.conversation_id == ConversationModel.id)
+            .filter(MessageModel.conversation_id == conversation_id, ConversationModel.user_id == user_id)
             .order_by(MessageModel.created_at)
             .limit(limit)
             .offset(offset)
@@ -643,6 +647,20 @@ class ConversationRepository:
     def count_messages(self, conversation_id: str) -> int:
         """대화의 전체 메시지 수 조회"""
         return self.db.query(MessageModel).filter(MessageModel.conversation_id == conversation_id).count()
+
+    def count_owned_messages(self, conversation_id: str, user_id: str) -> int:
+        """소유자 조건으로 메시지를 세고 빈 대화와 접근 불가 대화를 구분해요."""
+        count = (
+            self.db.query(func.count(MessageModel.id))
+            .select_from(ConversationModel)
+            .outerjoin(MessageModel, MessageModel.conversation_id == ConversationModel.id)
+            .filter(ConversationModel.id == conversation_id, ConversationModel.user_id == user_id)
+            .group_by(ConversationModel.id)
+            .scalar()
+        )
+        if count is None:
+            raise NotFoundException(f"Conversation {conversation_id} not found")
+        return count
 
     def get_recent_messages(self, conversation_id: str, turn_count: int = 10) -> list[MessageModel]:
         """

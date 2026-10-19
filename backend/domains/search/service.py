@@ -39,6 +39,7 @@ from domains.search.schemas import (
     TopicPrepResult,
 )
 from shared.exceptions import ExternalAPIException
+from shared.latency import latency_span
 from shared.logging_config import log_event
 from shared.language import (
     LanguageCode,
@@ -153,36 +154,38 @@ class SearchService:
             준비 카드 생성 결과
         """
         language_context = ensure_language_context(language_context)
-        prepared = await self._prepare_search_results(topic, language_context=language_context)
-        if not prepared.quality.is_sufficient:
-            return self._build_low_quality_result(
-                topic,
-                prepared.sources,
-                reason=prepared.quality.reason or "대화 준비에 사용할 검색 출처가 충분하지 않아요.",
-                retry_suggestion=prepared.quality.retry_suggestion,
-                language_context=language_context,
-            )
+        with latency_span("topic_prep.total"):
+            prepared = await self._prepare_search_results(topic, language_context=language_context)
+            if not prepared.quality.is_sufficient:
+                return self._build_low_quality_result(
+                    topic,
+                    prepared.sources,
+                    reason=prepared.quality.reason or "대화 준비에 사용할 검색 출처가 충분하지 않아요.",
+                    retry_suggestion=prepared.quality.retry_suggestion,
+                    language_context=language_context,
+                )
 
-        card = await self._generate_topic_prep_card(
-            topic,
-            prepared.sources,
-            prepared.analysis,
-            language_context=language_context,
-        )
-        if not card.quality.is_sufficient:
-            return self._build_not_ready_topic_prep_result(
-                topic,
-                card.quality,
-                language_context=language_context,
-                use_quality_retry_suggestion=False,
-            )
+            with latency_span("topic_prep.card_generation"):
+                card = await self._generate_topic_prep_card(
+                    topic,
+                    prepared.sources,
+                    prepared.analysis,
+                    language_context=language_context,
+                )
+            if not card.quality.is_sufficient:
+                return self._build_not_ready_topic_prep_result(
+                    topic,
+                    card.quality,
+                    language_context=language_context,
+                    use_quality_retry_suggestion=False,
+                )
 
-        return TopicPrepResult(
-            ready=True,
-            language=language_context,
-            card=card,
-            quality=card.quality,
-        )
+            return TopicPrepResult(
+                ready=True,
+                language=language_context,
+                card=card,
+                quality=card.quality,
+            )
 
     async def prepare_custom_focus_questions(
         self,
@@ -309,14 +312,16 @@ class SearchService:
     ) -> PreparedSearchResult:
         """검색 전처리, 검색 수집, LLM source judge를 실행"""
         language_context = ensure_language_context(language_context)
-        analysis = await self._analyze_query(query, language_context=language_context)
+        with latency_span("search.query_analysis"):
+            analysis = await self._analyze_query(query, language_context=language_context)
         log_event("search.pipeline", stage="provider_search", status="start",
                   recency_intent=analysis.recency_intent)
-        raw_results = await self._search_duckduckgo(
-            analysis.enhanced_query,
-            analysis,
-            language_context=language_context,
-        )
+        with latency_span("search.provider_search"):
+            raw_results = await self._search_duckduckgo(
+                analysis.enhanced_query,
+                analysis,
+                language_context=language_context,
+            )
         sources = [
             SearchResultItem(
                 title=r.get("title", ""),
@@ -338,12 +343,13 @@ class SearchService:
                 ),
             )
 
-        accepted_sources, quality = await self._judge_search_quality(
-            query,
-            sources,
-            analysis,
-            language_context=language_context,
-        )
+        with latency_span("search.quality_judge"):
+            accepted_sources, quality = await self._judge_search_quality(
+                query,
+                sources,
+                analysis,
+                language_context=language_context,
+            )
         return PreparedSearchResult(
             analysis=analysis,
             sources=accepted_sources,
@@ -487,7 +493,9 @@ class SearchService:
         source_text = self._format_numbered_sources(sources)
         analysis_text = self._format_query_analysis_for_judge(analysis)
         try:
-            provider = LLMProviderFactory.create_provider(http_client=self.http_client)
+            provider = LLMProviderFactory.create_provider(
+                provider_type="openrouter", http_client=self.http_client,
+            )
             started_at = time.perf_counter()
             request = LLMRequest(
                 messages=[
@@ -533,7 +541,7 @@ class SearchService:
                         ),
                     ),
                 ],
-                model=get_model_for_provider(),
+                model=self.settings.search_quality_judge_model,
                 max_tokens=self.settings.search_quality_judge_max_tokens,
                 temperature=0.1,
                 extra_params=self._build_structured_output_params(
