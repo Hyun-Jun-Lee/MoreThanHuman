@@ -138,7 +138,7 @@ async def test_topic_prep_logs_each_stage_without_topic_text(monkeypatch, capsys
     async def fake_judge(_query, sources, _analysis, **_kwargs):
         return sources, _prepared(topic, sources).quality
 
-    async def fake_card(_topic, sources, _analysis, **_kwargs):
+    async def fake_card(_topic, sources, **_kwargs):
         return _card(topic, sources)
 
     monkeypatch.setattr(service, "_analyze_query", fake_analyze)
@@ -204,7 +204,6 @@ async def test_prepare_topic_returns_ready_card_when_search_quality_is_sufficien
     async def fake_generate(
         topic: str,
         sources: list[SearchResultItem],
-        _analysis=None,
         language_context=None,
     ):
         return _card(topic, sources)
@@ -232,7 +231,6 @@ async def test_prepare_topic_rejects_when_source_count_is_too_low(monkeypatch):
     async def fail_if_called(
         _topic: str,
         _sources: list[SearchResultItem],
-        _analysis=None,
         language_context=None,
     ):
         raise AssertionError("LLM card generation should not run for low source count")
@@ -259,7 +257,6 @@ async def test_prepare_topic_rejects_when_llm_quality_gate_fails(monkeypatch):
     async def fake_generate(
         topic: str,
         sources: list[SearchResultItem],
-        _analysis=None,
         language_context=None,
     ):
         return _card(topic, sources, is_sufficient=False)
@@ -382,7 +379,7 @@ def test_build_topic_prep_card_rejects_incomplete_sufficient_llm_payload(data):
     )
 
     assert card.quality.is_sufficient is False
-    assert card.quality.reason == "검색 결과로 대화 준비 카드를 완성하지 못했어요."
+    assert card.quality.reason == "주제에 맞는 대화 준비 카드를 완성하지 못했어요."
     assert card.quality.retry_suggestion is not None
 
 
@@ -466,3 +463,34 @@ def test_topic_prep_system_prompt_includes_english_practice_policy():
     assert "tense" in prompt
     assert "articles" in prompt
     assert "prepositions" in prompt
+
+
+@pytest.mark.asyncio
+async def test_topic_prep_card_prompt_omits_search_sources(monkeypatch):
+    service = SearchService()
+    sources = _sources()
+    captured = {}
+
+    class FakeResponse:
+        content = json.dumps({
+            "quality": {"is_sufficient": True, "relevance": True, "freshness": True, "specificity": True},
+            "summary": "A conversation about a recent Dodgers game.",
+            "directions": _direction_payload(),
+        })
+
+    class FakeProvider:
+        async def chat_completion(self, request):
+            captured["request"] = request
+            return FakeResponse()
+
+    monkeypatch.setattr("domains.search.service.LLMProviderFactory.create_provider", lambda **kwargs: FakeProvider())
+
+    card = await service._generate_topic_prep_card("recent Dodgers game", sources)
+
+    system_prompt = captured["request"].messages[0].content
+    user_prompt = captured["request"].messages[1].content
+    assert "source" not in system_prompt.lower()
+    assert "Search Results" not in user_prompt
+    assert "Enhanced query" not in user_prompt
+    assert all(source.title not in user_prompt and source.url not in user_prompt for source in sources)
+    assert card.sources == sources

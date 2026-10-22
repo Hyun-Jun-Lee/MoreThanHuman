@@ -690,6 +690,7 @@ module Search {
 
   Topic Prep summary와 direction title/description은 입력 topic 언어를 우선하고, 모호하면 `native_language`로 fallback해요. first question과 실제 conversation은 계속 `target_language` 연습에 맞춰 생성돼요.
   Topic Prep prompt policy도 conversation과 같은 target-language practice priorities를 사용해요.
+  검색·출처 품질 판정은 카드 생성 전에 실행해요. 카드 생성 LLM은 출처 목록이나 출처 수를 전달받지 않고 입력 주제를 바탕으로 summary와 대화 방향·질문을 만들어요. 카드의 `sources`와 출처 개수 품질 필드는 기존 검색 결과를 응답에 보존해요.
   Low-quality 상태의 `retry_guidance`와 `example_topics`는 사용자가 이해할 수 있도록 `feedback_language`로 표시하되, 예시 유형은 target language 연습 목적을 반영해요.
 
   type TopicPrepCard {

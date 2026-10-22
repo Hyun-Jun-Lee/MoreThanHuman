@@ -53,7 +53,7 @@ from shared.language_prompt_policy import (
 )
 
 MIN_TOPIC_PREP_SOURCE_COUNT = 3
-INCOMPLETE_TOPIC_PREP_CARD_REASON = "검색 결과로 대화 준비 카드를 완성하지 못했어요."
+INCOMPLETE_TOPIC_PREP_CARD_REASON = "주제에 맞는 대화 준비 카드를 완성하지 못했어요."
 
 
 def resolve_topic_display_language(topic: str, native_language: LanguageCode) -> LanguageCode:
@@ -169,7 +169,6 @@ class SearchService:
                 card = await self._generate_topic_prep_card(
                     topic,
                     prepared.sources,
-                    prepared.analysis,
                     language_context=language_context,
                 )
             if not card.quality.is_sufficient:
@@ -921,18 +920,13 @@ class SearchService:
         self,
         topic: str,
         sources: list[SearchResultItem],
-        analysis: QueryAnalysis | None = None,
         language_context: LearningLanguageContext | None = None,
         display_language: LanguageCode | None = None,
     ) -> TopicPrepCard:
-        """LLM으로 검색 품질 판정과 준비 카드 내용을 생성"""
+        """검색 출처를 프롬프트에 포함하지 않고 준비 카드를 생성"""
         language_context = ensure_language_context(language_context)
         display_language = display_language or resolve_topic_display_language(
             topic, language_context.native_language
-        )
-        source_text = "\n".join(
-            f"- Title: {source.title}\n  Snippet: {source.snippet}\n  URL: {source.url}"
-            for source in sources
         )
         current_date, timezone = current_search_context()
 
@@ -952,9 +946,7 @@ class SearchService:
                         content=(
                             f"Current date: {current_date}\n"
                             f"Timezone: {timezone}\n"
-                            f"Topic: {topic}\n"
-                            f"Enhanced query: {analysis.enhanced_query if analysis else topic}\n\n"
-                            f"Search Results:\n{source_text}"
+                            f"Topic: {topic}"
                         ),
                     ),
                 ],
@@ -1003,18 +995,15 @@ Learner language context:
 Target-language practice priorities:
 {topic_prep_priorities}
 
-Evaluate whether the search results are good enough to start a concrete {target_name} conversation.
-Judge quality using:
-1. source_count: enough independent sources
-2. relevance: directly related to the user's topic
-3. freshness: clear recent/current context when the topic asks for recent/current news
-4. specificity: concrete people, events, results, or issues rather than generic background
-
-If the quality is insufficient, set is_sufficient to false and explain how to make the topic more specific.
+Create a conversation card from the user's topic.
+Judge whether the topic supports a complete, relevant card. Use the quality fields to describe
+the card's relevance to the topic, appropriate treatment of time-sensitive claims, and specificity.
+If the topic is too vague for a concrete card, set is_sufficient to false and explain how to make it more specific.
 If sufficient, create a short {display_name} summary and exactly three conversation directions.
 Each direction must use one of these direction values: {directions}.
 Each direction must include exactly three first questions.
-Questions must be specific to the search summary and must not be generic questions like "Do you like baseball?"
+Questions must be specific to the topic and must not be generic questions like "Do you like baseball?"
+Do not invent current events, scores, dates, or other time-sensitive facts that are not in the topic.
 For sufficient cards, write the summary, titles, and descriptions in {display_name}.
 Write every first question in {target_name}.
 When is_sufficient is false, write quality reason and retry_suggestion in {feedback_name} so the learner can recover.
@@ -1029,7 +1018,7 @@ Respond only in JSON:
     "reason": "brief reason",
     "retry_suggestion": null
   }},
-  "summary": "3-5 short {display_name} sentences grounded in the search results.",
+  "summary": "3-5 short {display_name} sentences about the topic.",
   "directions": [
     {{
       "direction": "CASUAL_CHAT",
