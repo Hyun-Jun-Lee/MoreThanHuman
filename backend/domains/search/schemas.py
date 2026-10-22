@@ -4,7 +4,7 @@ Search 도메인 모델 정의
 from datetime import datetime
 from enum import Enum
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StrictBool
 
 from shared.language import LearningLanguageContext
 
@@ -41,6 +41,7 @@ class SearchQueryAnalysisResult(BaseModel):
     required_tokens: list[str]
     context_terms: list[str]
     recency_intent: bool
+    search_required: StrictBool
     exclude_terms: list[str]
 
 
@@ -147,6 +148,7 @@ class TopicPrepResult(BaseModel):
     """주제 준비 카드 생성 결과"""
 
     ready: bool
+    search_required: bool = True
     language: LearningLanguageContext = Field(default_factory=LearningLanguageContext)
     card: TopicPrepCard | None = None
     quality: TopicPrepQuality

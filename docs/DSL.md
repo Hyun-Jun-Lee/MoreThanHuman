@@ -681,6 +681,7 @@ module Search {
 
   type TopicPrepResult {
     ready: Boolean
+    search_required: Boolean
     language: LearningLanguageContext
     card?: TopicPrepCard
     quality: TopicPrepQuality
@@ -690,7 +691,9 @@ module Search {
 
   Topic Prep summary와 direction title/description은 입력 topic 언어를 우선하고, 모호하면 `native_language`로 fallback해요. first question과 실제 conversation은 계속 `target_language` 연습에 맞춰 생성돼요.
   Topic Prep prompt policy도 conversation과 같은 target-language practice priorities를 사용해요.
-  검색·출처 품질 판정은 카드 생성 전에 실행해요. 카드 생성 LLM은 출처 목록이나 출처 수를 전달받지 않고 입력 주제를 바탕으로 summary와 대화 방향·질문을 만들어요. 카드의 `sources`와 출처 개수 품질 필드는 기존 검색 결과를 응답에 보존해요.
+  검색어 분석 LLM은 `search_required` Boolean을 반환해요. 최신 정보나 시점에 따라 변하는 사실을 요구하는 명시적 표현은 코드 규칙이 검색을 강제하고, 분석 실패 시에도 검색해요. `search_required=false`이면 웹 검색과 출처 판정을 생략하고 카드 생성으로 이동해요.
+  카드 생성 LLM은 출처 목록이나 출처 수를 전달받지 않고 입력 주제를 바탕으로 summary와 대화 방향·질문을 만들어요. 검색 생략 카드의 `sources`는 빈 목록이고 출처 개수는 0이에요. 이때 `ready`는 카드 완성 여부를 뜻하며 출처 수가 0이어도 true일 수 있어요. 검색 경로의 카드에는 기존 검색 결과와 출처 개수 품질 필드를 보존해요.
+  Topic Prep의 직접 입력 질문과 방향 재생성은 주제에서 생성하며 웹 검색을 다시 호출하지 않아요.
   Low-quality 상태의 `retry_guidance`와 `example_topics`는 사용자가 이해할 수 있도록 `feedback_language`로 표시하되, 예시 유형은 target language 연습 목적을 반영해요.
 
   type TopicPrepCard {

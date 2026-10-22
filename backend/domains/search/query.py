@@ -72,6 +72,11 @@ TRAVEL_TERMS = {
     "travel", "trip", "restaurant", "restaurants", "hotel", "hotels",
 }
 NEWS_TERMS = {"뉴스", "이슈", "소식", "news", "issue", "新闻", "消息"}
+SEARCH_REQUIRED_TERMS = {
+    "결과", "일정", "가격", "시세", "요금", "맛집",
+    "result", "results", "score", "schedule", "price", "prices",
+    "餐厅", "价格", "结果", "日程",
+}
 GENERIC_INTENT_TERMS = {
     "경기", "결과", "일정", "뉴스", "이슈", "소식",
     "game", "match", "result", "score", "news", "issue",
@@ -88,6 +93,7 @@ class QueryAnalysis:
     required_tokens: list[str]
     context_terms: list[str]
     recency_intent: bool
+    search_required: bool
     exclude_terms: list[str]
     enhanced_query: str
 
@@ -133,6 +139,7 @@ def build_rule_query_analysis(query: str, *, current_date: str | None = None) ->
         required_tokens=required_tokens,
         context_terms=context_terms,
         recency_intent=recency_intent,
+        search_required=True,
         exclude_terms=exclude_terms,
         enhanced_query=enhanced_query,
     )
@@ -162,6 +169,11 @@ def merge_query_analysis(
         rule_analysis.exclude_terms + _clean_string_list(llm_data.get("exclude_terms"))
     )
     recency_intent = rule_analysis.recency_intent or llm_data.get("recency_intent") is True
+    search_required = (
+        recency_intent
+        or bool(set(_tokenize(rule_analysis.original_query.lower())) & SEARCH_REQUIRED_TERMS)
+        or llm_data.get("search_required") is not False
+    )
     enhanced_query = build_enhanced_query(
         rule_analysis.original_query,
         canonical_topic,
@@ -177,6 +189,7 @@ def merge_query_analysis(
         required_tokens=required_tokens,
         context_terms=context_terms,
         recency_intent=recency_intent,
+        search_required=search_required,
         exclude_terms=exclude_terms,
         enhanced_query=enhanced_query,
     )

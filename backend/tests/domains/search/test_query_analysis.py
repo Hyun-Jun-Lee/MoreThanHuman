@@ -105,12 +105,53 @@ def test_merge_query_analysis_keeps_rule_baseline_when_llm_is_missing():
     assert "KBO" not in merged.enhanced_query
 
 
+@pytest.mark.parametrize(
+    ("query", "llm_search_required", "expected"),
+    [
+        ("면접 자기소개 연습", False, False),
+        ("요즘 AI 뉴스", False, True),
+        ("축구 경기 결과", False, True),
+        ("오사카 맛집 추천", False, True),
+        ("여행 경험 이야기", True, True),
+    ],
+)
+def test_search_decision_preserves_explicit_fact_requirements(query, llm_search_required, expected):
+    rule = build_rule_query_analysis(query, current_date="2026-06-04")
+
+    merged = merge_query_analysis(rule, {"search_required": llm_search_required})
+
+    assert merged.search_required is expected
+
+
+@pytest.mark.parametrize("llm_data", [None, {}, {"search_required": "false"}, {"search_required": 0}])
+def test_search_decision_defaults_to_search_without_boolean_answer(llm_data):
+    rule = build_rule_query_analysis("면접 자기소개 연습", current_date="2026-06-04")
+
+    merged = merge_query_analysis(rule, llm_data)
+
+    assert merged.search_required is True
+
+
+@pytest.mark.asyncio
+async def test_query_analysis_searches_when_llm_fails(monkeypatch):
+    service = SearchService()
+
+    async def fail_analysis(*_args, **_kwargs):
+        raise RuntimeError("analysis unavailable")
+
+    monkeypatch.setattr(service, "_generate_llm_query_analysis", fail_analysis)
+
+    analysis = await service._analyze_query("면접 자기소개 연습")
+
+    assert analysis.search_required is True
+
+
 @pytest.mark.asyncio
 async def test_llm_query_analyzer_prompt_includes_current_date_and_timezone(monkeypatch):
     captured = {}
 
     class FakeResponse:
-        content = '{"canonical_topic":"롯데 자이언츠","required_phrases":["롯데 자이언츠"],"required_tokens":["롯데","자이언츠"],"context_terms":["KBO"],"recency_intent":true,"exclude_terms":[]}'
+        content = '{"canonical_topic":"롯데 자이언츠","required_phrases":["롯데 자이언츠"],"required_tokens":["롯데","자이언츠"],"context_terms":["KBO"],"recency_intent":true,"exclude_terms":[],"search_required":true}'
 
     class FakeProvider:
         async def chat_completion(self, request):
@@ -122,6 +163,7 @@ async def test_llm_query_analyzer_prompt_includes_current_date_and_timezone(monk
     data = await SearchService()._generate_llm_query_analysis("최근 롯데 자이언츠 경기", "2026-06-04", "Asia/Seoul")
 
     assert data["canonical_topic"] == "롯데 자이언츠"
+    assert data["search_required"] is True
     assert captured["request"].extra_params["response_format"]["type"] == "json_schema"
     assert (
         captured["request"].extra_params["response_format"]["json_schema"]["name"]

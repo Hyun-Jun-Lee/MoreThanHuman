@@ -155,20 +155,29 @@ class SearchService:
         """
         language_context = ensure_language_context(language_context)
         with latency_span("topic_prep.total"):
-            prepared = await self._prepare_search_results(topic, language_context=language_context)
-            if not prepared.quality.is_sufficient:
-                return self._build_low_quality_result(
-                    topic,
-                    prepared.sources,
-                    reason=prepared.quality.reason or "대화 준비에 사용할 검색 출처가 충분하지 않아요.",
-                    retry_suggestion=prepared.quality.retry_suggestion,
-                    language_context=language_context,
+            with latency_span("search.query_analysis"):
+                analysis = await self._analyze_query(topic, language_context=language_context)
+            log_event("search.pipeline", stage="search_decision", status="ok",
+                      search_required=analysis.search_required)
+            sources: list[SearchResultItem] = []
+            if analysis.search_required:
+                prepared = await self._prepare_search_results(
+                    topic, language_context=language_context, analysis=analysis,
                 )
+                if not prepared.quality.is_sufficient:
+                    return self._build_low_quality_result(
+                        topic,
+                        prepared.sources,
+                        reason=prepared.quality.reason or "대화 준비에 사용할 검색 출처가 충분하지 않아요.",
+                        retry_suggestion=prepared.quality.retry_suggestion,
+                        language_context=language_context,
+                    )
+                sources = prepared.sources
 
             with latency_span("topic_prep.card_generation"):
                 card = await self._generate_topic_prep_card(
                     topic,
-                    prepared.sources,
+                    sources,
                     language_context=language_context,
                 )
             if not card.quality.is_sufficient:
@@ -177,10 +186,12 @@ class SearchService:
                     card.quality,
                     language_context=language_context,
                     use_quality_retry_suggestion=False,
+                    search_required=analysis.search_required,
                 )
 
             return TopicPrepResult(
                 ready=True,
+                search_required=analysis.search_required,
                 language=language_context,
                 card=card,
                 quality=card.quality,
@@ -196,15 +207,6 @@ class SearchService:
         language_context = ensure_language_context(language_context)
         focus = custom_focus.strip()
         display_language = resolve_topic_display_language(topic, language_context.native_language)
-        prepared = await self._prepare_search_results(topic, language_context=language_context)
-        if not prepared.quality.is_sufficient:
-            return CustomFocusQuestionsResult(
-                ready=False,
-                custom_focus=focus,
-                retry_guidance=self._custom_focus_retry_guidance(display_language),
-            )
-
-        source_text = self._format_topic_prep_sources(prepared.sources)
         target_name = language_name(language_context.target_language)
         display_name = language_name(display_language)
         provider = LLMProviderFactory.create_provider(http_client=self.http_client)
@@ -224,7 +226,7 @@ class SearchService:
                     ),
                     LLMMessage(
                         role="user",
-                        content=f"Topic: {topic}\nFocus: {focus}\n\nSearch Results:\n{source_text}",
+                        content=f"Topic: {topic}\nFocus: {focus}",
                     ),
                 ],
                 model=get_model_for_provider(),
@@ -255,11 +257,6 @@ class SearchService:
         """같은 검증 주제에서 새로운 세 대화 방향만 생성한다."""
         language_context = ensure_language_context(language_context)
         display_language = resolve_topic_display_language(topic, language_context.native_language)
-        prepared = await self._prepare_search_results(topic, language_context=language_context)
-        if not prepared.quality.is_sufficient:
-            raise ExternalAPIException("Topic prep directions are unavailable for this topic")
-
-        source_text = self._format_topic_prep_sources(prepared.sources)
         target_name = language_name(language_context.target_language)
         display_name = language_name(display_language)
         directions = ", ".join(direction.value for direction in ConversationDirection)
@@ -281,8 +278,7 @@ class SearchService:
                     LLMMessage(
                         role="user",
                         content=(
-                            f"Topic: {topic}\nPrevious directions: {json.dumps(previous_directions)}\n\n"
-                            f"Search Results:\n{source_text}"
+                            f"Topic: {topic}\nPrevious directions: {json.dumps(previous_directions)}"
                         ),
                     ),
                 ],
@@ -308,11 +304,13 @@ class SearchService:
         self,
         query: str,
         language_context: LearningLanguageContext | None = None,
+        analysis: QueryAnalysis | None = None,
     ) -> PreparedSearchResult:
         """검색 전처리, 검색 수집, LLM source judge를 실행"""
         language_context = ensure_language_context(language_context)
-        with latency_span("search.query_analysis"):
-            analysis = await self._analyze_query(query, language_context=language_context)
+        if analysis is None:
+            with latency_span("search.query_analysis"):
+                analysis = await self._analyze_query(query, language_context=language_context)
         log_event("search.pipeline", stage="provider_search", status="start",
                   recency_intent=analysis.recency_intent)
         with latency_span("search.provider_search"):
@@ -397,7 +395,11 @@ class SearchService:
                         f"You analyze a user's search topic for a {target_name} conversation app. "
                         f"The learner's native language is {native_name}. "
                         "Return only valid JSON with keys: canonical_topic, required_phrases, "
-                        "required_tokens, context_terms, recency_intent, exclude_terms. "
+                        "required_tokens, context_terms, recency_intent, exclude_terms, search_required. "
+                        "Set search_required false only when a conversation card can be created from the topic "
+                        "without current or externally verified facts, such as personal experience, opinions, "
+                        "or language practice. Set it true for current events, results, prices, schedules, "
+                        "place recommendations, or when uncertain. "
                         "Keep query expansion additive and do not change the user's intent."
                     ),
                 ),
@@ -1264,13 +1266,6 @@ Respond only in JSON:
         }
 
     @staticmethod
-    def _format_topic_prep_sources(sources: list[SearchResultItem]) -> str:
-        return "\n".join(
-            f"- Title: {source.title}\n  Snippet: {source.snippet}\n  URL: {source.url}"
-            for source in sources
-        )
-
-    @staticmethod
     def _custom_focus_retry_guidance(display_language: LanguageCode) -> str:
         if display_language == LanguageCode.KOREAN:
             return "이 주제 안에서 이야기하고 싶은 방향을 다시 입력해 주세요."
@@ -1311,9 +1306,20 @@ Respond only in JSON:
         *,
         language_context: LearningLanguageContext | None = None,
         use_quality_retry_suggestion: bool = True,
+        search_required: bool = True,
     ) -> TopicPrepResult:
         """Topic Prep not-ready 응답의 retry/example 정합성을 맞춘다."""
         language_context = ensure_language_context(language_context)
+        if not search_required:
+            guidance = self._direct_topic_retry_guidance(language_context)
+            return TopicPrepResult(
+                ready=False,
+                search_required=False,
+                language=language_context,
+                quality=quality.model_copy(update={"retry_suggestion": guidance}),
+                retry_guidance=guidance,
+                example_topics=[],
+            )
         example_topics = self._build_example_topics(
             topic,
             language_context=language_context,
@@ -1330,11 +1336,20 @@ Respond only in JSON:
         )
         return TopicPrepResult(
             ready=False,
+            search_required=search_required,
             language=language_context,
             quality=final_quality,
             retry_guidance=retry_guidance,
             example_topics=example_topics,
         )
+
+    @staticmethod
+    def _direct_topic_retry_guidance(language_context: LearningLanguageContext) -> str:
+        if language_context.feedback_language == LanguageCode.ENGLISH:
+            return "Please describe a more specific conversation situation or experience."
+        if language_context.feedback_language == LanguageCode.CHINESE:
+            return "请更具体地描述想讨论的情境或经历。"
+        return "대화하고 싶은 상황이나 경험을 좀 더 구체적으로 입력해주세요."
 
     def _build_retry_guidance(
         self,

@@ -1,4 +1,5 @@
 import json
+from dataclasses import replace
 from datetime import UTC, datetime
 
 import pytest
@@ -108,6 +109,10 @@ def _prepared(topic: str, sources: list[SearchResultItem], is_sufficient: bool =
     )
 
 
+async def _search_required_analysis(topic: str, **_kwargs):
+    return build_rule_query_analysis(topic, current_date="2026-06-04")
+
+
 def _direction_payload() -> list[dict]:
     return [
         {
@@ -128,8 +133,11 @@ def _direction_payload() -> list[dict]:
 async def test_topic_prep_logs_each_stage_without_topic_text(monkeypatch, capsys):
     service = SearchService()
     topic = "private coffee topic"
+    analysis_calls = 0
 
     async def fake_analyze(_query, **_kwargs):
+        nonlocal analysis_calls
+        analysis_calls += 1
         return build_rule_query_analysis(topic, current_date="2026-06-04")
 
     async def fake_search(_query, _analysis, **_kwargs):
@@ -154,6 +162,7 @@ async def test_topic_prep_logs_each_stage_without_topic_text(monkeypatch, capsys
     rows = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line.startswith("{")]
     stages = {row.get("stage"): row for row in rows if row.get("duration_ms") is not None}
     assert result.ready is True
+    assert analysis_calls == 1
     assert set(stages) >= {
         "topic_prep.total", "search.query_analysis", "search.provider_search",
         "search.quality_judge", "topic_prep.card_generation",
@@ -198,7 +207,7 @@ async def test_topic_prep_logs_failed_stage_and_preserves_exception(monkeypatch,
 async def test_prepare_topic_returns_ready_card_when_search_quality_is_sufficient(monkeypatch):
     service = SearchService()
 
-    async def fake_prepare(topic: str, language_context=None):
+    async def fake_prepare(topic: str, language_context=None, analysis=None):
         return _prepared(topic, _sources())
 
     async def fake_generate(
@@ -209,6 +218,7 @@ async def test_prepare_topic_returns_ready_card_when_search_quality_is_sufficien
         return _card(topic, sources)
 
     monkeypatch.setattr(service, "_prepare_search_results", fake_prepare)
+    monkeypatch.setattr(service, "_analyze_query", _search_required_analysis)
     monkeypatch.setattr(service, "_generate_topic_prep_card", fake_generate)
 
     result = await service.prepare_topic("recent Dodgers game result")
@@ -222,10 +232,109 @@ async def test_prepare_topic_returns_ready_card_when_search_quality_is_sufficien
 
 
 @pytest.mark.asyncio
+async def test_prepare_topic_skips_search_when_analysis_says_unnecessary(monkeypatch):
+    service = SearchService()
+    topic = "면접 자기소개 연습"
+
+    async def fake_llm_analysis(_topic, *_args, **_kwargs):
+        return {
+            "canonical_topic": topic,
+            "required_phrases": [topic],
+            "required_tokens": ["면접", "자기소개", "연습"],
+            "context_terms": [],
+            "recency_intent": False,
+            "exclude_terms": [],
+            "search_required": False,
+        }
+
+    async def fail_if_searched(*_args, **_kwargs):
+        raise AssertionError("direct topic prep must skip web search and source judge")
+
+    async def fake_generate(_topic, sources, **_kwargs):
+        return service._build_topic_prep_card_from_data(
+            topic,
+            sources,
+            {"quality": {"is_sufficient": True, "relevance": True, "freshness": True, "specificity": True},
+             "summary": "Interview introduction practice.", "directions": _direction_payload()},
+        )
+
+    monkeypatch.setattr(service, "_generate_llm_query_analysis", fake_llm_analysis)
+    monkeypatch.setattr(service, "_prepare_search_results", fail_if_searched)
+    monkeypatch.setattr(service, "_generate_topic_prep_card", fake_generate)
+
+    result = await service.prepare_topic(topic)
+
+    assert result.ready is True
+    assert result.search_required is False
+    assert result.card is not None
+    assert result.card.sources == []
+    assert result.quality.source_count == 0
+    assert result.quality.has_enough_sources is False
+
+
+@pytest.mark.asyncio
+async def test_direct_topic_prep_failure_does_not_claim_search_failed(monkeypatch):
+    service = SearchService()
+    topic = "면접 자기소개 연습"
+
+    async def fake_analyze(_topic, **_kwargs):
+        return replace(build_rule_query_analysis(topic), search_required=False)
+
+    async def fake_generate(_topic, sources, **_kwargs):
+        return service._build_topic_prep_card_from_data(
+            topic, sources, {"quality": {"is_sufficient": False}, "summary": "", "directions": []},
+        )
+
+    monkeypatch.setattr(service, "_analyze_query", fake_analyze)
+    monkeypatch.setattr(service, "_generate_topic_prep_card", fake_generate)
+
+    result = await service.prepare_topic(topic)
+
+    assert result.ready is False
+    assert result.search_required is False
+    assert result.quality.source_count == 0
+    assert "검색" not in result.retry_guidance
+
+
+@pytest.mark.asyncio
+async def test_topic_prep_followups_generate_without_repeating_search(monkeypatch):
+    service = SearchService()
+    requests = []
+
+    async def fail_if_searched(*_args, **_kwargs):
+        raise AssertionError("follow-up generation must not repeat web search")
+
+    class FakeResponse:
+        def __init__(self, content):
+            self.content = content
+
+    class FakeProvider:
+        async def chat_completion(self, request):
+            requests.append(request)
+            if len(requests) == 1:
+                return FakeResponse(json.dumps({
+                    "is_relevant": True,
+                    "first_questions": ["What is your strength?", "Why this role?", "What did you learn?"],
+                    "retry_guidance": None,
+                }))
+            return FakeResponse(json.dumps({"directions": _direction_payload()}))
+
+    monkeypatch.setattr(service, "_prepare_search_results", fail_if_searched)
+    monkeypatch.setattr("domains.search.service.LLMProviderFactory.create_provider", lambda **kwargs: FakeProvider())
+
+    focus = await service.prepare_custom_focus_questions("면접 자기소개 연습", "강점 설명")
+    directions = await service.regenerate_topic_prep_directions("면접 자기소개 연습", [])
+
+    assert focus.ready is True
+    assert len(directions.directions) == 3
+    assert all("Search Results" not in request.messages[1].content for request in requests)
+
+
+@pytest.mark.asyncio
 async def test_prepare_topic_rejects_when_source_count_is_too_low(monkeypatch):
     service = SearchService()
 
-    async def fake_prepare(topic: str, language_context=None):
+    async def fake_prepare(topic: str, language_context=None, analysis=None):
         return _prepared(topic, _sources()[:1], is_sufficient=False)
 
     async def fail_if_called(
@@ -236,6 +345,7 @@ async def test_prepare_topic_rejects_when_source_count_is_too_low(monkeypatch):
         raise AssertionError("LLM card generation should not run for low source count")
 
     monkeypatch.setattr(service, "_prepare_search_results", fake_prepare)
+    monkeypatch.setattr(service, "_analyze_query", _search_required_analysis)
     monkeypatch.setattr(service, "_generate_topic_prep_card", fail_if_called)
 
     result = await service.prepare_topic("recent game")
@@ -251,7 +361,7 @@ async def test_prepare_topic_rejects_when_source_count_is_too_low(monkeypatch):
 async def test_prepare_topic_rejects_when_llm_quality_gate_fails(monkeypatch):
     service = SearchService()
 
-    async def fake_prepare(topic: str, language_context=None):
+    async def fake_prepare(topic: str, language_context=None, analysis=None):
         return _prepared(topic, _sources())
 
     async def fake_generate(
@@ -262,6 +372,7 @@ async def test_prepare_topic_rejects_when_llm_quality_gate_fails(monkeypatch):
         return _card(topic, sources, is_sufficient=False)
 
     monkeypatch.setattr(service, "_prepare_search_results", fake_prepare)
+    monkeypatch.setattr(service, "_analyze_query", _search_required_analysis)
     monkeypatch.setattr(service, "_generate_topic_prep_card", fake_generate)
 
     result = await service.prepare_topic("요즘 이슈")
@@ -282,7 +393,7 @@ async def test_prepare_topic_uses_feedback_language_when_llm_card_quality_fails(
         feedback_language="zh",
     )
 
-    async def fake_prepare(topic: str, language_context=None):
+    async def fake_prepare(topic: str, language_context=None, analysis=None):
         return _prepared(topic, _sources())
 
     async def fake_generate(
@@ -294,6 +405,7 @@ async def test_prepare_topic_uses_feedback_language_when_llm_card_quality_fails(
         return _card(topic, sources, is_sufficient=False)
 
     monkeypatch.setattr(service, "_prepare_search_results", fake_prepare)
+    monkeypatch.setattr(service, "_analyze_query", _search_required_analysis)
     monkeypatch.setattr(service, "_generate_topic_prep_card", fake_generate)
 
     result = await service.prepare_topic("预约", language_context=context)
@@ -314,7 +426,7 @@ async def test_prepare_topic_uses_english_feedback_for_korean_practice_retry(mon
         feedback_language="en",
     )
 
-    async def fake_prepare(topic: str, language_context=None):
+    async def fake_prepare(topic: str, language_context=None, analysis=None):
         prepared = _prepared(topic, _sources()[:1], is_sufficient=False)
         return PreparedSearchResult(
             analysis=prepared.analysis,
@@ -331,6 +443,7 @@ async def test_prepare_topic_uses_english_feedback_for_korean_practice_retry(mon
         raise AssertionError("LLM card generation should not run for low source count")
 
     monkeypatch.setattr(service, "_prepare_search_results", fake_prepare)
+    monkeypatch.setattr(service, "_analyze_query", _search_required_analysis)
     monkeypatch.setattr(service, "_generate_topic_prep_card", fail_if_called)
 
     result = await service.prepare_topic("clinic appointment", language_context=context)

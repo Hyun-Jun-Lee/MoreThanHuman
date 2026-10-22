@@ -19,6 +19,26 @@ void main() {
     expect(result.language.targetLanguage, LearningLanguageCode.ko);
   });
 
+  test('parses a ready card when search was skipped', () {
+    final Map<String, dynamic> json = _readyResult();
+    final Map<String, dynamic> card = json['card']! as Map<String, dynamic>;
+    json['search_required'] = false;
+    json['quality'] = <String, dynamic>{
+      ..._quality(),
+      'source_count': 0,
+      'has_enough_sources': false,
+    };
+    card['sources'] = <Map<String, dynamic>>[];
+    card['quality'] = json['quality'];
+
+    final TopicPrepResult result = TopicPrepResult.fromJson(json);
+
+    expect(result.ready, isTrue);
+    expect(result.card?.sources, isEmpty);
+    expect(result.quality.sourceCount, 0);
+    expect(result.quality.hasEnoughSources, isFalse);
+  });
+
   test('parses a low-quality topic prep result', () {
     final TopicPrepResult result = TopicPrepResult.fromJson(<String, dynamic>{
       'ready': false,

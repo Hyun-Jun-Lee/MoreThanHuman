@@ -73,8 +73,32 @@ def test_prepare_topic_endpoint_returns_card_for_authenticated_user():
     body = response.json()
     assert body["success"] is True
     assert body["data"]["ready"] is True
+    assert body["data"]["search_required"] is True
     assert body["data"]["card"]["topic"] == "recent Dodgers game"
     assert len(body["data"]["card"]["directions"]) == 3
+
+
+def test_prepare_topic_endpoint_marks_direct_card_without_sources():
+    class FakeService:
+        async def prepare_topic(self, topic: str, language_context=None) -> TopicPrepResult:
+            ready = _ready_result(topic)
+            quality = ready.quality.model_copy(update={"source_count": 0, "has_enough_sources": False})
+            return ready.model_copy(update={
+                "search_required": False,
+                "quality": quality,
+                "card": ready.card.model_copy(update={"quality": quality}),
+            })
+
+    client = TestClient(_app_with_overrides(FakeService()))
+
+    response = client.post("/api/search/topic-prep/", json={"topic": "interview practice"})
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["ready"] is True
+    assert data["search_required"] is False
+    assert data["quality"]["source_count"] == 0
+    assert data["card"]["sources"] == []
 
 
 def test_prepare_topic_endpoint_returns_retry_guidance_for_low_quality_topic():
