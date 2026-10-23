@@ -46,6 +46,8 @@ nginx `request_time`은 nginx가 요청을 읽기 시작한 때부터 응답 전
 
 2026-10-23 로컬 백엔드 프로세스에서 동일한 `퇴사` 주제로 실제 OpenRouter 호출을 5회 측정했어요. 모두 검색 생략·카드 완성이었고, 서비스 호출 시작 기준 요약 중앙값은 3.41초, 카드 중앙값은 4.95초, 같은 요청 안의 요약→카드 간격 중앙값은 1.30초였어요(범위 1.20초에서 2.56초). 인증·프로필 조회·HTTP 전송·앱 렌더링은 제외한 값이므로 실제 화면 시각은 모바일·서버의 동일 trace_id 로그로 확인해야 해요.
 
+임시 로컬 HTTP 서버의 인증 의존성을 테스트 값으로 대체한 1회에서는 클라이언트가 `summary_ready`를 요청 후 4.07초, `card_ready`를 6.39초에 받았어요. 두 이벤트 간격은 2.31초였고 서버 로그의 시작 시각은 각각 4.06초와 6.38초였어요. 이 값도 실제 인증·프로필 조회 및 모바일 렌더링은 포함하지 않아요.
+
 `POST /api/search/topic-prep/`는 요청별 `trace_id`에서 `topic_prep.total`과 `search.query_analysis` → `search.provider_search` → `search.quality_judge` → `topic_prep.card_generation`의 완료 로그를 남겨요. `search_decision.search_required=false`이면 검색·출처 판정 로그 없이 카드 생성으로 이동해요. 각 `duration_ms`는 해당 단계의 시작부터 완료까지이고 `start_offset_ms`는 API 요청 시작 기준이에요. 검색 결과가 없으면 품질 판정을, 검색 품질이 부족하면 카드 생성을 건너뛰므로 해당 단계 로그가 없어요. 실패 단계에는 `status=error`를 남기고 예외는 기존 응답 정책대로 전파해요. 이미 있는 provider 세부 로그와 함께 비교할 수 있으며 검색어·출처 본문·LLM 응답은 로그에 넣지 않아요. `topic_prep.total`에는 결과 구성도 포함되고, 전체 요청의 `auth` 및 응답 직렬화는 포함되지 않아요. 이 단계들은 포함 관계가 있으므로 `topic_prep.total`과 하위 시간을 더하지 않아요.
 
 검색어 분석은 `search.query_analysis.llm_request`와 `search.query_analysis.parse`, 카드 생성은 `topic_prep.card_llm_request`·`topic_prep.card_parse`·`topic_prep.card_build`로 나눠 기록해요. LLM 요청 로그에는 요청 모델명, OpenRouter가 응답 메타데이터로 제공한 실제 provider·service tier·생성 시간, 입력·출력 토큰 수와 응답 글자 수를 기록해요. 메타데이터가 없으면 해당 필드는 생략해요. OpenRouter 호출 시간은 HTTP 연결·라우팅·모델 처리·응답 수신을 모두 포함하며, 생성 시간 메타데이터는 공급자 측 값이므로 둘을 단순한 네트워크 지연 차이로 해석하지 않아요.
