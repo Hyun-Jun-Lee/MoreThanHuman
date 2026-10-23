@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from domains.auth.models import ProfileModel
 from shared.exceptions import NotFoundException
+from shared.latency import latency_span
 from shared.language import LearningLanguageContext
 
 
@@ -27,7 +28,8 @@ class AuthRepository:
 
     def find_by_id(self, profile_id: str) -> ProfileModel:
         """ID로 프로필 조회"""
-        profile = self.db.query(ProfileModel).filter(ProfileModel.id == profile_id).first()
+        with latency_span("auth.profile.select"):
+            profile = self.db.query(ProfileModel).filter(ProfileModel.id == profile_id).first()
         if not profile:
             raise NotFoundException(f"Profile {profile_id} not found")
         return profile

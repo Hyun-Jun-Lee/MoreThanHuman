@@ -73,6 +73,8 @@ API와 nginx는 JSON을 stdout에 기록하고 Docker `json-file`이 각 컨테�
 
 로컬 대화 목록의 반복 지연 측정은 별도의 Supabase 이메일·비밀번호 개발 계정을 키체인에 등록하고 `backend/scripts/benchmark_conversation_list.py`로 실행해요. 준비 요청·중앙값·p95·느린 요청 ID와 키체인 명령은 [API 로그 문서](OBSERVABILITY.md#개발-계정으로-대화-목록-반복-측정)에 있어요. 이 측정 도구는 로컬 HTTP 주소만 허용해요.
 
+Topic Prep 요약·카드 스트림의 도착 시각은 같은 개발 계정으로 `backend/scripts/benchmark_api_flows.py`의 `topic-prep-stream --topic '...' --allow-cost`를 사용해요. 요청 ID별 단계와 실행 옵션은 [API 로그 문서](OBSERVABILITY.md#앱-주요-흐름-반복-측정)에 있어요.
+
 ```text
 Flutter App
 → Google Sign-In SDK로 로그인

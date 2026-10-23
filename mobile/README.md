@@ -208,7 +208,7 @@ Splash → Onboarding(최초 1회) → Google 또는 iOS Apple Login → Home
 
 홈의 `＋ 새 대화`에서 Free Chat을 선택하면 Topic Input 화면으로 이동해요. Topic Input은 2자 미만 입력을 클라이언트에서 막고, 예시 topic chip으로 빠르게 주제를 채울 수 있게 해요.
 
-Topic Prep 화면은 전달받은 topic으로 `POST /api/search/topic-prep/`를 호출해 loading, ready, low-quality, error 상태를 표시해요. 응답의 `language`는 첫 답변 입력 안내처럼 사용자가 직접 작성해야 하는 copy에 사용하고, 서버가 내려준 retry guidance가 있으면 그 문구를 우선 표시해요.
+Topic Prep 화면은 전달받은 topic으로 `POST /api/search/topic-prep/stream/`을 호출해요. 주제와 영역별 로딩 표시를 먼저 보여주고 `summary_ready`에서 요약을, `card_ready`에서 완성된 방향·첫 질문을 보여줘요. 스트림 오류는 전체 오류 상태로 표시하며 부분 재시도는 아직 없어요. 응답의 `language`는 첫 답변 입력 안내처럼 사용자가 직접 작성해야 하는 copy에 사용하고, 서버가 내려준 retry guidance가 있으면 그 문구를 우선 표시해요.
 
 | 상태 | 표시 |
 |------|------|

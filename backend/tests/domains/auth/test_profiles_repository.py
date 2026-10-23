@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 
 from sqlalchemy import create_engine
@@ -6,6 +7,7 @@ from sqlalchemy.orm import sessionmaker
 from database import Base
 from domains.auth.models import ProfileModel
 from domains.auth.repository import AuthRepository
+from shared.logging_config import request_context
 
 
 def _repository():
@@ -34,6 +36,27 @@ def test_get_or_create_profile_creates_profile_from_supabase_identity():
     assert profile.target_language == "en"
     assert profile.feedback_language == "ko"
     assert profile.nickname is None
+
+
+def test_find_by_id_logs_select_time_without_profile_id(capsys):
+    repository = _repository()
+    repository.get_or_create_profile(
+        profile_id="private-profile-id", email="learner@example.com",
+        name="Learner", oauth_provider="google",
+    )
+
+    token = request_context.set({"trace_id": "a" * 32, "request_id": "b" * 32})
+    try:
+        profile = repository.find_by_id("private-profile-id")
+    finally:
+        request_context.reset(token)
+
+    rows = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line.startswith("{")]
+    span = next(row for row in rows if row.get("stage") == "auth.profile.select")
+    assert profile.id == "private-profile-id"
+    assert span["status"] == "ok"
+    assert span["duration_ms"] >= 0
+    assert "private-profile-id" not in json.dumps(rows)
 
 
 def test_get_or_create_profile_keeps_existing_profile_unchanged():

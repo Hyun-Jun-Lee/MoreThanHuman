@@ -1,3 +1,4 @@
+import json
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
@@ -140,3 +141,35 @@ def test_prepare_topic_endpoint_requires_authentication():
     response = client.post("/api/search/topic-prep/", json={"topic": "recent Dodgers game"})
 
     assert response.status_code in {401, 403}
+
+
+def test_prepare_topic_stream_emits_summary_before_card():
+    class FakeService:
+        async def prepare_topic_stream(self, topic: str, language_context=None):
+            assert language_context.target_language.value == "ko"
+            yield "summary_ready", "A specific topic summary."
+            yield "card_ready", _ready_result(topic)
+
+    client = TestClient(_app_with_overrides(FakeService()))
+    response = client.post("/api/search/topic-prep/stream/", json={"topic": "interview practice"})
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/x-ndjson")
+    events = [json.loads(line) for line in response.text.splitlines()]
+    assert [event["event"] for event in events] == ["summary_ready", "card_ready"]
+    assert events[0]["data"] == "A specific topic summary."
+    assert events[1]["data"]["ready"] is True
+
+
+def test_prepare_topic_stream_reports_failure_after_summary():
+    class FakeService:
+        async def prepare_topic_stream(self, topic: str, language_context=None):
+            yield "summary_ready", "A specific topic summary."
+            raise RuntimeError("private upstream detail")
+
+    client = TestClient(_app_with_overrides(FakeService()))
+    response = client.post("/api/search/topic-prep/stream/", json={"topic": "interview practice"})
+
+    events = [json.loads(line) for line in response.text.splitlines()]
+    assert [event["event"] for event in events] == ["summary_ready", "error"]
+    assert "private upstream detail" not in response.text

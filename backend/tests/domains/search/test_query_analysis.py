@@ -1,7 +1,11 @@
+import json
+
 import pytest
 
+from domains.llm.schemas import LLMResponse
 from domains.search.query import build_rule_query_analysis, merge_query_analysis
 from domains.search.service import SearchService
+from shared.logging_config import request_context
 
 
 def test_rule_analysis_enhances_recent_lotte_giants_query():
@@ -147,24 +151,38 @@ async def test_query_analysis_searches_when_llm_fails(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_llm_query_analyzer_prompt_includes_current_date_and_timezone(monkeypatch):
+async def test_llm_query_analyzer_prompt_includes_current_date_and_timezone(monkeypatch, capsys):
     captured = {}
-
-    class FakeResponse:
-        content = '{"canonical_topic":"롯데 자이언츠","required_phrases":["롯데 자이언츠"],"required_tokens":["롯데","자이언츠"],"context_terms":["KBO"],"recency_intent":true,"exclude_terms":[],"search_required":true}'
 
     class FakeProvider:
         async def chat_completion(self, request):
             captured["request"] = request
-            return FakeResponse()
+            return LLMResponse(
+                content='{"canonical_topic":"롯데 자이언츠","required_phrases":["롯데 자이언츠"],"required_tokens":["롯데","자이언츠"],"context_terms":["KBO"],"recency_intent":true,"exclude_terms":[],"search_required":true}',
+                usage={"prompt_tokens": 101, "completion_tokens": 65},
+                upstream_provider="Google",
+            )
 
     monkeypatch.setattr("domains.search.service.LLMProviderFactory.create_provider", lambda **kwargs: FakeProvider())
 
-    data = await SearchService()._generate_llm_query_analysis("최근 롯데 자이언츠 경기", "2026-06-04", "Asia/Seoul")
+    token = request_context.set({"trace_id": "a" * 32, "request_id": "b" * 32})
+    try:
+        data = await SearchService()._generate_llm_query_analysis("최근 롯데 자이언츠 경기", "2026-06-04", "Asia/Seoul")
+    finally:
+        request_context.reset(token)
+
+    rows = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line.startswith("{")]
+    llm_row = next(row for row in rows if row.get("stage") == "search.query_analysis.llm_request")
+    assert llm_row["prompt_tokens"] == 101
+    assert llm_row["completion_tokens"] == 65
+    assert llm_row["upstream_provider"] == "Google"
+    assert any(row.get("stage") == "search.query_analysis.parse" for row in rows)
+    assert "롯데 자이언츠" not in json.dumps(rows, ensure_ascii=False)
 
     assert data["canonical_topic"] == "롯데 자이언츠"
     assert data["search_required"] is True
     assert captured["request"].extra_params["response_format"]["type"] == "json_schema"
+    assert captured["request"].extra_params["provider"] == {"sort": "latency"}
     assert (
         captured["request"].extra_params["response_format"]["json_schema"]["name"]
         == "search_query_analysis"
@@ -172,3 +190,30 @@ async def test_llm_query_analyzer_prompt_includes_current_date_and_timezone(monk
     user_prompt = captured["request"].messages[1].content
     assert "Current date: 2026-06-04" in user_prompt
     assert "Timezone: Asia/Seoul" in user_prompt
+
+
+@pytest.mark.asyncio
+async def test_query_analyzer_omits_openrouter_routing_for_ollama(monkeypatch):
+    service = SearchService()
+    monkeypatch.setattr(service.settings, "llm_provider", "ollama")
+    captured = {}
+
+    class FakeProvider:
+        async def chat_completion(self, request):
+            captured["extra_params"] = request.extra_params
+            return LLMResponse(content=json.dumps({
+                "canonical_topic": "interview practice",
+                "required_phrases": [],
+                "required_tokens": [],
+                "context_terms": [],
+                "recency_intent": False,
+                "exclude_terms": [],
+                "search_required": False,
+            }))
+
+    monkeypatch.setattr("domains.search.service.LLMProviderFactory.create_provider", lambda **kwargs: FakeProvider())
+
+    await service._generate_llm_query_analysis("interview practice", "2026-06-04", "Asia/Seoul")
+
+    assert "response_format" in captured["extra_params"]
+    assert "provider" not in captured["extra_params"]

@@ -42,11 +42,21 @@ nginx `request_time`은 nginx가 요청을 읽기 시작한 때부터 응답 전
 
 ### Topic Prep 단계별 시간
 
-`POST /api/search/topic-prep/`는 요청별 `trace_id`에서 `topic_prep.total`과 `search.query_analysis` → `search.provider_search` → `search.quality_judge` → `topic_prep.card_generation`의 완료 로그를 남겨요. 각 `duration_ms`는 해당 단계의 시작부터 완료까지이고 `start_offset_ms`는 API 요청 시작 기준이에요. 검색 결과가 없으면 품질 판정을, 검색 품질이 부족하면 카드 생성을 건너뛰므로 해당 단계 로그가 없어요. 실패 단계에는 `status=error`를 남기고 예외는 기존 응답 정책대로 전파해요. 이미 있는 provider 세부 로그와 함께 비교할 수 있으며 검색어·출처 본문·LLM 응답은 로그에 넣지 않아요. `topic_prep.total`에는 결과 구성도 포함되고, 전체 요청의 `auth` 및 응답 직렬화는 포함되지 않아요. 이 단계들은 포함 관계가 있으므로 `topic_prep.total`과 하위 시간을 더하지 않아요.
+스트림 Topic Prep의 `topic_prep.summary_ready`와 `topic_prep.card_ready`는 이벤트를 보낼 때 기록해요. 각 로그의 `start_offset_ms`는 서버 요청 시작 기준이에요. 모바일 `[latency]`의 같은 이벤트는 HTTP 요청 시작 기준 수신 시각이에요. 스트림 카드 LLM 로그에는 전체 응답의 provider·토큰 메타데이터가 제공되지 않을 수 있어요.
+
+2026-10-23 로컬 백엔드 프로세스에서 동일한 `퇴사` 주제로 실제 OpenRouter 호출을 5회 측정했어요. 모두 검색 생략·카드 완성이었고, 서비스 호출 시작 기준 요약 중앙값은 3.41초, 카드 중앙값은 4.95초, 같은 요청 안의 요약→카드 간격 중앙값은 1.30초였어요(범위 1.20초에서 2.56초). 인증·프로필 조회·HTTP 전송·앱 렌더링은 제외한 값이므로 실제 화면 시각은 모바일·서버의 동일 trace_id 로그로 확인해야 해요.
+
+`POST /api/search/topic-prep/`는 요청별 `trace_id`에서 `topic_prep.total`과 `search.query_analysis` → `search.provider_search` → `search.quality_judge` → `topic_prep.card_generation`의 완료 로그를 남겨요. `search_decision.search_required=false`이면 검색·출처 판정 로그 없이 카드 생성으로 이동해요. 각 `duration_ms`는 해당 단계의 시작부터 완료까지이고 `start_offset_ms`는 API 요청 시작 기준이에요. 검색 결과가 없으면 품질 판정을, 검색 품질이 부족하면 카드 생성을 건너뛰므로 해당 단계 로그가 없어요. 실패 단계에는 `status=error`를 남기고 예외는 기존 응답 정책대로 전파해요. 이미 있는 provider 세부 로그와 함께 비교할 수 있으며 검색어·출처 본문·LLM 응답은 로그에 넣지 않아요. `topic_prep.total`에는 결과 구성도 포함되고, 전체 요청의 `auth` 및 응답 직렬화는 포함되지 않아요. 이 단계들은 포함 관계가 있으므로 `topic_prep.total`과 하위 시간을 더하지 않아요.
+
+검색어 분석은 `search.query_analysis.llm_request`와 `search.query_analysis.parse`, 카드 생성은 `topic_prep.card_llm_request`·`topic_prep.card_parse`·`topic_prep.card_build`로 나눠 기록해요. LLM 요청 로그에는 요청 모델명, OpenRouter가 응답 메타데이터로 제공한 실제 provider·service tier·생성 시간, 입력·출력 토큰 수와 응답 글자 수를 기록해요. 메타데이터가 없으면 해당 필드는 생략해요. OpenRouter 호출 시간은 HTTP 연결·라우팅·모델 처리·응답 수신을 모두 포함하며, 생성 시간 메타데이터는 공급자 측 값이므로 둘을 단순한 네트워크 지연 차이로 해석하지 않아요.
+
+프로필 조회의 `auth.profile.select`는 `profiles` ORM 조회·행 fetch·객체 구성을 포함해요. 같은 요청의 `db_slow_query`는 커서 실행 시간을 기록하므로 두 구간의 차이로 Python 측 잔여 비용을 대략 확인할 수 있어요. SQL 실행 시간만으로 DB 서버 처리와 서울–시드니 왕복 시간을 분리할 수는 없으며, 이를 확인할 때는 별도 진단에서 같은 연결의 `SELECT 1`과 프로필 조회, 서버 측 실행 계획을 비교해요.
 
 검색 공급자 안에서는 `search.provider_load`(ddgs import), `search.provider_client`(클라이언트 생성), `search.provider_request`(ddgs 텍스트 검색), `search.provider_normalize`(결과 정규화)를 같은 요청 ID로 기록해요. 검색 호출에는 설정된 `backend`·`region`·`requested_results`·`recency_intent`와 성공 시 `result_count`, 오류 시 `exception_type`만 남겨요. `backend=auto`일 때 ddgs 내부에서 실제로 선택한 검색 엔진이나 재시도 횟수는 이 로그만으로 식별할 수 없어요. 공급자 전체 `search.provider_search`는 스레드 실행 대기를 포함하므로 내부 구간의 합보다 길 수 있어요. 수집 상한은 기본 6개이며 `source_count`·`accepted_count`·`sufficient`를 함께 비교해 품질 변화를 확인해요.
 
 `search.quality_judge`는 `SEARCH_QUALITY_JUDGE_MODEL`의 OpenRouter 모델을 사용하며 `search.pipeline`의 `quality_judge` 시작·완료 로그에 모델명을 남겨요. 검색어 분석과 준비 카드 생성은 기존 `LLM_PROVIDER`·`OPENROUTER_MODEL` 설정을 유지해요. 모델 교체 전후에는 같은 주제로 준비 카드 완성 여부와 출처 채택 수까지 함께 비교해요.
+
+Topic Prep의 OpenRouter 요청은 모델 환경변수를 나누지 않고 검색 필요 여부 분석·출처 품질 판정에 `provider.sort=latency`, 카드 생성에 `provider.sort=throughput`을 전달해요. Ollama 요청에는 OpenRouter 전용 옵션을 보내지 않아요. structured output 미지원으로 재시도할 때도 `provider.sort`를 유지하며 `response_format`만 제외해요. 실제 선택된 upstream provider와 `service_tier`는 LLM 세부 로그에서 확인해요.
 
 ## 로컬 조회
 
@@ -68,16 +78,17 @@ API의 `proxy_request_id`로 nginx의 같은 시도를 찾고, `trace_id`로 앱
 
 ### 앱 주요 흐름 반복 측정
 
-`backend/scripts/benchmark_api_flows.py`는 같은 로컬 개발 계정과 연결 재사용으로 아래 네 흐름을 측정해요. 토큰 발급은 표본에서 제외하며 각 요청에 `X-Request-ID`를 붙여 API 로그와 연결해요. 출력에는 요청·응답 본문, 토큰, 검색어, 이메일을 넣지 않아요. 주소는 `http://localhost`·`127.0.0.1`·`::1`과 명시적 포트만 허용해요.
+`backend/scripts/benchmark_api_flows.py`는 같은 로컬 개발 계정과 연결 재사용으로 아래 다섯 흐름을 측정해요. 토큰 발급은 표본에서 제외하며 각 요청에 `X-Request-ID`를 붙여 API 로그와 연결해요. 출력에는 요청·응답 본문, 토큰, 검색어, 이메일을 넣지 않아요. 주소는 `http://localhost`·`127.0.0.1`·`::1`과 명시적 포트만 허용해요.
 
 | 흐름 | CLI 선택 | 요청과 측정 경계 |
 |------|---------|----------------|
 | 홈 | `home` | `/auth/me` 뒤 최근 대화 5개·주간 주제·스낵 12개·바구니 리셋 GET을 병렬 시작해 개별 완료와 묶음 완료를 기록해요. 앱 UI 프레임 시간은 포함하지 않아요. |
 | 자유 대화 준비 | `topic-prep --topic '...'` | `POST /search/topic-prep/`의 전체 HTTP 응답을 측정해요. 검색·LLM 비용이 매 표본에 발생해요. |
+| 자유 대화 준비 스트림 | `topic-prep-stream --topic '...'` | `POST /search/topic-prep/stream/`의 요약 수신, 카드 수신, 두 이벤트 간격과 전체 HTTP 시간을 측정해요. 검색·LLM 비용이 매 표본에 발생해요. |
 | 대화 시작·이어 말하기 | `stream --kind free-chat --text '...'`, `stream --kind roleplay --role-character '...'`, `stream --kind suggested --topic-id UUID`, `stream --kind turn --conversation-id UUID --text '...'` | NDJSON 응답 헤더, 첫 `text_delta`, 첫 `audio_segment`, `turn_completed`까지의 시간을 기록해요. 첫 화면 프레임·실제 재생은 모바일 로그로 확인해요. 모든 표본은 새 요청 ID로 영속 대화 또는 발화를 만들고 LLM/TTS 비용이 발생해요. `--allow-writes`가 필요해요. |
 | 기존 대화 진입 | `messages --conversation-id UUID` | 메시지 첫 40개를 읽고 총 40개 초과면 마지막 40개를 추가 조회해요. 이어서 미해결 turn과 대화별 권한 GET을 기록해요. |
 
-예시는 `cd backend && .venv/bin/python -m scripts.benchmark_api_flows --email '<개발 계정 이메일>' home --samples 20`이에요. 주제 준비는 `topic-prep --topic 'coffee culture' --samples 3 --allow-cost`처럼, 스트림은 `stream --kind free-chat --text 'I like coffee.' --samples 1 --allow-writes`처럼 실행해요. 기존 대화 진입은 `messages --conversation-id UUID`예요. 조회의 기본은 10회와 준비 1회이고 주제 준비·스트림의 기본은 1회와 준비 0회예요. 쓰기 흐름에는 자동 정리를 하지 않아요. 측정용 계정의 슬롯·발화 제한을 확인하고, 반복 표본의 대화·메시지 증가와 주제·답변 내용 변화가 결과에 영향을 줄 수 있어요. 중앙값·p95와 개별 요청 ID, 주제 준비의 `ready`, 스트림의 `audio_status`, 재진입의 메시지 수를 출력하며 실패·불완전 스트림은 통계에 넣지 않고 중단해요. p95는 표본이 적으면 안정적인 상위 지연 추정이 아니에요.
+예시는 `cd backend && .venv/bin/python -m scripts.benchmark_api_flows --email '<개발 계정 이메일>' home --samples 20`이에요. 주제 준비는 `topic-prep --topic 'coffee culture' --samples 3 --allow-cost`, 단계별 준비는 `topic-prep-stream --topic 'coffee culture' --samples 3 --allow-cost`처럼 실행해요. 대화 스트림은 `stream --kind free-chat --text 'I like coffee.' --samples 1 --allow-writes`처럼 실행해요. 기존 대화 진입은 `messages --conversation-id UUID`예요. 조회의 기본은 10회와 준비 1회이고 주제 준비·스트림의 기본은 1회와 준비 0회예요. 쓰기 흐름에는 자동 정리를 하지 않아요. 측정용 계정의 슬롯·발화 제한을 확인하고, 반복 표본의 대화·메시지 증가와 주제·답변 내용 변화가 결과에 영향을 줄 수 있어요. 중앙값·p95와 개별 요청 ID, 주제 준비의 `ready`, 스트림의 `audio_status`, 재진입의 메시지 수를 출력하며 실패·불완전 스트림은 통계에 넣지 않고 중단해요. p95는 표본이 적으면 안정적인 상위 지연 추정이 아니에요.
 
 클라이언트 시간에는 로컬 전송과 JSON/NDJSON 파싱이 포함돼요. 서버 요청 완료 로그의 `duration_ms`, 인증·DB 단계, 스트림의 `first_text_delta`·`first_audio_segment`와 같은 요청 ID로 비교해요. 홈의 병렬 묶음은 실제 Flutter 화면 표시 시간과 다르고, 스트림 첫 오디오는 재생 시작 시간이 아니에요.
 

@@ -1,5 +1,6 @@
 import asyncio
 import importlib
+import json
 
 import httpx
 import pytest
@@ -91,6 +92,37 @@ async def test_providers_borrow_client_and_preserve_timeout(monkeypatch, provide
         ) for request in requests)
         assert len(requests) == 2
     assert client.is_closed
+
+
+@pytest.mark.asyncio
+async def test_openrouter_reads_selected_provider_without_exposing_response_content():
+    async def upstream(request):
+        assert request.headers["x-openrouter-metadata"] == "enabled"
+        assert json.loads(request.content)["provider"] == {"sort": "throughput"}
+        return httpx.Response(200, json={
+            "choices": [{"message": {"content": "private generated card"}}],
+            "model": "google/gemini-3.1-flash-lite-preview",
+            "usage": {"prompt_tokens": 120, "completion_tokens": 80},
+            "service_tier": "priority",
+            "openrouter_metadata": {
+                "generation_time": 410,
+                "endpoints": {"available": [
+                    {"provider": "Other", "selected": False},
+                    {"provider": "Google", "selected": True},
+                ]},
+            },
+        })
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(upstream)) as client:
+        response = await OpenRouterProvider(client).chat_completion(LLMRequest(
+            messages=[LLMMessage(role="user", content="topic")], model="test-model",
+            extra_params={"provider": {"sort": "throughput"}},
+        ))
+
+    assert response.upstream_provider == "Google"
+    assert response.service_tier == "priority"
+    assert response.upstream_generation_ms == 410
+    assert response.usage == {"prompt_tokens": 120, "completion_tokens": 80}
 
 
 @pytest.mark.asyncio

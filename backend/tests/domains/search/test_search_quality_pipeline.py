@@ -163,6 +163,7 @@ async def test_quality_judge_prompt_includes_current_date_and_timezone(monkeypat
     assert captured["provider_type"] == "openrouter"
     assert captured["request"].model == "google/gemini-3.1-flash-lite"
     assert captured["request"].extra_params["response_format"]["type"] == "json_schema"
+    assert captured["request"].extra_params["provider"] == {"sort": "latency"}
     assert (
         captured["request"].extra_params["response_format"]["json_schema"]["name"]
         == "search_quality_judge"
@@ -267,7 +268,7 @@ async def test_quality_judge_retries_without_structured_output_when_provider_rej
     class FakeProvider:
         async def chat_completion(self, request):
             calls.append(request.extra_params)
-            if request.extra_params:
+            if request.extra_params and "response_format" in request.extra_params:
                 raise ExternalAPIException("response_format json_schema is not supported")
             return FakeResponse()
 
@@ -285,7 +286,8 @@ async def test_quality_judge_retries_without_structured_output_when_provider_rej
     assert len(accepted_sources) == 2
     assert quality.is_sufficient is True
     assert calls[0] is not None
-    assert calls[1] is None
+    assert calls[0]["provider"] == {"sort": "latency"}
+    assert calls[1] == {"provider": {"sort": "latency"}}
 
 
 def test_quality_finalizer_rejects_invalid_source_id():

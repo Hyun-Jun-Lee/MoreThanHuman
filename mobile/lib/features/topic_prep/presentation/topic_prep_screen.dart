@@ -63,6 +63,7 @@ class _TopicPrepScreenState extends ConsumerState<TopicPrepScreen> {
     final AsyncValue<TopicPrepResult> result = ref.watch(
       topicPrepControllerProvider(_topic),
     );
+    final String? partialSummary = ref.watch(topicPrepSummaryProvider(_topic));
     final StartConversationState startState = ref.watch(
       startConversationControllerProvider,
     );
@@ -71,7 +72,7 @@ class _TopicPrepScreenState extends ConsumerState<TopicPrepScreen> {
       appBar: AppBar(title: Text(copy.topicPrepTitle)),
       body: result.when(
         loading: () =>
-            AppAsyncStateView.loading(message: copy.preparingConversation),
+            _LoadingTopicPrepView(topic: _topic, summary: partialSummary),
         error: (_, _) => AppAsyncStateView.error(
           title: copy.topicPrepFailedTitle,
           message: copy.connectionRetryMessage,
@@ -457,6 +458,47 @@ class _TopicPrepScreenState extends ConsumerState<TopicPrepScreen> {
     } finally {
       if (mounted) setState(() => _isRegeneratingDirections = false);
     }
+  }
+}
+
+class _LoadingTopicPrepView extends StatelessWidget {
+  const _LoadingTopicPrepView({required this.topic, required this.summary});
+
+  final String topic;
+  final String? summary;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppCopy copy = AppCopy.of(context);
+    return ListView(
+      children: <Widget>[
+        const SizedBox(height: AppSpacing.lg),
+        Text(topic, style: AppTypography.headlineLg),
+        const SizedBox(height: AppSpacing.lg),
+        AppColorBlockCard(
+          color: AppPalette.blockCream,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              AppSectionLabel(copy.summaryLabel),
+              const SizedBox(height: AppSpacing.md),
+              if (summary == null)
+                const LinearProgressIndicator()
+              else
+                Text(summary!, style: AppTypography.body),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xl),
+        AppSectionLabel(copy.chooseDirectionLabel),
+        const SizedBox(height: AppSpacing.md),
+        const LinearProgressIndicator(),
+        const SizedBox(height: AppSpacing.xl),
+        AppSectionLabel(copy.pickFirstQuestionLabel),
+        const SizedBox(height: AppSpacing.md),
+        const LinearProgressIndicator(),
+      ],
+    );
   }
 }
 

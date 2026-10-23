@@ -1,9 +1,14 @@
 """
 Search API Router
 """
+import asyncio
+import json
+import logging
+
 import httpx
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from domains.auth.dependencies import get_current_profile
@@ -19,7 +24,7 @@ from domains.search.schemas import (
 )
 from domains.search.service import SearchService
 from shared.http_clients import get_ai_http_client
-from shared.logging_config import log_exception
+from shared.logging_config import log_event, log_exception
 from shared.exceptions import AppException
 from shared.language import ensure_language_context
 from shared.types import SuccessResponse
@@ -75,6 +80,36 @@ async def prepare_topic(
     except AppException as e:
         log_exception(e, status_code=502, error_code="SEARCH_UPSTREAM_FAILED")
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=e.message)
+
+
+@router.post("/topic-prep/stream/", response_class=StreamingResponse)
+async def prepare_topic_stream(
+    request: TopicPrepRequest,
+    current_user: ProfileModel = Depends(get_current_profile),
+    service: SearchService = Depends(get_search_service),
+) -> StreamingResponse:
+    """요약과 완성 카드를 각각 한 번씩 NDJSON으로 전달해요."""
+    language_context = ensure_language_context(getattr(current_user, "language", None))
+
+    async def events():
+        try:
+            async for name, value in service.prepare_topic_stream(
+                request.topic, language_context=language_context,
+            ):
+                data = value.model_dump(mode="json") if isinstance(value, TopicPrepResult) else value
+                yield json.dumps({"event": name, "data": data}, ensure_ascii=False) + "\n"
+        except asyncio.CancelledError:
+            raise
+        except Exception as error:
+            log_event("search.pipeline", level=logging.ERROR,
+                      stage="topic_prep.stream", status="error",
+                      exception_type=type(error).__name__)
+            yield json.dumps({"event": "error", "code": "TOPIC_PREP_FAILED"}) + "\n"
+
+    return StreamingResponse(
+        events(), media_type="application/x-ndjson; charset=utf-8",
+        headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.post("/topic-prep/custom-questions/", response_model=SuccessResponse[CustomFocusQuestionsResult])

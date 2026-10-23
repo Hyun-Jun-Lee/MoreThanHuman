@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:curitalk/app/router/app_router.dart';
 import 'package:curitalk/app/theme/app_theme.dart';
 import 'package:curitalk/features/conversation/conversation.dart';
@@ -9,6 +11,32 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
 void main() {
+  testWidgets('summary appears while directions and questions are loading', (
+    WidgetTester tester,
+  ) async {
+    final _StreamingTopicPrepRepository repository =
+        _StreamingTopicPrepRepository();
+    await tester.pumpWidget(_app(repository: repository));
+    await tester.pump();
+
+    expect(find.text('recent lotte'), findsOneWidget);
+    expect(find.byType(LinearProgressIndicator), findsNWidgets(3));
+
+    repository.events.add(const TopicPrepStreamEvent.summary('Early summary'));
+    await tester.pump();
+    expect(find.text('Early summary'), findsOneWidget);
+    expect(find.byType(LinearProgressIndicator), findsNWidgets(2));
+    expect(find.text('CASUAL CHAT'), findsNothing);
+
+    repository.events.add(
+      TopicPrepStreamEvent.card(await repository.prepareTopic('recent lotte')),
+    );
+    await repository.events.close();
+    await tester.pumpAndSettle();
+    expect(find.text('Lotte won 8-3.'), findsOneWidget);
+    expect(find.text('CASUAL CHAT'), findsOneWidget);
+  });
+
   testWidgets('ready state shows summary, sources, and default question', (
     WidgetTester tester,
   ) async {
@@ -368,6 +396,16 @@ class _FakeTopicPrepRepository
       ),
     ]);
   }
+}
+
+class _StreamingTopicPrepRepository extends _FakeTopicPrepRepository
+    implements TopicPrepStreamRepository {
+  final StreamController<TopicPrepStreamEvent> events =
+      StreamController<TopicPrepStreamEvent>();
+
+  @override
+  Stream<TopicPrepStreamEvent> prepareTopicStream(String topic) =>
+      events.stream;
 }
 
 const LearningLanguageContext _koreanPracticeLanguage = LearningLanguageContext(

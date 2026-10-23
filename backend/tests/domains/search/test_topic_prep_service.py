@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 
 import pytest
 
+from domains.llm.schemas import LLMResponse
 from domains.search.schemas import (
     ConversationDirection,
     SearchQuality,
@@ -579,29 +580,49 @@ def test_topic_prep_system_prompt_includes_english_practice_policy():
 
 
 @pytest.mark.asyncio
-async def test_topic_prep_card_prompt_omits_search_sources(monkeypatch):
+async def test_topic_prep_card_prompt_omits_search_sources(monkeypatch, capsys):
     service = SearchService()
     sources = _sources()
     captured = {}
 
-    class FakeResponse:
-        content = json.dumps({
-            "quality": {"is_sufficient": True, "relevance": True, "freshness": True, "specificity": True},
-            "summary": "A conversation about a recent Dodgers game.",
-            "directions": _direction_payload(),
-        })
-
     class FakeProvider:
         async def chat_completion(self, request):
             captured["request"] = request
-            return FakeResponse()
+            return LLMResponse(
+                content=json.dumps({
+                    "quality": {"is_sufficient": True, "relevance": True, "freshness": True, "specificity": True},
+                    "summary": "A conversation about a recent Dodgers game.",
+                    "directions": _direction_payload(),
+                }),
+                usage={"prompt_tokens": 210, "completion_tokens": 380},
+                upstream_provider="Google",
+                service_tier="priority",
+                upstream_generation_ms=900,
+            )
 
     monkeypatch.setattr("domains.search.service.LLMProviderFactory.create_provider", lambda **kwargs: FakeProvider())
 
-    card = await service._generate_topic_prep_card("recent Dodgers game", sources)
+    token = request_context.set({"trace_id": "a" * 32, "request_id": "b" * 32})
+    try:
+        card = await service._generate_topic_prep_card("recent Dodgers game", sources)
+    finally:
+        request_context.reset(token)
+
+    rows = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line.startswith("{")]
+    llm_row = next(row for row in rows if row.get("stage") == "topic_prep.card_llm_request")
+    assert llm_row["prompt_tokens"] == 210
+    assert llm_row["completion_tokens"] == 380
+    assert llm_row["upstream_provider"] == "Google"
+    assert llm_row["service_tier"] == "priority"
+    assert llm_row["upstream_generation_ms"] == 900
+    assert {row.get("stage") for row in rows} >= {
+        "topic_prep.card_parse", "topic_prep.card_build",
+    }
+    assert "A conversation about a recent Dodgers game." not in json.dumps(rows)
 
     system_prompt = captured["request"].messages[0].content
     user_prompt = captured["request"].messages[1].content
+    assert captured["request"].extra_params == {"provider": {"sort": "throughput"}}
     assert "source" not in system_prompt.lower()
     assert "Search Results" not in user_prompt
     assert "Enhanced query" not in user_prompt

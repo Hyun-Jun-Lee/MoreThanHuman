@@ -143,6 +143,8 @@ flutter test
 
 ## 상세 문서
 
+Topic Prep의 요약·카드 도착 시간은 [API 로그와 지연 진단](docs/OBSERVABILITY.md#앱-주요-흐름-반복-측정)의 `topic-prep-stream`으로 측정해요.
+
 | 문서 | 내용 |
 |------|------|
 | [환경변수](docs/ENVIRONMENT.md) | 전체 설정·기본값·provider 선택 |

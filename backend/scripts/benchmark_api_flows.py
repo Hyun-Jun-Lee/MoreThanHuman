@@ -111,6 +111,54 @@ def _topic_prep(client: httpx.Client, token: str, number: int, topic: str) -> Fl
     )
 
 
+def _topic_prep_stream(client: httpx.Client, token: str, number: int, topic: str) -> FlowSample:
+    request_id = uuid4().hex
+    started = perf_counter()
+    timings: dict[str, float | None] = {
+        "summary_ready": None, "card_ready": None, "summary_to_card": None,
+        "http_total": None,
+    }
+    ready: bool | None = None
+    try:
+        with client.stream(
+            "POST", "/api/search/topic-prep/stream/", json={"topic": topic},
+            headers={**_headers(token, request_id), "Accept": "application/x-ndjson"},
+        ) as response:
+            if response.status_code != 200:
+                raise BenchmarkError(
+                    f"topic_prep_stream HTTP {response.status_code}. X-Request-ID={request_id}"
+                )
+            for line in response.iter_lines():
+                if not line:
+                    continue
+                event = json.loads(line)
+                elapsed = (perf_counter() - started) * 1000
+                if event.get("event") == "summary_ready":
+                    if timings["summary_ready"] is not None:
+                        raise BenchmarkError(f"요약 중복 이벤트. X-Request-ID={request_id}")
+                    timings["summary_ready"] = elapsed
+                elif event.get("event") == "card_ready":
+                    if timings["card_ready"] is not None:
+                        raise BenchmarkError(f"카드 중복 이벤트. X-Request-ID={request_id}")
+                    timings["card_ready"] = elapsed
+                    data = event.get("data")
+                    if not isinstance(data, dict) or not isinstance(data.get("ready"), bool):
+                        raise BenchmarkError(f"카드 형식 오류. X-Request-ID={request_id}")
+                    ready = data["ready"]
+                elif event.get("event") == "error":
+                    raise BenchmarkError(f"topic_prep_stream 오류. X-Request-ID={request_id}")
+                else:
+                    raise BenchmarkError(f"알 수 없는 스트림 이벤트. X-Request-ID={request_id}")
+    except (httpx.HTTPError, ValueError) as exc:
+        raise BenchmarkError(f"topic_prep_stream 연결·형식 실패. X-Request-ID={request_id}") from exc
+    if ready is None or timings["card_ready"] is None:
+        raise BenchmarkError(f"카드 완료 이벤트 누락. X-Request-ID={request_id}")
+    if timings["summary_ready"] is not None:
+        timings["summary_to_card"] = timings["card_ready"] - timings["summary_ready"]
+    timings["http_total"] = (perf_counter() - started) * 1000
+    return FlowSample(number, timings, {"topic_prep_stream": request_id}, {"ready": ready})
+
+
 def _messages(client: httpx.Client, token: str, number: int, conversation_id: str) -> FlowSample:
     base = f"/api/conversations/{conversation_id}"
     started = perf_counter()
@@ -211,6 +259,8 @@ def run_benchmark(client: httpx.Client, token: str, args: argparse.Namespace) ->
             sample = _home(client, token, number)
         elif args.flow == "topic-prep":
             sample = _topic_prep(client, token, number, args.topic)
+        elif args.flow == "topic-prep-stream":
+            sample = _topic_prep_stream(client, token, number, args.topic)
         elif args.flow == "messages":
             sample = _messages(client, token, number, args.conversation_id)
         else:
@@ -258,12 +308,12 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--email", required=True, help="키체인에 등록한 Supabase 개발 계정")
     parser.add_argument("--base-url", default="http://127.0.0.1:8010")
     subparsers = parser.add_subparsers(dest="flow", required=True)
-    for name in ("home", "topic-prep", "stream", "messages"):
+    for name in ("home", "topic-prep", "topic-prep-stream", "stream", "messages"):
         sub = subparsers.add_parser(name)
-        costly = name in {"topic-prep", "stream"}
+        costly = name in {"topic-prep", "topic-prep-stream", "stream"}
         sub.add_argument("--samples", type=int, default=1 if costly else 10)
         sub.add_argument("--warmup", type=int, default=0 if costly else 1)
-        if name == "topic-prep":
+        if name in {"topic-prep", "topic-prep-stream"}:
             sub.add_argument("--topic", required=True)
             sub.add_argument("--allow-cost", action="store_true")
         elif name == "stream":
@@ -279,12 +329,12 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def _validate_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
-    costly = args.flow in {"topic-prep", "stream"}
+    costly = args.flow in {"topic-prep", "topic-prep-stream", "stream"}
     if not 1 <= args.samples <= (30 if costly else 200):
         parser.error("samples 범위를 확인해요 (조회 1~200, 외부 호출 1~30).")
     if not 0 <= args.warmup <= (5 if costly else 20):
         parser.error("warmup 범위를 확인해요 (조회 0~20, 외부 호출 0~5).")
-    if args.flow == "topic-prep":
+    if args.flow in {"topic-prep", "topic-prep-stream"}:
         if not args.topic.strip() or not args.allow_cost:
             parser.error("주제 준비에는 --topic과 --allow-cost가 필요해요.")
     if args.flow == "stream":

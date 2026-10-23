@@ -8,7 +8,7 @@ import re
 import time
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any
+from typing import Any, AsyncIterator
 
 import httpx
 from pydantic import BaseModel, ValidationError
@@ -38,6 +38,7 @@ from domains.search.schemas import (
     TopicPrepQuality,
     TopicPrepResult,
 )
+from domains.search.topic_prep_stream import completed_summary
 from shared.exceptions import ExternalAPIException
 from shared.latency import latency_span
 from shared.logging_config import log_event
@@ -196,6 +197,78 @@ class SearchService:
                 card=card,
                 quality=card.quality,
             )
+
+    async def prepare_topic_stream(
+        self,
+        topic: str,
+        language_context: LearningLanguageContext | None = None,
+    ) -> AsyncIterator[tuple[str, str | TopicPrepResult]]:
+        """완성된 요약을 먼저, 검증된 카드 전체를 나중에 전달해요."""
+        language_context = ensure_language_context(language_context)
+        with latency_span("topic_prep.total"):
+            with latency_span("search.query_analysis"):
+                analysis = await self._analyze_query(topic, language_context=language_context)
+            log_event("search.pipeline", stage="search_decision", status="ok",
+                      search_required=analysis.search_required)
+            sources: list[SearchResultItem] = []
+            if analysis.search_required:
+                prepared = await self._prepare_search_results(
+                    topic, language_context=language_context, analysis=analysis,
+                )
+                if not prepared.quality.is_sufficient:
+                    with latency_span("topic_prep.card_ready"):
+                        pass
+                    yield "card_ready", self._build_low_quality_result(
+                        topic, prepared.sources,
+                        reason=prepared.quality.reason or "대화 준비에 사용할 검색 출처가 충분하지 않아요.",
+                        retry_suggestion=prepared.quality.retry_suggestion,
+                        language_context=language_context,
+                    )
+                    return
+                sources = prepared.sources
+
+            display_language = resolve_topic_display_language(
+                topic, language_context.native_language
+            )
+            request = self._build_topic_prep_card_request(
+                topic, language_context=language_context, display_language=display_language,
+            )
+            provider = LLMProviderFactory.create_provider(http_client=self.http_client)
+            chunks: list[str] = []
+            summary_sent = False
+            with latency_span("topic_prep.card_generation"):
+                with latency_span("topic_prep.card_llm_request", model=request.model):
+                    async for delta in provider.chat_completion_stream(request):
+                        chunks.append(delta)
+                        if not summary_sent:
+                            summary = completed_summary("".join(chunks))
+                            if summary is not None:
+                                summary_sent = True
+                                with latency_span("topic_prep.summary_ready"):
+                                    pass
+                                yield "summary_ready", summary
+                with latency_span("topic_prep.card_parse"):
+                    data = self._parse_json_response("".join(chunks))
+                with latency_span("topic_prep.card_build"):
+                    card = self._build_topic_prep_card_from_data(
+                        topic, sources, data, language_context=language_context,
+                        display_language=display_language,
+                    )
+
+            if card.quality.is_sufficient:
+                result = TopicPrepResult(
+                    ready=True, search_required=analysis.search_required,
+                    language=language_context, card=card, quality=card.quality,
+                )
+            else:
+                result = self._build_not_ready_topic_prep_result(
+                    topic, card.quality, language_context=language_context,
+                    use_quality_retry_suggestion=False,
+                    search_required=analysis.search_required,
+                )
+            with latency_span("topic_prep.card_ready"):
+                pass
+            yield "card_ready", result
 
     async def prepare_custom_focus_questions(
         self,
@@ -415,20 +488,27 @@ class SearchService:
             model=get_model_for_provider(),
             max_tokens=self.settings.search_query_analysis_max_tokens,
             temperature=0.1,
-            extra_params=self._build_structured_output_params(
-                SearchQueryAnalysisResult,
-                "search_query_analysis",
-            ),
+            extra_params={
+                **self._build_structured_output_params(
+                    SearchQueryAnalysisResult,
+                    "search_query_analysis",
+                ),
+                **({"provider": {"sort": "latency"}}
+                   if self.settings.llm_provider.lower() == "openrouter" else {}),
+            },
         )
         log_event("search.pipeline", stage="query_analysis", status="start",
                   provider=self._provider_name(provider), model=request.model)
-        response = await self._chat_completion_with_structured_fallback(
-            provider,
-            request,
-            stage="query_analysis",
-            query=query,
-        )
-        data = self._parse_structured_json_response(response.content, SearchQueryAnalysisResult)
+        with latency_span("search.query_analysis.llm_request", model=request.model) as llm_fields:
+            response = await self._chat_completion_with_structured_fallback(
+                provider,
+                request,
+                stage="query_analysis",
+                query=query,
+            )
+            llm_fields.update(self._llm_response_log_fields(response))
+        with latency_span("search.query_analysis.parse"):
+            data = self._parse_structured_json_response(response.content, SearchQueryAnalysisResult)
         log_event("search.pipeline", stage="query_analysis", status="ok",
                   provider=self._provider_name(provider), model=request.model,
                   duration_ms=round((time.perf_counter() - started_at) * 1000),
@@ -545,10 +625,13 @@ class SearchService:
                 model=self.settings.search_quality_judge_model,
                 max_tokens=self.settings.search_quality_judge_max_tokens,
                 temperature=0.1,
-                extra_params=self._build_structured_output_params(
-                    SearchQualityJudgeResult,
-                    "search_quality_judge",
-                ),
+                extra_params={
+                    **self._build_structured_output_params(
+                        SearchQualityJudgeResult,
+                        "search_quality_judge",
+                    ),
+                    "provider": {"sort": "latency"},
+                },
             )
             log_event("search.pipeline", stage="quality_judge", status="start",
                       provider=self._provider_name(provider), model=request.model,
@@ -619,7 +702,11 @@ class SearchService:
             log_event("search.pipeline", level=logging.WARNING,
                       stage=stage, status="structured_output_fallback",
                       provider=self._provider_name(provider))
-            return await provider.chat_completion(request.model_copy(update={"extra_params": None}))
+            fallback_params = dict(request.extra_params or {})
+            fallback_params.pop("response_format", None)
+            return await provider.chat_completion(request.model_copy(
+                update={"extra_params": fallback_params or None},
+            ))
 
     def _should_retry_without_structured_output(self, exc: ExternalAPIException) -> bool:
         """provider/model이 structured output을 거부한 오류인지 추정"""
@@ -871,7 +958,6 @@ class SearchService:
             f"- {s.title}: {s.snippet}" for s in sources
         )
         current_date, timezone = current_search_context()
-
         try:
             provider = LLMProviderFactory.create_provider(http_client=self.http_client)
             started_at = time.perf_counter()
@@ -930,41 +1016,25 @@ class SearchService:
         display_language = display_language or resolve_topic_display_language(
             topic, language_context.native_language
         )
-        current_date, timezone = current_search_context()
 
         try:
             provider = LLMProviderFactory.create_provider(http_client=self.http_client)
-            request = LLMRequest(
-                messages=[
-                    LLMMessage(
-                        role="system",
-                        content=self._build_topic_prep_system_prompt(
-                            language_context=language_context,
-                            display_language=display_language,
-                        ),
-                    ),
-                    LLMMessage(
-                        role="user",
-                        content=(
-                            f"Current date: {current_date}\n"
-                            f"Timezone: {timezone}\n"
-                            f"Topic: {topic}"
-                        ),
-                    ),
-                ],
-                model=get_model_for_provider(),
-                max_tokens=min(self.settings.max_tokens, 1600),
-                temperature=0.2,
+            request = self._build_topic_prep_card_request(
+                topic, language_context=language_context, display_language=display_language,
             )
-            response = await provider.chat_completion(request)
-            data = self._parse_json_response(response.content)
-            return self._build_topic_prep_card_from_data(
-                topic,
-                sources,
-                data,
-                language_context=language_context,
-                display_language=display_language,
-            )
+            with latency_span("topic_prep.card_llm_request", model=request.model) as llm_fields:
+                response = await provider.chat_completion(request)
+                llm_fields.update(self._llm_response_log_fields(response))
+            with latency_span("topic_prep.card_parse"):
+                data = self._parse_json_response(response.content)
+            with latency_span("topic_prep.card_build"):
+                return self._build_topic_prep_card_from_data(
+                    topic,
+                    sources,
+                    data,
+                    language_context=language_context,
+                    display_language=display_language,
+                )
         except ExternalAPIException:
             raise
         except Exception as e:
@@ -972,6 +1042,36 @@ class SearchService:
                       stage="topic_prep_generation", status="error",
                       exception_type=type(e).__name__)
             raise ExternalAPIException(f"Topic prep generation failed: {str(e)}")
+
+    def _build_topic_prep_card_request(
+        self, topic: str, *, language_context: LearningLanguageContext,
+        display_language: LanguageCode,
+    ) -> LLMRequest:
+        current_date, timezone = current_search_context()
+        return LLMRequest(
+            messages=[
+                LLMMessage(
+                    role="system",
+                    content=self._build_topic_prep_system_prompt(
+                        language_context=language_context,
+                        display_language=display_language,
+                    ),
+                ),
+                LLMMessage(
+                    role="user",
+                    content=(
+                        f"Current date: {current_date}\n"
+                        f"Timezone: {timezone}\n"
+                        f"Topic: {topic}"
+                    ),
+                ),
+            ],
+            model=get_model_for_provider(),
+            max_tokens=min(self.settings.max_tokens, 1600),
+            temperature=0.2,
+            extra_params={"provider": {"sort": "throughput"}}
+            if self.settings.llm_provider.lower() == "openrouter" else None,
+        )
 
     def _build_topic_prep_system_prompt(
         self,
@@ -1045,6 +1145,23 @@ Respond only in JSON:
         if callable(get_provider_name):
             return str(get_provider_name())
         return provider.__class__.__name__
+
+    @staticmethod
+    def _llm_response_log_fields(response: LLMResponse) -> dict[str, str | int | float]:
+        """LLM 응답의 비본문 성능 메타데이터만 기록해요."""
+        fields: dict[str, str | int | float] = {"response_chars": len(response.content or "")}
+        if response.upstream_provider:
+            fields["upstream_provider"] = response.upstream_provider
+        if response.service_tier:
+            fields["service_tier"] = response.service_tier
+        if response.upstream_generation_ms is not None:
+            fields["upstream_generation_ms"] = response.upstream_generation_ms
+        usage = response.usage if isinstance(response.usage, dict) else {}
+        for name in ("prompt_tokens", "completion_tokens"):
+            value = usage.get(name)
+            if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+                fields[name] = value
+        return fields
 
     def _build_topic_prep_card_from_data(
         self,

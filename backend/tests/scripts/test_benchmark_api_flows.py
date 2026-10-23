@@ -68,6 +68,27 @@ def test_topic_prep_reports_ready_state_without_topic_text(capsys):
     assert "private-topic" not in output
 
 
+def test_topic_prep_stream_measures_two_event_times_without_text(capsys):
+    def respond(request):
+        assert request.url.path == "/api/search/topic-prep/stream/"
+        assert json.loads(request.content) == {"topic": "private-topic"}
+        return httpx.Response(
+            200, headers={"content-type": "application/x-ndjson; charset=utf-8"},
+            text='{"event":"summary_ready","data":"private-summary"}\n'
+                 '{"event":"card_ready","data":{"ready":true}}\n',
+        )
+
+    with _client(respond) as client:
+        sample = benchmark._topic_prep_stream(client, "token", 1, "private-topic")
+    assert sample.timings["summary_ready"] is not None
+    assert sample.timings["card_ready"] >= sample.timings["summary_ready"]
+    assert sample.timings["summary_to_card"] >= 0
+    benchmark.print_report("topic-prep-stream", [sample], 0)
+    output = capsys.readouterr().out
+    assert "private-topic" not in output
+    assert "private-summary" not in output
+
+
 def test_stream_measures_events_and_uses_fresh_idempotency_key():
     def respond(request):
         assert request.url.path == "/api/conversations/start/free-chat/stream/"

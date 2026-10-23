@@ -595,6 +595,7 @@ module Search {
   router SearchRouter {
     POST /api/search/                              -> search
     POST /api/search/topic-prep/                   -> prepareTopic
+    POST /api/search/topic-prep/stream/            -> prepareTopicStream
     POST /api/search/topic-prep/custom-questions/  -> prepareCustomFocusQuestions
     POST /api/search/topic-prep/directions/        -> regenerateTopicPrepDirections
   }
@@ -602,6 +603,7 @@ module Search {
   service SearchService {
     async function search(query: String) -> SearchResult
     async function prepareTopic(topic: String) -> TopicPrepResult
+    async function prepareTopicStream(topic: String) -> Stream<TopicPrepEvent>
     async function prepareSearchResults(query: String) -> PreparedSearchResult
     async function analyzeQuery(query: String) -> QueryAnalysis
     async function searchDuckDuckGo(query: String, analysis?: QueryAnalysis) -> List<SearchResultItem>
@@ -688,6 +690,14 @@ module Search {
     retry_guidance?: String
     example_topics: List<String>
   }
+
+  type TopicPrepEvent {
+    event: "summary_ready" | "card_ready" | "error"
+    data?: String | TopicPrepResult
+    code?: "TOPIC_PREP_FAILED"
+  }
+
+  `POST /api/search/topic-prep/stream/`은 같은 요청·품질 규칙을 적용하고 `application/x-ndjson`으로 줄 단위 이벤트를 반환해요. `summary_ready`의 `data`는 완성된 요약 문자열이며 `quality.is_sufficient=true`일 때만 카드보다 먼저 보낼 수 있어요. `card_ready`의 `data`는 완전한 `TopicPrepResult`예요. 스트림 시작 후 실패하면 `error` 이벤트의 `code=TOPIC_PREP_FAILED`로 끝나요. 낮은 품질 결과에서는 `summary_ready` 없이 `card_ready`가 올 수 있어요. 부분 실패 재시도 API는 아직 없어요.
 
   Topic Prep summary와 direction title/description은 입력 topic 언어를 우선하고, 모호하면 `native_language`로 fallback해요. first question과 실제 conversation은 계속 `target_language` 연습에 맞춰 생성돼요.
   Topic Prep prompt policy도 conversation과 같은 target-language practice priorities를 사용해요.

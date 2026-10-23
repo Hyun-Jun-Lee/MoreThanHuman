@@ -32,6 +32,28 @@ void main() {
       'Bearer access-token',
     );
   });
+
+  test('stream repository yields summary before the complete card', () async {
+    final ApiClient client = ApiClient.create(
+      tokenStorage: _MemoryTokenStorage('access-token'),
+      baseUrl: 'https://example.com/api/',
+    );
+    final _TopicPrepHttpClientAdapter adapter = _TopicPrepHttpClientAdapter();
+    client.dio.httpClientAdapter = adapter;
+    addTearDown(client.close);
+
+    final List<TopicPrepStreamEvent> events = await ApiTopicPrepRepository(
+      client,
+    ).prepareTopicStream('퇴사').toList();
+
+    expect(adapter.lastRequest?.uri.path, '/api/search/topic-prep/stream/');
+    expect(
+      adapter.lastRequest?.headers['Authorization'],
+      'Bearer access-token',
+    );
+    expect(events.map((event) => event.summary), <String?>['퇴사에 관한 요약', null]);
+    expect(events.last.result?.ready, isTrue);
+  });
 }
 
 class _TopicPrepHttpClientAdapter implements HttpClientAdapter {
@@ -44,39 +66,53 @@ class _TopicPrepHttpClientAdapter implements HttpClientAdapter {
     Future<void>? cancelFuture,
   ) async {
     lastRequest = options;
-    return ResponseBody.fromString(
-      jsonEncode(<String, dynamic>{
-        'success': true,
-        'data': <String, dynamic>{
-          'ready': true,
-          'language': <String, String>{
-            'native_language': 'ko',
-            'target_language': 'en',
-            'feedback_language': 'ko',
-          },
-          'card': <String, dynamic>{
-            'topic': '최근 롯데 자이언츠 경기',
-            'summary': 'Lotte won 8-3 after ending a losing streak.',
-            'directions': <Map<String, dynamic>>[
-              _direction('CASUAL_CHAT', 'Casual Chat'),
-              _direction('DEBATE', 'Debate'),
-              _direction('EXPLANATION_PRACTICE', 'Explain'),
-            ],
-            'sources': <Map<String, dynamic>>[
-              <String, dynamic>{
-                'title': 'Lotte game recap',
-                'url': 'https://example.com/sports/lotte',
-                'snippet': 'Lotte beat KIA 8-3.',
-              },
-            ],
-            'quality': _quality(),
-            'timestamp': '2026-07-02T00:00:00Z',
-          },
-          'quality': _quality(),
-          'retry_guidance': null,
-          'example_topics': <String>[],
+    final String body = jsonEncode(<String, dynamic>{
+      'success': true,
+      'data': <String, dynamic>{
+        'ready': true,
+        'language': <String, String>{
+          'native_language': 'ko',
+          'target_language': 'en',
+          'feedback_language': 'ko',
         },
-      }),
+        'card': <String, dynamic>{
+          'topic': '최근 롯데 자이언츠 경기',
+          'summary': 'Lotte won 8-3 after ending a losing streak.',
+          'directions': <Map<String, dynamic>>[
+            _direction('CASUAL_CHAT', 'Casual Chat'),
+            _direction('DEBATE', 'Debate'),
+            _direction('EXPLANATION_PRACTICE', 'Explain'),
+          ],
+          'sources': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'title': 'Lotte game recap',
+              'url': 'https://example.com/sports/lotte',
+              'snippet': 'Lotte beat KIA 8-3.',
+            },
+          ],
+          'quality': _quality(),
+          'timestamp': '2026-07-02T00:00:00Z',
+        },
+        'quality': _quality(),
+        'retry_guidance': null,
+        'example_topics': <String>[],
+      },
+    });
+    if (options.path.endsWith('/stream/')) {
+      final Object? data = (jsonDecode(body) as Map<String, dynamic>)['data'];
+      return ResponseBody.fromString(
+        '${jsonEncode(<String, Object?>{'event': 'summary_ready', 'data': '퇴사에 관한 요약'})}\n'
+        '${jsonEncode(<String, Object?>{'event': 'card_ready', 'data': data})}\n',
+        200,
+        headers: <String, List<String>>{
+          Headers.contentTypeHeader: <String>[
+            'application/x-ndjson; charset=utf-8',
+          ],
+        },
+      );
+    }
+    return ResponseBody.fromString(
+      body,
       200,
       headers: <String, List<String>>{
         Headers.contentTypeHeader: <String>[Headers.jsonContentType],

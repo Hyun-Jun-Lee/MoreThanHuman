@@ -46,6 +46,7 @@ class OpenRouterProvider(LLMProvider):
                     "Authorization": f"Bearer {self.api_key}",
                     "HTTP-Referer": "https://github.com/MoreThanHuman",
                     "Content-Type": "application/json",
+                    "X-OpenRouter-Metadata": "enabled",
                 },
                 json={
                     "model": request.model,
@@ -58,11 +59,27 @@ class OpenRouterProvider(LLMProvider):
             )
             response.raise_for_status()
             data = response.json()
+            metadata = data.get("openrouter_metadata")
+            metadata = metadata if isinstance(metadata, dict) else {}
+            endpoints = metadata.get("endpoints")
+            available = endpoints.get("available", []) if isinstance(endpoints, dict) else []
+            selected = next(
+                (item for item in available if isinstance(item, dict) and item.get("selected") is True),
+                None,
+            ) if isinstance(available, list) else None
+            upstream_provider = selected.get("provider") if selected else None
+            service_tier = data.get("service_tier")
+            generation_time = metadata.get("generation_time")
 
             return LLMResponse(
                 content=data["choices"][0]["message"]["content"],
                 model=data.get("model"),
                 usage=data.get("usage"),
+                upstream_provider=upstream_provider if isinstance(upstream_provider, str) else None,
+                service_tier=service_tier if isinstance(service_tier, str) else None,
+                upstream_generation_ms=float(generation_time)
+                if isinstance(generation_time, (int, float)) and not isinstance(generation_time, bool)
+                else None,
             )
         except httpx.HTTPStatusError as e:
             response_body = e.response.text[:500] if e.response is not None else ""
