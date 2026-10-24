@@ -1,6 +1,6 @@
 # 운영 가이드
 
-> 최종 갱신: 2026-10-10 · 배포·주간 생성·복구 절차
+> 최종 갱신: 2026-10-24 · 배포·주간 생성·복구 절차
 
 [실행 및 CLI](../README.md) · [환경변수](ENVIRONMENT.md) · [API 계약](DSL.md)
 
@@ -44,23 +44,23 @@ docker compose logs --tail=100 api
 
 API는 Uvicorn worker 2개로 실행해요. Compose 명령만 바꾼 경우에도 위 `up --force-recreate --no-deps api`로 API 컨테이너만 재생성하면 돼요. 전체 `docker compose down`은 필요하지 않으며 nginx는 실행 상태를 유지해요. API 재생성 중 짧은 요청 실패가 발생할 수 있으므로 상태 확인 뒤 실제 API 요청도 점검해요.
 
-최초 nginx 실행 전에는 [설정 파일](../deploy/nginx/conf.d/api.conf)의 도메인과 호스트 볼륨 경로를 확인하고, 문서 접근용 `deploy/nginx/auth/docs.htpasswd`를 준비해요. [계정 파일 생성 스크립트](../deploy/scripts/create-docs-htpasswd.sh)는 사용자명·비밀번호를 인자로 받아 파일을 생성하며 기존 파일을 덮어써요. 비밀번호를 명령 기록·프로세스 인자로 노출하지 않도록 서버의 secret 관리 절차를 사용해요.
+운영 nginx는 [HTTPS 설정](../deploy/nginx/conf.d/api.conf)을 기본으로 읽어요. 최초 실행 전 도메인과 호스트 볼륨 경로를 확인하고, `/etc/letsencrypt/live/api.curitalk.app/fullchain.pem`과 `privkey.pem`이 있는지 확인해요. 인증서와 개인키는 Git에 넣지 않고 호스트에서 관리하며 Compose가 컨테이너에 읽기 전용으로 마운트해요. 인증서가 없는 새 서버라면 nginx를 시작하기 **전에** [HTTP 최초 발급 설정](../deploy/nginx/bootstrap/api.conf)을 `deploy/nginx/conf.d/api.conf`에 임시로 복사해요. 문서 접근용 `deploy/nginx/auth/docs.htpasswd`도 준비해요. [계정 파일 생성 스크립트](../deploy/scripts/create-docs-htpasswd.sh)는 사용자명·비밀번호를 인자로 받아 파일을 생성하며 기존 파일을 덮어써요. 비밀번호를 명령 기록·프로세스 인자로 노출하지 않도록 서버의 secret 관리 절차를 사용해요.
 
 ```bash
 docker compose up -d --build api nginx
 ```
 
-기본 설정은 HTTP예요. HTTPS는 인증서 발급 후 [TLS 설정 예시](../deploy/nginx/conf.d/api.ssl.conf.example)의 도메인·인증서 경로를 확인해 적용해요. [인증서 갱신 스크립트](../deploy/scripts/certbot-renew.sh)는 호스트 certbot과 root 권한이 필요하고, 저장소 루트에서 실행해야 해요.
+HTTP 최초 발급 설정으로 시작했다면 호스트에서 `sudo certbot certonly --webroot --webroot-path=/var/www/certbot -d api.curitalk.app`을 실행해요. 발급 후 `git restore -- deploy/nginx/conf.d/api.conf`로 Git의 HTTPS 설정을 복원해요. 이어 `docker compose exec nginx nginx -t`가 성공하면 `docker compose exec nginx nginx -s reload`하고 `curl -fS https://api.curitalk.app/health`로 외부 접속을 확인해요. 임시 HTTP 설정을 사용한 채 배포를 끝내지 않아요. 이미 인증서가 있는 운영 서버에서는 이 최초 발급 절차가 필요하지 않아요. [인증서 갱신 스크립트](../deploy/scripts/certbot-renew.sh)는 호스트 certbot과 root 권한이 필요하고, 저장소 루트에서 실행해야 해요.
 
 ## API 로그 점검
 
 API와 nginx는 JSON을 stdout에 기록하고 Docker `json-file`이 각 컨테이너에서 `20m × 5`로 회전해요. 이 용량 상한은 보존 일수를 보장하지 않아요. API 기본 접근 로그는 중복과 URL 쿼리 노출을 막기 위해 끄고, nginx 접근 로그에는 원본 URL 대신 메서드·상태·시간·요청 ID만 남겨요. 필드·측정 경계·조회 예시는 [API 로그 문서](OBSERVABILITY.md)에 있어요.
 
-배포 전 `CURITALK_ENV_FILE`을 지정한 상태에서 `docker compose config -q`를 실행해요. 배포 후 `docker compose exec nginx nginx -t`로 nginx 구성을 확인하고, API 성공·실패 요청 각 한 건에서 `trace_id`·`request_id`·`proxy_request_id`와 nginx 시간을 대조해요. nginx 설정을 바꿨다면 `docker compose up -d --force-recreate nginx`로 적용해요. 호스트에서는 `docker inspect <container> --format '{{json .HostConfig.LogConfig}}'`로 로깅 드라이버와 회전 설정을, `df -h`로 디스크 여유를 확인해요. 실제 로그량을 본 뒤 회전 상한을 조정해요.
+배포 전 `CURITALK_ENV_FILE`을 지정한 상태에서 `docker compose config -q`를 실행해요. nginx 설정을 바꿨다면 먼저 `docker compose exec nginx nginx -t`로 검증하고 성공한 경우에만 `docker compose exec nginx nginx -s reload`해요. 배포 후에는 `curl -fS https://api.curitalk.app/health`와 API 성공·실패 요청 각 한 건에서 `trace_id`·`request_id`·`proxy_request_id`와 nginx 시간을 대조해요. 호스트에서는 `docker inspect <container> --format '{{json .HostConfig.LogConfig}}'`로 로깅 드라이버와 회전 설정을, `df -h`로 디스크 여유를 확인해요. 실제 로그량을 본 뒤 회전 상한을 조정해요.
 
 ## 상태 확인
 
-로컬 직접 실행은 `http://localhost:8010/health`, nginx 배포는 서비스 도메인의 `/health`를 확인해요. 현재 health 응답의 database 값은 고정 문자열이므로 실제 DB 접근은 인증된 조회 API나 별도 DB 점검으로 확인해야 해요.
+로컬 직접 실행은 `http://localhost:8010/health`, nginx 배포는 `https://api.curitalk.app/health`를 확인해요. 현재 health 응답의 database 값은 고정 문자열이므로 실제 DB 접근은 인증된 조회 API나 별도 DB 점검으로 확인해야 해요.
 
 ## Swagger 인증
 

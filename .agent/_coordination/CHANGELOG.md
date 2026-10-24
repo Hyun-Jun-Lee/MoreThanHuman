@@ -1,5 +1,7 @@
 # CHANGELOG — 완료된 작업 기록
 
+- 2026-10-24: Codex side conversation — 운영 nginx의 HTTPS 설정을 Git의 활성 `api.conf`로 고정하고, 기존 HTTP 설정을 인증서 최초 발급용으로 분리했어요. 운영 가이드에 발급·검증·reload 절차를 동기화하고 Compose 구성 검증과 설정 파일 비교를 통과했어요. 운영 서버 적용은 별도예요.
+
 - 2026-10-23: Codex — Topic Prep에 요약 선표시 NDJSON 스트림을 추가하고 앱에서 방향·첫 질문 로딩을 분리했어요. `summary_ready`·`card_ready` 시각을 서버·앱에 기록하고 반복 측정 CLI를 확장했어요. 실제 OpenRouter 5회에서 요약→카드 간격 중앙값은 1.30초였고, 관련 백엔드 39개 및 모바일 스트림·화면 테스트를 통과했어요. 부분 재시도는 결정 전까지 보류해요.
 
 - 2026-10-23: Codex — `positioning` 스킬로 tomatalk의 AI 회화 연습 범주, 한국 영어학습자 우선 ICP 가설, 자기 주제의 맥락 준비에서 첫 답변·후속 대화로 이어지는 가치 제안, 경쟁 대안과 학습 성과 검증 기준을 `PM/POSITIONING.md`에 정리했어요. 마케팅 전략 v1.1·PM 인덱스·회의 HTML 링크를 동기화했어요.
