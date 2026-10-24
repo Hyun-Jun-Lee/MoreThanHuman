@@ -8,6 +8,7 @@ class AppSelectionCard extends StatelessWidget {
     required this.selected,
     required this.onTap,
     this.description,
+    this.descriptionStyle,
     this.icon,
     this.trailing,
     this.surfaceColor,
@@ -19,6 +20,7 @@ class AppSelectionCard extends StatelessWidget {
   final bool selected;
   final VoidCallback? onTap;
   final String? description;
+  final TextStyle? descriptionStyle;
   final Widget? icon;
   final Widget? trailing;
   final Color? surfaceColor;
@@ -85,9 +87,10 @@ class AppSelectionCard extends StatelessWidget {
                           const SizedBox(height: AppSpacing.xxs),
                           Text(
                             description!,
-                            style: AppTypography.bodySm.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
+                            style: (descriptionStyle ?? AppTypography.bodySm)
+                                .copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
                           ),
                         ],
                       ],

@@ -4,6 +4,7 @@ import 'package:curitalk/app/theme/tokens/tokens.dart';
 import 'package:curitalk/app/theme/app_component_themes.dart';
 import 'package:curitalk/core/config/app_config.dart';
 import 'package:curitalk/core/copy/copy.dart';
+import 'package:curitalk/core/widgets/app_loading_indicator.dart';
 import 'package:curitalk/features/billing/billing_controller.dart';
 import 'package:curitalk/features/billing/billing_repository.dart';
 import 'package:flutter/material.dart';
@@ -48,12 +49,13 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
             const SizedBox(height: AppSpacing.md),
             entitlement.when(
               data: (value) => Text(copy.currentPlan(value.plan)),
-              loading: () => const LinearProgressIndicator(),
+              loading: () =>
+                  const Center(child: AppLoadingIndicator(width: 120)),
               error: (_, _) => Text(copy.subscriptionStatusUnavailable),
             ),
             const SizedBox(height: AppSpacing.xl),
             if (state.isLoading && state.products.isEmpty)
-              const Center(child: CircularProgressIndicator()),
+              const Center(child: AppLoadingIndicator(width: 180)),
             for (final id in const ['Free', 'Advance', 'Plus'])
               _PlanCard(
                 id: id,

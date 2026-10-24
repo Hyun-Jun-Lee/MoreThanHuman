@@ -430,10 +430,11 @@ class AppCopy {
       isKorean ? '어떤 주제가 좋으세요?' : 'What would you like to talk about?';
   String get customFocusLabel =>
       isKorean ? '직접 입력하는 대화 방향' : 'Your own conversation focus';
+  String get customFocusOpenLabel => isKorean ? '직접 입력' : 'Write your own';
   String get customFocusPlaceholder => isKorean
       ? '마음에 드는 주제가 없으면 직접 입력해보세요'
       : 'If none of these feel right, enter your own.';
-  String get customFocusSubmitLabel => 'Submit';
+  String get customFocusSubmitLabel => isKorean ? '질문 만들기' : 'Create questions';
   String get customFocusEmptyError =>
       isKorean ? '대화 방향을 입력해 주세요.' : 'Enter a conversation focus.';
   String get preparingCustomQuestions =>
@@ -441,7 +442,8 @@ class AppCopy {
   String get customFocusQuestionsFailed => isKorean
       ? '원하는 방향의 질문을 준비하지 못했어요. 다시 시도해 주세요.'
       : 'We could not prepare questions for that focus. Please try again.';
-  String get regenerateDirectionsLabel => 'Show different directions';
+  String get regenerateDirectionsLabel =>
+      isKorean ? '대화 방향 새로고침' : 'Refresh directions';
   String get preparingDirections =>
       isKorean ? '새로운 대화 방향을 준비하는 중...' : 'Preparing new directions...';
   String get regenerateDirectionsFailed => isKorean
@@ -480,9 +482,20 @@ class AppCopy {
       isKorean ? '출처: $title' : 'Source: $title';
   String get typingSemanticLabel =>
       isKorean ? 'AI가 답변을 작성하는 중' : 'AI is typing';
-  String firstQuestionSemanticLabel(int number, String question) => isKorean
-      ? '첫 질문 $number: $question'
-      : 'First question $number: $question';
+  String firstQuestionSemanticLabel(
+    int number,
+    String question, [
+    String? translation,
+  ]) {
+    final String label = isKorean
+        ? '첫 질문 $number: $question'
+        : 'First question $number: $question';
+    if (translation == null) return label;
+    return isKorean
+        ? '$label, 번역: $translation'
+        : '$label, translation: $translation';
+  }
+
   String get defaultLoadingLabel => isKorean ? '불러오는 중...' : 'Loading...';
   String get defaultErrorTitle =>
       isKorean ? '문제가 발생했어요.' : 'Something went wrong.';

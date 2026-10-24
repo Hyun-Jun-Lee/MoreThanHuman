@@ -1,5 +1,6 @@
 import 'package:curitalk/app/theme/tokens/tokens.dart';
 import 'package:curitalk/core/copy/copy.dart';
+import 'package:curitalk/core/widgets/app_loading_indicator.dart';
 import 'package:flutter/material.dart';
 
 enum AppAsyncStateType { loading, error, empty }
@@ -36,12 +37,15 @@ class AppAsyncStateView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppCopy copy = AppCopy.of(context);
-    final String? resolvedTitle = title ?? switch (type) {
-      AppAsyncStateType.error => copy.defaultErrorTitle,
-      AppAsyncStateType.empty => copy.defaultEmptyTitle,
-      AppAsyncStateType.loading => null,
-    };
-    final String? resolvedMessage = message ??
+    final String? resolvedTitle =
+        title ??
+        switch (type) {
+          AppAsyncStateType.error => copy.defaultErrorTitle,
+          AppAsyncStateType.empty => copy.defaultEmptyTitle,
+          AppAsyncStateType.loading => null,
+        };
+    final String? resolvedMessage =
+        message ??
         (type == AppAsyncStateType.loading ? copy.defaultLoadingLabel : null);
     return Semantics(
       liveRegion: type != AppAsyncStateType.empty,
@@ -91,10 +95,7 @@ class AppAsyncStateView extends StatelessWidget {
       return icon!;
     }
     if (type == AppAsyncStateType.loading) {
-      return const SizedBox.square(
-        dimension: AppSize.iconButton,
-        child: CircularProgressIndicator(strokeWidth: AppBorderWidth.focused),
-      );
+      return const AppLoadingIndicator(width: 180);
     }
 
     return Icon(

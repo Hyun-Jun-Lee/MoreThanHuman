@@ -50,6 +50,7 @@ def _ready_result(topic: str) -> TopicPrepResult:
                 title=direction.value,
                 description=f"{direction.value} description",
                 first_questions=["Question one?", "Question two?", "Question three?"],
+                first_question_translations=["First translation?", "Second translation?", "Third translation?"],
             )
             for direction in ConversationDirection
         ],
@@ -77,6 +78,9 @@ def test_prepare_topic_endpoint_returns_card_for_authenticated_user():
     assert body["data"]["search_required"] is True
     assert body["data"]["card"]["topic"] == "recent Dodgers game"
     assert len(body["data"]["card"]["directions"]) == 3
+    assert body["data"]["card"]["directions"][0]["first_question_translations"] == [
+        "First translation?", "Second translation?", "Third translation?"
+    ]
 
 
 def test_prepare_topic_endpoint_marks_direct_card_without_sources():

@@ -117,6 +117,7 @@ assets/
 | `AppSectionLabel` | uppercase mono 스타일의 섹션 레이블 |
 | `AppColorBlockCard` | 파스텔 color block 기반 콘텐츠 카드 |
 | `AppAsyncStateView` | loading·error·empty 공통 상태 표현 |
+| `AppLoadingIndicator` | 가로형 토마토 5단계 공통 로딩 표시. 화면·버튼 크기와 동작 줄이기 설정에 대응 |
 | `AppPageIndicator` | 온보딩 등에 사용하는 현재 페이지 표시 |
 | `AppModalSheet` | 키보드와 Safe area를 고려한 공통 bottom sheet |
 | `MainNavigationBar` | 홈·내 정보 2탭 내비게이션 |
@@ -208,18 +209,22 @@ Splash → Onboarding(최초 1회) → Google 또는 iOS Apple Login → Home
 
 홈의 `＋ 새 대화`에서 Free Chat을 선택하면 Topic Input 화면으로 이동해요. Topic Input은 2자 미만 입력을 클라이언트에서 막고, 예시 topic chip으로 빠르게 주제를 채울 수 있게 해요.
 
-Topic Prep 화면은 전달받은 topic으로 `POST /api/search/topic-prep/stream/`을 호출해요. 주제와 영역별 로딩 표시를 먼저 보여주고 `summary_ready`에서 요약을, `card_ready`에서 완성된 방향·첫 질문을 보여줘요. 스트림 오류는 전체 오류 상태로 표시하며 부분 재시도는 아직 없어요. 응답의 `language`는 첫 답변 입력 안내처럼 사용자가 직접 작성해야 하는 copy에 사용하고, 서버가 내려준 retry guidance가 있으면 그 문구를 우선 표시해요.
+Topic Prep 화면은 전달받은 topic으로 `POST /api/search/topic-prep/stream/`을 호출해요. 주제와 준비 중인 각 영역에는 앱 공통 가로형 토마토 로딩 표시를 보여줘요. 축소 동작 설정에서는 첫 프레임을 정지 상태로 표시해요. `summary_ready`에서 요약 영역의 로딩을 끝내고 요약을, `card_ready`에서 나머지 로딩을 끝내고 완성된 방향·첫 질문을 보여줘요. 스트림 오류는 전체 오류 상태로 표시하며 부분 재시도는 아직 없어요. 응답의 `language`는 첫 답변 입력 안내처럼 사용자가 직접 작성해야 하는 copy에 사용하고, 서버가 내려준 retry guidance가 있으면 그 문구를 우선 표시해요.
+
+첫 질문 카드에는 AI가 같은 응답에서 생성한 반대 언어 번역을 회색 12px 보조 글씨로 표시해요. 방향 재생성·직접 입력 방향에도 같은 규칙을 적용하며, 번역이 없는 구형 응답은 원문 질문만 표시해요. 대화 시작에는 원문 질문만 전달해요.
+
+추천 대화 방향 3개 옆의 `직접 입력` 버튼을 누르면 팝업에서 원하는 방향을 입력해 첫 질문 3개를 생성해요. 생성에 성공하면 입력한 방향이 추가 선택 버튼으로 표시되고 새 질문과 반대 언어 번역이 함께 나타나요. 다른 방향을 눌렀다가 직접 입력 방향을 다시 선택할 수 있으며, 다시 입력하면 해당 버튼과 질문을 최신 결과로 교체해요. 본문에는 별도의 직접 입력 폼을 두지 않아요. 제목 옆 14px 검은색 새로고침 이미지 버튼은 배경 없이 기존 추천 방향만 다시 생성해요.
 
 | 상태 | 표시 |
 |------|------|
 | `loading` | 준비 중 안내 |
-| `ready=true` | summary, sources, direction 4개, 선택 direction의 첫 질문 3개 |
+| `ready=true` | summary, direction 4개, 선택 direction의 첫 질문 3개 |
 | `ready=false` | retry guidance, example topic chip, edit topic 복귀 |
 | `error` | 재시도 가능한 오류 상태 |
 
 기본 선택은 `CASUAL_CHAT`과 첫 번째 질문이에요. 사용자는 선택한 첫 질문에 대한 답변을 활성 target language로 입력하고, 앱은 `POST /api/conversations/start/free-chat/stream/`에 `first_message`, `search_context`, `topic`, `conversation_direction`, `selected_question`을 보내 Conversation 화면으로 이동해요. 첫 답변은 2자 미만이면 클라이언트에서 막아요.
 
-출처 링크는 현재 화면에 표시만 하고, 외부 브라우저 열기는 `url_launcher`를 도입하는 후속 작업에서 연결해요.
+요약을 기다리는 동안 토마토 로딩 표시는 카드 안 가운데에 배치해요. 서버 응답의 출처 정보는 화면에 표시하지 않아요.
 
 ## Roleplay Setup 흐름
 

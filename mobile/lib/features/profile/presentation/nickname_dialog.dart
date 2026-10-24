@@ -1,4 +1,5 @@
 import 'package:curitalk/core/copy/copy.dart';
+import 'package:curitalk/core/widgets/app_loading_indicator.dart';
 import 'package:curitalk/features/auth/auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -121,10 +122,7 @@ class _NicknameDialogState extends ConsumerState<NicknameDialog> {
           FilledButton(
             onPressed: _isSaving ? null : _save,
             child: _isSaving
-                ? const SizedBox.square(
-                    dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
+                ? const AppLoadingIndicator(width: 88)
                 : Text(copy.nicknameSaveLabel),
           ),
         ],

@@ -130,6 +130,7 @@ class TopicPrepDirection(BaseModel):
     title: str
     description: str
     first_questions: list[str] = Field(..., min_length=3, max_length=3)
+    first_question_translations: list[str] = Field(default_factory=list, max_length=3)
 
 
 class TopicPrepCard(BaseModel):
@@ -162,6 +163,7 @@ class CustomFocusQuestionsResult(BaseModel):
     ready: bool
     custom_focus: str
     first_questions: list[str] = Field(default_factory=list, max_length=3)
+    first_question_translations: list[str] = Field(default_factory=list, max_length=3)
     retry_guidance: str | None = None
 
 

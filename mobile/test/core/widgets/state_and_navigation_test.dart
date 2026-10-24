@@ -11,7 +11,7 @@ void main() {
   ) async {
     await tester.pumpWidget(_themedApp(const AppAsyncStateView.loading()));
 
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.byType(AppLoadingIndicator), findsOneWidget);
     expect(find.text('Loading...'), findsOneWidget);
 
     int retryCount = 0;

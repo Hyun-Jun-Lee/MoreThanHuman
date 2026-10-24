@@ -1,4 +1,5 @@
 import 'package:curitalk/app/theme/tokens/tokens.dart';
+import 'package:curitalk/core/widgets/app_loading_indicator.dart';
 import 'package:flutter/material.dart';
 
 class AppPrimaryButton extends StatelessWidget {
@@ -35,13 +36,7 @@ class AppPrimaryButton extends StatelessWidget {
         child: FilledButton(
           onPressed: isEnabled ? onPressed : null,
           child: isLoading
-              ? SizedBox.square(
-                  dimension: AppSize.icon,
-                  child: CircularProgressIndicator(
-                    color: Theme.of(context).colorScheme.onPrimary,
-                    strokeWidth: AppBorderWidth.focused,
-                  ),
-                )
+              ? const AppLoadingIndicator(width: 100)
               : Row(
                   mainAxisSize: MainAxisSize.min,
                   mainAxisAlignment: MainAxisAlignment.center,

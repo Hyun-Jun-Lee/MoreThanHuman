@@ -57,7 +57,7 @@ void main() {
       ),
     );
 
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.byType(AppLoadingIndicator), findsOneWidget);
     await tester.tap(find.byType(FilledButton));
     expect(pressCount, 1);
 

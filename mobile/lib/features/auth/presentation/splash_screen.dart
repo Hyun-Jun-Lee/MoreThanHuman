@@ -1,3 +1,6 @@
+import 'dart:math' as math;
+
+import 'package:curitalk/app/theme/tokens/tokens.dart';
 import 'package:curitalk/core/copy/copy.dart';
 import 'package:curitalk/features/auth/auth.dart';
 import 'package:curitalk/features/onboarding/onboarding.dart';
@@ -89,35 +92,68 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
-        child: Stack(
-          children: <Widget>[
-            ScaleTransition(
-              scale: _scale,
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 600),
-                  child: Image.asset(
-                    'assets/images/splash/toma_talk.png',
-                    width: double.infinity,
-                    fit: BoxFit.contain,
-                    semanticLabel: 'tomatalk',
+        child: LayoutBuilder(
+          builder: (BuildContext context, BoxConstraints constraints) {
+            final double imageWidth = math.max(
+              0,
+              math.min(
+                600,
+                math.min(
+                  constraints.maxWidth,
+                  (constraints.maxHeight - 40) / 0.62,
+                ),
+              ),
+            );
+            return Stack(
+              children: <Widget>[
+                ScaleTransition(
+                  scale: _scale,
+                  child: Center(
+                    child: SizedBox(
+                      width: imageWidth,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          ClipRect(
+                            key: const ValueKey('splash-image-viewport'),
+                            child: Align(
+                              heightFactor: 0.62,
+                              child: Image.asset(
+                                'assets/images/splash/toma_talk.png',
+                                width: double.infinity,
+                                fit: BoxFit.contain,
+                                semanticLabel: 'tomatalk',
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            '오늘의 토마톡!',
+                            textAlign: TextAlign.center,
+                            style: AppTypography.button.copyWith(
+                              color: Theme.of(context).colorScheme.onSurface,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            ),
-            if (hasError)
-              Align(
-                alignment: Alignment.bottomCenter,
-                child: IconButton(
-                  tooltip: copy.tryAgainLabel,
-                  onPressed: () {
-                    ref.invalidate(authControllerProvider);
-                    ref.invalidate(onboardingControllerProvider);
-                  },
-                  icon: const Icon(Icons.refresh),
-                ),
-              ),
-          ],
+                if (hasError)
+                  Align(
+                    alignment: Alignment.bottomCenter,
+                    child: IconButton(
+                      tooltip: copy.tryAgainLabel,
+                      onPressed: () {
+                        ref.invalidate(authControllerProvider);
+                        ref.invalidate(onboardingControllerProvider);
+                      },
+                      icon: const Icon(Icons.refresh),
+                    ),
+                  ),
+              ],
+            );
+          },
         ),
       ),
     );

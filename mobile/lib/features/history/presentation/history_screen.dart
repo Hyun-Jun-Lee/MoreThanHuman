@@ -56,9 +56,10 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
         ),
         data: (value) => Column(
           children: [
-            if (conversations.isLoading) const LinearProgressIndicator(),
+            if (conversations.isLoading)
+              const Center(child: AppLoadingIndicator(width: 120)),
             Expanded(
-              child: RefreshIndicator(
+              child: RefreshIndicator.noSpinner(
                 onRefresh: () async {
                   ref.invalidate(conversationHistoryControllerProvider);
                   try {
@@ -97,7 +98,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                             if (value.loadMoreFailed)
                               Text(copy.moreConversationsFailed),
                             if (value.isLoadingMore)
-                              const CircularProgressIndicator()
+                              const AppLoadingIndicator(width: 160)
                             else
                               OutlinedButton(
                                 onPressed: controller.loadMore,
@@ -139,10 +140,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                       trailing:
                           _deleting.contains(item.id) ||
                               _changing.contains(item.id)
-                          ? const SizedBox.square(
-                              dimension: AppSize.icon,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
+                          ? const AppLoadingIndicator(width: 44)
                           : PopupMenuButton<String>(
                               tooltip: copy.conversationOptionsLabel,
                               icon: const Icon(Icons.more_horiz_rounded),

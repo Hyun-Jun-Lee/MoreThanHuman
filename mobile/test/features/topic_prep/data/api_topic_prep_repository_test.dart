@@ -23,6 +23,10 @@ void main() {
     );
 
     expect(result.ready, isTrue);
+    expect(
+      result.card?.directions.first.firstQuestionTranslations.first,
+      '무엇이 눈에 띄었나요?',
+    );
     expect(adapter.lastRequest?.uri.path, '/api/search/topic-prep/');
     expect(adapter.lastRequest?.data, <String, String>{
       'topic': '최근 롯데 자이언츠 경기',
@@ -157,6 +161,11 @@ Map<String, dynamic> _direction(String direction, String title) {
       'What stood out to you?',
       'Which detail would you explain first?',
       'What would you ask a friend about it?',
+    ],
+    'first_question_translations': <String>[
+      '무엇이 눈에 띄었나요?',
+      '어떤 부분을 먼저 설명하겠어요?',
+      '친구에게 무엇을 물어보겠어요?',
     ],
   };
 }

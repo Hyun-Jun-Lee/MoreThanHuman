@@ -313,8 +313,11 @@ class _RecentConversations extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (isRefreshing)
-          const LinearProgressIndicator(
-            key: ValueKey('recent-conversations-refresh-indicator'),
+          const Center(
+            child: AppLoadingIndicator(
+              key: ValueKey('recent-conversations-refresh-indicator'),
+              width: 120,
+            ),
           ),
         for (int index = 0; index < conversations.length; index++) ...[
           RecentConversationCard(

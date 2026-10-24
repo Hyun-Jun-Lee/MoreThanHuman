@@ -167,12 +167,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       if (isSavingAppLocale)
                         const Padding(
                           padding: EdgeInsets.only(top: AppSpacing.md),
-                          child: Center(
-                            child: SizedBox.square(
-                              dimension: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                          ),
+                          child: Center(child: AppLoadingIndicator(width: 120)),
                         ),
                       const SizedBox(height: AppSpacing.xl),
                       AppSectionLabel(copy.languagePairSectionLabel),
@@ -212,12 +207,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       if (isSavingLanguage)
                         const Padding(
                           padding: EdgeInsets.only(top: AppSpacing.md),
-                          child: Center(
-                            child: SizedBox.square(
-                              dimension: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                          ),
+                          child: Center(child: AppLoadingIndicator(width: 120)),
                         ),
                       const SizedBox(height: AppSpacing.xl),
                       const Spacer(),

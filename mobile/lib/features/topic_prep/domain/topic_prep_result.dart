@@ -118,6 +118,7 @@ class TopicPrepDirection {
     required this.title,
     required this.description,
     required this.firstQuestions,
+    this.firstQuestionTranslations = const <String>[],
   });
 
   factory TopicPrepDirection.fromJson(Object? json) {
@@ -129,6 +130,7 @@ class TopicPrepDirection {
     final Object? title = json['title'];
     final Object? description = json['description'];
     final Object? questions = json['first_questions'];
+    final Object? translations = json['first_question_translations'];
     if (title is! String ||
         title.trim().isEmpty ||
         description is! String ||
@@ -137,7 +139,13 @@ class TopicPrepDirection {
         questions.length != 3 ||
         questions.any((Object? question) {
           return question is! String || question.trim().isEmpty;
-        })) {
+        }) ||
+        (translations != null &&
+            (translations is! List ||
+                (translations.isNotEmpty && translations.length != 3) ||
+                translations.any(
+                  (Object? value) => value is! String || value.trim().isEmpty,
+                )))) {
       throw const FormatException('Topic prep direction payload is invalid.');
     }
     return TopicPrepDirection(
@@ -148,6 +156,12 @@ class TopicPrepDirection {
           .cast<String>()
           .map((String question) => question.trim())
           .toList(growable: false),
+      firstQuestionTranslations: translations == null
+          ? const <String>[]
+          : (translations as List)
+                .cast<String>()
+                .map((String value) => value.trim())
+                .toList(growable: false),
     );
   }
 
@@ -155,6 +169,7 @@ class TopicPrepDirection {
   final String title;
   final String description;
   final List<String> firstQuestions;
+  final List<String> firstQuestionTranslations;
 }
 
 class TopicPrepCard {
@@ -211,6 +226,7 @@ class CustomFocusQuestions {
     required this.ready,
     required this.customFocus,
     required this.firstQuestions,
+    this.firstQuestionTranslations = const <String>[],
     this.retryGuidance,
   });
 
@@ -221,11 +237,20 @@ class CustomFocusQuestions {
     final Object? ready = json['ready'];
     final Object? customFocus = json['custom_focus'];
     final Object? questions = json['first_questions'];
+    final Object? translations = json['first_question_translations'];
     final Object? retryGuidance = json['retry_guidance'];
     if (ready is! bool ||
         customFocus is! String ||
         customFocus.trim().isEmpty ||
         questions is! List ||
+        (translations != null &&
+            (translations is! List ||
+                (ready &&
+                    translations.isNotEmpty &&
+                    translations.length != 3) ||
+                translations.any(
+                  (Object? value) => value is! String || value.trim().isEmpty,
+                ))) ||
         (retryGuidance != null && retryGuidance is! String) ||
         (ready &&
             (questions.length != 3 ||
@@ -241,6 +266,12 @@ class CustomFocusQuestions {
           .whereType<String>()
           .map((String question) => question.trim())
           .toList(growable: false),
+      firstQuestionTranslations: translations == null
+          ? const <String>[]
+          : (translations as List)
+                .cast<String>()
+                .map((String value) => value.trim())
+                .toList(growable: false),
       retryGuidance: retryGuidance as String?,
     );
   }
@@ -248,6 +279,7 @@ class CustomFocusQuestions {
   final bool ready;
   final String customFocus;
   final List<String> firstQuestions;
+  final List<String> firstQuestionTranslations;
   final String? retryGuidance;
 }
 

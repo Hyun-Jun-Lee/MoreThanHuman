@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:curitalk/app/router/app_router.dart';
+import 'package:curitalk/app/theme/tokens/tokens.dart';
 import 'package:curitalk/features/auth/auth.dart';
 import 'package:curitalk/features/onboarding/onboarding.dart';
 import 'package:flutter/material.dart';
@@ -125,7 +126,7 @@ void main() {
     expect(scale.scale.value, 1);
   });
 
-  testWidgets('splash shows only the supplied image while restoring session', (
+  testWidgets('splash shows the supplied image and home-matched title', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
@@ -146,7 +147,20 @@ void main() {
       (image.image as AssetImage).assetName,
       'assets/images/splash/toma_talk.png',
     );
-    expect(find.byType(Text), findsNothing);
+    final Text title = tester.widget<Text>(find.text('오늘의 토마톡!'));
+    expect(title.textAlign, TextAlign.center);
+    expect(title.style?.fontFamily, AppTypography.button.fontFamily);
+    expect(title.style?.fontSize, AppTypography.button.fontSize);
+    expect(title.style?.fontWeight, AppTypography.button.fontWeight);
+    expect(find.text('오늘의 토마톡!'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('오늘의 토마톡!')).dy,
+      greaterThan(
+        tester
+            .getBottomLeft(find.byKey(const ValueKey('splash-image-viewport')))
+            .dy,
+      ),
+    );
     expect(find.byType(CircularProgressIndicator), findsNothing);
     expect(tester.takeException(), isNull);
   });
@@ -168,6 +182,6 @@ void main() {
     await tester.pump();
 
     expect(find.byIcon(Icons.refresh), findsOneWidget);
-    expect(find.byType(Text), findsNothing);
+    expect(find.text('오늘의 토마톡!'), findsOneWidget);
   });
 }

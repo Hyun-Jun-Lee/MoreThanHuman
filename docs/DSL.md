@@ -1,6 +1,6 @@
 # tomatalk Backend DSL
 
-> 최종 갱신: 2026-10-19 · 범위: FastAPI 백엔드 API + Flutter 모바일 연동
+> 최종 갱신: 2026-10-24 · 범위: FastAPI 백엔드 API + Flutter 모바일 연동
 
 사용자 클라이언트는 `mobile/`의 Flutter 기반 모바일 앱으로 개발해요. 이 문서는 모바일 앱이 연동할 백엔드 도메인, 데이터 모델, API 계약을 정의해요.
 
@@ -669,6 +669,7 @@ module Search {
     ready: Boolean
     custom_focus: String
     first_questions: List<String>
+    first_question_translations: List<String>
     retry_guidance?: String
   }
 
@@ -699,10 +700,10 @@ module Search {
 
   `POST /api/search/topic-prep/stream/`은 같은 요청·품질 규칙을 적용하고 `application/x-ndjson`으로 줄 단위 이벤트를 반환해요. `summary_ready`의 `data`는 완성된 요약 문자열이며 `quality.is_sufficient=true`일 때만 카드보다 먼저 보낼 수 있어요. `card_ready`의 `data`는 완전한 `TopicPrepResult`예요. 스트림 시작 후 실패하면 `error` 이벤트의 `code=TOPIC_PREP_FAILED`로 끝나요. 낮은 품질 결과에서는 `summary_ready` 없이 `card_ready`가 올 수 있어요. 부분 실패 재시도 API는 아직 없어요.
 
-  Topic Prep summary와 direction title/description은 입력 topic 언어를 우선하고, 모호하면 `native_language`로 fallback해요. first question과 실제 conversation은 계속 `target_language` 연습에 맞춰 생성돼요.
+  Topic Prep summary와 direction title/description은 입력 topic 언어를 우선하고, 모호하면 `native_language`로 fallback해요. first question과 실제 conversation은 계속 `target_language` 연습에 맞춰 생성돼요. 각 첫 질문의 `first_question_translations`는 질문과 같은 순서의 3개 문자열이며, 학습 언어가 영어면 한국어, 한국어면 영어로 생성해요. 앱은 번역을 작은 회색 보조 문구로 표시하고, 구형 응답에 필드가 없으면 질문만 표시해요.
   Topic Prep prompt policy도 conversation과 같은 target-language practice priorities를 사용해요.
   검색어 분석 LLM은 `search_required` Boolean을 반환해요. 최신 정보나 시점에 따라 변하는 사실을 요구하는 명시적 표현은 코드 규칙이 검색을 강제하고, 분석 실패 시에도 검색해요. `search_required=false`이면 웹 검색과 출처 판정을 생략하고 카드 생성으로 이동해요.
-  카드 생성 LLM은 출처 목록이나 출처 수를 전달받지 않고 입력 주제를 바탕으로 summary와 대화 방향·질문을 만들어요. 검색 생략 카드의 `sources`는 빈 목록이고 출처 개수는 0이에요. 이때 `ready`는 카드 완성 여부를 뜻하며 출처 수가 0이어도 true일 수 있어요. 검색 경로의 카드에는 기존 검색 결과와 출처 개수 품질 필드를 보존해요.
+  카드 생성 LLM은 입력 주제·현재 날짜·시간대·학습 언어 정책을 받아 summary와 대화 방향·질문을 만들어요. 검색 경로에서는 품질 판정을 통과한 출처의 제목·검색 요약만 번호가 있는 JSON 목록으로 함께 전달하고, 출처가 뒷받침하는 사실만 카드에 사용해요. URL은 카드 생성 입력에서 제외해요. 검색 결과 텍스트는 작성 지시가 아닌 참고 데이터예요. 검색 생략 카드에는 출처를 전달하지 않고 `sources`는 빈 목록, 출처 개수는 0이에요. 이때 `ready`는 카드 완성 여부를 뜻하며 출처 수가 0이어도 true일 수 있어요. 검색 경로의 카드에는 채택된 출처와 출처 개수 품질 필드를 보존해요.
   Topic Prep의 직접 입력 질문과 방향 재생성은 주제에서 생성하며 웹 검색을 다시 호출하지 않아요.
   Low-quality 상태의 `retry_guidance`와 `example_topics`는 사용자가 이해할 수 있도록 `feedback_language`로 표시하되, 예시 유형은 target language 연습 목적을 반영해요.
 
@@ -721,6 +722,7 @@ module Search {
     title: String
     description: String
     first_questions: List<String>
+    first_question_translations: List<String>
   }
 
   type TopicPrepQuality {
@@ -794,5 +796,6 @@ module LLM {
 
 ## 문서 변경 기록
 
+- 2026-10-24: Topic Prep 첫 질문의 영어·한국어 반대 언어 번역 필드를 추가했어요. 카드·방향 재생성·직접 입력 질문 응답에 적용해요.
 - 2026-10-04: 주간 추천의 첫 질문 선생성과 동일 주차 재발행 계약을 추가했어요.
 - 2026-09-13: README의 상세 API 안내를 통합하고 환경변수 상세는 ENVIRONMENT.md로 분리했어요. API 동작 자체는 변경하지 않았어요.

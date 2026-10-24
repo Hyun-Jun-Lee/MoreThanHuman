@@ -1,6 +1,7 @@
 import 'package:curitalk/app/theme/app_semantic_colors.dart';
 import 'package:curitalk/app/theme/app_theme.dart';
 import 'package:curitalk/app/theme/tokens/tokens.dart';
+import 'package:curitalk/core/widgets/app_loading_indicator.dart';
 import 'package:curitalk/features/conversation/domain/grammar_feedback.dart';
 import 'package:curitalk/features/conversation/presentation/widgets/widgets.dart';
 import 'package:flutter/material.dart';
@@ -57,11 +58,11 @@ void main() {
       ),
     );
 
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.byType(AppLoadingIndicator), findsOneWidget);
     expect(tester.widget<TextField>(find.byType(TextField)).enabled, isFalse);
     final IconButton sendButton = tester.widget<IconButton>(
       find.ancestor(
-        of: find.byType(CircularProgressIndicator),
+        of: find.byType(AppLoadingIndicator),
         matching: find.byType(IconButton),
       ),
     );

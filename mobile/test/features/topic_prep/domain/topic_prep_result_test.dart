@@ -15,6 +15,10 @@ void main() {
       TopicPrepDirectionType.casualChat,
     );
     expect(result.card?.directions.first.firstQuestions, hasLength(3));
+    expect(
+      result.card?.directions.first.firstQuestionTranslations.first,
+      '무엇이 눈에 띄었나요?',
+    );
     expect(result.language.nativeLanguage, LearningLanguageCode.zh);
     expect(result.language.targetLanguage, LearningLanguageCode.ko);
   });
@@ -37,6 +41,52 @@ void main() {
     expect(result.card?.sources, isEmpty);
     expect(result.quality.sourceCount, 0);
     expect(result.quality.hasEnoughSources, isFalse);
+  });
+
+  test('accepts an older direction without translations', () {
+    final Map<String, dynamic> json = _readyResult();
+    final List<dynamic> directions =
+        (json['card']! as Map<String, dynamic>)['directions']! as List<dynamic>;
+    (directions.first as Map<String, dynamic>).remove(
+      'first_question_translations',
+    );
+
+    final TopicPrepResult result = TopicPrepResult.fromJson(json);
+
+    expect(result.card?.directions.first.firstQuestionTranslations, isEmpty);
+  });
+
+  test('accepts an empty translation list from an older server', () {
+    final Map<String, dynamic> json = _readyResult();
+    final List<dynamic> directions =
+        (json['card']! as Map<String, dynamic>)['directions']! as List<dynamic>;
+    (directions.first as Map<String, dynamic>)['first_question_translations'] =
+        <String>[];
+
+    final TopicPrepResult result = TopicPrepResult.fromJson(json);
+
+    expect(result.card?.directions.first.firstQuestionTranslations, isEmpty);
+  });
+
+  test('parses translated custom focus questions', () {
+    final CustomFocusQuestions result = CustomFocusQuestions.fromJson(
+      <String, dynamic>{
+        'ready': true,
+        'custom_focus': 'the bullpen',
+        'first_questions': <String>[
+          'Question 1?',
+          'Question 2?',
+          'Question 3?',
+        ],
+        'first_question_translations': <String>['번역 1?', '번역 2?', '번역 3?'],
+      },
+    );
+
+    expect(result.firstQuestionTranslations, <String>[
+      '번역 1?',
+      '번역 2?',
+      '번역 3?',
+    ]);
   });
 
   test('parses a low-quality topic prep result', () {
@@ -121,6 +171,11 @@ Map<String, dynamic> _direction(String direction, String title) {
       'What stood out to you?',
       'Which detail would you explain first?',
       'What would you ask a friend about it?',
+    ],
+    'first_question_translations': <String>[
+      '무엇이 눈에 띄었나요?',
+      '어떤 부분을 먼저 설명하겠어요?',
+      '친구에게 무엇을 물어보겠어요?',
     ],
   };
 }
