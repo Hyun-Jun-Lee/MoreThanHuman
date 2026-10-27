@@ -1,6 +1,6 @@
 # 시스템 아키텍처
 
-> 프로젝트: MoreThanHuman (서비스명: tomatalk) · 버전: 0.1.10 · 최종 갱신: 2026-10-24
+> 프로젝트: MoreThanHuman (서비스명: tomatalk) · 버전: 0.1.10 · 최종 갱신: 2026-10-27
 
 ---
 
@@ -101,7 +101,7 @@ Home의 `language_snacks`는 최근 대화와 독립된 학습 콘텐츠 흐름�
 
 Flutter 앱 시작은 `Splash → Onboarding(최초 1회) → Google 또는 iOS Apple Login → Home` 순서예요. `go_router`가 onboarding 완료 상태와 Riverpod 인증 상태를 함께 관찰하며, 인증 복원 중에는 Splash를 유지하고 로그인 성공 또는 세션 만료 시 Home/Login으로 redirect해요. `AppCopy`는 system locale이 `ko`일 때 한국어, 그 밖에는 영어로 app chrome·접근성 label·클라이언트 오류를 표시하고 학습 언어 context를 바꾸지 않아요. Onboarding은 기기 locale로 `ko -> en`, `en -> ko` 기본값을 고르고, 중국어가 포함된 언어쌍은 화면에 표시하되 선택은 막아요. 사용자가 현재 선택 가능한 지원 언어쌍(`ko -> en`, `en -> ko`) 중 하나를 확정하면 pending language context를 secure storage에 저장해요. 인증이 생기면 `authControllerProvider`가 pending 값을 `POST /api/auth/bootstrap`에 함께 보내 프로필 생성·언어 적용·최종 프로필 응답을 한 요청으로 마친 뒤 Home을 표시해요. Home은 활성 언어쌍과 `/api/conversations/?limit=5&offset=0` 최근 대화 중 최대 2개를 표시해요. 내 정보 탭의 `학습 언어` 설정은 profile default만 갱신하며 새 대화부터 적용돼요. 기존 conversation은 snapshot을 유지하고, 화면의 별도 정책 설명문은 표시하지 않아요. Free Chat 선택 시 `Topic Input → Topic Prep`으로 이어져 `POST /api/search/topic-prep/`의 ready/low-quality/error 상태를 보여주고, 첫 답변 제출 후 `POST /api/conversations/start/free-chat/stream/`로 Conversation 화면에 진입해요. Topic Input 정적 예시 검색어는 system locale이 아니라 native language로 고르고 그대로 검색 요청에 보내요. Roleplay 선택 시 `Roleplay Setup`에서 target language에 맞는 preset/custom 상황을 고르고 `role_character`로 `POST /api/conversations/start/roleplay/stream/`를 호출해요. `turn_started`에서 요청 ID 기반 임시 대화 화면으로 들어가 첫 인사 델타와 음성을 표시·재생하고, `turn_completed`에서 영속 대화 ID로 화면을 교체해요. Topic Prep과 Roleplay 콘텐츠 선택은 target language를 따르고, retry guidance나 짧은 설명은 feedback language를 따르는 정책을 유지해요. Backend LLM prompt policy도 같은 원칙을 써서 target language가 conversation, roleplay, grammar, Topic Prep의 연습·교정 기준을 정하고 feedback language는 설명·retry 안내 언어만 정해요. 이 정책은 STT/TTS나 provider/model routing을 변경하지 않아요. Home 최근 대화 카드도 `/conversation/:conversationId`로 이동해 기존 메시지를 이어가요.
 
-Splash의 Flutter 화면은 새 Toma Talk 이미지를 흰 배경 중앙에 표시하고 이미지 아래에 `오늘의 토마톡!`을 Home의 `오늘의 토마토`와 같은 Freesentation 16px Bold 버튼 서체로 표시해요. 이미지 원본의 넓은 흰 여백은 화면에서 잘라 그림과 제목을 가깝게 배치해요. 이미지와 제목은 진입 시 한 번 0.96배로 줄였다가 650ms 안에 원래 크기로 되돌려요. 인증·onboarding 확인이 먼저 끝나도 모션 완료까지 Splash에 머물러요. 동작 줄이기 설정에서는 모션을 생략하고 즉시 화면 이동을 허용해요. 로딩 문구는 표시하지 않고 인증 또는 onboarding 확인 오류일 때만 하단 재시도 아이콘을 표시해요.
+Splash의 Flutter 화면은 새 Toma Talk 이미지와 그 아래의 `오늘의 토마톡!`을 흰 배경의 중앙보다 위쪽에 함께 배치해요. 제목은 Home의 `오늘의 토마토`와 같은 Freesentation 16px Bold 버튼 서체로 표시해요. 이미지 원본의 넓은 흰 여백은 화면에서 잘라 그림과 제목을 가깝게 배치해요. 이미지와 제목은 진입 시 한 번 0.96배로 줄였다가 650ms 안에 원래 크기로 되돌려요. 인증·onboarding 확인이 먼저 끝나도 모션 완료까지 Splash에 머물러요. 동작 줄이기 설정에서는 모션을 생략하고 즉시 화면 이동을 허용해요. 로딩 문구는 표시하지 않고 인증 또는 onboarding 확인 오류일 때만 하단 재시도 아이콘을 표시해요.
 
 모바일 내비게이션 v2 (2026-09-22, 2026-10-04 갱신)는 `StatefulShellRoute.indexedStack`이 홈(`/home`)·내 정보(`/profile`) 두 탭과 각 스크롤을 유지해요. 홈은 스낵 → 최근 2개 파스텔 카드 → 새 대화 순서이고, 홈의 `전체 보기` 버튼은 표시하지 않고, 전체 대화(`/history`) 직접 진입 경로는 shell 밖에 유지해요. 전체 대화는 별도 repository/controller가 기존 limit/offset API로 20개씩 조회하는 행 목록이에요. 추가 조회는 중복 요청·ID와 계정 변경 전 지연 응답을 차단해요. 준비·대화 경로도 shell 밖 루트 stack에 push하며, 생성 성공 시 준비 경로만 제거해 출발 화면을 보존해요. 대화에서 pop하면 두 목록을 갱신하고 전체 목록은 읽던 범위까지 재조회해요. 설정 저장은 인증 loading 전환 없이 profile을 갱신해 현재 탭을 유지하고, 로그아웃은 기존 인증 redirect로 shell을 해제해요. 상세 경로 계약은 [모바일 내비게이션 계약](_contracts/MOBILE_NAVIGATION.md)을 따라요.
 

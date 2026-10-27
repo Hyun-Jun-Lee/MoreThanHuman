@@ -129,6 +129,10 @@ void main() {
   testWidgets('splash shows the supplied image and home-matched title', (
     WidgetTester tester,
   ) async {
+    tester.view.physicalSize = const Size(402, 874);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
@@ -153,6 +157,12 @@ void main() {
     expect(title.style?.fontSize, AppTypography.button.fontSize);
     expect(title.style?.fontWeight, AppTypography.button.fontWeight);
     expect(find.text('오늘의 토마톡!'), findsOneWidget);
+    final Rect brand = tester.getRect(
+      find.byKey(const ValueKey('splash-brand-group')),
+    );
+    final Rect screen = tester.getRect(find.byType(Scaffold));
+    expect(brand.center.dx, closeTo(screen.center.dx, 1));
+    expect(brand.center.dy, lessThan(screen.center.dy - 75));
     expect(
       tester.getTopLeft(find.text('오늘의 토마톡!')).dy,
       greaterThan(

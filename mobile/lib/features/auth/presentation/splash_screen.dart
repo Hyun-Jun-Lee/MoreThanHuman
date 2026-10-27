@@ -108,8 +108,10 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
               children: <Widget>[
                 ScaleTransition(
                   scale: _scale,
-                  child: Center(
+                  child: Align(
+                    alignment: const Alignment(0, -0.35),
                     child: SizedBox(
+                      key: const ValueKey('splash-brand-group'),
                       width: imageWidth,
                       child: Column(
                         mainAxisSize: MainAxisSize.min,

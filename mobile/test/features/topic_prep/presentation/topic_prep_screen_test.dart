@@ -53,6 +53,16 @@ void main() {
       tester.getCenter(find.byType(TomatoBiteLoader).first).dx,
       closeTo(tester.getCenter(find.byType(AppColorBlockCard).first).dx, 1),
     );
+    final Finder summaryCard = find.byType(AppColorBlockCard).first;
+    final Finder summaryLabel = find.descendant(
+      of: summaryCard,
+      matching: find.byType(AppSectionLabel),
+    );
+    expect(
+      tester.getTopLeft(find.byType(TomatoBiteLoader).first).dy -
+          tester.getBottomLeft(summaryLabel).dy,
+      closeTo(AppSpacing.xs, 1),
+    );
 
     final Image initialTomato = tester.widget<Image>(
       find.descendant(
@@ -88,6 +98,11 @@ void main() {
     await tester.pump();
     await tester.pump();
     expect(find.text('Early summary'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('Early summary')).dy -
+          tester.getBottomLeft(summaryLabel).dy,
+      closeTo(AppSpacing.md, 1),
+    );
     expect(find.byType(TomatoBiteLoader), findsNWidgets(2));
     expect(find.text('CASUAL CHAT'), findsNothing);
 
@@ -168,6 +183,15 @@ void main() {
 
     final Finder dialog = find.byType(AlertDialog);
     expect(dialog, findsOneWidget);
+    expect(find.text('What would you like to discuss?'), findsOneWidget);
+    final TextField dialogField = tester.widget<TextField>(
+      find.descendant(of: dialog, matching: find.byType(TextField)),
+    );
+    expect(
+      dialogField.decoration?.hintText,
+      "Enter what you'd like to discuss",
+    );
+    expect(dialogField.maxLines, 1);
     await tester.tap(find.text('Create questions'));
     await tester.pumpAndSettle();
     expect(find.text('Enter a conversation focus.'), findsOneWidget);

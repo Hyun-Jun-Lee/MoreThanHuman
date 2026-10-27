@@ -400,7 +400,7 @@ class _TopicPrepScreenState extends ConsumerState<TopicPrepScreen> {
                 controller: _customFocusController,
                 hintText: copy.customFocusPlaceholder,
                 autofocus: true,
-                maxLines: 2,
+                maxLines: 1,
                 textInputAction: TextInputAction.done,
                 errorText: inputError,
                 onChanged: (_) {
@@ -549,7 +549,7 @@ class _LoadingTopicPrepView extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               AppSectionLabel(copy.summaryLabel),
-              const SizedBox(height: AppSpacing.md),
+              SizedBox(height: summary == null ? AppSpacing.xs : AppSpacing.md),
               if (summary == null)
                 Center(
                   child: TomatoBiteLoader(

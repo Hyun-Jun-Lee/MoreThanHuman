@@ -429,11 +429,10 @@ class AppCopy {
   String get chooseDirectionLabel =>
       isKorean ? '어떤 주제가 좋으세요?' : 'What would you like to talk about?';
   String get customFocusLabel =>
-      isKorean ? '직접 입력하는 대화 방향' : 'Your own conversation focus';
+      isKorean ? '어떤 이야기를 나눌까요?' : 'What would you like to discuss?';
   String get customFocusOpenLabel => isKorean ? '직접 입력' : 'Write your own';
-  String get customFocusPlaceholder => isKorean
-      ? '마음에 드는 주제가 없으면 직접 입력해보세요'
-      : 'If none of these feel right, enter your own.';
+  String get customFocusPlaceholder =>
+      isKorean ? '나누고 싶은 내용을 적어 주세요' : "Enter what you'd like to discuss";
   String get customFocusSubmitLabel => isKorean ? '질문 만들기' : 'Create questions';
   String get customFocusEmptyError =>
       isKorean ? '대화 방향을 입력해 주세요.' : 'Enter a conversation focus.';
