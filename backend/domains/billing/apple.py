@@ -6,7 +6,9 @@ from pathlib import Path
 from appstoreserverlibrary.api_client import APIException, AppStoreServerAPIClient
 from appstoreserverlibrary.models.Environment import Environment
 from appstoreserverlibrary.models.Status import Status
+from appstoreserverlibrary.models.UpdateAppAccountTokenRequest import UpdateAppAccountTokenRequest
 from appstoreserverlibrary.signed_data_verifier import SignedDataVerifier, VerificationException
+from uuid import UUID
 
 from config import Settings
 
@@ -85,6 +87,15 @@ class AppleGateway:
             return self.verifier.verify_and_decode_notification(signed_payload)
         except (VerificationException, ValueError) as exc:
             raise AppleVerificationError("Apple 알림 서명을 확인할 수 없어요") from exc
+
+    def set_app_account_token(self, original_transaction_id: str, user_id: str) -> None:
+        try:
+            self.client.set_app_account_token(
+                original_transaction_id,
+                UpdateAppAccountTokenRequest(appAccountToken=UUID(user_id)),
+            )
+        except APIException as exc:
+            raise AppleUnavailableError("Apple 구독 계정 연결을 갱신하지 못했어요") from exc
 
     def current_subscription(self, transaction_id: str) -> VerifiedSubscription:
         try:

@@ -1,6 +1,6 @@
 # tomatalk Backend DSL
 
-> 최종 갱신: 2026-10-24 · 범위: FastAPI 백엔드 API + Flutter 모바일 연동
+> 최종 갱신: 2026-11-01 · 범위: FastAPI 백엔드 API + Flutter 모바일 연동
 
 사용자 클라이언트는 `mobile/`의 Flutter 기반 모바일 앱으로 개발해요. 이 문서는 모바일 앱이 연동할 백엔드 도메인, 데이터 모델, API 계약을 정의해요.
 
@@ -154,6 +154,8 @@ module Auth {
     POST /api/auth/swagger/token        -> issueSwaggerToken
     POST /api/auth/bootstrap            -> initializeProfile
     GET  /api/auth/me                    -> getCurrentUser
+    DELETE /api/auth/me                   -> requestAccountDeletion
+    GET  /api/auth/deletion-status/{receipt} -> getDeletionStatus
     GET  /api/auth/me/language-preferences
                                             -> getLanguagePreferences
     PUT  /api/auth/me/language-preferences
@@ -189,6 +191,10 @@ module Auth {
 `PUT /api/auth/me/language-preferences`는 profile default만 갱신해요. 모바일 Account UX는 변경값이 새 대화부터 적용되고 기존 conversation은 생성 시점 snapshot을 유지한다고 안내해야 해요.
 `PUT /api/auth/me/app-locale`는 앱 chrome 표시 언어만 저장해요. 값이 없는 기존 profile은 기기 system locale을 따르며 학습 언어쌍과 기존 conversation snapshot은 바꾸지 않아요.
 `PUT /api/auth/me/nickname`은 인증된 사용자 본인의 닉네임만 저장하고 `{ success, data: UserProfile }`을 반환해요. 앞뒤 공백 제거와 NFC 정규화 후 1~20자이며 줄바꿈·제어 문자는 허용하지 않아요. 닉네임 중복은 허용하고 UNIQUE 제약이나 중복 조회는 없어요. `nickname: null`은 신규 앱 프로필의 첫 설정이 끝나지 않았음을 뜻해요. 기존 프로필은 migration에서 현재 `name`을 닉네임으로 이관해요. 화면 표시에는 `nickname`을 우선 사용하고 `name`은 OAuth 원본으로 보존해요.
+
+`DELETE /api/auth/me`는 현재 계정의 삭제 요청을 영속화해 기존 Supabase JWT 접근을 즉시 차단해요. 응답의 `data`는 `status: completed|processing`, 서버가 생성한 고엔트로피 `receipt`, `apple_disconnect_required`를 담아요. Apple 로그인 사용자는 새 Apple 승인 코드와 ID 토큰을 선택적으로 body의 `apple_authorization_code`, `apple_identity_token`으로 보내 연결 해제를 시도할 수 있어요. 연결 해제 실패는 데이터 삭제를 막지 않으며 앱이 Apple 계정 설정에서 수동 해제를 안내해요. 데이터 삭제와 Supabase Auth 삭제 중 외부 오류가 나면 `processing`과 HTTP 202를 반환하고 운영 재시도 작업이 완료해요. `GET /api/auth/deletion-status/{receipt}`는 인증 없이 해당 영수증의 `processing|completed`만 반환해요. 삭제된 프로필·대화·학습 기록은 재가입 시 복구되지 않아요.
+
+삭제에 필요한 서버 전용 Supabase 관리자 키가 설정되지 않았으면 요청을 영속화하기 전에 HTTP 503을 반환해요.
 첫 설정 팝업은 기기의 우선 시스템 언어가 한국어면 영어, 영어를 포함한 그 밖의 언어면 한국어 닉네임을 기기에서 생성해 입력 칸에 미리 채워요. 사용자는 수정할 수 있으며 저장 전에는 서버에 전송하지 않아요. 내 정보의 닉네임 수정 팝업은 현재 값을 유지해요.
 
 ## 5. Language Snack 모듈
@@ -523,6 +529,8 @@ NDJSON 각 줄에는 `event`, 0부터 증가하는 `seq`, `turn_id`, `attempt_id
 대화 목록의 `locked`는 저장된 `slot_active`를 반영해요. 목록 조회는 구독 상태를 갱신하거나 슬롯을 재조정하지 않아요. 구독 갱신 작업이 지연되면 표시가 잠시 이전 상태일 수 있으나 생성·발화·활성화 요청은 현재 권한을 다시 검사해요.
 
 `GET /api/billing/entitlement/`는 인증 계정의 검증된 `plan`, `status`, `expires_at`, `slot_limit`, `turn_limit`을 반환해요. iOS 앱은 App Store 제품 ID `Advance`·`Plus`의 표시 가격을 직접 불러와요. `POST /api/billing/apple/verify/`는 인증 계정의 `{ "signed_transaction": "Apple StoreKit 2 JWS" }`를 받아 Apple 서명 및 App Store Server API의 현재 상태를 검증하고 권한을 반환해요. 다른 계정에 묶인 구매는 HTTP 409 `PURCHASE_ACCOUNT_CONFLICT`, 잘못된 거래는 HTTP 400 `INVALID_APPLE_PURCHASE`예요. `POST /api/billing/apple/notifications/`는 Apple Server Notifications V2의 `{ "signedPayload": "..." }`를 받아 서명을 검증하고 Apple의 현재 상태를 다시 조회해요. 알림 ID로 중복 처리를 막아요.
+
+`POST /api/billing/apple/restore/`는 사용자가 명시적으로 구매 복원을 누른 뒤 받은 StoreKit 2 서명 거래를 받아요. Apple의 현재 상태를 조회해 유효한 구독만 연결하고, 구독이 삭제된 계정에 연결돼 있으면 App Store Server API의 App Account Token을 새 계정 ID로 갱신해요. 다른 활성 계정의 구매는 HTTP 409로 거부해요. 복원되는 것은 남은 구독 이용 권한뿐이며 학습 자료는 복구하지 않아요. 계정 삭제 자체는 Apple 자동 갱신을 중단하지 않으므로 앱에서 Apple 구독 관리 경로를 안내해요.
 
 멀티모달 대화 API는 아래 다섯 가지 요청 형태를 기본 계약으로 사용해요.
 

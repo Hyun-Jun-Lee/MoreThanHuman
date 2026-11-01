@@ -12,6 +12,7 @@ import 'package:curitalk/features/profile/presentation/nickname_dialog.dart';
 import 'package:curitalk/features/language/language.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -23,6 +24,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   static const double _sectionContentGap = AppSpacing.md;
 
   bool isLoggingOut = false;
+  bool isDeletingAccount = false;
   bool isSavingLanguage = false;
   bool isSavingAppLocale = false;
   String? languageError;
@@ -213,9 +215,28 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       const Spacer(),
                       Center(
                         child: TextButton(
+                          onPressed:
+                              user == null ||
+                                  isDeletingAccount ||
+                                  isLoggingOut ||
+                                  isSavingLanguage ||
+                                  isSavingAppLocale
+                              ? null
+                              : _deleteAccount,
+                          child: Text(
+                            copy.deleteAccountLabel,
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.error,
+                            ),
+                          ),
+                        ),
+                      ),
+                      Center(
+                        child: TextButton(
                           style: AppComponentThemes.mutedTextButton,
                           onPressed:
                               isLoggingOut ||
+                                  isDeletingAccount ||
                                   isSavingLanguage ||
                                   isSavingAppLocale
                               ? null
@@ -242,6 +263,91 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             ),
       ),
     );
+  }
+
+  Future<void> _deleteAccount() async {
+    final user = ref.read(authControllerProvider).value?.user;
+    if (user == null) return;
+    final copy = AppCopy.of(context);
+    final isIos = Theme.of(context).platform == TargetPlatform.iOS;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(copy.deleteAccountLabel),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(copy.deleteAccountWarning),
+              if (isIos) ...[
+                const SizedBox(height: AppSpacing.md),
+                Text(copy.deleteAccountSubscriptionWarning),
+                TextButton(
+                  onPressed: () => launchUrl(
+                    Uri.parse('https://apps.apple.com/account/subscriptions'),
+                    mode: LaunchMode.externalApplication,
+                  ),
+                  child: Text(copy.manageSubscription),
+                ),
+              ],
+              if (user.oauthProvider == 'apple') ...[
+                const SizedBox(height: AppSpacing.md),
+                Text(copy.deleteAccountAppleWarning),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(copy.cancelLabel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(
+              copy.deleteAccountLabel,
+              style: TextStyle(
+                color: Theme.of(dialogContext).colorScheme.error,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => isDeletingAccount = true);
+    try {
+      AppleIdentityTokens? appleTokens;
+      if (user.oauthProvider == 'apple') {
+        try {
+          appleTokens = await ref.read(appleIdentityServiceProvider).signIn();
+        } on Object {
+          // Apple 재인증 실패는 계정 데이터 삭제를 막지 않아요.
+        }
+      }
+      final result = await ref
+          .read(authControllerProvider.notifier)
+          .deleteAccount(appleTokens: appleTokens);
+      if (messenger.mounted) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              '${result.status == 'completed' ? copy.deletionCompleted : copy.deletionProcessing}'
+              '${result.appleDisconnectRequired ? ' ${copy.deletionAppleManual}' : ''}'
+              '${result.localCleanupFailed ? ' ${copy.deletionLocalCleanupFailed}' : ''}',
+            ),
+          ),
+        );
+      }
+    } on Object {
+      if (messenger.mounted) {
+        messenger.showSnackBar(SnackBar(content: Text(copy.deletionFailed)));
+      }
+    } finally {
+      if (mounted) setState(() => isDeletingAccount = false);
+    }
   }
 
   Future<void> _changeAppLocale(String nextLocale) async {

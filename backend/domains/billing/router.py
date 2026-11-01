@@ -56,6 +56,22 @@ def verify_purchase(
         raise HTTPException(status_code=503, detail={"code": "APPLE_UNAVAILABLE", "message": "Apple 구독 확인을 다시 시도해 주세요"})
 
 
+@router.post("/apple/restore/")
+def restore_purchase(
+    payload: VerifyPurchaseRequest,
+    current_user: ProfileModel = Depends(get_current_profile),
+    service: BillingService = Depends(get_billing_service),
+):
+    try:
+        return SuccessResponse(data=service.restore_purchase(current_user.id, payload.signed_transaction))
+    except PurchaseOwnedByAnotherAccount as exc:
+        raise HTTPException(status_code=409, detail={"code": "PURCHASE_ACCOUNT_CONFLICT", "message": str(exc)}) from exc
+    except AppleVerificationError as exc:
+        raise HTTPException(status_code=400, detail={"code": "INVALID_APPLE_PURCHASE", "message": str(exc)}) from exc
+    except AppleUnavailableError as exc:
+        raise HTTPException(status_code=503, detail={"code": "APPLE_UNAVAILABLE", "message": "Apple 구독 확인을 다시 시도해 주세요"}) from exc
+
+
 @router.post("/apple/notifications/")
 def apple_notification(payload: NotificationRequest, service: BillingService = Depends(get_billing_service)):
     try:

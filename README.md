@@ -78,6 +78,8 @@ docker compose up -d --build --force-recreate --no-deps api
 
 구독·대화 권한을 활성화하려면 [운영 가이드의 기존 대화 슬롯 초기화](docs/OPERATIONS.md#대화-이용-권한-활성화)와 Apple Sandbox 검증을 먼저 마쳐요. 운영 환경의 `CONVERSATION_ACCESS_ENABLED`는 검증 전 `false`로 유지해요.
 
+계정 삭제 중 외부 장애로 남은 작업은 `backend/`에서 `uv run python -m scripts.retry_account_deletions`로 재시도해요. 서버 키와 정기 실행 절차는 [계정 삭제 운영 가이드](docs/OPERATIONS.md#계정-삭제-처리)를 참고해요.
+
 ### 스낵 콘텐츠 생성
 
 로컬에서는 Docker나 API 서버 없이 DB와 LLM에 직접 연결해요. 먼저 의존성 설치와 마이그레이션을 완료해야 해요.

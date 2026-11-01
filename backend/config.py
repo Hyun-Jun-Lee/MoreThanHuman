@@ -61,6 +61,11 @@ class Settings(BaseSettings):
     # Supabase Auth
     supabase_url: str | None = None
     supabase_publishable_key: str | None = None
+    supabase_secret_key: str | None = None
+    apple_signin_team_id: str | None = None
+    apple_signin_key_id: str | None = None
+    apple_signin_client_id: str | None = None
+    apple_signin_private_key: str | None = None
     supabase_auth_verify_mode: Literal["remote", "auto"] = "auto"
     supabase_auth_timeout_seconds: float = 5.0
     swagger_token_issuer_enabled: bool = False

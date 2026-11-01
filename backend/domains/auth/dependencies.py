@@ -10,7 +10,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 from database import get_db
-from domains.auth.models import ProfileModel
+from domains.auth.models import AccountDeletionModel, ProfileModel
 from domains.auth.repository import AuthRepository
 from domains.auth.service import AuthService, SupabaseUserClaims
 from domains.auth.supabase import SupabaseAuthVerifier
@@ -48,12 +48,16 @@ def get_supabase_auth_verifier(
 async def get_verified_claims(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     verifier: SupabaseAuthVerifier = Depends(get_supabase_auth_verifier),
+    db: Session = Depends(get_db),
 ) -> SupabaseUserClaims:
     """Bearer 토큰을 검증해 Supabase 사용자 claim을 반환해요."""
     try:
         with latency_span("auth"):
             with latency_span("auth.verify_token"):
-                return await verifier.verify_access_token(credentials.credentials)
+                claims = await verifier.verify_access_token(credentials.credentials)
+                if db.query(AccountDeletionModel.user_id).filter_by(user_id=claims.sub).first():
+                    raise AuthenticationException("Account deletion is in progress or completed")
+                return claims
     except AuthenticationException as e:
         log_exception(e, status_code=401, error_code="AUTHENTICATION_FAILED")
         raise HTTPException(
@@ -94,12 +98,15 @@ def get_legacy_profile(
 async def get_current_user_from_token_param(
     token: str = Query(..., description="Supabase access token"),
     verifier: SupabaseAuthVerifier = Depends(get_supabase_auth_verifier),
+    db: Session = Depends(get_db),
 ) -> AuthenticatedUser:
     """SSE 쿼리 토큰을 검증하고 사용자 ID만 반환해요."""
     try:
         with latency_span("auth"):
             with latency_span("auth.verify_token"):
                 claims = await verifier.verify_access_token(token)
+                if db.query(AccountDeletionModel.user_id).filter_by(user_id=claims.sub).first():
+                    raise AuthenticationException("Account deletion is in progress or completed")
         return AuthenticatedUser(id=claims.sub)
     except AuthenticationException as e:
         log_exception(e, status_code=401, error_code="AUTHENTICATION_FAILED")

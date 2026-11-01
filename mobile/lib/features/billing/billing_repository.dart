@@ -50,6 +50,13 @@ class BillingRepository {
         data: {'signed_transaction': signedTransaction},
         decodeData: BillingEntitlement.fromJson,
       )).data;
+
+  Future<BillingEntitlement> restore(String signedTransaction) async =>
+      (await client.post<BillingEntitlement>(
+        'billing/apple/restore/',
+        data: {'signed_transaction': signedTransaction},
+        decodeData: BillingEntitlement.fromJson,
+      )).data;
 }
 
 final billingRepositoryProvider = Provider<BillingRepository>(

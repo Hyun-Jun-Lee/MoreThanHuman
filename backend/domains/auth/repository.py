@@ -7,8 +7,8 @@ from datetime import datetime
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from domains.auth.models import ProfileModel
-from shared.exceptions import NotFoundException
+from domains.auth.models import AccountDeletionModel, ProfileModel
+from shared.exceptions import AuthenticationException, NotFoundException
 from shared.latency import latency_span
 from shared.language import LearningLanguageContext
 
@@ -49,6 +49,8 @@ class AuthRepository:
         language: LearningLanguageContext | None = None,
     ) -> ProfileModel:
         """Supabase claim으로 프로필을 준비하고 선택한 학습 언어를 적용해요."""
+        if self.db.query(AccountDeletionModel.user_id).filter_by(user_id=profile_id).first():
+            raise AuthenticationException("Account deletion is in progress or completed")
         profile = self.db.query(ProfileModel).filter(ProfileModel.id == profile_id).first()
         if profile is None:
             now = datetime.utcnow()

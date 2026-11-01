@@ -41,3 +41,15 @@ class ProfileModel(Base):
             target_language=self.target_language,
             feedback_language=self.feedback_language,
         )
+
+
+class AccountDeletionModel(Base):
+    """삭제 요청과 JWT 차단을 위한 최소 영속 기록이에요."""
+
+    __tablename__ = "account_deletions"
+
+    user_id = Column(String(36), primary_key=True)
+    receipt_hash = Column(String(64), unique=True, nullable=False)
+    status = Column(String(16), nullable=False, default="processing")
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    completed_at = Column(DateTime, nullable=True)

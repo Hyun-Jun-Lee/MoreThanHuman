@@ -8,7 +8,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from database import Base
-from domains.auth.models import ProfileModel
+from domains.auth.models import AccountDeletionModel, ProfileModel
 from domains.conversation.models import ConversationModel  # noqa: F401 - mapper 등록
 from domains.billing.apple import VerifiedSubscription
 from domains.billing.service import BillingService, PurchaseOwnedByAnotherAccount
@@ -20,6 +20,10 @@ class FakeGateway:
         self.purchase = purchase
         self.calls = 0
         self.supplied_original = None
+        self.rebindings = []
+
+    def set_app_account_token(self, original, user_id):
+        self.rebindings.append((original, user_id))
 
     def decode_transaction(self, _signed):
         return SimpleNamespace(
@@ -79,6 +83,39 @@ def test_existing_purchase_cannot_be_restored_to_another_account():
     with pytest.raises(PurchaseOwnedByAnotherAccount):
         service.verify_purchase(other, "signed")
     assert db.query(AppleSubscriptionModel).one().user_id == owner
+
+
+def test_explicit_restore_rebinds_only_deleted_owner_entitlement():
+    db, (old_owner, new_owner) = _db()
+    gateway = FakeGateway(_purchase(old_owner))
+    service = BillingService(db, gateway)
+    service.verify_purchase(old_owner, "signed")
+    db.add(AccountDeletionModel(user_id=old_owner, receipt_hash="a" * 64,
+                                status="completed"))
+    db.query(AppleSubscriptionModel).filter_by(user_id=old_owner).delete()
+    db.query(ProfileModel).filter_by(id=old_owner).delete()
+    db.commit()
+    assert service.restore_purchase(new_owner, "signed")["plan"] == "advance"
+    assert db.query(AppleSubscriptionModel).one().user_id == new_owner
+    assert gateway.rebindings == [("100000001", new_owner)]
+    service.process_notification("signed-notification")
+    assert db.query(AppleSubscriptionModel).one().user_id == new_owner
+
+
+def test_explicit_restore_rejects_active_owner_and_expired_purchase():
+    db, (owner, other) = _db()
+    gateway = FakeGateway(_purchase(owner))
+    service = BillingService(db, gateway)
+    with pytest.raises(PurchaseOwnedByAnotherAccount):
+        service.restore_purchase(other, "signed")
+    db.add(AccountDeletionModel(user_id=owner, receipt_hash="b" * 64,
+                                status="processing"))
+    db.commit()
+    with pytest.raises(PurchaseOwnedByAnotherAccount):
+        service.restore_purchase(other, "signed")
+    gateway.purchase = _purchase(None, expiry=datetime.utcnow() - timedelta(days=1))
+    with pytest.raises(ValueError):
+        service.restore_purchase(other, "signed")
 
 
 def test_expired_or_revoked_purchase_does_not_grant_slots():

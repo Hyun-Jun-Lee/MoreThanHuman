@@ -41,6 +41,7 @@ class BillingController extends Notifier<BillingUiState> {
   late BillingRepository _repository;
   StreamSubscription<List<PurchaseDetails>>? _subscription;
   final Set<String> _processing = {};
+  DateTime? _restoreRequestedAt;
 
   @override
   BillingUiState build() {
@@ -109,6 +110,7 @@ class BillingController extends Notifier<BillingUiState> {
   Future<void> restore() async {
     if (!Platform.isIOS || state.isProcessing) return;
     state = state.copyWith(isProcessing: true);
+    _restoreRequestedAt = DateTime.now();
     try {
       await _store.restorePurchases();
       if (ref.mounted) {
@@ -118,6 +120,7 @@ class BillingController extends Notifier<BillingUiState> {
         );
       }
     } on Object {
+      _restoreRequestedAt = null;
       if (ref.mounted) {
         state = state.copyWith(isProcessing: false, message: 'restore_failed');
       }
@@ -140,12 +143,20 @@ class BillingController extends Notifier<BillingUiState> {
         );
       } else if (purchase.status == PurchaseStatus.purchased ||
           purchase.status == PurchaseStatus.restored) {
-        unawaited(_verifyPurchase(purchase));
+        final requestedAt = _restoreRequestedAt;
+        final explicitRestore =
+            purchase.status == PurchaseStatus.restored &&
+            requestedAt != null &&
+            DateTime.now().difference(requestedAt) < const Duration(minutes: 2);
+        unawaited(_verifyPurchase(purchase, restore: explicitRestore));
       }
     }
   }
 
-  Future<void> _verifyPurchase(PurchaseDetails purchase) async {
+  Future<void> _verifyPurchase(
+    PurchaseDetails purchase, {
+    bool restore = false,
+  }) async {
     final id =
         purchase.purchaseID ?? purchase.verificationData.serverVerificationData;
     if (!_processing.add(id)) return;
@@ -156,9 +167,15 @@ class BillingController extends Notifier<BillingUiState> {
           purchase.verificationData.serverVerificationData.isEmpty) {
         throw StateError('Purchase cannot be verified');
       }
-      await _repository.verify(
-        purchase.verificationData.serverVerificationData,
-      );
+      if (restore) {
+        await _repository.restore(
+          purchase.verificationData.serverVerificationData,
+        );
+      } else {
+        await _repository.verify(
+          purchase.verificationData.serverVerificationData,
+        );
+      }
       canComplete = true;
       if (ref.mounted &&
           ref.read(authControllerProvider).value?.user?.id == userId) {

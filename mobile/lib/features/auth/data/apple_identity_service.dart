@@ -8,10 +8,15 @@ abstract interface class AppleIdentityService {
 }
 
 class AppleIdentityTokens {
-  const AppleIdentityTokens({required this.idToken, required this.rawNonce});
+  const AppleIdentityTokens({
+    required this.idToken,
+    required this.rawNonce,
+    this.authorizationCode,
+  });
 
   final String idToken;
   final String rawNonce;
+  final String? authorizationCode;
 }
 
 class AppleSignInIdentityService implements AppleIdentityService {
@@ -52,7 +57,11 @@ class AppleSignInIdentityService implements AppleIdentityService {
           'Apple did not return an identity token.',
         );
       }
-      return AppleIdentityTokens(idToken: idToken, rawNonce: rawNonce);
+      return AppleIdentityTokens(
+        idToken: idToken,
+        rawNonce: rawNonce,
+        authorizationCode: credential.authorizationCode,
+      );
     } on SignInWithAppleAuthorizationException catch (error) {
       if (error.code == AuthorizationErrorCode.canceled) {
         return null;

@@ -3,6 +3,7 @@ import 'package:curitalk/core/copy/copy.dart';
 import 'package:curitalk/core/network/network.dart';
 import 'package:curitalk/core/widgets/widgets.dart';
 import 'package:curitalk/features/auth/auth.dart';
+import 'package:curitalk/features/auth/data/account_local_data.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -18,6 +19,34 @@ class LoginScreen extends ConsumerStatefulWidget {
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   LoginFailureReason? _failureReason;
   bool _isSigningIn = false;
+  bool _checkingDeletionStatus = false;
+  String? _deletionStatus;
+
+  @override
+  void initState() {
+    super.initState();
+    Future<void>.microtask(_checkDeletionStatus);
+  }
+
+  Future<void> _checkDeletionStatus() async {
+    if (_checkingDeletionStatus) return;
+    setState(() => _checkingDeletionStatus = true);
+    try {
+      final storage = ref.read(accountLocalDataProvider);
+      final receipt = await storage.readReceipt();
+      if (receipt == null) return;
+      final repository = ref.read(authRepositoryProvider);
+      if (repository is! AccountDeletionRepository) return;
+      final status = await (repository as AccountDeletionRepository)
+          .deletionStatus(receipt);
+      if (status == 'completed') await storage.clearReceipt();
+      if (mounted) setState(() => _deletionStatus = status);
+    } on Object {
+      if (mounted) setState(() => _deletionStatus = 'unavailable');
+    } finally {
+      if (mounted) setState(() => _checkingDeletionStatus = false);
+    }
+  }
 
   Future<void> _signIn() async {
     if (_isSigningIn) return;
@@ -124,6 +153,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
+            if (_deletionStatus != null) ...[
+              const SizedBox(height: AppSpacing.md),
+              Semantics(
+                liveRegion: true,
+                child: Text(switch (_deletionStatus) {
+                  'completed' => appCopy.deletionCompleted,
+                  'processing' => appCopy.deletionProcessing,
+                  _ => appCopy.deletionStatusUnavailable,
+                }),
+              ),
+              if (_deletionStatus != 'completed')
+                TextButton(
+                  onPressed: _checkingDeletionStatus
+                      ? null
+                      : _checkDeletionStatus,
+                  child: Text(appCopy.checkDeletionStatus),
+                ),
+            ],
             const SizedBox(height: AppSpacing.xl),
             AppPrimaryButton(
               label: auth.hasError ? copy.tryAgainLabel : copy.googleLabel,

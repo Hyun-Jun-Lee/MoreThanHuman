@@ -1,6 +1,18 @@
 # 운영 가이드
 
-> 최종 갱신: 2026-10-24 · 배포·주간 생성·복구 절차
+> 최종 갱신: 2026-11-01 · 배포·주간 생성·복구 절차
+
+## 계정 삭제 처리
+
+계정 삭제 기능을 켜기 전에 서버 전용 `SUPABASE_SECRET_KEY`를 설정하고 `alembic upgrade head`를 적용해요. Apple 로그인 연결을 서버에서 해제하려면 별도의 `APPLE_SIGNIN_TEAM_ID`, `APPLE_SIGNIN_KEY_ID`, `APPLE_SIGNIN_CLIENT_ID`, `APPLE_SIGNIN_PRIVATE_KEY`도 설정해요. Apple 키가 없거나 폐기에 실패해도 사용자 데이터 삭제는 진행하며 앱이 수동 연결 해제를 안내해요.
+
+외부 장애로 남은 삭제 요청은 `docker compose exec -T api python -m scripts.retry_account_deletions`로 재시도해요. 운영 호스트에서 아래와 같이 5분마다 실행하고 실패 로그를 모니터링해요. 경로를 실제 저장소 경로로 바꿔요.
+
+```cron
+*/5 * * * * cd /path/to/MoreThanHuman && docker compose exec -T api python -m scripts.retry_account_deletions >> /var/log/tomatalk-account-deletion.log 2>&1
+```
+
+`account_deletions.status='processing'`이 오래 남지 않는지 확인해요. 완료 전에 고객에게 계정 삭제가 끝났다고 안내하지 않아요. 이 테이블은 삭제된 JWT 재사용을 막고 구매 복원 시 이전 계정 상태를 확인하는 최소 기록이므로 운영자가 임의로 지우지 않아요.
 
 [실행 및 CLI](../README.md) · [환경변수](ENVIRONMENT.md) · [API 계약](DSL.md)
 

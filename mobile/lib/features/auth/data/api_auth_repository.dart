@@ -5,7 +5,11 @@ import 'package:curitalk/features/language/domain/learning_language.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class ApiAuthRepository
-    implements AuthRepository, AppLocaleRepository, NicknameRepository {
+    implements
+        AuthRepository,
+        AppLocaleRepository,
+        NicknameRepository,
+        AccountDeletionRepository {
   const ApiAuthRepository(this.apiClient);
 
   final ApiClient apiClient;
@@ -56,6 +60,43 @@ class ApiAuthRepository
           data: <String, String>{'nickname': nickname},
           decodeData: UserProfile.fromJson,
         );
+    return response.data;
+  }
+
+  @override
+  Future<AccountDeletionResult> deleteAccount({
+    String? appleIdentityToken,
+    String? appleAuthorizationCode,
+  }) async {
+    final data = <String, dynamic>{};
+    if (appleIdentityToken != null) {
+      data['apple_identity_token'] = appleIdentityToken;
+    }
+    if (appleAuthorizationCode != null) {
+      data['apple_authorization_code'] = appleAuthorizationCode;
+    }
+    final response = await apiClient.request<AccountDeletionResult>(
+      'auth/me',
+      method: 'DELETE',
+      data: data,
+      decodeData: AccountDeletionResult.fromJson,
+    );
+    return response.data;
+  }
+
+  @override
+  Future<String> deletionStatus(String receipt) async {
+    final response = await apiClient.get<String>(
+      'auth/deletion-status/${Uri.encodeComponent(receipt)}',
+      requiresAuth: false,
+      decodeData: (value) {
+        if (value is! Map<String, dynamic> ||
+            !AccountDeletionResult.validStatus(value['status'])) {
+          throw const FormatException('Invalid account deletion status.');
+        }
+        return value['status'] as String;
+      },
+    );
     return response.data;
   }
 }

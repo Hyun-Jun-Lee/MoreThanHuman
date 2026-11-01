@@ -381,6 +381,35 @@ class AppCopy {
   String get languagePairSectionLabel =>
       isKorean ? '학습 언어' : 'Learning Language';
   String get logOutLabel => isKorean ? '로그 아웃' : 'LOG OUT';
+  String get deleteAccountLabel => isKorean ? '계정 삭제' : 'Delete account';
+  String get deleteAccountWarning => isKorean
+      ? '계정과 대화·학습 기록이 영구적으로 삭제돼요. 재가입해도 이 기록은 복구되지 않아요.'
+      : 'Your account and learning history will be permanently deleted. Rejoining will not restore this history.';
+  String get deleteAccountSubscriptionWarning => isKorean
+      ? '계정을 삭제해도 Apple 구독은 자동으로 취소되지 않으며 계속 결제될 수 있어요. Apple 구독 관리에서 직접 해지할 수 있어요. 재가입 후에는 남은 구독 권한만 구매 복원으로 다시 연결할 수 있어요.'
+      : 'Deleting your account does not cancel your Apple subscription. Billing may continue. You can cancel it in Apple subscription settings. If you rejoin, Restore Purchases can reconnect only the remaining subscription access.';
+  String get deleteAccountAppleWarning => isKorean
+      ? 'Apple 로그인을 다시 요청할 수 있어요. 연결 해제에 실패해도 계정 삭제는 계속되며, Apple 계정 설정에서 앱 연결을 직접 해제할 수 있어요.'
+      : 'You may be asked to sign in with Apple again. If disconnection fails, account deletion continues and you can remove the app in Apple Account settings.';
+  String get deletionProcessing => isKorean
+      ? '삭제 요청을 접수했어요. 서버에서 삭제를 완료하는 중이에요.'
+      : 'Deletion requested. The server is still finishing it.';
+  String get deletionStatusUnavailable => isKorean
+      ? '삭제 진행 상태를 확인하지 못했어요. 다시 확인해 주세요.'
+      : 'Could not check deletion status. Please try again.';
+  String get checkDeletionStatus =>
+      isKorean ? '삭제 상태 확인' : 'Check deletion status';
+  String get deletionCompleted =>
+      isKorean ? '계정 삭제가 완료되었어요.' : 'Account deletion is complete.';
+  String get deletionAppleManual => isKorean
+      ? 'Apple 계정 설정에서 tomatalk 연결도 해제해 주세요.'
+      : 'Please also disconnect tomatalk in your Apple Account settings.';
+  String get deletionFailed => isKorean
+      ? '계정 삭제 요청에 실패했어요. 다시 시도해 주세요.'
+      : 'Could not request account deletion. Please try again.';
+  String get deletionLocalCleanupFailed => isKorean
+      ? '기기 데이터 일부를 지우지 못했어요. 앱을 삭제하면 기기에 남은 자료를 제거할 수 있어요.'
+      : 'Some on-device data could not be cleared. Removing the app will remove remaining local data.';
   String get languagePairSaveFailed =>
       isKorean ? '언어쌍을 저장하지 못했어요.' : 'Language pair could not be saved.';
   String get startConversationTitle =>

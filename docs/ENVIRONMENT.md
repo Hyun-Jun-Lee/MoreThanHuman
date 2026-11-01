@@ -1,6 +1,6 @@
 # 환경변수
 
-> 최종 갱신: 2026-10-01 · 환경변수 설명의 단일 기준 문서
+> 최종 갱신: 2026-11-01 · 환경변수 설명의 단일 기준 문서
 
 [빠른 시작](../README.md#실행-준비) · [운영 가이드](OPERATIONS.md)
 
@@ -80,6 +80,11 @@
 | `MAX_HISTORY_TURNS` | 아니오 | `10` | 대화 기록 최대 턴 |
 | `CONVERSATION_ACCESS_ENABLED` | 아니오 | `false` | 무료 1개·15회, Advance 5개·무제한, Plus 10개·무제한 정책을 서버에서 집행. 운영은 Apple Sandbox 검증과 기존 대화 초기화 후 활성화 |
 | `APPLE_IAP_ENVIRONMENT` | Apple 결제 시 필수 | 없음 | `sandbox` 또는 `production`; 서명과 API 환경이 일치해야 함 |
+| `SUPABASE_SECRET_KEY` | 계정 삭제 시 필수 | 없음 | 서버 전용 Supabase 관리자 키. Auth 사용자 삭제에 사용하며 모바일 환경에 전달하지 않음 |
+| `APPLE_SIGNIN_TEAM_ID` | Apple 로그인 연결 해제 시 필수 | 없음 | Apple Developer Team ID |
+| `APPLE_SIGNIN_KEY_ID` | Apple 로그인 연결 해제 시 필수 | 없음 | Sign in with Apple 키 ID |
+| `APPLE_SIGNIN_CLIENT_ID` | Apple 로그인 연결 해제 시 필수 | 없음 | 네이티브 앱의 Bundle ID |
+| `APPLE_SIGNIN_PRIVATE_KEY` | Apple 로그인 연결 해제 시 필수 | 없음 | Sign in with Apple `.p8` 키 본문; 서버 비밀 저장소에서 주입 |
 | `APPLE_IAP_BUNDLE_ID` | Apple 결제 시 필수 | 없음 | App Store Connect 앱의 Bundle ID |
 | `APPLE_IAP_APP_ID` | 운영 결제 시 필수 | 없음 | App Store Connect의 숫자 Apple 앱 ID |
 | `APPLE_IAP_ISSUER_ID` | Apple 결제 시 필수 | 없음 | App Store Connect In-App Purchase 키 발급자 ID |

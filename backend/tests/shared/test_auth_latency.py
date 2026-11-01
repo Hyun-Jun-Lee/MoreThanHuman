@@ -4,6 +4,7 @@ from types import SimpleNamespace
 import httpx
 import pytest
 from fastapi import Depends, FastAPI, HTTPException
+from database import get_db
 
 from domains.auth.dependencies import (
     get_auth_service, get_current_user, get_current_user_from_token_param,
@@ -34,12 +35,26 @@ class FailingAppleGateway:
         raise AppleVerificationError("signature secret: " + signed_payload)
 
 
+class EmptyDeletionQuery:
+    def filter_by(self, **_kwargs):
+        return self
+
+    def first(self):
+        return None
+
+
+class EmptyDeletionDb:
+    def query(self, _model):
+        return EmptyDeletionQuery()
+
+
 @pytest.mark.asyncio
 async def test_all_protected_auth_paths_share_request_context_without_tokens(capsys):
     app = FastAPI()
     app.add_middleware(LatencyMiddleware)
     app.dependency_overrides[get_auth_service] = AuthService
     app.dependency_overrides[get_supabase_auth_verifier] = Verifier
+    app.dependency_overrides[get_db] = EmptyDeletionDb
     app.dependency_overrides[get_language_snack_operations_key] = lambda: "operations-secret"
 
     @app.get("/api/bearer/")

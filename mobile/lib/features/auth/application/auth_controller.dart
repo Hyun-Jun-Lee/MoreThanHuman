@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:curitalk/core/network/network.dart';
 import 'package:curitalk/features/auth/data/api_auth_repository.dart';
+import 'package:curitalk/features/auth/data/account_local_data.dart';
 import 'package:curitalk/features/auth/data/apple_identity_service.dart';
 import 'package:curitalk/features/auth/data/google_identity_service.dart';
 import 'package:curitalk/features/auth/data/supabase_auth_service.dart';
@@ -11,6 +12,7 @@ import 'package:curitalk/features/auth/domain/user_profile.dart';
 import 'package:curitalk/features/language/language.dart';
 import 'package:curitalk/features/onboarding/data/onboarding_storage.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class AuthController extends AsyncNotifier<AuthSession> {
@@ -18,6 +20,7 @@ class AuthController extends AsyncNotifier<AuthSession> {
   late SupabaseAuthService _supabaseAuthService;
   late GoogleIdentityService _googleIdentityService;
   late OnboardingStorage _onboardingStorage;
+  late AccountLocalData _accountLocalData;
   late AuthSessionCoordinator _sessionCoordinator;
   StreamSubscription<SupabaseSessionChange>? _authSubscription;
 
@@ -27,6 +30,7 @@ class AuthController extends AsyncNotifier<AuthSession> {
     _supabaseAuthService = ref.watch(supabaseAuthServiceProvider);
     _googleIdentityService = ref.watch(googleIdentityServiceProvider);
     _onboardingStorage = ref.watch(onboardingStorageProvider);
+    _accountLocalData = ref.watch(accountLocalDataProvider);
     final AuthSessionCoordinator sessionCoordinator = ref.watch(
       authSessionCoordinatorProvider,
     );
@@ -128,6 +132,61 @@ class AuthController extends AsyncNotifier<AuthSession> {
     _sessionCoordinator.deactivateSession();
     await _signOutSafely();
     state = const AsyncData<AuthSession>(AuthSession.unauthenticated());
+  }
+
+  Future<AccountDeletionResult> deleteAccount({
+    AppleIdentityTokens? appleTokens,
+  }) async {
+    final userId = state.value?.user?.id;
+    if (userId == null) {
+      throw StateError('A signed-in user is required to delete an account.');
+    }
+    final repository = _repository;
+    if (repository is! AccountDeletionRepository) {
+      throw StateError('Account deletion is unavailable.');
+    }
+    final result = await (repository as AccountDeletionRepository)
+        .deleteAccount(
+          appleIdentityToken: appleTokens?.idToken,
+          appleAuthorizationCode: appleTokens?.authorizationCode,
+        );
+    _sessionCoordinator.deactivateSession();
+    var localCleanupFailed = false;
+    try {
+      if (!await _accountLocalData.clearLearningData(userId)) {
+        localCleanupFailed = true;
+      }
+      try {
+        if (result.status == 'processing') {
+          await _accountLocalData.saveReceipt(result.receipt);
+        } else {
+          await _accountLocalData.clearReceipt();
+        }
+      } on Object {
+        localCleanupFailed = true;
+      }
+      try {
+        if (defaultTargetPlatform == TargetPlatform.iOS) {
+          await const MethodChannel(
+            'com.morethanhuman.curitalk/snack_widget',
+          ).invokeMethod<void>('clear');
+        }
+      } on MissingPluginException {
+        // 위젯 확장이 없는 빌드에서도 계정 삭제는 계속해요.
+      } on PlatformException catch (error) {
+        localCleanupFailed = true;
+        debugPrint('Could not clear local widget state: $error');
+      }
+    } finally {
+      await _signOutSafely();
+      state = const AsyncData<AuthSession>(AuthSession.unauthenticated());
+    }
+    return AccountDeletionResult(
+      status: result.status,
+      receipt: result.receipt,
+      appleDisconnectRequired: result.appleDisconnectRequired,
+      localCleanupFailed: localCleanupFailed,
+    );
   }
 
   Future<void> updateAppLocale(String appLocale) async {

@@ -81,7 +81,8 @@ def test_profile_get_reuses_profile_loaded_during_auth(path):
     response = client.get(path, headers=headers)
 
     assert response.status_code == 200
-    assert len(selects) == 1
+    # 삭제된 JWT 차단 조회는 별도이며 프로필 자체는 한 번만 읽어요.
+    assert sum("FROM profiles" in statement for statement in selects) == 1
     data = response.json()["data"]
     language = data["language"] if path == "/api/auth/me" else data
     assert language == {"native_language": "ko", "target_language": "en", "feedback_language": "ko"}
