@@ -2,6 +2,21 @@ import 'package:curitalk/features/conversation/conversation.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('parses replay availability without inline audio', () {
+    final message = ConversationMessage.fromJson(<String, dynamic>{
+      'id': 'assistant-id',
+      'conversation_id': 'conversation-id',
+      'role': 'assistant',
+      'content': 'Hello again.',
+      'created_at': '2026-07-02T00:00:00Z',
+      'audio_available': true,
+    });
+
+    expect(message.audioAvailable, isTrue);
+    expect(message.audio, isNull);
+    expect(message.copyWith(content: 'Updated.').audioAvailable, isTrue);
+  });
+
   test('parses conversation start response', () {
     final ConversationResponse response =
         ConversationResponse.fromJson(<String, dynamic>{
@@ -17,6 +32,21 @@ void main() {
     expect(response.messageId, 'message-id');
     expect(response.conversationType, ConversationType.freeChat);
     expect(response.response, contains('interesting'));
+  });
+
+  test('parses roleplay conversation start response without difficulty', () {
+    final ConversationResponse response =
+        ConversationResponse.fromJson(<String, dynamic>{
+          'conversation_id': 'conversation-id',
+          'message_id': 'message-id',
+          'conversation_type': 'ROLE_PLAYING',
+          'role_character': 'a cafe barista',
+          'response': 'Welcome in.',
+          'grammar_feedback': null,
+        });
+
+    expect(response.conversationType, ConversationType.rolePlaying);
+    expect(response.roleCharacter, 'a cafe barista');
   });
 
   test('parses multimodal text message response', () {

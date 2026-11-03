@@ -1,13 +1,116 @@
 import 'dart:async';
 
 import 'package:curitalk/app/theme/app_theme.dart';
+import 'package:curitalk/app/theme/tokens/tokens.dart';
 import 'package:curitalk/features/conversation/conversation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('shows completed no-error feedback as natural badge', (
+  testWidgets('reopened assistant message offers replay and stop', (
+    WidgetTester tester,
+  ) async {
+    final replayCompleter = Completer<void>();
+    final requests = <String>[];
+    final stops = <String>[];
+    await tester.pumpWidget(
+      _app(
+        ConversationMessage(
+          id: 'assistant-message-id',
+          conversationId: 'conversation-id',
+          role: ConversationMessageRole.assistant,
+          content: 'Welcome back.',
+          createdAt: DateTime.utc(2026, 7, 2),
+          audioAvailable: true,
+        ),
+        onReplayAudio: (id) {
+          requests.add(id);
+          return replayCompleter.future;
+        },
+        onStopAudio: (id) async {
+          stops.add(id);
+          replayCompleter.complete();
+        },
+      ),
+    );
+
+    expect(find.byTooltip('Replay response'), findsOneWidget);
+    await tester.tap(find.byTooltip('Replay response'));
+    await tester.pump();
+    expect(requests, <String>['assistant-message-id']);
+    expect(find.byTooltip('Stop audio response'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Stop audio response'));
+    await tester.pump();
+    expect(stops, <String>['assistant-message-id']);
+    expect(find.byTooltip('Replay response'), findsOneWidget);
+  });
+
+  testWidgets('replay failure keeps speaker available for retry', (
+    WidgetTester tester,
+  ) async {
+    var requests = 0;
+    await tester.pumpWidget(
+      _app(
+        ConversationMessage(
+          id: 'assistant-message-id',
+          conversationId: 'conversation-id',
+          role: ConversationMessageRole.assistant,
+          content: 'Welcome back.',
+          createdAt: DateTime.utc(2026, 7, 2),
+          audioAvailable: true,
+        ),
+        onReplayAudio: (_) async {
+          requests++;
+          throw StateError('Replay failed');
+        },
+      ),
+    );
+
+    await tester.tap(find.byTooltip('Replay response'));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Replay response'), findsOneWidget);
+    expect(
+      find.textContaining('Audio for this response is unavailable.'),
+      findsWidgets,
+    );
+    await tester.tap(find.byTooltip('Replay response'));
+    await tester.pumpAndSettle();
+    expect(requests, 2);
+  });
+
+  testWidgets('disposing a replaying tile cancels its audio request', (
+    WidgetTester tester,
+  ) async {
+    final replayCompleter = Completer<void>();
+    final stops = <String>[];
+    await tester.pumpWidget(
+      _app(
+        ConversationMessage(
+          id: 'assistant-message-id',
+          conversationId: 'conversation-id',
+          role: ConversationMessageRole.assistant,
+          content: 'Welcome back.',
+          createdAt: DateTime.utc(2026, 7, 2),
+          audioAvailable: true,
+        ),
+        onReplayAudio: (_) => replayCompleter.future,
+        onStopAudio: (id) async {
+          stops.add(id);
+          replayCompleter.complete();
+        },
+      ),
+    );
+    await tester.tap(find.byTooltip('Replay response'));
+    await tester.pump();
+
+    await tester.pumpWidget(const SizedBox.shrink());
+
+    expect(stops, <String>['assistant-message-id']);
+  });
+
+  testWidgets('shows completed no-error feedback as green icon only', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
@@ -24,10 +127,14 @@ void main() {
     );
 
     expect(find.text('That was fun.'), findsOneWidget);
-    expect(find.text('LOOKS NATURAL'), findsOneWidget);
+    expect(find.text('LOOKS NATURAL'), findsNothing);
+    final Icon icon = tester.widget<Icon>(
+      find.byIcon(Icons.check_circle_rounded),
+    );
+    expect(icon.color, AppPalette.semanticSuccess);
   });
 
-  testWidgets('shows completed error feedback as correction card', (
+  testWidgets('shows completed error feedback behind a red icon', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
@@ -43,8 +150,28 @@ void main() {
       ),
     );
 
+    final Icon collapsedIcon = tester.widget<Icon>(
+      find.byIcon(Icons.error_outline_rounded),
+    );
+    expect(collapsedIcon.color, AppPalette.semanticError);
+    expect(find.byType(IconButton), findsNothing);
+    expect(find.textContaining('I was surprised.'), findsNothing);
+    expect(find.text('Use the past participle after was.'), findsNothing);
+
+    await tester.tap(find.byTooltip('Show grammar feedback'));
+    await tester.pump();
+
     expect(find.textContaining('I was surprised.'), findsOneWidget);
     expect(find.text('Use the past participle after was.'), findsOneWidget);
+    expect(find.text('SHOW MORE'), findsNothing);
+    expect(find.text('SHOW LESS'), findsNothing);
+    expect(find.byTooltip('Hide grammar feedback'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Hide grammar feedback'));
+    await tester.pump();
+
+    expect(find.textContaining('I was surprised.'), findsNothing);
+    expect(find.text('Use the past participle after was.'), findsNothing);
   });
 
   testWidgets('shows and plays assistant audio response', (
@@ -69,14 +196,64 @@ void main() {
       ),
     );
 
-    expect(find.text('Play response'), findsOneWidget);
-    await tester.tap(find.text('Play response'));
+    expect(find.byIcon(Icons.volume_up_rounded), findsOneWidget);
+    final Finder audioIconFinder = find.byTooltip('Replay response');
+    final Finder bubbleFinder = find.descendant(
+      of: find.byType(ConversationMessageTile),
+      matching: find.byType(DecoratedBox),
+    );
+    final Rect audioIconRect = tester.getRect(audioIconFinder);
+    final Rect bubbleRect = tester.getRect(bubbleFinder);
+    expect(audioIconRect.right, closeTo(bubbleRect.right - AppSpacing.lg, 0.1));
+    expect(
+      audioIconRect.bottom,
+      closeTo(bubbleRect.bottom - AppSpacing.md, 0.1),
+    );
+
+    await tester.tap(find.byTooltip('Replay response'));
     await tester.pump();
 
     expect(player.playedAudio?.format, 'mp3');
   });
 
-  testWidgets('prevents duplicate assistant audio playback taps', (
+  testWidgets('auto plays assistant audio once when requested', (
+    WidgetTester tester,
+  ) async {
+    final _FakeConversationAudioPlayer player = _FakeConversationAudioPlayer();
+    int autoPlayStartedCount = 0;
+    await tester.pumpWidget(
+      _app(
+        ConversationMessage(
+          id: 'assistant-message-id',
+          conversationId: 'conversation-id',
+          role: ConversationMessageRole.assistant,
+          content: 'Sure. What size would you like?',
+          createdAt: DateTime.utc(2026, 7, 2),
+          audio: const VoiceAudioResponse(
+            contentType: 'audio/mpeg',
+            base64: 'AAA=',
+            format: 'mp3',
+          ),
+        ),
+        audioPlayer: player,
+        autoPlayAudio: true,
+        onAutoPlayStarted: () => autoPlayStartedCount++,
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump();
+
+    expect(player.playCount, 1);
+    expect(autoPlayStartedCount, 1);
+    expect(find.byTooltip('Replay response'), findsOneWidget);
+
+    await tester.pump();
+    expect(player.playCount, 1);
+    expect(autoPlayStartedCount, 1);
+  });
+
+  testWidgets('stops assistant audio playback from the bubble icon', (
     WidgetTester tester,
   ) async {
     final Completer<void> playCompleter = Completer<void>();
@@ -101,18 +278,16 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('Play response'));
+    await tester.tap(find.byTooltip('Replay response'));
     await tester.pump();
-    expect(find.text('Playing response'), findsOneWidget);
+    expect(find.byTooltip('Stop audio response'), findsOneWidget);
 
-    await tester.tap(find.text('Playing response'), warnIfMissed: false);
+    await tester.tap(find.byTooltip('Stop audio response'));
+    await tester.pump();
     expect(player.playCount, 1);
+    expect(player.stopCount, 1);
 
-    playCompleter.complete();
-    await tester.pump();
-    expect(find.text('Play response'), findsOneWidget);
-
-    await tester.tap(find.text('Play response'));
+    await tester.tap(find.byTooltip('Replay response'));
     await tester.pump();
     expect(player.playCount, 2);
   });
@@ -121,7 +296,10 @@ void main() {
     WidgetTester tester,
   ) async {
     final _FakeConversationAudioPlayer player = _FakeConversationAudioPlayer(
-      error: const ConversationAudioException('Could not play audio response.'),
+      error: const ConversationAudioException(
+        'Could not play audio response.',
+        reason: ConversationAudioExceptionReason.playbackFailed,
+      ),
     );
     await tester.pumpWidget(
       _app(
@@ -141,10 +319,13 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('Play response'));
+    await tester.tap(find.byTooltip('Replay response'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Could not play audio response.'), findsWidgets);
+    expect(
+      find.text('Audio could not be played. Please try again.'),
+      findsWidgets,
+    );
     expect(find.text('Retry'), findsNothing);
   });
 
@@ -165,7 +346,12 @@ void main() {
     );
 
     expect(find.textContaining('Sure.'), findsOneWidget);
-    expect(find.text('TTS unavailable.'), findsOneWidget);
+    expect(
+      find.text(
+        'Audio for this response is unavailable. You can keep chatting with the text.',
+      ),
+      findsOneWidget,
+    );
     expect(find.text('Retry'), findsNothing);
   });
 }
@@ -173,6 +359,10 @@ void main() {
 Widget _app(
   ConversationMessage message, {
   ConversationAudioPlayer? audioPlayer,
+  bool autoPlayAudio = false,
+  VoidCallback? onAutoPlayStarted,
+  Future<void> Function(String)? onReplayAudio,
+  Future<void> Function(String)? onStopAudio,
 }) {
   return ProviderScope(
     overrides: [
@@ -181,7 +371,15 @@ Widget _app(
     ],
     child: MaterialApp(
       theme: AppTheme.light,
-      home: Scaffold(body: ConversationMessageTile(message: message)),
+      home: Scaffold(
+        body: ConversationMessageTile(
+          message: message,
+          autoPlayAudio: autoPlayAudio,
+          onAutoPlayStarted: onAutoPlayStarted,
+          onReplayAudio: onReplayAudio,
+          onStopAudio: onStopAudio,
+        ),
+      ),
     ),
   );
 }
@@ -193,6 +391,7 @@ class _FakeConversationAudioPlayer implements ConversationAudioPlayer {
   final ConversationAudioException? error;
   VoiceAudioResponse? playedAudio;
   int playCount = 0;
+  int stopCount = 0;
 
   @override
   Future<void> play(VoiceAudioResponse audio) async {
@@ -210,6 +409,15 @@ class _FakeConversationAudioPlayer implements ConversationAudioPlayer {
 
   @override
   Future<void> dispose() async {}
+
+  @override
+  Future<void> stop() async {
+    stopCount++;
+    final Completer<void>? completer = playCompleter;
+    if (completer != null && !completer.isCompleted) {
+      completer.complete();
+    }
+  }
 }
 
 GrammarFeedback _feedback({required bool hasErrors}) {

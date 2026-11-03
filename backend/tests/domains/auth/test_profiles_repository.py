@@ -1,9 +1,13 @@
+import json
+from datetime import datetime
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from database import Base
 from domains.auth.models import ProfileModel
 from domains.auth.repository import AuthRepository
+from shared.logging_config import request_context
 
 
 def _repository():
@@ -13,10 +17,10 @@ def _repository():
     return AuthRepository(session)
 
 
-def test_upsert_profile_creates_profile_from_supabase_identity():
+def test_get_or_create_profile_creates_profile_from_supabase_identity():
     repository = _repository()
 
-    profile = repository.upsert_profile(
+    profile = repository.get_or_create_profile(
         profile_id="550e8400-e29b-41d4-a716-446655440000",
         email="learner@example.com",
         name="Learner",
@@ -28,25 +32,144 @@ def test_upsert_profile_creates_profile_from_supabase_identity():
     assert profile.email == "learner@example.com"
     assert profile.oauth_provider == "google"
     assert profile.avatar_url == "https://example.com/avatar.png"
+    assert profile.native_language == "ko"
+    assert profile.target_language == "en"
+    assert profile.feedback_language == "ko"
+    assert profile.nickname is None
 
 
-def test_upsert_profile_updates_existing_profile_without_duplicate():
+def test_find_by_id_logs_select_time_without_profile_id(capsys):
+    repository = _repository()
+    repository.get_or_create_profile(
+        profile_id="private-profile-id", email="learner@example.com",
+        name="Learner", oauth_provider="google",
+    )
+
+    token = request_context.set({"trace_id": "a" * 32, "request_id": "b" * 32})
+    try:
+        profile = repository.find_by_id("private-profile-id")
+    finally:
+        request_context.reset(token)
+
+    rows = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line.startswith("{")]
+    span = next(row for row in rows if row.get("stage") == "auth.profile.select")
+    assert profile.id == "private-profile-id"
+    assert span["status"] == "ok"
+    assert span["duration_ms"] >= 0
+    assert "private-profile-id" not in json.dumps(rows)
+
+
+def test_get_or_create_profile_keeps_existing_profile_unchanged():
     repository = _repository()
     profile_id = "550e8400-e29b-41d4-a716-446655440000"
 
-    repository.upsert_profile(
+    original = repository.get_or_create_profile(
         profile_id=profile_id,
         email="old@example.com",
         name="Old",
         oauth_provider="google",
     )
-    profile = repository.upsert_profile(
+    original_updated_at = original.updated_at
+    profile = repository.get_or_create_profile(
         profile_id=profile_id,
         email="new@example.com",
         name="New",
         oauth_provider="google",
     )
 
-    assert profile.email == "new@example.com"
-    assert profile.name == "New"
+    assert profile.email == "old@example.com"
+    assert profile.name == "Old"
+    assert profile.updated_at == original_updated_at
     assert repository.db.query(ProfileModel).count() == 1
+
+
+def test_get_or_create_profile_preserves_explicit_language_changes():
+    repository = _repository()
+    profile_id = "550e8400-e29b-41d4-a716-446655440000"
+    repository.get_or_create_profile(
+        profile_id=profile_id,
+        email="learner@example.com",
+        name="Learner",
+        oauth_provider="google",
+    )
+    updated = repository.update_language_preferences(
+        profile_id=profile_id,
+        native_language="en",
+        target_language="ko",
+        feedback_language="en",
+    )
+
+    updated_at = updated.updated_at
+    profile = repository.get_or_create_profile(
+        profile_id=profile_id,
+        email="new@example.com",
+        name="New",
+        oauth_provider="google",
+    )
+
+    assert profile.native_language == "en"
+    assert profile.target_language == "ko"
+    assert profile.feedback_language == "en"
+    assert profile.updated_at == updated_at
+
+
+def test_profile_settings_update_timestamp_only_when_values_change():
+    repository = _repository()
+    profile_id = "550e8400-e29b-41d4-a716-446655440000"
+    profile = repository.get_or_create_profile(
+        profile_id=profile_id,
+        email="learner@example.com",
+        name="Learner",
+        oauth_provider="google",
+    )
+    profile.updated_at = datetime(2020, 1, 1)
+    repository.db.commit()
+
+    same_language = repository.update_language_preferences(
+        profile_id=profile_id,
+        native_language="ko",
+        target_language="en",
+        feedback_language="ko",
+    )
+    assert same_language.updated_at == datetime(2020, 1, 1)
+
+    changed_language = repository.update_language_preferences(
+        profile_id=profile_id,
+        native_language="en",
+        target_language="ko",
+        feedback_language="en",
+    )
+    changed_at = changed_language.updated_at
+    assert changed_at > datetime(2020, 1, 1)
+
+    repository.update_language_preferences(
+        profile_id=profile_id,
+        native_language="en",
+        target_language="ko",
+        feedback_language="en",
+    )
+    assert repository.find_by_id(profile_id).updated_at == changed_at
+
+    changed_locale = repository.update_app_locale(profile_id=profile_id, app_locale="en")
+    changed_at = changed_locale.updated_at
+    repository.update_app_locale(profile_id=profile_id, app_locale="en")
+    assert repository.find_by_id(profile_id).updated_at == changed_at
+
+
+def test_nickname_is_preserved_on_auth_and_can_be_shared_between_users():
+    repository = _repository()
+    first = repository.get_or_create_profile(
+        profile_id="first", email="first@example.com", name="First", oauth_provider="google"
+    )
+    second = repository.get_or_create_profile(
+        profile_id="second", email="second@example.com", name="Second", oauth_provider="apple"
+    )
+
+    repository.update_nickname(profile_id=first.id, nickname="토마토")
+    repository.update_nickname(profile_id=second.id, nickname="토마토")
+    refreshed = repository.get_or_create_profile(
+        profile_id=first.id, email="changed@example.com", name="Changed", oauth_provider="google"
+    )
+
+    assert refreshed.nickname == "토마토"
+    assert second.nickname == "토마토"

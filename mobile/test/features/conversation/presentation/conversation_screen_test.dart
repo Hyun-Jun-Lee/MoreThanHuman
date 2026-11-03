@@ -7,6 +7,401 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
 void main() {
+  testWidgets(
+    'pending roleplay renders deltas and opens the saved conversation',
+    (WidgetTester tester) async {
+      final router = GoRouter(
+        initialLocation: AppRoute.roleplayPendingPath('request-id'),
+        routes: <RouteBase>[
+          GoRoute(path: AppRoute.home, builder: (_, _) => const Text('Home')),
+          GoRoute(
+            path: '${AppRoute.roleplayPending}/:requestId',
+            builder: (_, state) => PendingRoleplayScreen(
+              requestId: state.pathParameters['requestId']!,
+            ),
+          ),
+          GoRoute(
+            path: '${AppRoute.conversation}/:conversationId',
+            builder: (_, state) => ConversationScreen(
+              conversationId: state.pathParameters['conversationId']!,
+            ),
+          ),
+        ],
+      );
+      addTearDown(router.dispose);
+      final container = ProviderContainer(
+        overrides: [
+          conversationRepositoryProvider.overrideWithValue(
+            _FakeConversationRepository(),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      container
+          .read(startStreamPreviewProvider('request-id').notifier)
+          .update(const StartStreamPreview(assistantText: 'Streaming welcome'));
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp.router(
+            theme: AppTheme.light,
+            routerConfig: router,
+          ),
+        ),
+      );
+      await tester.pump();
+      for (var tick = 0; tick < 30; tick++) {
+        await tester.pump(const Duration(milliseconds: 24));
+      }
+      expect(find.text('Streaming welcome'), findsOneWidget);
+      expect(tester.widget<TextField>(find.byType(TextField)).enabled, isFalse);
+
+      container
+          .read(startStreamPreviewProvider('request-id').notifier)
+          .update(
+            const StartStreamPreview(
+              assistantText: 'Streaming welcome',
+              conversationId: 'conversation-id',
+              isActive: false,
+            ),
+          );
+      await tester.pumpAndSettle();
+      expect(find.byType(ConversationScreen), findsOneWidget);
+      expect(find.text('Streaming welcome'), findsNothing);
+      expect(find.text('Hello!'), findsOneWidget);
+    },
+  );
+
+  testWidgets('failed pending roleplay returns to its setup screen', (
+    WidgetTester tester,
+  ) async {
+    final router = GoRouter(
+      initialLocation: AppRoute.roleplaySetup,
+      routes: <RouteBase>[
+        GoRoute(
+          path: AppRoute.roleplaySetup,
+          builder: (_, _) => const Scaffold(body: Text('Roleplay setup')),
+        ),
+        GoRoute(
+          path: '${AppRoute.roleplayPending}/:requestId',
+          builder: (_, state) => PendingRoleplayScreen(
+            requestId: state.pathParameters['requestId']!,
+          ),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    container
+        .read(startStreamPreviewProvider('request-id').notifier)
+        .update(const StartStreamPreview(assistantText: 'Incomplete welcome'));
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp.router(theme: AppTheme.light, routerConfig: router),
+      ),
+    );
+    router.push(AppRoute.roleplayPendingPath('request-id'));
+    await tester.pump();
+    for (var tick = 0; tick < 30; tick++) {
+      await tester.pump(const Duration(milliseconds: 24));
+    }
+    expect(find.text('Incomplete welcome'), findsOneWidget);
+
+    container
+        .read(startStreamPreviewProvider('request-id').notifier)
+        .update(const StartStreamPreview(isActive: false, hasFailed: true));
+    await tester.pumpAndSettle();
+    expect(find.text('Roleplay setup'), findsOneWidget);
+    expect(find.text('Incomplete welcome'), findsNothing);
+  });
+
+  testWidgets('completed roleplay removes both preparation routes', (
+    WidgetTester tester,
+  ) async {
+    final router = GoRouter(
+      initialLocation: AppRoute.home,
+      routes: <RouteBase>[
+        GoRoute(path: AppRoute.home, builder: (_, _) => const Text('Home')),
+        GoRoute(
+          path: AppRoute.roleplaySetup,
+          builder: (_, _) => const Scaffold(body: Text('Setup')),
+        ),
+        GoRoute(
+          path: '${AppRoute.roleplayPending}/:requestId',
+          builder: (_, state) => PendingRoleplayScreen(
+            requestId: state.pathParameters['requestId']!,
+          ),
+        ),
+        GoRoute(
+          path: '${AppRoute.conversation}/:conversationId',
+          builder: (_, _) => const Scaffold(body: Text('Conversation')),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    container
+        .read(startStreamPreviewProvider('request-id').notifier)
+        .update(const StartStreamPreview(assistantText: 'Welcome.'));
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp.router(theme: AppTheme.light, routerConfig: router),
+      ),
+    );
+    router.push(AppRoute.roleplaySetup);
+    await tester.pump();
+    router.push(AppRoute.roleplayPendingPath('request-id'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    container
+        .read(startStreamPreviewProvider('request-id').notifier)
+        .update(
+          const StartStreamPreview(
+            assistantText: 'Welcome.',
+            conversationId: 'conversation-id',
+            isActive: false,
+          ),
+        );
+    await tester.pumpAndSettle();
+    expect(find.text('Conversation'), findsOneWidget);
+    router.pop();
+    await tester.pumpAndSettle();
+    expect(find.text('Home'), findsOneWidget);
+  });
+
+  testWidgets('restored pending route without a session returns to setup', (
+    WidgetTester tester,
+  ) async {
+    final router = GoRouter(
+      initialLocation: AppRoute.roleplayPendingPath('missing-request'),
+      routes: <RouteBase>[
+        GoRoute(
+          path: AppRoute.roleplaySetup,
+          builder: (_, _) => const Scaffold(body: Text('Roleplay setup')),
+        ),
+        GoRoute(
+          path: '${AppRoute.roleplayPending}/:requestId',
+          builder: (_, state) => PendingRoleplayScreen(
+            requestId: state.pathParameters['requestId']!,
+          ),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp.router(theme: AppTheme.light, routerConfig: router),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Roleplay setup'), findsOneWidget);
+  });
+
+  testWidgets('start stream text is visible before saved assistant loads', (
+    WidgetTester tester,
+  ) async {
+    final router = _router();
+    addTearDown(router.dispose);
+    final container = ProviderContainer(
+      overrides: [
+        conversationRepositoryProvider.overrideWithValue(
+          _FakeConversationRepository(),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    container
+        .read(startStreamPreviewProvider('conversation-id').notifier)
+        .update(
+          const StartStreamPreview(
+            userMessageId: 'new-user',
+            userText: 'My question',
+            assistantText: 'Streaming answer',
+          ),
+        );
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp.router(theme: AppTheme.light, routerConfig: router),
+      ),
+    );
+    await tester.pump();
+    for (var tick = 0; tick < 30; tick++) {
+      await tester.pump(const Duration(milliseconds: 24));
+    }
+    expect(find.text('My question'), findsOneWidget);
+    expect(find.text('Streaming answer'), findsOneWidget);
+    expect(tester.widget<TextField>(find.byType(TextField)).enabled, isFalse);
+  });
+
+  testWidgets(
+    'saved assistant stays hidden behind an unfinished start preview',
+    (WidgetTester tester) async {
+      final router = _router();
+      addTearDown(router.dispose);
+      final container = ProviderContainer(
+        overrides: [
+          conversationRepositoryProvider.overrideWithValue(
+            _FakeConversationRepository(savedAssistantText: 'Hello. Again?'),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      container
+          .read(startStreamPreviewProvider('conversation-id').notifier)
+          .update(const StartStreamPreview());
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp.router(
+            theme: AppTheme.light,
+            routerConfig: router,
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 24));
+      expect(find.text('Hello. Again?'), findsNothing);
+      container
+          .read(startStreamPreviewProvider('conversation-id').notifier)
+          .update(
+            const StartStreamPreview(
+              assistantText: 'Hello.',
+              fullAssistantText: 'Hello. Again?',
+              isActive: false,
+            ),
+          );
+      for (var tick = 0; tick < 15; tick++) {
+        await tester.pump(const Duration(milliseconds: 24));
+      }
+      expect(find.text('Hello.'), findsOneWidget);
+      expect(find.text('Hello. Again?'), findsNothing);
+    },
+  );
+
+  testWidgets('15 used turns keep messages readable and disable the composer', (
+    WidgetTester tester,
+  ) async {
+    final repository = _FakeConversationRepository();
+    final router = _router();
+    addTearDown(router.dispose);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          conversationRepositoryProvider.overrideWithValue(repository),
+          conversationTurnAccessProvider('conversation-id').overrideWith(
+            (ref) async => const ConversationTurnAccess(
+              enabled: true,
+              userTurns: 15,
+              turnLimit: 15,
+              canSend: false,
+            ),
+          ),
+        ],
+        child: MaterialApp.router(theme: AppTheme.light, routerConfig: router),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Hello!'), findsOneWidget);
+    expect(find.textContaining('15 free turns'), findsOneWidget);
+    expect(tester.widget<TextField>(find.byType(TextField)).enabled, isFalse);
+    expect(repository.sentTextTurns, isEmpty);
+  });
+
+  testWidgets(
+    'reentering a long conversation shows newest message without restoring old scroll',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final router = _router();
+      addTearDown(router.dispose);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            conversationRepositoryProvider.overrideWithValue(
+              _LongConversationRepository(),
+            ),
+            conversationAudioRecorderProvider.overrideWithValue(
+              _FakeConversationAudioRecorder(),
+            ),
+          ],
+          child: MaterialApp.router(
+            theme: AppTheme.light,
+            routerConfig: router,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final latest = find.text('Message 119');
+      expect(latest.hitTestable(), findsOneWidget);
+      expect(find.text('Message 80').hitTestable(), findsNothing);
+      await tester.drag(find.byType(ListView), const Offset(0, 500));
+      await tester.pumpAndSettle();
+      final position = tester
+          .state<ScrollableState>(find.byType(Scrollable).first)
+          .position;
+      expect(position.pixels, greaterThan(0));
+      final oldOffset = position.pixels;
+      // 입력으로 다시 빌드돼도 과거 대화의 열람 위치를 유지해요.
+      await tester.enterText(find.byType(TextField), 'Draft');
+      await tester.pump();
+      expect(position.pixels, oldOffset);
+      position.jumpTo(0);
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.byTooltip('Show grammar feedback'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(find.byTooltip('Show grammar feedback'));
+      await tester.pumpAndSettle();
+      expect(position.pixels, greaterThan(0));
+      expect(latest.hitTestable(), findsNothing);
+      router.go(AppRoute.home);
+      await tester.pumpAndSettle();
+      router.push(AppRoute.conversationPath('conversation-id'));
+      await tester.pumpAndSettle();
+      expect(latest.hitTestable(), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.text('Load earlier messages'),
+        600,
+        scrollable: find.byType(Scrollable).first,
+        maxScrolls: 30,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Voice input'));
+      await tester.pump();
+      expect(find.byTooltip('Stop recording'), findsOneWidget);
+      expect(
+        tester
+            .widget<TextButton>(
+              find.widgetWithText(TextButton, 'Load earlier messages'),
+            )
+            .onPressed,
+        isNull,
+      );
+      await tester.tap(find.byTooltip('Cancel recording'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Load earlier messages'));
+      await tester.pumpAndSettle();
+      expect(latest.hitTestable(), findsNothing);
+      await tester.scrollUntilVisible(
+        find.text('Message 40'),
+        600,
+        scrollable: find.byType(Scrollable).first,
+        maxScrolls: 30,
+      );
+      expect(find.text('Message 40').hitTestable(), findsOneWidget);
+    },
+  );
+
   testWidgets('explicit back button returns to Home when stack is empty', (
     WidgetTester tester,
   ) async {
@@ -38,7 +433,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Hello!'), findsOneWidget);
-    await tester.tap(find.byTooltip('Back to home'));
+    await tester.tap(find.byTooltip('Back'));
     await tester.pumpAndSettle();
 
     expect(find.text('Home'), findsOneWidget);
@@ -51,6 +446,8 @@ void main() {
         _FakeConversationRepository();
     final _FakeConversationAudioRecorder recorder =
         _FakeConversationAudioRecorder();
+    final _FakeConversationAudioPlayer audioPlayer =
+        _FakeConversationAudioPlayer();
     final GoRouter router = _router();
 
     await tester.pumpWidget(
@@ -58,6 +455,7 @@ void main() {
         overrides: [
           conversationRepositoryProvider.overrideWithValue(repository),
           conversationAudioRecorderProvider.overrideWithValue(recorder),
+          conversationAudioPlayerProvider.overrideWithValue(audioPlayer),
         ],
         child: MaterialApp.router(theme: AppTheme.light, routerConfig: router),
       ),
@@ -78,7 +476,10 @@ void main() {
 
     expect(recorder.stopCount, 1);
     expect(repository.sentAudioFilenames, <String>['recording.m4a']);
+    expect(repository.sentAudioIncludeAudio, <bool>[true]);
     expect(find.text('Audio transcript'), findsOneWidget);
+    expect(audioPlayer.playCount, 1);
+    expect(find.byTooltip('Replay response'), findsOneWidget);
   });
 
   testWidgets('voice input can cancel recording without upload', (
@@ -177,12 +578,56 @@ void main() {
 
     await tester.tap(find.byTooltip('Voice input'));
     await tester.pump();
+    await tester.pump(minimumVoiceRecordingDuration);
     await tester.tap(find.byTooltip('Stop recording'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Recording did not produce audio.'), findsOneWidget);
+    expect(
+      find.text(
+        'We could not hear enough audio. Try speaking a little longer.',
+      ),
+      findsOneWidget,
+    );
     expect(repository.sentAudioFilenames, isEmpty);
   });
+
+  testWidgets(
+    'short voice recording shows recognition guidance without upload',
+    (WidgetTester tester) async {
+      final _FakeConversationRepository repository =
+          _FakeConversationRepository();
+      final _FakeConversationAudioRecorder recorder =
+          _FakeConversationAudioRecorder();
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            conversationRepositoryProvider.overrideWithValue(repository),
+            conversationAudioRecorderProvider.overrideWithValue(recorder),
+          ],
+          child: MaterialApp.router(
+            theme: AppTheme.light,
+            routerConfig: _router(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Voice input'));
+      await tester.pump();
+      await tester.tap(find.byTooltip('Stop recording'));
+      await tester.pumpAndSettle();
+
+      expect(recorder.stopCount, 1);
+      expect(
+        find.text(
+          'We could not hear enough audio. Try speaking a little longer.',
+        ),
+        findsOneWidget,
+      );
+      expect(repository.sentAudioFilenames, isEmpty);
+    },
+  );
 
   testWidgets('voice upload failure shows retry card without recorder error', (
     WidgetTester tester,
@@ -209,11 +654,20 @@ void main() {
 
     await tester.tap(find.byTooltip('Voice input'));
     await tester.pump();
+    await tester.pump(minimumVoiceRecordingDuration);
     await tester.tap(find.byTooltip('Stop recording'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Voice message could not be sent.'), findsOneWidget);
-    expect(find.text('Recording did not produce audio.'), findsNothing);
+    expect(
+      find.text('Your voice message could not be sent. Please try again.'),
+      findsOneWidget,
+    );
+    expect(
+      find.text(
+        'We could not hear enough audio. Try speaking a little longer.',
+      ),
+      findsNothing,
+    );
     expect(repository.sentAudioFilenames, <String>['recording.m4a']);
 
     await tester.tap(find.text('Retry'));
@@ -230,11 +684,14 @@ void main() {
   ) async {
     final _FakeConversationRepository repository =
         _FakeConversationRepository();
+    final _FakeConversationAudioPlayer audioPlayer =
+        _FakeConversationAudioPlayer();
 
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
           conversationRepositoryProvider.overrideWithValue(repository),
+          conversationAudioPlayerProvider.overrideWithValue(audioPlayer),
         ],
         child: MaterialApp.router(
           theme: AppTheme.light,
@@ -250,6 +707,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(repository.sentTextTurns, <String>['I need coffee.']);
+    expect(repository.sentTextIncludeAudio, <bool>[true]);
+    expect(audioPlayer.playCount, 1);
+    expect(find.byTooltip('Replay response'), findsOneWidget);
   });
 }
 
@@ -271,11 +731,17 @@ GoRouter _router() {
 }
 
 class _FakeConversationRepository implements ConversationRepository {
-  _FakeConversationRepository({this.failAudioSend = false});
+  _FakeConversationRepository({
+    this.failAudioSend = false,
+    this.savedAssistantText = 'Hello!',
+  });
 
   final bool failAudioSend;
+  final String savedAssistantText;
   final List<String> sentAudioFilenames = <String>[];
   final List<String> sentTextTurns = <String>[];
+  final List<bool> sentAudioIncludeAudio = <bool>[];
+  final List<bool> sentTextIncludeAudio = <bool>[];
 
   @override
   Future<PaginatedMessages> listMessages(
@@ -289,7 +755,7 @@ class _FakeConversationRepository implements ConversationRepository {
           id: 'assistant-message-id',
           conversationId: conversationId,
           role: ConversationMessageRole.assistant,
-          content: 'Hello!',
+          content: savedAssistantText,
           createdAt: DateTime.utc(2026, 7, 11),
         ),
       ],
@@ -314,15 +780,21 @@ class _FakeConversationRepository implements ConversationRepository {
   Future<MultimodalMessageResponse> sendTextTurn({
     required String conversationId,
     required String text,
-    bool includeAudioResponse = false,
+    bool includeAudioResponse = true,
   }) async {
     sentTextTurns.add(text);
+    sentTextIncludeAudio.add(includeAudioResponse);
     return MultimodalMessageResponse(
       messageId: 'user-text-id',
       response: 'AI response',
       turnCount: 2,
       inputMode: ConversationInputMode.text,
       transcript: text,
+      audio: const VoiceAudioResponse(
+        contentType: 'audio/mpeg',
+        base64: 'AAA=',
+        format: 'mp3',
+      ),
     );
   }
 
@@ -330,9 +802,10 @@ class _FakeConversationRepository implements ConversationRepository {
   Future<MultimodalMessageResponse> sendAudioTurn({
     required String conversationId,
     required ConversationAudioFile audioFile,
-    bool includeAudioResponse = false,
+    bool includeAudioResponse = true,
   }) async {
     sentAudioFilenames.add(audioFile.filename);
+    sentAudioIncludeAudio.add(includeAudioResponse);
     if (failAudioSend) {
       throw StateError('Network failure');
     }
@@ -342,24 +815,43 @@ class _FakeConversationRepository implements ConversationRepository {
       turnCount: 2,
       inputMode: ConversationInputMode.audio,
       transcript: 'Audio transcript',
+      audio: VoiceAudioResponse(
+        contentType: 'audio/mpeg',
+        base64: 'AAA=',
+        format: 'mp3',
+      ),
     );
   }
 
   @override
-  Future<ConversationResponse> startFreeChat({
+  Future<MultimodalConversationResponse> startFreeChat({
     required String firstMessage,
     String? searchContext,
     String? topic,
     String? conversationDirection,
     String? selectedQuestion,
+    bool includeAudioResponse = true,
   }) {
     throw UnimplementedError();
   }
 
   @override
-  Future<ConversationResponse> startRoleplay({
+  Future<MultimodalConversationResponse> startFreeChatWithAudio({
+    required ConversationAudioFile audioFile,
+    String? searchContext,
+    String? topic,
+    String? conversationDirection,
+    String? selectedQuestion,
+    bool includeAudioResponse = true,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<MultimodalConversationResponse> startRoleplay({
     required String roleCharacter,
     String? searchContext,
+    bool includeAudioResponse = true,
   }) {
     throw UnimplementedError();
   }
@@ -401,4 +893,68 @@ class _FakeConversationAudioRecorder implements ConversationAudioRecorder {
 
   @override
   Future<void> dispose() async {}
+}
+
+class _FakeConversationAudioPlayer implements ConversationAudioPlayer {
+  int playCount = 0;
+
+  @override
+  Future<void> play(VoiceAudioResponse audio) async {
+    playCount++;
+  }
+
+  @override
+  Future<void> stop() async {}
+
+  @override
+  Future<void> dispose() async {}
+}
+
+class _LongConversationRepository extends _FakeConversationRepository {
+  @override
+  Future<PaginatedMessages> listMessages(
+    String conversationId, {
+    int limit = 50,
+    int offset = 0,
+  }) async {
+    return PaginatedMessages(
+      results: List.generate(
+        120,
+        (i) => ConversationMessage(
+          id: 'message-$i',
+          conversationId: conversationId,
+          role: i == 110
+              ? ConversationMessageRole.user
+              : ConversationMessageRole.assistant,
+          grammarFeedback: i == 110
+              ? GrammarFeedback(
+                  id: 'feedback-110',
+                  messageId: 'message-110',
+                  originalText: 'Message 110',
+                  correctedText:
+                      'I was surprised by the result of the conversation yesterday.',
+                  hasErrors: true,
+                  errors: const [
+                    GrammarError(
+                      original: 'surprise',
+                      corrected: 'surprised',
+                      explanation:
+                          'Use the adjective to describe how you felt about the result.',
+                    ),
+                  ],
+                  createdAt: DateTime.utc(2026, 9, 22),
+                )
+              : null,
+          content: 'Message $i',
+          createdAt: DateTime.utc(2026, 9, 22, 0, i),
+        ),
+      ).skip(offset).take(limit).toList(),
+      pagination: Pagination(
+        limit: limit,
+        offset: offset,
+        totalCount: 120,
+        hasMore: offset + limit < 120,
+      ),
+    );
+  }
 }

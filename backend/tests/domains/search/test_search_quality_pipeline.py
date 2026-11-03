@@ -2,9 +2,11 @@ from datetime import UTC, datetime
 
 import pytest
 
+from config import Settings
 from domains.search.query import build_rule_query_analysis
 from domains.search.schemas import SearchQuality, SearchResultItem
 from domains.search.service import SearchService
+from shared.exceptions import ExternalAPIException
 
 
 def _quality(is_sufficient: bool) -> SearchQuality:
@@ -25,20 +27,20 @@ def _quality(is_sufficient: bool) -> SearchQuality:
 async def test_search_pipeline_summarizes_only_llm_accepted_sources(monkeypatch):
     service = SearchService()
 
-    async def fake_analyze(_query: str):
+    async def fake_analyze(_query: str, **_kwargs):
         return build_rule_query_analysis("최근 롯데 자이언츠 경기", current_date="2026-06-04")
 
-    async def fake_judge(_query, sources, _analysis):
+    async def fake_judge(_query, sources, _analysis, **_kwargs):
         return [sources[1], sources[2]], _quality(True)
 
-    async def fake_summarize(_query, sources, _analysis):
+    async def fake_summarize(_query, sources, _analysis, **_kwargs):
         assert [source.title for source in sources] == [
             "롯데 자이언츠, 최근 KBO 경기 결과",
             "롯데 자이언츠 경기 하이라이트",
         ]
         return "Lotte Giants won a recent KBO game."
 
-    async def fake_search(_query, _analysis=None):
+    async def fake_search(_query, _analysis=None, **_kwargs):
         return [
             {"title": "NAVER", "href": "https://www.naver.com/", "body": "네이버 포털"},
             {
@@ -69,16 +71,16 @@ async def test_search_pipeline_summarizes_only_llm_accepted_sources(monkeypatch)
 async def test_search_low_quality_does_not_summarize(monkeypatch):
     service = SearchService()
 
-    async def fake_analyze(_query: str):
+    async def fake_analyze(_query: str, **_kwargs):
         return build_rule_query_analysis("요즘 이슈", current_date="2026-06-04")
 
-    async def fake_judge(_query, _sources, _analysis):
+    async def fake_judge(_query, _sources, _analysis, **_kwargs):
         return [], _quality(False)
 
-    async def fail_summarize(_query, _sources, _analysis):
+    async def fail_summarize(_query, _sources, _analysis, **_kwargs):
         raise AssertionError("summary LLM should not run for low-quality search")
 
-    async def fake_search(_query, _analysis=None):
+    async def fake_search(_query, _analysis=None, **_kwargs):
         return [
             {"title": "Google 뉴스", "href": "https://news.google.com/?hl=ko", "body": "뉴스 모음"},
         ]
@@ -99,13 +101,13 @@ async def test_search_low_quality_does_not_summarize(monkeypatch):
 async def test_search_empty_results_does_not_call_quality_judge(monkeypatch):
     service = SearchService()
 
-    async def fake_analyze(_query: str):
+    async def fake_analyze(_query: str, **_kwargs):
         return build_rule_query_analysis("검색 결과 없는 주제", current_date="2026-06-04")
 
-    async def fake_search(_query, _analysis=None):
+    async def fake_search(_query, _analysis=None, **_kwargs):
         return []
 
-    async def fail_judge(_query, _sources, _analysis):
+    async def fail_judge(_query, _sources, _analysis, **_kwargs):
         raise AssertionError("quality judge should not run when search returns no sources")
 
     monkeypatch.setattr(service, "_analyze_query", fake_analyze)
@@ -126,14 +128,18 @@ async def test_quality_judge_prompt_includes_current_date_and_timezone(monkeypat
     analysis = build_rule_query_analysis("최근 애플 발표", current_date="2026-06-04")
 
     class FakeResponse:
-        content = '{"is_sufficient":true,"accepted_source_ids":[1,2],"rejected_sources":[],"relevance":true,"freshness":true,"specificity":true,"reason":null,"retry_suggestion":null}'
+        content = '{"is_sufficient":true,"accepted_source_ids":[1,2],"relevance":true,"freshness":true,"specificity":true,"reason":null,"retry_suggestion":null}'
 
     class FakeProvider:
         async def chat_completion(self, request):
             captured["request"] = request
             return FakeResponse()
 
-    monkeypatch.setattr("domains.search.service.LLMProviderFactory.create_provider", lambda: FakeProvider())
+    def fake_provider(**kwargs):
+        captured["provider_type"] = kwargs.get("provider_type")
+        return FakeProvider()
+
+    monkeypatch.setattr("domains.search.service.LLMProviderFactory.create_provider", fake_provider)
 
     accepted_sources, quality = await service._judge_search_quality(
         "최근 애플 발표",
@@ -146,11 +152,34 @@ async def test_quality_judge_prompt_includes_current_date_and_timezone(monkeypat
 
     assert quality.is_sufficient is True
     assert len(accepted_sources) == 2
+    system_prompt = captured["request"].messages[0].content
     user_prompt = captured["request"].messages[1].content
+    assert "rejected_sources" in system_prompt
+    assert "portal homepages" in system_prompt
+    assert "when uncertain, reject conservatively" in system_prompt
+    assert "at least 2 independent accepted sources" in system_prompt
+    assert "one short sentence" in system_prompt
+    assert captured["request"].max_tokens == 1000
+    assert captured["provider_type"] == "openrouter"
+    assert captured["request"].model == "google/gemini-3.1-flash-lite"
+    assert captured["request"].extra_params["response_format"]["type"] == "json_schema"
+    assert captured["request"].extra_params["provider"] == {"sort": "latency"}
+    assert (
+        captured["request"].extra_params["response_format"]["json_schema"]["name"]
+        == "search_quality_judge"
+    )
     assert "Current date:" in user_prompt
     assert "Timezone: Asia/Seoul" in user_prompt
     assert "Recency intent:" in user_prompt
+    assert "Required phrases:" in user_prompt
+    assert "Exclude terms:" in user_prompt
     assert "Source 1" in user_prompt
+
+
+def test_quality_judge_model_can_be_overridden_from_environment(monkeypatch):
+    monkeypatch.setenv("SEARCH_QUALITY_JUDGE_MODEL", "openai/gpt-4.1-nano")
+
+    assert Settings(_env_file=None, grammar_model_provider="openrouter").search_quality_judge_model == "openai/gpt-4.1-nano"
 
 
 def test_quality_finalizer_rejects_contradictory_sufficient_result():
@@ -205,6 +234,60 @@ def test_quality_judge_parser_accepts_common_llm_short_forms():
     assert result.relevance is True
     assert result.freshness is True
     assert result.specificity is True
+
+
+def test_quality_judge_parser_drops_alias_fields_after_normalization():
+    service = SearchService()
+
+    result = service._build_search_quality_judge_result(
+        {
+            "is_sufficient": True,
+            "accepted_ids": ["1", "2"],
+            "rejected_ids": ["3"],
+            "relevance": True,
+            "freshness": True,
+            "specificity": True,
+            "reason": None,
+            "retry_suggestion": None,
+        }
+    )
+
+    assert result.accepted_source_ids == [1, 2]
+    assert [source.id for source in result.rejected_sources] == [3]
+
+
+@pytest.mark.asyncio
+async def test_quality_judge_retries_without_structured_output_when_provider_rejects(monkeypatch):
+    service = SearchService()
+    analysis = build_rule_query_analysis("최근 애플 발표", current_date="2026-06-04")
+    calls = []
+
+    class FakeResponse:
+        content = '{"is_sufficient":true,"accepted_source_ids":[1,2],"rejected_sources":[],"relevance":true,"freshness":true,"specificity":true,"reason":null,"retry_suggestion":null}'
+
+    class FakeProvider:
+        async def chat_completion(self, request):
+            calls.append(request.extra_params)
+            if request.extra_params and "response_format" in request.extra_params:
+                raise ExternalAPIException("response_format json_schema is not supported")
+            return FakeResponse()
+
+    monkeypatch.setattr("domains.search.service.LLMProviderFactory.create_provider", lambda **kwargs: FakeProvider())
+
+    accepted_sources, quality = await service._judge_search_quality(
+        "최근 애플 발표",
+        [
+            SearchResultItem(title="Apple 발표", url="https://example.com/1", snippet="Apple announced a new product."),
+            SearchResultItem(title="Apple WWDC", url="https://example.com/2", snippet="Apple shared WWDC updates."),
+        ],
+        analysis,
+    )
+
+    assert len(accepted_sources) == 2
+    assert quality.is_sufficient is True
+    assert calls[0] is not None
+    assert calls[0]["provider"] == {"sort": "latency"}
+    assert calls[1] == {"provider": {"sort": "latency"}}
 
 
 def test_quality_finalizer_rejects_invalid_source_id():

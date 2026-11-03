@@ -29,3 +29,6 @@ class LLMResponse(BaseModel):
     content: str
     model: str | None = None
     usage: dict[str, Any] | None = None
+    upstream_provider: str | None = None
+    service_tier: str | None = None
+    upstream_generation_ms: float | None = None

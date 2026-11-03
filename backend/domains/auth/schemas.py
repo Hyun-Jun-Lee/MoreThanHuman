@@ -2,8 +2,19 @@
 Auth 도메인 Pydantic 스키마
 """
 from datetime import datetime
+from enum import Enum
+import unicodedata
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+
+from shared.language import LearningLanguageContext
+
+
+class AppLocaleCode(str, Enum):
+    """앱 chrome 표시 언어"""
+
+    KOREAN = "ko"
+    ENGLISH = "en"
 
 
 class RegisterRequest(BaseModel):
@@ -31,6 +42,17 @@ class DevTokenRequest(BaseModel):
     device_id: str = Field(default="swagger-local", min_length=1, max_length=64)
 
 
+class SwaggerTokenRequest(BaseModel):
+    """Swagger 테스트용 Supabase password grant 토큰 요청"""
+
+    email: EmailStr
+    password: str = Field(min_length=1, json_schema_extra={"format": "password"})
+    secret: str | None = Field(
+        default=None,
+        description="Required outside dev when SWAGGER_TOKEN_ISSUER_SECRET is configured.",
+    )
+
+
 class GoogleMobileLoginRequest(BaseModel):
     """Flutter Google Sign-In SDK id_token 로그인 요청"""
 
@@ -53,11 +75,12 @@ class LogoutRequest(BaseModel):
 
 
 class TokenResponse(BaseModel):
-    """JWT 토큰 응답"""
+    """Bearer 토큰 응답"""
 
     access_token: str
-    refresh_token: str
+    refresh_token: str | None = None
     token_type: str = "bearer"
+    expires_in: int | None = None
 
 
 class UserProfile(BaseModel):
@@ -66,11 +89,60 @@ class UserProfile(BaseModel):
     id: str
     email: str
     name: str
+    nickname: str | None = None
     is_active: bool
     oauth_provider: str | None = None
     avatar_url: str | None = None
+    app_locale: AppLocaleCode | None = None
+    language: LearningLanguageContext = Field(default_factory=LearningLanguageContext)
     created_at: datetime
     updated_at: datetime
 
     class Config:
         from_attributes = True
+
+
+class LanguagePreferencesRequest(LearningLanguageContext):
+    """현재 사용자 언어 선호 수정 요청"""
+
+    model_config = ConfigDict(extra="forbid", use_enum_values=False)
+
+
+class BootstrapRequest(BaseModel):
+    """로그인 초기화 시 적용할 선택적 학습 언어."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    language: LanguagePreferencesRequest | None = None
+
+
+class LanguagePreferencesResponse(LearningLanguageContext):
+    """현재 사용자 언어 선호 응답"""
+
+    model_config = ConfigDict(from_attributes=True, use_enum_values=False)
+
+
+class AppLocaleRequest(BaseModel):
+    """앱 표시 언어 수정 요청"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    app_locale: AppLocaleCode
+
+
+class NicknameRequest(BaseModel):
+    """현재 사용자 닉네임 수정 요청"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    nickname: str
+
+    @field_validator("nickname")
+    @classmethod
+    def validate_nickname(cls, value: str) -> str:
+        nickname = unicodedata.normalize("NFC", value.strip())
+        if not 1 <= len(nickname) <= 20:
+            raise ValueError("Nickname must be 1 to 20 characters.")
+        if any(unicodedata.category(char) == "Cc" for char in nickname):
+            raise ValueError("Nickname cannot contain control characters.")
+        return nickname

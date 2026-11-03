@@ -1,5 +1,5 @@
 ---
-name: Curitalk Interface System
+name: tomatalk Interface System
 platform: Flutter iOS and Android
 theme: light
 colors:
@@ -31,65 +31,65 @@ colors:
   overlay-scrim: '#000000'
 typography:
   display-xl:
-    fontFamily: Pretendard
+    fontFamily: Freesentation
     fontSize: 48px
-    fontWeight: '800'
+    fontWeight: '700'
     lineHeight: '1.0'
     letterSpacing: -1.44px
   display-lg:
-    fontFamily: Newsreader
+    fontFamily: Freesentation
     fontSize: 40px
     fontWeight: '700'
     lineHeight: '1.05'
     letterSpacing: 0
   headline-lg:
-    fontFamily: Pretendard
+    fontFamily: Freesentation
     fontSize: 32px
     fontWeight: '700'
     lineHeight: '1.15'
     letterSpacing: -0.32px
   headline-md:
-    fontFamily: Pretendard
+    fontFamily: Freesentation
     fontSize: 26px
     fontWeight: '700'
     lineHeight: '1.25'
     letterSpacing: -0.26px
   body-lg:
-    fontFamily: Pretendard
+    fontFamily: Freesentation
     fontSize: 20px
     fontWeight: '400'
     lineHeight: '1.4'
     letterSpacing: -0.14px
   body:
-    fontFamily: Pretendard
+    fontFamily: Freesentation
     fontSize: 18px
     fontWeight: '400'
     lineHeight: '1.45'
     letterSpacing: -0.14px
   body-sm:
-    fontFamily: Pretendard
+    fontFamily: Freesentation
     fontSize: 16px
     fontWeight: '400'
     lineHeight: '1.45'
     letterSpacing: 0
   button:
-    fontFamily: Pretendard
+    fontFamily: Freesentation
     fontSize: 16px
-    fontWeight: '600'
+    fontWeight: '700'
     lineHeight: '1.25'
     letterSpacing: 0
-  label-mono:
-    fontFamily: JetBrains Mono
+  label:
+    fontFamily: Freesentation
     fontSize: 14px
-    fontWeight: '600'
+    fontWeight: '700'
     lineHeight: '1.2'
-    letterSpacing: 0.7px
-  caption-mono:
-    fontFamily: JetBrains Mono
+    letterSpacing: 0.35px
+  caption:
+    fontFamily: Freesentation
     fontSize: 12px
     fontWeight: '500'
     lineHeight: '1.4'
-    letterSpacing: 1.2px
+    letterSpacing: 0
 spacing:
   hair: 1px
   xxs: 4px
@@ -125,9 +125,25 @@ motion:
   typing: 900ms
 ---
 
+## 모바일 내비게이션 v2 — 구현 결정 (2026-09-22, 2026-10-04 갱신)
+
+- 하단 목적지는 홈·내 정보 두 개예요. 각 탭은 화면과 스크롤 위치를 유지해요.
+- 홈은 언어 스낵 → 최근 대화 최대 2개 → `＋ 새 대화` 순서예요. 최근 대화는 파스텔 카드를 유지하고, 카드를 누르면 이어 말해요.
+- 홈의 `오늘의 토마토` 제목은 16px 버튼 서체와 좌우 8px 여백을 사용하고 가운데 정렬해요. 제목은 클릭 대상이 아니고, 오른쪽 `전체 보기` 버튼은 표시하지 않아요.
+- 스플래시의 새 Toma Talk 이미지 아래 `오늘의 토마톡!`은 홈의 `오늘의 토마토`와 같은 Freesentation 16px Bold 버튼 서체로 가운데 정렬해요. 이미지의 흰 여백은 표시 영역에서 잘라 제목과 가깝게 배치하고, 이미지와 제목 묶음은 첨부 화면의 파란 표시처럼 화면 중앙보다 위에 놓아요.
+- Topic Prep의 `어떤 주제가 좋으세요?` 제목 옆에는 첨부 이미지를 투명 배경으로 정리한 검은색 새로고침 아이콘만 둬요. 아이콘은 14px로 표시하고 버튼 배경도 투명하게 해요. 추천 방향 3개와 같은 줄바꿈 영역에 `직접 입력` 선택 버튼을 네 번째로 두고, 누르면 제목 `어떤 이야기를 나눌까요?`, 입력 안내 `나누고 싶은 내용을 적어 주세요`가 있는 팝업을 열어요. 입력칸은 한 줄로 표시해요. 질문 준비 중에는 해당 버튼을 비활성화해요. 생성에 성공하면 입력한 문구를 추가 선택 버튼으로 보여주고 새 첫 질문과 반대 언어 번역을 함께 표시해요. 다른 방향을 눌러도 입력한 방향과 질문을 보존해 다시 선택할 수 있어요.
+- Topic Prep 첫 질문 카드에는 학습 언어의 질문 아래에 반대 언어 번역을 회색 12px 보조 글씨로 표시해요. 질문 선택과 대화 시작에는 원문 질문을 사용해요.
+- Topic Prep의 요약 카드 로딩 표시는 가로 가운데에 배치하고 제목과의 간격을 줄여 카드 안에서 조금 위에 놓아요. 요약 문구가 나타난 뒤에는 기존 간격을 유지하고, 출처 섹션은 표시하지 않아요.
+- 움직이는 주간 주제 카드는 실제 카드 너비와 높이를 고정하고 문구를 가운데 배치해요. 표시 문구는 공백 기준 두 어절마다 줄바꿈하고 최대 세 줄로 표시해요. 원문과 접근성 이름에는 표시용 줄바꿈을 넣지 않아요.
+- 전체 대화 화면은 간결한 행 목록과 상단 `＋`로 구성해요. 기존 API의 페이지 조회를 연결하고 하단 탭을 숨겨요.
+- 홈과 전체 대화 화면의 새 대화 버튼은 동일한 방식 선택 시트를 열어요. 준비·대화 중에는 탭을 숨기고 복귀 시 출발 화면을 유지해요.
+- 내 정보는 기존 계정·언어 설정을 독립 화면으로 제공해요. 계정 영역에는 제목과 이메일 없이 프로필 원과 한 줄 사용자 이름만 표시하고, 이름은 20px Bold로 원 높이 안에 맞춰요. 구독·앱 언어·학습 언어 제목과 바로 아래 콘텐츠 사이에는 동일한 16px 간격을 사용해요. 세 섹션의 콘텐츠 글자는 앱 언어 버튼 기준인 Freesentation 12px Medium(500)으로 맞춰요. iOS 구독 영역은 현재 플랜을 첫 글자만 대문자인 영문(`Free`, `Advance`, `Plus`)의 검은색 상태 칩으로 표시하고, 옆의 흰색 `더 보기` 칩으로 구독 상세 화면을 열어요. 영어 UI의 해당 칩은 `Show more`, 앱 언어 칩은 `Korean`과 `English`로 첫 글자만 대문자로 표시해요. 학습 언어는 `한국어 → 영어`와 `영어 → 한국어` 두 옵션만 앱 언어와 같은 내용 폭 칩으로 가로 배치해요. 영어 UI에서는 칩 폭을 위해 `KR → EN`과 `EN → KR`로 축약하고 확인 팝업에는 전체 언어 이름을 표시해요. 앱 언어·학습 언어 변경 확인 팝업의 영문 확인 버튼은 `CHANGE`로 표시해요. 좁은 화면이나 큰 글씨에서는 다음 줄로 넘어갈 수 있어요. 온보딩의 언어쌍 카드 구성은 유지해요. 로그아웃은 화면 하단에 옅은 회색 `로그 아웃` 텍스트 버튼으로 표시하고 배경이나 외곽선은 두지 않아요. 홈 헤더의 오른쪽에는 원형 프로필 아이콘 대신 현재 언어 쌍 배지를 표시해요.
+- iOS 구독 화면 하단의 이용약관·개인정보처리방침 링크는 내 정보의 로그아웃과 같은 Freesentation 12px Medium, 옅은 회색 텍스트 버튼으로 표시해요. 링크 위의 월간 자동 갱신 안내 문단은 표시하지 않아요.
+- 탭 라벨은 기본 UI 서체로 항상 표시하고, 2개 항목의 너비와 터치 영역을 동일하게 유지해요. 탭 사이에는 슬라이드 전환을 넣지 않아요.
+
 ## 1. 시스템 방향
 
-Curitalk은 Figma 마케팅 시스템의 편집형 대비와 컬러 블록 문법을 모바일 학습 앱에 맞게 변형해요. 기본 화면은 흑백의 깨끗한 캔버스를 유지하고, 대화 주제·학습 피드백·최근 대화처럼 의미가 있는 콘텐츠 묶음에만 파스텔 컬러 블록을 사용해요.
+tomatalk은 Figma 마케팅 시스템의 편집형 대비와 컬러 블록 문법을 모바일 학습 앱에 맞게 변형해요. 기본 화면은 흑백의 깨끗한 캔버스를 유지하고, 대화 주제·학습 피드백·최근 대화처럼 의미가 있는 콘텐츠 묶음에만 파스텔 컬러 블록을 사용해요.
 
 이 시스템의 핵심은 **Warm Terracotta & Sand가 아니라 Monochrome Editorial + Pastel Color Blocks**예요. Terracotta는 일부 Stitch 화면의 아이콘이나 작은 강조 요소에만 제한적으로 등장하며, 앱의 주 배경이나 CTA 색상이 아니에요.
 
@@ -137,7 +153,7 @@ Curitalk은 Figma 마케팅 시스템의 편집형 대비와 컬러 블록 문�
 - Lime, Lilac, Cream, Mint 계열, Blue, Coral, Pink는 콘텐츠를 구분하는 큰 면으로 사용해요.
 - 버튼은 pill, 주요 카드와 패널은 24px 이상의 큰 radius를 사용해요.
 - 그림자와 gradient보다 색상 면, 여백, 테두리 굵기로 계층을 만들어요.
-- Pretendard 본문, 제한적인 Newsreader display, uppercase JetBrains Mono 레이블을 함께 사용해 편집형 리듬을 만들어요.
+- Freesentation의 Regular 본문과 Bold 제목·CTA, Medium 보조 정보로 계층을 만들어요.
 
 ## 2. 기준 자료와 우선순위
 
@@ -161,7 +177,7 @@ Stitch HTML은 시각적 참고 자료이며 Flutter 위젯 구조나 화면별 
 - hairline, hairline-soft: 입력창, 카드, 리스트 구분선
 - ink-secondary: 설명, 보조 문구, 시간 정보에만 사용
 
-원본 마케팅 시스템은 mid-gray 텍스트를 거의 사용하지 않지만, Curitalk 모바일 앱은 긴 설명과 상태 정보가 많으므로 접근 가능한 보조 텍스트 역할을 허용해요. 중요한 학습 내용과 CTA는 항상 ink를 사용해요.
+원본 마케팅 시스템은 mid-gray 텍스트를 거의 사용하지 않지만, tomatalk 모바일 앱은 긴 설명과 상태 정보가 많으므로 접근 가능한 보조 텍스트 역할을 허용해요. 중요한 학습 내용과 CTA는 항상 ink를 사용해요.
 
 ### 3.2 Pastel Color Blocks
 
@@ -201,26 +217,37 @@ Primary CTA, 앱 배경, 전체 화면 theme에는 사용하지 않아요.
 
 ### 4.1 Font Family
 
-- **Pretendard**: 앱 기본 산세리프 폰트. display-xl, headline, body, button에 사용해 한글·영문 본문 가독성을 담당해요.
-- **Newsreader**: 서브 디스플레이 폰트. 1차 적용 범위는 `display-lg`로 제한하고 Splash, Login hero, Home greeting처럼 짧은 강조 문구에만 사용해요.
-- **JetBrains Mono**: category, eyebrow, caption, metadata
+- **Freesentation**: 앱의 모든 텍스트에 쓰는 기본 폰트예요. Light(300), Regular(400), Medium(500), Bold(700) 네 파일을 번들해요.
 
-`headline-lg`와 `headline-md`는 실사용 화면 제목에 자주 등장하므로 Newsreader로 확장하지 않고 Pretendard를 유지해요. Stitch 산출물에 포함된 Quicksand 같은 화면별 임시 font는 구현 기준에 포함하지 않아요.
+본문은 Regular, 작은 보조 정보는 Medium, 제목과 CTA는 Bold를 사용해요. Light는 파일을 등록하지만 현재 텍스트 계층에는 배정하지 않아요. 화면별 Stitch HTML의 임시 font는 구현 기준에 포함하지 않아요.
 
 ### 4.2 사용 규칙
 
-- display-xl: 온보딩과 핵심 empty state의 짧은 제목. 현재는 Pretendard를 유지해요.
-- display-lg: Splash 로고성 문구, Login hero, Home 인사말처럼 짧고 브랜드감 있는 opener
+- display-xl: 온보딩과 핵심 empty state의 짧은 제목
+- display-lg: Login hero처럼 짧고 브랜드감 있는 opener. Splash는 제공 이미지로 표시해요.
 - headline-lg: 화면 제목과 큰 카드 제목
 - headline-md: 대화 주제, 준비 카드, bottom sheet 제목
 - body-lg: 온보딩 설명과 핵심 학습 문장
 - body: 기본 대화·설명 문장
 - body-sm: 카드 설명, 보조 정보
 - button: 모든 text CTA
-- label-mono: 버튼의 기술적 레이블, category chip
-- caption-mono: metadata, 진행 단계, 작은 상태 레이블
+- label: 섹션 제목, category chip
+- caption: metadata, 진행 단계, 작은 상태 레이블
 
-Mono 역할은 항상 uppercase를 기본으로 하며 문장형 본문에는 사용하지 않아요. Newsreader는 긴 문장형 본문이나 입력/채팅 텍스트에 사용하지 않아요. Display는 두 줄에서 세 줄 이내로 유지하고, 큰 제목일수록 line height를 더 촘촘하게 사용해요.
+섹션 제목 컴포넌트는 영문을 uppercase로 표시해요. Display는 두 줄에서 세 줄 이내로 유지하고, 큰 제목일수록 line height를 더 촘촘하게 사용해요.
+
+| 계층 | 크기 / 굵기 | 주 용도 |
+|---|---:|---|
+| `displayXl` | 48 / Bold 700 | 가장 큰 강조 제목 |
+| `displayLg` | 40 / Bold 700 | 로그인 대표 문구 |
+| `headlineLg` | 32 / Bold 700 | 화면 제목, 큰 카드 제목 |
+| `headlineMd` | 26 / Bold 700 | 카드·시트 제목 |
+| `bodyLg` | 20 / Regular 400 | 큰 본문 |
+| `body` | 18 / Regular 400 | 기본 설명·대화 문장 |
+| `bodySm` | 16 / Regular 400 | 보조 설명, 입력·채팅 텍스트 |
+| `button` | 16 / Bold 700 | 버튼·CTA |
+| `label` | 14 / Bold 700 | 섹션·카테고리 레이블 |
+| `caption` | 12 / Medium 500 | 메타데이터·작은 상태 표시 |
 
 ## 5. Layout & Spacing
 
@@ -234,7 +261,7 @@ Mono 역할은 항상 uppercase를 기본으로 하며 문장형 본문에는 �
 
 ## 6. Elevation & Depth
 
-Curitalk은 기본적으로 flat system이에요.
+tomatalk은 기본적으로 flat system이에요.
 
 | Level | 처리 | 사용 |
 |---|---|---|
@@ -302,11 +329,28 @@ Color block 자체에는 그림자를 추가하지 않아요. focus와 pressed �
 **Recent Conversation Card**
 
 - 주제별 pastel block을 순환
-- category는 White pill + caption-mono
-- 제목은 headline-md, 미리보기는 body
+- 유형은 제목 오른쪽 위의 White pill + caption-mono 배지에 `freechat` 또는 `roleplaying`으로 표시해요. 한국어·영어 UI에서 같은 문구를 사용해요.
+- 제목은 왼쪽 headline-md이며 표시할 때 두 어절마다 줄바꿈하고 최대 세 줄로 제한해요. 원문과 접근성 이름은 유지해요. 잠긴 대화만 `읽기 전용` 상태를 보여줘요. 메시지 수·계속 대화하기 문구는 표시하지 않아요.
+- 오른쪽 위 X를 제거하고, 왼쪽 스와이프로 오른쪽 `삭제` 텍스트 동작을 드러내요. 삭제는 기존 확인 팝업을 거쳐요.
 - 그림자 없이 색상과 여백으로 구분
 
+**Tomato Language Snacks (v2.6, 2026-09-20)**
+
+- 디버그 빌드에서만 열람 수 왼쪽에 restart 아이콘 버튼과 한국어/영어 테스트용 리셋 툴팁을 표시해요. 모션·팝업 중 비활성화하며 release/profile 레이아웃에는 포함하지 않아요.
+- Home의 최근 대화 위에 현재 열람 수/12와 토마토 바구니를 표시하며 "오늘의 언어" section label은 사용하지 않아요. 투명 PNG 바구니와 수정된 3입 이미지를 사용하고 별도 배경 없이 Home 배경 위에 표시해요. 텍스트·컨트롤은 onSurface 색상을 사용해요.
+- 바구니를 누르면 토마토를 꺼내요. 토마토 3개를 각각 4입 먹으며 투명 PNG 5단계를 교체하고 360ms 눌림·반동을 재생해요. 이미지 영역은 220px 정사각형, 원본 캔버스 좌표는 유지해요.
+- 꺼내기 모션은 400ms로, 바구니 위치의 작은 토마토가 중앙으로 이동하며 42%에서 100%로 커지고 살짝 반동을 줘요. 바구니는 먼저 페이드 아웃하고 토마토는 빠르게 나타나며, 고정 영역 안에서 transform·opacity만 바꿔 주변 레이아웃은 움직이지 않아요. 모션 감소 설정에서는 즉시 전환해요.
+- 토마토 한 개를 완료한 팝업을 닫으면 바구니로 돌아가며 `tomato_basket_leave_2/1/0.png`로 남은 개수를 보여줘요. 다음 토마토는 사용자가 바구니를 다시 눌러 꺼내요. 총 9개 이미지는 미리 로딩해요.
+- 터치 영역의 InkWell 물결·눌림 배경은 끄고 토마토 애니메이션만 재생해요. 키보드 포커스·툴팁은 유지하며 팝업 상단에는 페이지 번호 없이 닫기 버튼만 표시해요. Home의 일일 열람 수/12는 유지해요.
+- 토마토 번호/3은 유지하고 토마토·바구니 아래의 진행 점·체크는 모두 표시하지 않아요. 전환 시 높이가 바뀌지 않게 같은 여백을 확보해요. 터치 도중과 콘텐츠 팝업이 열렸을 때 중복 입력을 막고, reduce motion에서는 토마토 움직임을 생략해요. 바구니 아이콘과 토마토 버튼에 툴팁·접근성 이름을 제공해요.
+- 한입마다 지역별 표현은 lilac, 용법 차이는 blue, 동음이의어는 lime-soft 팝업을 열어요. 닫기 아이콘은 스크롤 영역 밖에 두고 본문만 스크롤해요. 마지막 입의 팝업 뒤에는 꼭지를 유지하고, 세 토마토 완료 후 팝업을 닫으면 빈 바구니·12/12와 소진·자정 충전 안내를 표시하고 터치를 비활성화해요. 현지 자정 이후 새 바구니로 교체하되, 열린 팝업·애니메이션은 종료 후 갱신해요.
+- 지역별 표현은 넓은 화면에서 두 열, 작은 화면·큰 글자 설정에서는 세로 배치해요. 용법 차이·동음이의어는 표현별 설명과 예문을 세로로 표시해요.
+- 표현은 headline-md, 설명·예문은 body-sm을 사용하며 내용을 잘라내지 않아요. 기존 5초 자동 전환·이전/다음 탐색은 Home에서 사용하지 않아요.
+- 설명 언어는 앱 chrome과 분리하고 학습 대상 콘텐츠의 explanation_language를 따라요.
+
 ### 8.3 Conversation
+
+앱의 데이터 로딩·저장·전송 표시에는 `AppLoadingIndicator`를 공통으로 사용해요. 다섯 한입 단계의 토마토를 가로로 나열하고 활성 단계만 색으로 강조하며 420ms마다 다음 단계로 옮겨 반복해요. 화면·섹션·버튼에 맞게 너비를 조절하고 접근성 로딩 이름을 제공해요. 동작 줄이기 설정이나 비활성 탭에서는 첫 프레임에 고정해요.
 
 - 사용자 메시지: inverse-canvas 배경 + inverse-ink
 - AI 메시지: canvas 배경 + ink, 필요한 경우 1px hairline
@@ -339,9 +383,8 @@ Color block 자체에는 그림자를 추가하지 않아요. focus와 pressed �
 - rounded.pill, caption-mono
 - 선택 상태는 Black fill + White text
 
-### 8.6 Source & Retry State
+### 8.6 Retry State
 
-- 검색 출처 행은 제목, host, 외부 이동 icon을 함께 표시해요.
 - 검색 품질 부족 상태는 searchRetry semantic surface 하나로 묶어요.
 - 재시도 카드에는 주제 수정과 다른 아이디어 선택을 모두 제공해 막힌 흐름을 만들지 않아요.
 
@@ -377,7 +420,7 @@ Color block 자체에는 그림자를 추가하지 않아요. focus와 pressed �
 - Black Primary CTA를 화면의 가장 중요한 행동 하나에만 사용해요.
 - 하나의 정보 묶음에는 하나의 pastel block을 충분히 크게 사용해요.
 - 화면 사이에 White canvas를 남겨 color block이 의도적으로 보이게 해요.
-- Pretendard의 크기와 weight, Newsreader의 제한적인 display 대비, JetBrains Mono의 taxonomy 대비로 계층을 만들어요.
+- Freesentation의 크기와 Regular·Medium·Bold 굵기 대비로 계층을 만들어요.
 - 버튼과 선택 chip은 pill 형태를 유지해요.
 - 대화와 문법 피드백에는 앱 전용 semantic color 역할을 사용해요.
 
@@ -386,7 +429,7 @@ Color block 자체에는 그림자를 추가하지 않아요. focus와 pressed �
 - 앱 전체를 Terracotta 또는 Sand surface로 덮지 않아요.
 - 여러 pastel 색상을 하나의 카드 안에서 장식적으로 섞지 않아요.
 - Color block에 gradient나 강한 shadow를 추가하지 않아요.
-- Mono font를 문장형 본문이나 긴 설명에 사용하지 않아요.
+- 작은 글씨에는 Light(300)를 사용하지 않아요.
 - 화면별 Stitch HTML의 임시 theme map을 Flutter에 그대로 복사하지 않아요.
 - 상태를 색상 하나로만 전달하지 않아요.
 
@@ -395,7 +438,7 @@ Color block 자체에는 그림자를 추가하지 않아요. focus와 pressed �
 - Material 3 ColorScheme에는 monochrome core와 semantic status를 연결해요.
 - Pastel block, conversation, grammar feedback 색상은 ThemeExtension으로 분리해요.
 - spacing, radius, size는 immutable token class로 관리해요.
-- typography는 TextTheme에 매핑하고 Mono 역할은 별도 extension으로 제공해요.
+- typography는 `AppTypography` 토큰과 기본 `ThemeData.fontFamily`로 적용해요.
 - v1은 light theme만 구현하며 system dynamic color는 사용하지 않아요.
 - 폰트는 앱 asset에 포함해 네트워크 상태와 관계없이 동일하게 렌더링해요.
 - 화면 코드에는 raw Hex, 임의 spacing, 임의 radius를 직접 작성하지 않아요.
@@ -403,6 +446,6 @@ Color block 자체에는 그림자를 추가하지 않아요. focus와 pressed �
 ## 12. Known Gaps
 
 - Pastel Hex 값은 Stitch PNG와 HTML에서 정규화한 값이며 향후 실제 기기 검수에서 미세 조정할 수 있어요.
-- Stitch 화면에는 Convia 명칭과 Quicksand, Terracotta 중심 theme 같은 과거 생성 흔적이 남아 있어요. Flutter 구현에서는 이 문서의 Curitalk token을 우선해요.
+- Stitch 화면에는 이전 서비스 명칭과 Quicksand, Terracotta 중심 theme 같은 과거 생성 흔적이 남아 있어요. Flutter 구현에서는 이 문서의 tomatalk token을 우선해요.
 - Dark theme은 v1 범위가 아니며 block-navy는 light flow 안의 제한적인 inverse panel이에요.
 - 문법 피드백은 일반 AI 말풍선과 구분되도록 `grammarSuggestionSurface`를 사용하고, 설명 텍스트는 gray 계열 보조 텍스트를 유지해요. 긴 교정/설명은 기본 접힘 상태에서 1줄로 표시하고 `SHOW MORE`/`SHOW LESS`로 확장해요.

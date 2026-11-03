@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('starts with no situation and Normal difficulty', () {
+  test('starts with no situation selected', () {
     final ProviderContainer container = ProviderContainer();
     addTearDown(container.dispose);
 
@@ -13,7 +13,6 @@ void main() {
 
     expect(state.selectedScenario, isNull);
     expect(state.isCustomMode, isFalse);
-    expect(state.difficulty, RoleplayDifficulty.normal);
     expect(state.canStart, isFalse);
   });
 
@@ -26,12 +25,12 @@ void main() {
 
     controller.enableCustomMode();
     controller.updateCustomInput('오사카 식당 예약 확인');
-    controller.selectScenario(roleplayPresetScenarios.first);
+    controller.selectScenario(enRoleplayScenarios.first);
     final RoleplaySetupState state = container.read(
       roleplaySetupControllerProvider,
     );
 
-    expect(state.selectedScenario, roleplayPresetScenarios.first);
+    expect(state.selectedScenario, enRoleplayScenarios.first);
     expect(state.isCustomMode, isFalse);
     expect(state.canStart, isTrue);
   });
@@ -43,7 +42,7 @@ void main() {
       roleplaySetupControllerProvider.notifier,
     );
 
-    controller.selectScenario(roleplayPresetScenarios.first);
+    controller.selectScenario(enRoleplayScenarios.first);
     controller.enableCustomMode();
     controller.updateCustomInput('A');
     RoleplaySetupState state = container.read(roleplaySetupControllerProvider);
@@ -51,30 +50,16 @@ void main() {
     expect(state.selectedScenario, isNull);
     expect(state.isCustomMode, isTrue);
     expect(state.canStart, isFalse);
-    expect(state.customErrorText, 'Enter at least 2 characters.');
+    expect(
+      state.customValidationReason,
+      RoleplaySetupValidationReason.customInputTooShort,
+    );
 
     controller.updateCustomInput('오사카 식당 예약 확인');
     state = container.read(roleplaySetupControllerProvider);
 
     expect(state.canStart, isTrue);
-    expect(state.customErrorText, isNull);
+    expect(state.customValidationReason, isNull);
     expect(state.payload?.roleCharacter, contains('오사카 식당 예약 확인'));
-  });
-
-  test('difficulty changes are reflected in payload', () {
-    final ProviderContainer container = ProviderContainer();
-    addTearDown(container.dispose);
-    final RoleplaySetupController controller = container.read(
-      roleplaySetupControllerProvider.notifier,
-    );
-
-    controller.selectScenario(roleplayPresetScenarios.first);
-    controller.selectDifficulty(RoleplayDifficulty.challenge);
-    final RoleplaySetupState state = container.read(
-      roleplaySetupControllerProvider,
-    );
-
-    expect(state.difficulty, RoleplayDifficulty.challenge);
-    expect(state.payload?.roleCharacter, contains('unexpected'));
   });
 }

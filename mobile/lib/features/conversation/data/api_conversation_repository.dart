@@ -4,21 +4,45 @@ import 'package:curitalk/features/conversation/domain/conversation_repository.da
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class ApiConversationRepository implements ConversationRepository {
+class ApiConversationRepository
+    implements
+        ConversationRepository,
+        CustomFocusConversationRepository,
+        ConversationDeletionRepository,
+        SuggestedConversationRepository {
   const ApiConversationRepository(this.apiClient);
 
   final ApiClient apiClient;
 
   @override
-  Future<ConversationResponse> startFreeChat({
+  Future<SuggestedConversationResponse> startSuggestedFreeChat({
+    required String topicId,
+    required String startRequestId,
+    bool includeAudioResponse = true,
+  }) async {
+    final response = await apiClient.post<SuggestedConversationResponse>(
+      'conversations/start/free-chat/suggested/',
+      data: <String, Object?>{
+        'topic_id': topicId,
+        'start_request_id': startRequestId,
+        'include_audio_response': includeAudioResponse,
+      },
+      decodeData: SuggestedConversationResponse.fromJson,
+    );
+    return response.data;
+  }
+
+  @override
+  Future<MultimodalConversationResponse> startFreeChat({
     required String firstMessage,
     String? searchContext,
     String? topic,
     String? conversationDirection,
     String? selectedQuestion,
+    bool includeAudioResponse = true,
   }) async {
-    final ApiResponse<ConversationResponse> response = await apiClient
-        .post<ConversationResponse>(
+    final ApiResponse<MultimodalConversationResponse> response = await apiClient
+        .post<MultimodalConversationResponse>(
           'conversations/start/free-chat/',
           data: <String, Object?>{
             'first_message': firstMessage,
@@ -26,25 +50,60 @@ class ApiConversationRepository implements ConversationRepository {
             'topic': topic,
             'conversation_direction': conversationDirection,
             'selected_question': selectedQuestion,
+            'include_audio_response': includeAudioResponse,
           },
-          decodeData: ConversationResponse.fromJson,
+          decodeData: MultimodalConversationResponse.fromJson,
         );
     return response.data;
   }
 
   @override
-  Future<ConversationResponse> startRoleplay({
+  Future<MultimodalConversationResponse> startFreeChatWithAudio({
+    required ConversationAudioFile audioFile,
+    String? searchContext,
+    String? topic,
+    String? conversationDirection,
+    String? selectedQuestion,
+    bool includeAudioResponse = true,
+  }) async {
+    final FormData formData = FormData.fromMap(<String, Object?>{
+      'audio_file': MultipartFile.fromBytes(
+        audioFile.bytes,
+        filename: audioFile.filename,
+        contentType: DioMediaType.parse(audioFile.contentType),
+      ),
+      'search_context': searchContext,
+      'topic': topic,
+      'conversation_direction': conversationDirection,
+      'selected_question': selectedQuestion,
+      'include_audio_response': includeAudioResponse.toString(),
+    });
+    final ApiResponse<MultimodalConversationResponse> response = await apiClient
+        .post<MultimodalConversationResponse>(
+          'conversations/start/free-chat/',
+          data: formData,
+          latencyTrace: audioFile.latencyTrace,
+          contentType: Headers.multipartFormDataContentType,
+          decodeData: MultimodalConversationResponse.fromJson,
+        );
+    return response.data;
+  }
+
+  @override
+  Future<MultimodalConversationResponse> startRoleplay({
     required String roleCharacter,
     String? searchContext,
+    bool includeAudioResponse = true,
   }) async {
-    final ApiResponse<ConversationResponse> response = await apiClient
-        .post<ConversationResponse>(
+    final ApiResponse<MultimodalConversationResponse> response = await apiClient
+        .post<MultimodalConversationResponse>(
           'conversations/start/roleplay/',
           data: <String, Object?>{
             'role_character': roleCharacter,
             'search_context': searchContext,
+            'include_audio_response': includeAudioResponse,
           },
-          decodeData: ConversationResponse.fromJson,
+          decodeData: MultimodalConversationResponse.fromJson,
         );
     return response.data;
   }
@@ -58,6 +117,7 @@ class ApiConversationRepository implements ConversationRepository {
     final ApiResponse<PaginatedMessages> response = await apiClient
         .get<PaginatedMessages>(
           'conversations/$conversationId/messages/',
+          diagnosticSource: 'conversation_messages',
           queryParameters: <String, Object?>{'limit': limit, 'offset': offset},
           decodeData: PaginatedMessages.fromJson,
         );
@@ -82,7 +142,7 @@ class ApiConversationRepository implements ConversationRepository {
   Future<MultimodalMessageResponse> sendTextTurn({
     required String conversationId,
     required String text,
-    bool includeAudioResponse = false,
+    bool includeAudioResponse = true,
   }) async {
     final ApiResponse<MultimodalMessageResponse> response = await apiClient
         .post<MultimodalMessageResponse>(
@@ -100,7 +160,7 @@ class ApiConversationRepository implements ConversationRepository {
   Future<MultimodalMessageResponse> sendAudioTurn({
     required String conversationId,
     required ConversationAudioFile audioFile,
-    bool includeAudioResponse = false,
+    bool includeAudioResponse = true,
   }) async {
     final FormData formData = FormData.fromMap(<String, Object?>{
       'audio_file': MultipartFile.fromBytes(
@@ -114,8 +174,75 @@ class ApiConversationRepository implements ConversationRepository {
         .post<MultimodalMessageResponse>(
           'conversations/$conversationId/turn/',
           data: formData,
+          latencyTrace: audioFile.latencyTrace,
           contentType: Headers.multipartFormDataContentType,
           decodeData: MultimodalMessageResponse.fromJson,
+        );
+    return response.data;
+  }
+
+  @override
+  Future<void> deleteConversation(String conversationId) async {
+    await apiClient.request<Object?>(
+      'conversations/$conversationId/',
+      method: 'DELETE',
+      decodeData: (Object? value) => value,
+    );
+  }
+
+  @override
+  Future<MultimodalConversationResponse> startFreeChatWithCustomFocus({
+    required String firstMessage,
+    String? searchContext,
+    String? topic,
+    String? selectedQuestion,
+    required String customFocus,
+    bool includeAudioResponse = true,
+  }) async {
+    final ApiResponse<MultimodalConversationResponse> response = await apiClient
+        .post<MultimodalConversationResponse>(
+          'conversations/start/free-chat/',
+          data: <String, Object?>{
+            'first_message': firstMessage,
+            'search_context': searchContext,
+            'topic': topic,
+            'selected_question': selectedQuestion,
+            'custom_focus': customFocus,
+            'include_audio_response': includeAudioResponse,
+          },
+          decodeData: MultimodalConversationResponse.fromJson,
+        );
+    return response.data;
+  }
+
+  @override
+  Future<MultimodalConversationResponse> startFreeChatWithAudioAndCustomFocus({
+    required ConversationAudioFile audioFile,
+    String? searchContext,
+    String? topic,
+    String? selectedQuestion,
+    required String customFocus,
+    bool includeAudioResponse = true,
+  }) async {
+    final FormData formData = FormData.fromMap(<String, Object?>{
+      'audio_file': MultipartFile.fromBytes(
+        audioFile.bytes,
+        filename: audioFile.filename,
+        contentType: DioMediaType.parse(audioFile.contentType),
+      ),
+      'search_context': searchContext,
+      'topic': topic,
+      'selected_question': selectedQuestion,
+      'custom_focus': customFocus,
+      'include_audio_response': includeAudioResponse.toString(),
+    });
+    final ApiResponse<MultimodalConversationResponse> response = await apiClient
+        .post<MultimodalConversationResponse>(
+          'conversations/start/free-chat/',
+          data: formData,
+          latencyTrace: audioFile.latencyTrace,
+          contentType: Headers.multipartFormDataContentType,
+          decodeData: MultimodalConversationResponse.fromJson,
         );
     return response.data;
   }

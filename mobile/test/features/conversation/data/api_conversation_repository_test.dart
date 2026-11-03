@@ -8,6 +8,26 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('posts suggested start ID and decodes assistant message ID', () async {
+    final adapter = _ConversationHttpClientAdapter();
+    final repository = _repository(adapter);
+    final response = await repository.startSuggestedFreeChat(
+      topicId: 'topic-id',
+      startRequestId: 'request-id',
+    );
+    expect(response.conversationId, 'conversation-id');
+    expect(response.assistantMessageId, 'assistant-message-id');
+    expect(
+      adapter.lastRequest?.uri.path,
+      '/api/conversations/start/free-chat/suggested/',
+    );
+    expect(adapter.lastRequest?.data, {
+      'topic_id': 'topic-id',
+      'start_request_id': 'request-id',
+      'include_audio_response': true,
+    });
+  });
+
   test('posts free-chat start metadata', () async {
     final _ConversationHttpClientAdapter adapter =
         _ConversationHttpClientAdapter();
@@ -32,6 +52,7 @@ void main() {
       'topic': '롯데 자이언츠 최근 경기',
       'conversation_direction': 'CASUAL_CHAT',
       'selected_question': 'What stood out?',
+      'include_audio_response': true,
     });
   });
 
@@ -58,7 +79,7 @@ void main() {
     );
     expect(adapter.requests.last.data, <String, Object?>{
       'text': 'Hello again',
-      'include_audio_response': false,
+      'include_audio_response': true,
     });
   });
 
@@ -86,11 +107,76 @@ void main() {
       startsWith(Headers.multipartFormDataContentType),
     );
     expect(formData.fields.single.key, 'include_audio_response');
-    expect(formData.fields.single.value, 'false');
+    expect(formData.fields.single.value, 'true');
     expect(formData.files.single.key, 'audio_file');
     expect(formData.files.single.value.filename, 'recording.webm');
     expect(formData.files.single.value.contentType.toString(), 'audio/webm');
   });
+
+  test('starts free-chat with audio as multipart form data', () async {
+    final _ConversationHttpClientAdapter adapter =
+        _ConversationHttpClientAdapter();
+    final ApiConversationRepository repository = _repository(adapter);
+
+    final MultimodalConversationResponse response = await repository
+        .startFreeChatWithAudio(
+          audioFile: const ConversationAudioFile(
+            bytes: <int>[1, 2, 3],
+            filename: 'answer.m4a',
+            contentType: 'audio/m4a',
+          ),
+          searchContext: 'Lotte won 8-3.',
+          topic: '롯데 자이언츠 최근 경기',
+          conversationDirection: 'CASUAL_CHAT',
+          selectedQuestion: 'What stood out?',
+        );
+
+    final RequestOptions request = adapter.lastRequest!;
+    final FormData formData = request.data as FormData;
+    expect(response.inputMode, ConversationInputMode.audio);
+    expect(response.transcript, 'I want to talk about the game.');
+    expect(request.uri.path, '/api/conversations/start/free-chat/');
+    expect(
+      request.contentType,
+      startsWith(Headers.multipartFormDataContentType),
+    );
+    expect(_fieldValue(formData, 'search_context'), 'Lotte won 8-3.');
+    expect(_fieldValue(formData, 'topic'), '롯데 자이언츠 최근 경기');
+    expect(_fieldValue(formData, 'conversation_direction'), 'CASUAL_CHAT');
+    expect(_fieldValue(formData, 'selected_question'), 'What stood out?');
+    expect(_fieldValue(formData, 'include_audio_response'), 'true');
+    expect(formData.files.single.key, 'audio_file');
+    expect(formData.files.single.value.filename, 'answer.m4a');
+    expect(formData.files.single.value.contentType.toString(), 'audio/m4a');
+  });
+
+  test('starts roleplay with a role field only', () async {
+    final _ConversationHttpClientAdapter adapter =
+        _ConversationHttpClientAdapter();
+    final ApiConversationRepository repository = _repository(adapter);
+
+    final MultimodalConversationResponse response = await repository
+        .startRoleplay(
+          roleCharacter: 'a friendly cafe barista taking an order',
+        );
+
+    expect(response.conversationType, ConversationType.rolePlaying);
+    expect(adapter.lastRequest?.uri.path, '/api/conversations/start/roleplay/');
+    expect(adapter.lastRequest?.data, <String, Object?>{
+      'role_character': 'a friendly cafe barista taking an order',
+      'search_context': null,
+      'include_audio_response': true,
+    });
+  });
+}
+
+String? _fieldValue(FormData formData, String key) {
+  for (final MapEntry<String, String> field in formData.fields) {
+    if (field.key == key) {
+      return field.value;
+    }
+  }
+  return null;
 }
 
 ApiConversationRepository _repository(_ConversationHttpClientAdapter adapter) {
@@ -116,6 +202,14 @@ class _ConversationHttpClientAdapter implements HttpClientAdapter {
     requests.add(options);
     final String path = options.uri.path;
     final Map<String, dynamic> data = switch (path) {
+      '/api/conversations/start/free-chat/suggested/' => <String, dynamic>{
+        'conversation_id': 'conversation-id',
+        'assistant_message_id': 'assistant-message-id',
+        'conversation_type': 'FREE_CHAT',
+        'response': 'What do you like?',
+        'audio': null,
+        'audio_error': null,
+      },
       '/api/conversations/conversation-id/messages/' => <String, dynamic>{
         'results': <Map<String, dynamic>>[
           <String, dynamic>{
@@ -156,10 +250,20 @@ class _ConversationHttpClientAdapter implements HttpClientAdapter {
       _ => <String, dynamic>{
         'conversation_id': 'conversation-id',
         'message_id': 'message-id',
-        'conversation_type': 'FREE_CHAT',
-        'role_character': null,
+        'conversation_type': path.endsWith('/start/roleplay/')
+            ? 'ROLE_PLAYING'
+            : 'FREE_CHAT',
+        'role_character': path.endsWith('/start/roleplay/')
+            ? 'a friendly cafe barista taking an order'
+            : null,
         'response': 'Hello!',
         'grammar_feedback': null,
+        'input_mode': options.data is FormData ? 'audio' : 'text',
+        'transcript': options.data is FormData
+            ? 'I want to talk about the game.'
+            : 'I liked the game.',
+        'audio': null,
+        'audio_error': null,
       },
     };
     return ResponseBody.fromString(

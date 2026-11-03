@@ -12,5 +12,26 @@ import UIKit
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    let channel = FlutterMethodChannel(
+      name: "com.morethanhuman.curitalk/snack_widget",
+      binaryMessenger: engineBridge.applicationRegistrar.messenger()
+    )
+    channel.setMethodCallHandler { call, result in
+      switch call.method {
+      case "read":
+        result(SnackWidgetStore.readRaw())
+      case "write":
+        guard let raw = call.arguments as? String, SnackWidgetStore.saveRaw(raw) else {
+          result(FlutterError(code: "INVALID_SNAPSHOT", message: "Invalid snack widget snapshot", details: nil))
+          return
+        }
+        result(nil)
+      case "clear":
+        SnackWidgetStore.clear()
+        result(nil)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
   }
 }

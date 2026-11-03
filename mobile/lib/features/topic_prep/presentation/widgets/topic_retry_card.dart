@@ -10,11 +10,15 @@ class TopicRetryCard extends StatelessWidget {
     required this.onEditTopic,
     required this.onTryAnotherIdea,
     this.title = 'We need a clearer topic',
+    this.editTopicLabel = 'Edit topic',
+    this.tryAnotherIdeaLabel = 'Try another idea',
     super.key,
   });
 
   final String title;
   final String message;
+  final String editTopicLabel;
+  final String tryAnotherIdeaLabel;
   final VoidCallback onEditTopic;
   final VoidCallback onTryAnotherIdea;
 
@@ -55,13 +59,13 @@ class TopicRetryCard extends StatelessWidget {
             style: AppTypography.bodySm.copyWith(color: colors.onSearchRetry),
           ),
           const SizedBox(height: AppSpacing.lg),
-          AppPrimaryButton(label: 'Edit topic', onPressed: onEditTopic),
+          AppPrimaryButton(label: editTopicLabel, onPressed: onEditTopic),
           const SizedBox(height: AppSpacing.sm),
           SizedBox(
             width: double.infinity,
             child: OutlinedButton(
               onPressed: onTryAnotherIdea,
-              child: const Text('Try another idea'),
+              child: Text(tryAnotherIdeaLabel),
             ),
           ),
         ],

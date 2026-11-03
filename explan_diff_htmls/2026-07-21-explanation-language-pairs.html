@@ -1,0 +1,930 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>언어쌍 일급 도메인 리팩터 설명</title>
+  <style>
+    :root {
+      --paper: #fbfaf7;
+      --ink: #1f2428;
+      --muted: #66707a;
+      --line: #d9ddd8;
+      --accent: #276b61;
+      --accent-soft: #dcece7;
+      --gold: #d99b32;
+      --rose: #e8d1cf;
+      --blue: #d8e4f2;
+      --green: #dfead7;
+      --code: #172126;
+      --code-ink: #e7f0ef;
+      --shadow: 0 20px 45px rgba(31, 36, 40, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+      line-height: 1.68;
+    }
+
+    a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    .page {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 34px 22px 80px;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+      gap: 28px;
+      align-items: stretch;
+      padding: 38px;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background: #fffdf8;
+      box-shadow: var(--shadow);
+    }
+
+    .eyebrow {
+      margin: 0 0 10px;
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(34px, 5vw, 64px);
+      line-height: 1.04;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      margin: 22px 0 0;
+      max-width: 760px;
+      color: var(--muted);
+      font-size: 18px;
+    }
+
+    .hero-card {
+      min-height: 260px;
+      padding: 22px;
+      border-radius: 18px;
+      background: linear-gradient(180deg, #ecf5ef, #f7efe2);
+      border: 1px solid rgba(39, 107, 97, 0.18);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .hero-card strong {
+      font-size: 15px;
+      color: #27423d;
+    }
+
+    .pair-stack {
+      display: grid;
+      gap: 10px;
+    }
+
+    .pair-pill {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 14px;
+      background: rgba(255, 255, 255, 0.8);
+      border: 1px solid rgba(39, 107, 97, 0.16);
+      border-radius: 999px;
+      font-weight: 700;
+      color: #293b36;
+    }
+
+    .toc {
+      margin: 28px 0 0;
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.65);
+    }
+
+    .toc-title {
+      margin: 0 0 10px;
+      font-weight: 800;
+    }
+
+    .toc nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .toc a {
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: #ffffff;
+      border: 1px solid var(--line);
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    section {
+      margin-top: 56px;
+    }
+
+    h2 {
+      margin: 0 0 16px;
+      font-size: clamp(28px, 4vw, 42px);
+      line-height: 1.15;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      margin: 34px 0 12px;
+      font-size: 24px;
+      line-height: 1.25;
+    }
+
+    p {
+      margin: 12px 0;
+    }
+
+    .lead {
+      font-size: 18px;
+      color: #3f474d;
+    }
+
+    .callout {
+      margin: 22px 0;
+      padding: 18px 20px;
+      border-left: 5px solid var(--accent);
+      background: var(--accent-soft);
+      border-radius: 14px;
+    }
+
+    .callout strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+      margin: 22px 0;
+    }
+
+    .card {
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.72);
+    }
+
+    .card h4 {
+      margin: 0 0 8px;
+      font-size: 17px;
+    }
+
+    .card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 15px;
+    }
+
+    .system-diagram {
+      margin: 28px 0;
+      padding: 22px;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: #fffdfb;
+      overflow-x: auto;
+    }
+
+    .flow-row {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(150px, 1fr));
+      gap: 12px;
+      align-items: stretch;
+      min-width: 780px;
+    }
+
+    .flow-box {
+      position: relative;
+      padding: 16px;
+      border-radius: 14px;
+      border: 1px solid rgba(31, 36, 40, 0.12);
+      background: var(--blue);
+    }
+
+    .flow-box:nth-child(2) {
+      background: var(--green);
+    }
+
+    .flow-box:nth-child(3) {
+      background: #f3ead7;
+    }
+
+    .flow-box:nth-child(4) {
+      background: var(--rose);
+    }
+
+    .flow-box:nth-child(5) {
+      background: var(--accent-soft);
+    }
+
+    .flow-box:not(:last-child)::after {
+      content: "→";
+      position: absolute;
+      right: -13px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-weight: 900;
+      color: var(--accent);
+      z-index: 2;
+    }
+
+    .flow-box b {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 15px;
+    }
+
+    .flow-box span {
+      display: block;
+      color: #4b555d;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .phone-wrap {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 18px;
+      margin: 26px 0;
+    }
+
+    .phone {
+      min-height: 360px;
+      padding: 18px;
+      border: 10px solid #1f2428;
+      border-radius: 32px;
+      background: #fffefa;
+      box-shadow: 0 16px 30px rgba(31, 36, 40, 0.12);
+    }
+
+    .phone-top {
+      height: 22px;
+      width: 86px;
+      margin: 0 auto 18px;
+      border-radius: 999px;
+      background: #1f2428;
+      opacity: 0.18;
+    }
+
+    .screen-title {
+      font-weight: 900;
+      font-size: 18px;
+      line-height: 1.25;
+      margin-bottom: 14px;
+    }
+
+    .option {
+      padding: 12px;
+      margin: 9px 0;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fff;
+      font-size: 14px;
+    }
+
+    .option.selected {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+      font-weight: 800;
+    }
+
+    .button {
+      margin-top: 16px;
+      padding: 11px 14px;
+      border-radius: 999px;
+      background: var(--ink);
+      color: #fff;
+      text-align: center;
+      font-weight: 800;
+      font-size: 13px;
+    }
+
+    pre {
+      margin: 20px 0;
+      padding: 18px;
+      border-radius: 16px;
+      background: var(--code);
+      color: var(--code-ink);
+      overflow-x: auto;
+      white-space: pre-wrap;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .code-caption {
+      margin: 22px 0 -12px;
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .change-list {
+      display: grid;
+      gap: 12px;
+      margin: 22px 0;
+    }
+
+    .change-item {
+      display: grid;
+      grid-template-columns: 160px 1fr;
+      gap: 14px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.72);
+    }
+
+    .change-item b {
+      color: var(--accent);
+    }
+
+    .quiz {
+      display: grid;
+      gap: 18px;
+    }
+
+    .question {
+      padding: 20px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: #ffffff;
+      box-shadow: 0 10px 26px rgba(31, 36, 40, 0.05);
+    }
+
+    .question h3 {
+      margin-top: 0;
+      font-size: 20px;
+    }
+
+    .answers {
+      display: grid;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .answers button {
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: #fbfaf7;
+      color: var(--ink);
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .answers button:hover {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+    }
+
+    .answers button.correct {
+      border-color: #2f7d32;
+      background: #e2f2e1;
+    }
+
+    .answers button.incorrect {
+      border-color: #a93b3b;
+      background: #f4dfdf;
+    }
+
+    .feedback {
+      min-height: 28px;
+      margin-top: 12px;
+      color: #33413d;
+      font-weight: 700;
+    }
+
+    .small {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    footer {
+      margin-top: 70px;
+      padding-top: 24px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    @media (max-width: 820px) {
+      .hero,
+      .grid,
+      .phone-wrap {
+        grid-template-columns: 1fr;
+      }
+
+      .hero {
+        padding: 24px;
+      }
+
+      .change-item {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">feat/language-pairs 설명서</p>
+        <h1>영어회화 앱에서<br>언어쌍 학습 플랫폼으로</h1>
+        <p class="subtitle">
+          이 변경은 Curitalk가 더 이상 “한국어 사용자의 영어 연습”이라는 한 방향만 가정하지 않도록,
+          언어쌍을 프로필, 대화, 프롬프트, 검색, 모바일 UX의 공통 도메인으로 끌어올린 리팩터입니다.
+        </p>
+      </div>
+      <aside class="hero-card" aria-label="지원 언어쌍 요약">
+        <strong>초기 지원 언어쌍</strong>
+        <div class="pair-stack">
+          <div class="pair-pill"><span>한국어</span><span>→ English</span></div>
+          <div class="pair-pill"><span>English</span><span>→ 한국어</span></div>
+          <div class="pair-pill"><span>中文</span><span>→ English</span></div>
+          <div class="pair-pill"><span>中文</span><span>→ 한국어</span></div>
+        </div>
+        <p class="small">모델 라우팅은 아직 바꾸지 않고, 언어 컨텍스트만 모든 흐름에 전달합니다.</p>
+      </aside>
+    </header>
+
+    <div class="toc">
+      <p class="toc-title">목차</p>
+      <nav>
+        <a href="#background">배경</a>
+        <a href="#intuition">직관</a>
+        <a href="#code">코드 산책</a>
+        <a href="#edge-cases">중요한 경계</a>
+        <a href="#quiz">퀴즈</a>
+      </nav>
+    </div>
+
+    <section id="background">
+      <h2>배경: 왜 “언어쌍”이 도메인이 되어야 했나</h2>
+      <p class="lead">
+        기존 Curitalk는 구조상으로는 꽤 일반적인 대화 학습 앱처럼 보였습니다. 사용자는 로그인하고,
+        관심 주제를 검색해 Topic Prep 카드를 만들고, Free Chat이나 Roleplay로 대화를 시작합니다.
+        대화가 이어지는 동안 메시지는 저장되고, 문법 피드백은 비동기 작업으로 생성됩니다.
+      </p>
+      <p>
+        하지만 중요한 가정 하나가 코드 곳곳에 박혀 있었습니다. 프롬프트는 “English conversation assistant”라고 말했고,
+        문법 피드백은 영어의 주어-동사 일치와 질문 어순을 중심으로 검사했으며, 온보딩과 로그인 화면도 영어회화 앱으로 자신을 소개했습니다.
+        데이터 모델은 언어 중립처럼 보였지만 실제 행동은 영어 전용이었던 셈입니다.
+      </p>
+
+      <div class="callout">
+        <strong>핵심 문제</strong>
+        언어 설정이 단순 UI 텍스트라면, 사용자가 언어쌍을 바꾼 순간 기존 대화의 성격도 바뀔 수 있습니다.
+        반대로 언어 설정이 대화 생성 시점에 snapshot으로 저장되면, 오래된 영어 연습 대화와 새 한국어 연습 대화가 같은 계정 안에서 안전하게 공존합니다.
+      </div>
+
+      <h3>초보자를 위한 큰 그림</h3>
+      <p>
+        대화형 학습 앱에는 적어도 네 종류의 상태가 섞입니다.
+      </p>
+      <div class="grid">
+        <div class="card">
+          <h4>프로필 기본값</h4>
+          <p>새 대화를 만들 때 어떤 언어쌍을 기본으로 쓸지 결정합니다.</p>
+        </div>
+        <div class="card">
+          <h4>대화 snapshot</h4>
+          <p>대화가 시작된 순간의 언어쌍입니다. 이후 프로필이 바뀌어도 유지됩니다.</p>
+        </div>
+        <div class="card">
+          <h4>프롬프트 컨텍스트</h4>
+          <p>LLM에게 목표 언어, 피드백 언어, 모국어를 알려주는 실행-time 정보입니다.</p>
+        </div>
+      </div>
+      <p>
+        이 PR은 이 세 상태를 같은 이름과 같은 구조로 연결합니다. 이름은 <strong>LearningLanguageContext</strong>입니다.
+        필드는 단순합니다. <code>native_language</code>, <code>target_language</code>, <code>feedback_language</code>.
+        단순하지만, 이 세 필드가 흐르는 경로는 앱 전체를 통과합니다.
+      </p>
+
+      <div class="system-diagram">
+        <div class="flow-row">
+          <div class="flow-box">
+            <b>Onboarding</b>
+            <span>예: zh → ko 선택<br>feedback: zh</span>
+          </div>
+          <div class="flow-box">
+            <b>Profile API</b>
+            <span>PUT /auth/me/language-preferences</span>
+          </div>
+          <div class="flow-box">
+            <b>Profile Defaults</b>
+            <span>profiles.native_language<br>profiles.target_language</span>
+          </div>
+          <div class="flow-box">
+            <b>Conversation Snapshot</b>
+            <span>conversations에 시작 시점 언어 저장</span>
+          </div>
+          <div class="flow-box">
+            <b>Prompts</b>
+            <span>대화, 문법, 검색, Topic Prep이 snapshot 사용</span>
+          </div>
+        </div>
+      </div>
+
+      <h3>이 변경 바로 전의 좁은 배경</h3>
+      <p>
+        인증은 Supabase access token으로 FastAPI 보호 API를 호출하는 구조입니다.
+        <code>GET /api/auth/me</code>는 Supabase token을 검증하고 <code>profiles</code> row를 만들거나 갱신합니다.
+        대화는 <code>ConversationService</code>에서 생성되고, 메시지 저장 후 LLM 응답을 만들며,
+        문법 피드백은 백그라운드 태스크로 생성됩니다.
+      </p>
+      <p>
+        모바일 앱은 <code>Splash → Onboarding → Login → Home</code> 순서로 이동합니다.
+        중요한 제약은 온보딩이 로그인보다 먼저 온다는 점입니다. 즉 사용자가 언어쌍을 고르는 순간에는 아직 서버에 저장할 사용자 ID가 없습니다.
+        이 PR은 그 간극을 “pending local language context”로 메웁니다.
+      </p>
+    </section>
+
+    <section id="intuition">
+      <h2>직관: 지도는 프로필에, 여권 도장은 대화에</h2>
+      <p class="lead">
+        이 리팩터의 가장 좋은 비유는 여행입니다. 프로필의 언어쌍은 앞으로 어디로 가고 싶은지 적어 둔 지도이고,
+        conversation snapshot은 특정 여행을 시작할 때 찍힌 여권 도장입니다.
+      </p>
+      <p>
+        사용자가 오늘은 영어를 연습하다가 내일 한국어를 연습하고 싶어질 수 있습니다.
+        지도는 바뀌어도 됩니다. 그러나 어제 시작한 영어 대화의 여권 도장이 갑자기 한국어로 바뀌면 곤란합니다.
+        그 대화의 맥락, 문법 피드백, 검색 준비 카드, 음성 turn은 모두 어제의 언어쌍을 기준으로 해석되어야 합니다.
+      </p>
+
+      <div class="phone-wrap" aria-label="모바일 UX 간단 그림">
+        <div class="phone">
+          <div class="phone-top"></div>
+          <div class="screen-title">What do you want<br>to practice?</div>
+          <div class="option selected">English → Korean<br><span class="small">Feedback in English</span></div>
+          <div class="option">Chinese → Korean<br><span class="small">用中文接收反馈</span></div>
+          <div class="option">Korean → English<br><span class="small">한국어로 피드백을 받아요</span></div>
+          <div class="button">CONTINUE</div>
+        </div>
+        <div class="phone">
+          <div class="phone-top"></div>
+          <div class="screen-title">CURITALK</div>
+          <div class="option selected">English → Korean</div>
+          <p class="small">Hi, Learner</p>
+          <div class="button">START CONVERSATION</div>
+        </div>
+        <div class="phone">
+          <div class="phone-top"></div>
+          <div class="screen-title">Account</div>
+          <div class="option">LOG OUT</div>
+          <div class="option selected">Language Pair<br>English → Korean</div>
+          <div class="button">SAVE LANGUAGE PAIR</div>
+        </div>
+      </div>
+
+      <h3>장난감 예시</h3>
+      <p>
+        사용자가 중국어 화자이고 한국어를 배우기로 했다고 합시다. 온보딩에서 선택한 값은 이렇게 생깁니다.
+      </p>
+      <p class="code-caption">언어 컨텍스트 예시</p>
+      <pre>{
+  "native_language": "zh",
+  "target_language": "ko",
+  "feedback_language": "zh"
+}</pre>
+      <p>
+        이 값이 프로필에 저장되면 새 대화는 한국어 연습 대화로 시작합니다.
+        그러면 LLM에게 가는 시스템 프롬프트는 “한국어로 대화하라”고 말하고, 문법 피드백은 조사, 어미, 띄어쓰기, 높임말 같은 한국어 문제를 검사합니다.
+        설명은 중국어로 받을 수 있습니다. 여기서 흥미로운 점은 모델 공급자는 아직 바뀌지 않았다는 것입니다.
+        모델을 바꾸지 않고도 “무엇을 해야 하는지”를 정확히 전달하는 기반을 먼저 만든 것입니다.
+      </p>
+    </section>
+
+    <section id="code">
+      <h2>코드 산책: 바뀐 부분을 흐름대로 읽기</h2>
+      <p class="lead">
+        diff는 50개가 넘는 파일을 건드리지만, 구조는 비교적 또렷합니다.
+        먼저 공통 계약을 만들고, 저장 모델에 붙이고, API로 노출하고, 새 대화 생성 시 snapshot을 남긴 뒤,
+        프롬프트와 모바일 UX가 그 값을 사용하게 했습니다.
+      </p>
+
+      <div class="change-list">
+        <div class="change-item">
+          <b>공통 계약</b>
+          <span><code>backend/shared/language.py</code>와 Flutter <code>features/language</code>가 같은 개념을 정의합니다.</span>
+        </div>
+        <div class="change-item">
+          <b>저장소</b>
+          <span><code>profiles</code>에는 기본값, <code>conversations</code>에는 시작 시점 snapshot을 저장합니다.</span>
+        </div>
+        <div class="change-item">
+          <b>API</b>
+          <span><code>/api/auth/me/language-preferences</code>를 추가하고 <code>UserProfile.language</code>를 반환합니다.</span>
+        </div>
+        <div class="change-item">
+          <b>실행 흐름</b>
+          <span>conversation, grammar, search, topic prep prompt가 언어 컨텍스트를 받아 target/feedback 언어를 반영합니다.</span>
+        </div>
+        <div class="change-item">
+          <b>모바일</b>
+          <span>온보딩에서 언어쌍을 고르고, 로그인 후 서버에 sync하고, Home/Profile에서 보고 바꿀 수 있습니다.</span>
+        </div>
+      </div>
+
+      <h3>1. 백엔드: 지원 언어쌍을 닫힌 집합으로 정의</h3>
+      <p>
+        가장 먼저 생긴 것은 <code>LearningLanguageContext</code>입니다.
+        여기서 중요한 결정은 “언어 코드를 문자열로 대충 통과시키지 않는다”는 점입니다.
+        <code>SUPPORTED_LANGUAGE_PAIRS</code>가 MVP에서 허용되는 네 가지 쌍을 닫힌 집합으로 갖고,
+        Pydantic validator가 나머지를 거부합니다.
+      </p>
+      <pre>SUPPORTED_LANGUAGE_PAIRS = frozenset(
+    {
+        (LanguageCode.KOREAN, LanguageCode.ENGLISH),
+        (LanguageCode.ENGLISH, LanguageCode.KOREAN),
+        (LanguageCode.CHINESE, LanguageCode.ENGLISH),
+        (LanguageCode.CHINESE, LanguageCode.KOREAN),
+    }
+)</pre>
+      <p>
+        이 작은 집합은 나중에 큰 안전장치가 됩니다. 예를 들어 UI가 실수로 <code>en → zh</code>를 보내도,
+        백엔드 prompt builder까지 흘러가지 않고 API schema 단계에서 막힙니다.
+      </p>
+
+      <h3>2. 저장 모델: profile default와 conversation snapshot 분리</h3>
+      <p>
+        <code>ProfileModel</code>과 <code>ConversationModel</code> 모두 세 language column을 가집니다.
+        겉보기에는 중복처럼 보일 수 있지만, 의미가 다릅니다. 프로필은 앞으로 만들 대화의 기본값이고,
+        conversation은 이미 시작된 대화의 계약입니다.
+      </p>
+      <pre>class ProfileModel(Base):
+    native_language = Column(String(8), default="ko", nullable=False)
+    target_language = Column(String(8), default="en", nullable=False)
+    feedback_language = Column(String(8), default="ko", nullable=False)
+
+    @property
+    def language(self) -> LearningLanguageContext:
+        return language_context_from_values(...)</pre>
+      <p>
+        새 Alembic migration은 두 테이블에 column을 추가합니다.
+        또한 이전 profile migration은 SQLite fresh DB에서 foreign key constraint 변경이 실패할 수 있었기 때문에,
+        batch mode로 수정했습니다. 개발 기본 DB가 SQLite인 프로젝트에서는 이런 부분이 꽤 현실적인 품질 문제입니다.
+      </p>
+
+      <h3>3. Auth API: 언어 선호는 profile boundary에서만 쓴다</h3>
+      <p>
+        새 endpoint는 좁습니다. 현재 사용자 자신의 언어 선호만 읽고 바꿉니다.
+        email, 이름, active 상태 같은 다른 profile 필드를 같이 업데이트하지 않습니다.
+      </p>
+      <pre>@router.get("/me/language-preferences")
+def get_language_preferences(...):
+    preferences = service.get_language_preferences(current_user.id)
+    return SuccessResponse(data=preferences)
+
+@router.put("/me/language-preferences")
+def update_language_preferences(request, ...):
+    preferences = service.update_language_preferences(current_user.id, request)
+    return SuccessResponse(data=preferences)</pre>
+      <p>
+        이 구조 덕분에 언어 설정이 일급 계약이 되지만, 별도 “language domain”이 auth table을 직접 수정하는 식의 도메인 결합은 피합니다.
+      </p>
+
+      <h3>4. Conversation: 생성 시점에 snapshot 저장</h3>
+      <p>
+        Free Chat과 Roleplay 시작 시 <code>current_user.language</code>가 service로 전달되고,
+        conversation row에 세 값이 저장됩니다. 이어 말하기는 프로필을 다시 보지 않고 <code>conversation.language</code>를 읽습니다.
+      </p>
+      <pre>conversation = ConversationModel(
+    ...,
+    native_language=language_context.native_language.value,
+    target_language=language_context.target_language.value,
+    feedback_language=language_context.feedback_language.value,
+)
+
+system_prompt = self.build_system_prompt(
+    ...,
+    language_context=language_context,
+)</pre>
+      <p>
+        이것이 이번 PR의 중심축입니다. 사용자가 profile을 <code>ko → en</code>에서 <code>en → ko</code>로 바꿔도,
+        이전 conversation은 자신이 태어난 언어쌍을 계속 들고 있습니다.
+      </p>
+
+      <h3>5. Grammar: 영어 문법 검사에서 목표 언어 검사로</h3>
+      <p>
+        문법 피드백은 가장 조심스러운 부분입니다. 영어 문법 규칙을 한국어에 적용하면 이상한 피드백이 나옵니다.
+        그래서 target이 한국어일 때는 별도 prompt branch가 생겼습니다.
+      </p>
+      <pre>if language_context.target_language.value == "ko":
+    return f"""Analyze the following Korean response for grammar and naturalness issues.
+...
+2. Check Korean-specific issues:
+   - particles such as 은/는, 이/가, 을/를, 에/에서
+   - verb endings and tense/aspect markers
+   - spacing and spelling
+   - honorific and formality fit
+...
+4. Explain issues in {feedback_name}."""</pre>
+      <p>
+        즉 “교정 문장은 목표 언어로”, “설명은 feedback 언어로”라는 분리가 생겼습니다.
+        이것은 중국어 화자가 한국어를 배울 때 특히 중요합니다.
+      </p>
+
+      <h3>6. Search와 Topic Prep: 검색 카드도 언어쌍을 알아야 한다</h3>
+      <p>
+        Topic Prep은 단순 번역 문제가 아닙니다. 검색 region, 검색 실패 안내, 예시 topic, 요약 언어,
+        첫 질문 언어가 모두 학습 경험을 좌우합니다. 이 PR은 search pipeline 전반에 language context를 통과시킵니다.
+      </p>
+      <pre>return TopicPrepResult(
+    ready=True,
+    language=language_context,
+    card=card,
+    quality=card.quality,
+)</pre>
+      <p>
+        검색 region은 아직 거칠지만 의도는 분명합니다. 중국어 사용자는 <code>cn-zh</code>,
+        영어 목표 언어는 <code>us-en</code>, 한국어 목표 언어는 <code>kr-kr</code> 힌트를 사용합니다.
+        모델 라우팅은 후속 과제로 남겼지만, 나중에 benchmark를 붙일 수 있도록 언어 정보가 이미 흐르고 있습니다.
+      </p>
+
+      <h3>7. Flutter: 로그인 전 선택을 로그인 후 저장하기</h3>
+      <p>
+        모바일에서 가장 흥미로운 부분은 순서 문제입니다. 온보딩은 로그인 전이고, 서버 저장은 로그인 후입니다.
+        그래서 <code>OnboardingStorage</code>가 pending language context를 secure storage에 저장합니다.
+        로그인 또는 세션 복원에 성공하면 <code>AuthController</code>가 pending 값을 서버로 동기화하고 삭제합니다.
+      </p>
+      <pre>Future&lt;void&gt; _syncPendingLanguageContext() async {
+  final LearningLanguageContext? pending =
+      await _onboardingStorage.readPendingLanguageContext();
+  if (pending == null) {
+    return;
+  }
+  await _languagePreferencesRepository.updateLanguagePreferences(pending);
+  await _onboardingStorage.clearPendingLanguageContext();
+}</pre>
+      <p>
+        Home header는 현재 active pair를 badge로 보여주고, Account sheet에서는 나중에 언어쌍을 바꿀 수 있습니다.
+        저장 후에는 auth session을 다시 복원해서 <code>UserProfile.language</code>가 최신값으로 hydration됩니다.
+      </p>
+    </section>
+
+    <section id="edge-cases">
+      <h2>중요한 경계와 의도적으로 미룬 것들</h2>
+      <p class="lead">
+        좋은 리팩터는 무엇을 바꿨는지만큼 무엇을 바꾸지 않았는지도 선명해야 합니다.
+        이 PR은 언어쌍의 “길”을 만들었지만, 모든 나라의 모든 학습 경험을 한 번에 완성하려 하지는 않습니다.
+      </p>
+
+      <div class="grid">
+        <div class="card">
+          <h4>기존 데이터 보존 제외</h4>
+          <p>사용자 결정에 따라 생산 데이터 backfill choreography는 만들지 않았습니다. 대신 fresh/reset DB와 기본값을 검증했습니다.</p>
+        </div>
+        <div class="card">
+          <h4>모델 라우팅 후속</h4>
+          <p>DeepSeek/Qwen 같은 pair-specific provider 선택은 benchmark 이후로 미뤘습니다.</p>
+        </div>
+        <div class="card">
+          <h4>전체 i18n 아님</h4>
+          <p>중국어 UX는 언어쌍 선택과 회복 안내 등 핵심 표면으로 제한했습니다.</p>
+        </div>
+      </div>
+
+      <div class="callout">
+        <strong>검증된 것</strong>
+        백엔드 focused test 41개, Flutter focused test 22개, Flutter analyze, Alembic fresh SQLite upgrade, 그리고 diff whitespace check가 통과했습니다.
+        특히 fresh SQLite migration 실패를 수동 리뷰 중 발견해 기존 migration을 batch mode로 보정했습니다.
+      </div>
+    </section>
+
+    <section id="quiz">
+      <h2>퀴즈: 정말 이해했는지 확인하기</h2>
+      <p class="lead">
+        아래 문제는 암기용이 아니라 구조 이해를 확인하기 위한 것입니다. 답을 누르면 바로 피드백이 나옵니다.
+      </p>
+
+      <div class="quiz">
+        <div class="question" data-answer="b" data-feedback="맞습니다. profile은 앞으로 만들 대화의 기본값이고, conversation snapshot은 이미 시작된 대화의 언어 계약입니다.">
+          <h3>1. 왜 언어 설정을 profile에만 저장하지 않고 conversation에도 저장할까요?</h3>
+          <div class="answers">
+            <button data-choice="a">DB query를 줄이기 위해서만이다.</button>
+            <button data-choice="b">사용자가 나중에 프로필 언어쌍을 바꿔도 기존 대화의 언어 행동을 유지하기 위해서다.</button>
+            <button data-choice="c">모바일에서 언어쌍 selector를 더 쉽게 그리기 위해서다.</button>
+            <button data-choice="d">Supabase token에 언어쌍을 넣기 위해서다.</button>
+          </div>
+          <div class="feedback"></div>
+        </div>
+
+        <div class="question" data-answer="c" data-feedback="맞습니다. MVP는 ko→en, en→ko, zh→en, zh→ko 네 가지로 닫혀 있고 en→zh는 아직 허용하지 않습니다.">
+          <h3>2. 이번 PR에서 지원하지 않는 언어쌍은 무엇인가요?</h3>
+          <div class="answers">
+            <button data-choice="a">ko → en</button>
+            <button data-choice="b">en → ko</button>
+            <button data-choice="c">en → zh</button>
+            <button data-choice="d">zh → ko</button>
+          </div>
+          <div class="feedback"></div>
+        </div>
+
+        <div class="question" data-answer="a" data-feedback="맞습니다. 로그인 전 선택은 pending local state로 보관하고, 인증이 생긴 뒤 서버 프로필에 저장합니다.">
+          <h3>3. 온보딩이 로그인보다 먼저 실행되는 문제는 어떻게 해결했나요?</h3>
+          <div class="answers">
+            <button data-choice="a">선택한 언어쌍을 secure storage에 pending 값으로 저장하고, 로그인/세션 복원 후 서버에 동기화한다.</button>
+            <button data-choice="b">온보딩을 로그인 뒤로 옮긴다.</button>
+            <button data-choice="c">언어쌍을 Google profile locale에서만 추론한다.</button>
+            <button data-choice="d">첫 대화를 시작할 때마다 사용자가 다시 고르게 한다.</button>
+          </div>
+          <div class="feedback"></div>
+        </div>
+
+        <div class="question" data-answer="d" data-feedback="맞습니다. 한국어 target에서는 영어 문법 규칙을 그대로 적용하지 않고 한국어 고유의 조사, 어미, 띄어쓰기, 높임말 등을 봅니다.">
+          <h3>4. 한국어 target 문법 피드백 prompt에서 특별히 검사하는 것은 무엇인가요?</h3>
+          <div class="answers">
+            <button data-choice="a">영어의 subject-verb agreement만 검사한다.</button>
+            <button data-choice="b">검색 결과의 freshness만 검사한다.</button>
+            <button data-choice="c">OAuth provider가 Google인지 검사한다.</button>
+            <button data-choice="d">조사, 어미, 띄어쓰기, 높임말, 자연스러움을 검사한다.</button>
+          </div>
+          <div class="feedback"></div>
+        </div>
+
+        <div class="question" data-answer="b" data-feedback="맞습니다. 이번 변경은 언어 컨텍스트의 길을 깔고, pair-specific 모델 선택은 benchmark 이후로 남겼습니다.">
+          <h3>5. 이번 PR에서 의도적으로 후속 과제로 남긴 것은 무엇인가요?</h3>
+          <div class="answers">
+            <button data-choice="a">프로필 언어 선호 API</button>
+            <button data-choice="b">언어쌍별 모델 라우팅과 provider benchmark</button>
+            <button data-choice="c">conversation language snapshot</button>
+            <button data-choice="d">Flutter 온보딩의 언어쌍 selector</button>
+          </div>
+          <div class="feedback"></div>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      생성일: 2026-07-21 · 기준 diff: <code>feat/language-pairs</code> vs <code>main</code>.
+      이 문서는 코드 리뷰 대체물이 아니라, 변경의 의도와 구조를 빠르게 이해하기 위한 해설입니다.
+    </footer>
+  </main>
+
+  <script>
+    document.querySelectorAll(".question").forEach((question) => {
+      const answer = question.dataset.answer;
+      const explanation = question.dataset.feedback;
+      const feedback = question.querySelector(".feedback");
+      question.querySelectorAll("button").forEach((button) => {
+        button.addEventListener("click", () => {
+          question.querySelectorAll("button").forEach((other) => {
+            other.classList.remove("correct", "incorrect");
+          });
+          const choice = button.dataset.choice;
+          const isCorrect = choice === answer;
+          button.classList.add(isCorrect ? "correct" : "incorrect");
+          if (!isCorrect) {
+            const correctButton = question.querySelector(`button[data-choice="${answer}"]`);
+            correctButton.classList.add("correct");
+          }
+          feedback.textContent = isCorrect
+            ? explanation
+            : `아직 아닙니다. 초록색으로 표시된 답을 기준으로 다시 읽어보세요. ${explanation}`;
+        });
+      });
+    });
+  </script>
+</body>
+</html>

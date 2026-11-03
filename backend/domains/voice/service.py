@@ -2,13 +2,16 @@
 Voice Service Layer
 """
 import base64
+import logging
 from pathlib import Path
 from typing import Protocol
 
+import httpx
 from fastapi import UploadFile
 
 from config import get_settings
 from domains.voice.openai_provider import OpenAIVoiceProvider
+from domains.voice.openrouter_provider import OpenRouterVoiceProvider
 from domains.voice.provider import VoiceProvider
 from domains.voice.schemas import (
     VoiceAudioResponse,
@@ -16,6 +19,8 @@ from domains.voice.schemas import (
     VoiceTranscriptionResult,
 )
 from shared.exceptions import AppException, ValidationException
+from shared.latency import latency_span
+from shared.logging_config import log_event
 
 settings = get_settings()
 
@@ -34,6 +39,7 @@ class UploadedAudio(Protocol):
 class VoiceService:
     """음성 입력/응답 처리 서비스"""
 
+    minimum_audio_bytes = 1024
     supported_content_types = {
         "audio/flac",
         "audio/mpeg",
@@ -43,13 +49,17 @@ class VoiceService:
         "audio/ogg",
         "audio/wav",
         "audio/webm",
+        "audio/x-m4a",
         "video/mp4",
     }
     supported_extensions = {".flac", ".mp3", ".mp4", ".mpeg", ".mpga", ".m4a", ".ogg", ".wav", ".webm"}
     octet_stream_content_type = "application/octet-stream"
 
-    def __init__(self, provider: VoiceProvider | None = None):
+    def __init__(
+        self, provider: VoiceProvider | None = None, *, http_client: httpx.AsyncClient | None = None
+    ):
         self._provider = provider
+        self.http_client = http_client
 
     @property
     def provider(self) -> VoiceProvider:
@@ -59,11 +69,19 @@ class VoiceService:
         return self._provider
 
     def _create_provider(self) -> VoiceProvider:
-        if settings.stt_provider != "openai" or settings.tts_provider != "openai":
+        if settings.stt_provider != settings.tts_provider:
+            raise AppException("STT_PROVIDER and TTS_PROVIDER must use the same provider.")
+        if self.http_client is None:
+            raise RuntimeError("Voice providers require an app-owned HTTP client")
+        if settings.stt_provider == "openai":
+            return OpenAIVoiceProvider(self.http_client)
+        if settings.stt_provider == "openrouter":
+            return OpenRouterVoiceProvider(self.http_client)
+        if settings.tts_provider not in {"openai", "openrouter"}:
             raise AppException(
-                "Only openai is supported for STT_PROVIDER and TTS_PROVIDER in this version."
+                "Only openai and openrouter are supported for STT_PROVIDER and TTS_PROVIDER."
             )
-        return OpenAIVoiceProvider()
+        raise AppException("Unsupported voice provider configuration.")
 
     @staticmethod
     def normalize_text(value: str | None) -> str | None:
@@ -104,17 +122,31 @@ class VoiceService:
         self._validate_audio_metadata(filename, content_type)
 
         audio_bytes = await self._read_limited_upload(audio_file)
-        self._validate_audio_size(audio_bytes)
-        self._validate_audio_signature(filename, audio_bytes)
-
-        result = await self.provider.transcribe_audio(
+        self._validate_audio_size(
+            audio_bytes,
             filename=filename,
             content_type=content_type,
-            audio_bytes=audio_bytes,
         )
+        self._validate_audio_signature(filename, audio_bytes)
+
+        provider = self.provider
+        provider_name = self._provider_name(provider)
+        log_event("voice.upload_validated", provider=provider_name, input_bytes=len(audio_bytes))
+        with latency_span(
+            "stt", provider=provider_name, model=settings.stt_model, input_bytes=len(audio_bytes)
+        ):
+            result = await provider.transcribe_audio(
+                filename=filename,
+                content_type=content_type,
+                audio_bytes=audio_bytes,
+            )
         transcript = self.normalize_text(result.text)
         if not transcript:
+            log_event("voice.transcription_empty", level=logging.WARNING,
+                      provider=provider_name, input_bytes=len(audio_bytes))
             raise ValidationException("STT returned an empty transcript.")
+        log_event("voice.transcription_completed", provider=provider_name,
+                  input_bytes=len(audio_bytes), output_chars=len(transcript))
         return VoiceTranscriptionResult(text=transcript)
 
     async def synthesize_response(self, text: str) -> VoiceAudioResponse:
@@ -128,18 +160,21 @@ class VoiceService:
                 f"TTS input text exceeds {settings.tts_max_input_chars} characters."
             )
 
-        result = await self.provider.synthesize_speech(text=normalized_text)
+        with latency_span("tts", model=settings.tts_model, input_chars=len(normalized_text)) as timing:
+            result = await self.provider.synthesize_speech(text=normalized_text)
+            timing["output_bytes"] = len(result.audio_bytes)
         max_output_bytes = settings.tts_max_output_mb * 1024 * 1024
         if len(result.audio_bytes) > max_output_bytes:
             raise ValidationException(
                 f"TTS output exceeds {settings.tts_max_output_mb} MB.",
                 details={"max_output_mb": settings.tts_max_output_mb},
             )
-        return VoiceAudioResponse(
-            content_type=result.content_type,
-            base64=base64.b64encode(result.audio_bytes).decode("ascii"),
-            format=result.format,
-        )
+        with latency_span("audio_encode"):
+            return VoiceAudioResponse(
+                content_type=result.content_type,
+                base64=base64.b64encode(result.audio_bytes).decode("ascii"),
+                format=result.format,
+            )
 
     def _validate_audio_metadata(self, filename: str, content_type: str) -> None:
         extension = Path(filename).suffix.lower()
@@ -181,9 +216,25 @@ class VoiceService:
 
         return b"".join(chunks)
 
-    def _validate_audio_size(self, audio_bytes: bytes) -> None:
+    def _validate_audio_size(
+        self,
+        audio_bytes: bytes,
+        *,
+        filename: str,
+        content_type: str,
+    ) -> None:
         if not audio_bytes:
             raise ValidationException("audio_file is empty.")
+        if len(audio_bytes) < self.minimum_audio_bytes:
+            log_event("voice.upload_rejected", level=logging.WARNING,
+                      error_code="AUDIO_TOO_SMALL", input_bytes=len(audio_bytes))
+            raise ValidationException(
+                "audio_file is too small.",
+                details={
+                    "byte_length": len(audio_bytes),
+                    "minimum_byte_length": self.minimum_audio_bytes,
+                },
+            )
         max_bytes = settings.voice_max_upload_mb * 1024 * 1024
         if len(audio_bytes) > max_bytes:
             raise ValidationException(
@@ -216,3 +267,9 @@ class VoiceService:
                 "Invalid audio file signature.",
                 details={"extension": extension},
             )
+
+    def _provider_name(self, provider: VoiceProvider) -> str:
+        get_provider_name = getattr(provider, "get_provider_name", None)
+        if callable(get_provider_name):
+            return str(get_provider_name())
+        return provider.__class__.__name__

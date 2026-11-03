@@ -1,4 +1,5 @@
 import 'package:curitalk/app/theme/tokens/tokens.dart';
+import 'package:curitalk/core/copy/copy.dart';
 import 'package:curitalk/core/widgets/widgets.dart';
 import 'package:curitalk/features/roleplay_setup/domain/roleplay_scenario.dart';
 import 'package:flutter/material.dart';
@@ -24,7 +25,9 @@ class RoleplayScenarioCard extends StatelessWidget {
       onTap: onTap,
       icon: Icon(scenario.icon),
       surfaceColor: selected ? AppPalette.blockCream : null,
-      semanticLabel: 'Roleplay scenario: ${scenario.title}',
+      semanticLabel: AppCopy.of(
+        context,
+      ).roleplayScenarioSemanticLabel(scenario.title),
     );
   }
 }

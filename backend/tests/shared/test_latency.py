@@ -1,0 +1,266 @@
+import asyncio
+import json
+import sqlite3
+import time
+from io import BytesIO
+from threading import Event, Thread
+
+import httpx
+import pytest
+from fastapi import FastAPI
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import Session
+from starlette.responses import JSONResponse
+
+from shared.db_latency import DbRequestStats, TimedQueuePool, db_request_stats, install_db_latency
+from shared.latency import LatencyMiddleware, latency_span
+from domains.voice.service import VoiceService
+from domains.voice.schemas import VoiceSynthesisResult, VoiceTranscriptionResult
+from starlette.datastructures import Headers, UploadFile
+
+
+def events(capsys):
+    return [
+        json.loads(line)
+        for line in capsys.readouterr().out.splitlines()
+        if line.startswith("{")
+    ]
+
+
+@pytest.mark.asyncio
+async def test_concurrent_requests_keep_trace_and_body_private(capsys):
+    app = FastAPI()
+    app.add_middleware(LatencyMiddleware)
+
+    @app.post("/api/conversations/start/free-chat/")
+    async def turn():
+        with latency_span("llm"):
+            await asyncio.sleep(0)
+        return {"response": "private transcript"}
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="http://test") as client:
+        responses = await asyncio.gather(*[
+            client.post("/api/conversations/start/free-chat/", headers={"X-Request-ID": trace})
+            for trace in ("a" * 32, "b" * 32)
+        ])
+
+    rows = events(capsys)
+    assert [response.headers["x-request-id"] for response in responses] == ["a" * 32, "b" * 32]
+    for trace in ("a" * 32, "b" * 32):
+        matching = [row for row in rows if row["trace_id"] == trace]
+        assert {row.get("stage") for row in matching} >= {"llm", "server_total"}
+        assert sum("method" in row for row in matching) == 1
+        assert len({row["request_id"] for row in matching}) == 1
+        assert all(row["duration_ms"] >= 0 for row in matching)
+    assert "private transcript" not in json.dumps(rows)
+
+
+@pytest.mark.asyncio
+async def test_failed_span_preserves_exception_and_http_status(capsys):
+    app = FastAPI()
+    app.add_middleware(LatencyMiddleware)
+
+    @app.post("/api/conversations/start/roleplay/")
+    async def turn():
+        try:
+            with latency_span("tts"):
+                raise ValueError("secret provider payload")
+        except ValueError:
+            return JSONResponse({"error": "unavailable"}, status_code=502)
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="http://test") as client:
+        response = await client.post("/api/conversations/start/roleplay/", headers={"X-Request-ID": "bad input"})
+    rows = events(capsys)
+    assert response.status_code == 502
+    assert len(response.headers["x-request-id"]) == 32
+    assert next(row for row in rows if row.get("stage") == "tts")["status"] == "error"
+    assert next(row for row in rows if "method" in row)["status_code"] == 502
+    assert "secret provider payload" not in json.dumps(rows)
+    with latency_span("outside_request"):
+        pass
+    assert events(capsys) == []
+
+
+@pytest.mark.asyncio
+async def test_health_requests_are_instrumented(capsys):
+    app = FastAPI()
+    app.add_middleware(LatencyMiddleware)
+
+    @app.get("/health")
+    async def health():
+        return {"ok": True}
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="http://test") as client:
+        response = await client.get("/health")
+    assert len(response.headers["x-request-id"]) == 32
+    rows = events(capsys)
+    assert len(rows) == 1
+    assert rows[0]["method"] == "GET"
+    assert rows[0]["route"] == "/health"
+
+
+@pytest.mark.asyncio
+async def test_get_records_db_and_response_timeline_without_query_values(capsys):
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=TimedQueuePool)
+    install_db_latency(engine)
+    app = FastAPI()
+    app.add_middleware(LatencyMiddleware)
+
+    @app.get("/api/items/{item_id}/")
+    async def item(item_id: str):
+        with latency_span("handler", operation="item_lookup"):
+            with Session(engine) as db:
+                db.execute(text("SELECT :private_value"), {"private_value": "secret-sql-value"}).scalar_one()
+                db.commit()
+        return {"ok": True}
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="http://test") as client:
+        response = await client.get("/api/items/private-id/?token=private-token")
+
+    assert response.status_code == 200
+    rows = events(capsys)
+    completed = next(row for row in rows if row.get("method") == "GET")
+    handler = next(row for row in rows if row.get("stage") == "handler")
+    assert completed["db_query_count"] == 1
+    assert completed["db_checkout_count"] >= 1
+    assert completed["db_acquire_total_ms"] >= 0
+    assert completed["db_connect_count"] == 1
+    assert completed["db_pool_wait_count"] == 0
+    assert completed["db_acquire_other_ms"] >= 0
+    assert completed["db_commit_count"] == 1
+    assert completed["response_start_ms"] <= completed["response_body_ms"]
+    assert handler["start_offset_ms"] <= completed["response_start_ms"]
+    assert handler["operation"] == "item_lookup"
+    assert "secret-sql-value" not in json.dumps(rows)
+    assert "private-token" not in json.dumps(rows)
+    assert "private-id" not in json.dumps(rows)
+
+
+def test_pool_wait_and_new_connection_have_separate_timings():
+    def creator():
+        time.sleep(0.03)
+        return sqlite3.connect(":memory:", check_same_thread=False)
+
+    engine = create_engine("sqlite://", creator=creator, poolclass=TimedQueuePool,
+                           pool_size=1, max_overflow=0)
+    new_connection = DbRequestStats()
+    token = db_request_stats.set(new_connection)
+    try:
+        with engine.connect():
+            pass
+    finally:
+        db_request_stats.reset(token)
+    created = new_connection.finish()
+    assert created["db_connect_count"] == 1
+    assert created["db_connect_total_ms"] >= 20
+    assert created["db_pool_wait_count"] == 0
+    assert created["db_acquire_total_ms"] >= created["db_connect_total_ms"]
+
+    held = engine.connect()
+    waiting = Event()
+    waited = DbRequestStats()
+
+    def checkout_when_available():
+        worker_token = db_request_stats.set(waited)
+        try:
+            waiting.set()
+            with engine.connect():
+                pass
+        finally:
+            db_request_stats.reset(worker_token)
+
+    worker = Thread(target=checkout_when_available)
+    worker.start()
+    assert waiting.wait(timeout=1)
+    time.sleep(0.05)
+    held.close()
+    worker.join(timeout=1)
+    assert not worker.is_alive()
+    reused = waited.finish()
+    assert reused["db_pool_wait_count"] == 1
+    assert reused["db_pool_wait_total_ms"] >= 30
+    assert reused["db_connect_count"] == 0
+    assert reused["db_acquire_total_ms"] >= reused["db_pool_wait_total_ms"]
+    engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_retry_and_route_template_hide_path_and_query(capsys):
+    app = FastAPI()
+    app.add_middleware(LatencyMiddleware)
+
+    @app.get("/api/items/{item_id}/")
+    async def item(item_id: str):
+        return {"item_id": item_id}
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="http://test") as client:
+        responses = [
+            await client.get(
+                "/api/items/private-item/?token=secret-query",
+                headers={"X-Request-ID": "a" * 32, "X-Proxy-Request-ID": "b" * 32},
+            )
+            for _ in range(2)
+        ]
+    rows = [row for row in events(capsys) if "method" in row]
+    assert [response.headers["x-request-id"] for response in responses] == ["a" * 32] * 2
+    assert len({row["request_id"] for row in rows}) == 2
+    assert {row["route"] for row in rows} == {"/api/items/{item_id}/"}
+    assert all(row["proxy_request_id"] == "b" * 32 for row in rows)
+    assert "secret-query" not in json.dumps(rows)
+    assert "private-item" not in json.dumps(rows)
+
+
+@pytest.mark.asyncio
+async def test_voice_service_spans_reach_request_context(capsys):
+    class Provider:
+        def get_provider_name(self):
+            return "fake"
+
+        async def transcribe_audio(self, **kwargs):
+            return VoiceTranscriptionResult(text="private words")
+
+        async def synthesize_speech(self, **kwargs):
+            return VoiceSynthesisResult(audio_bytes=b"audio", content_type="audio/mpeg", format="mp3")
+
+    voice = VoiceService(provider=Provider())
+    app = FastAPI()
+    app.add_middleware(LatencyMiddleware)
+
+    @app.post("/api/conversations/start/free-chat/")
+    async def turn():
+        upload = UploadFile(
+            BytesIO(b"RIFF\x00\x00\x00\x00WAVEfmt " + b"x" * 2048),
+            filename="test.wav", headers=Headers({"content-type": "audio/wav"}),
+        )
+        try:
+            _, text = await voice.resolve_input_text(text=None, audio_file=upload)
+            audio = await voice.synthesize_response(text)
+            return audio.model_dump()
+        finally:
+            await upload.close()
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="http://test") as client:
+        response = await client.post("/api/conversations/start/free-chat/")
+    assert response.status_code == 200
+    rows = events(capsys)
+    assert {row["stage"] for row in rows if "stage" in row} == {"stt", "tts", "audio_encode", "server_total"}
+    assert sum("method" in row for row in rows) == 1
+    assert len({row["trace_id"] for row in rows}) == 1
+    assert "private words" not in json.dumps(rows)
+
+
+@pytest.mark.asyncio
+async def test_cancellation_is_preserved_and_context_is_reset(capsys):
+    async def cancelled_app(scope, receive, send):
+        with latency_span("llm"):
+            raise asyncio.CancelledError()
+
+    app = LatencyMiddleware(cancelled_app)
+    with pytest.raises(asyncio.CancelledError):
+        await app({"type": "http", "method": "POST", "path": "/api/conversations/id/turn/"}, None, None)
+    rows = events(capsys)
+    assert all(row["status"] == "error" for row in rows if "stage" in row)
+    assert rows[-1]["response_complete"] is False
+    with latency_span("outside"):
+        pass
+    assert events(capsys) == []

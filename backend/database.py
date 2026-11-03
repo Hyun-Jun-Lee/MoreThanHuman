@@ -6,6 +6,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
 from config import get_settings
+from shared.db_latency import TimedQueuePool, install_db_latency
 
 settings = get_settings()
 
@@ -14,7 +15,9 @@ settings = get_settings()
 engine = create_engine(
     settings.database_url,
     connect_args={"check_same_thread": False} if settings.database_url.startswith("sqlite") else {},
+    **({"poolclass": TimedQueuePool} if settings.database_url.startswith("postgresql") else {}),
 )
+install_db_latency(engine)
 
 # 세션 팩토리
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

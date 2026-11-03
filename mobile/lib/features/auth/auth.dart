@@ -1,4 +1,5 @@
 export 'application/auth_controller.dart';
+export 'data/apple_identity_service.dart';
 export 'data/api_auth_repository.dart';
 export 'data/google_identity_service.dart';
 export 'data/supabase_auth_service.dart';

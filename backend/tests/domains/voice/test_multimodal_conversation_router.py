@@ -5,7 +5,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from domains.auth.dependencies import get_current_user
+from domains.auth.dependencies import get_current_profile, get_current_user
 from domains.conversation.enums import ConversationType
 from domains.conversation.router import (
     _enforce_voice_content_length_limit,
@@ -15,6 +15,7 @@ from domains.conversation.router import (
 )
 from domains.conversation.schemas import ConversationResponse, MessageResponse
 from domains.voice.schemas import VoiceAudioResponse, VoiceInputMode
+from shared.language import LearningLanguageContext
 from shared.exceptions import ExternalAPIException, ValidationException
 
 
@@ -31,6 +32,8 @@ class FakeConversationService:
         topic=None,
         conversation_direction=None,
         selected_question=None,
+        custom_focus=None,
+        language_context=None,
     ):
         self.started.append(
             {
@@ -40,6 +43,8 @@ class FakeConversationService:
                 "topic": topic,
                 "conversation_direction": conversation_direction,
                 "selected_question": selected_question,
+                "custom_focus": custom_focus,
+                "language_context": language_context,
             }
         )
         return ConversationResponse(
@@ -47,6 +52,30 @@ class FakeConversationService:
             message_id=uuid4(),
             conversation_type=ConversationType.FREE_CHAT,
             response="Where would you like to travel first?",
+            grammar_feedback=None,
+        )
+
+    async def start_roleplay_conversation(
+        self,
+        role_character,
+        search_context=None,
+        user_id="",
+        language_context=None,
+    ):
+        self.started.append(
+            {
+                "role_character": role_character,
+                "search_context": search_context,
+                "user_id": user_id,
+                "language_context": language_context,
+            }
+        )
+        return ConversationResponse(
+            conversation_id=uuid4(),
+            message_id=uuid4(),
+            conversation_type=ConversationType.ROLE_PLAYING,
+            role_character=role_character,
+            response="Welcome in. What would you like to practice?",
             grammar_feedback=None,
         )
 
@@ -107,7 +136,15 @@ class FakeVoiceService:
 def _conversation_app_with_overrides(conversation_service, voice_service) -> FastAPI:
     app = FastAPI()
     app.include_router(router)
-    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id="user-1")
+    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(
+        id="user-1",
+        language=LearningLanguageContext(
+            native_language="en",
+            target_language="ko",
+            feedback_language="en",
+        ),
+    )
+    app.dependency_overrides[get_current_profile] = app.dependency_overrides[get_current_user]
     app.dependency_overrides[get_conversation_service] = lambda: conversation_service
     app.dependency_overrides[get_voice_service] = lambda: voice_service
     return app
@@ -255,6 +292,7 @@ def test_free_chat_start_accepts_audio_input_with_topic_prep_fields():
     assert conversation_service.started[0]["topic"] == "travel plans"
     assert conversation_service.started[0]["conversation_direction"] == "DEBATE"
     assert conversation_service.started[0]["selected_question"] == "Is slow travel better?"
+    assert conversation_service.started[0]["language_context"].target_language.value == "ko"
 
 
 def test_free_chat_start_keeps_existing_json_text_contract():
@@ -274,6 +312,48 @@ def test_free_chat_start_keeps_existing_json_text_contract():
     assert conversation_service.started[0]["first_message"] == "Let's talk about food."
 
 
+def test_roleplay_start_ignores_legacy_difficulty_and_returns_tts_audio():
+    conversation_service = FakeConversationService()
+    voice_service = FakeVoiceService()
+    client = TestClient(_conversation_app_with_overrides(conversation_service, voice_service))
+
+    response = client.post(
+        "/api/conversations/start/roleplay/",
+        json={
+            "role_character": "A cafe customer who asks follow-ups.",
+            "roleplay_difficulty": "CHALLENGE",
+            "include_audio_response": True,
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["conversation_type"] == "ROLE_PLAYING"
+    assert "roleplay_difficulty" not in data
+    assert data["input_mode"] == "text"
+    assert data["audio"]["base64"] == "YXVkaW8="
+    assert data["audio_error"] is None
+    assert conversation_service.started[0]["role_character"] == "A cafe customer who asks follow-ups."
+    assert "roleplay_difficulty" not in conversation_service.started[0]
+    assert voice_service.synthesized == ["Welcome in. What would you like to practice?"]
+
+
+def test_roleplay_start_without_difficulty_returns_reduced_response():
+    conversation_service = FakeConversationService()
+    voice_service = FakeVoiceService()
+    client = TestClient(_conversation_app_with_overrides(conversation_service, voice_service))
+
+    response = client.post(
+        "/api/conversations/start/roleplay/",
+        json={"role_character": "A cafe customer."},
+    )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert "roleplay_difficulty" not in data
+    assert "roleplay_difficulty" not in conversation_service.started[0]
+
+
 def test_multimodal_routes_publish_request_body_contracts():
     conversation_service = FakeConversationService()
     voice_service = FakeVoiceService()
@@ -282,9 +362,14 @@ def test_multimodal_routes_publish_request_body_contracts():
     schema = client.get("/openapi.json").json()
 
     free_chat_body = schema["paths"]["/api/conversations/start/free-chat/"]["post"]["requestBody"]
+    roleplay_body = schema["paths"]["/api/conversations/start/roleplay/"]["post"]["requestBody"]
     turn_body = schema["paths"]["/api/conversations/{conversation_id}/turn/"]["post"]["requestBody"]
     assert "application/json" in free_chat_body["content"]
     assert "multipart/form-data" in free_chat_body["content"]
+    roleplay_schema = roleplay_body["content"]["application/json"]["schema"]
+    roleplay_ref = roleplay_schema["$ref"].rsplit("/", 1)[-1]
+    roleplay_properties = schema["components"]["schemas"][roleplay_ref]["properties"]
+    assert "roleplay_difficulty" not in roleplay_properties
     assert "application/json" in turn_body["content"]
     assert "multipart/form-data" in turn_body["content"]
 

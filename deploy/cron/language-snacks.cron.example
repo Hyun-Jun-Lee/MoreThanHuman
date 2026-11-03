@@ -1,0 +1,6 @@
+# Install in the user's crontab after replacing the absolute repository path.
+# Assumes the cron daemon runs in UTC: Sunday 20:00 UTC = Monday 05:00 Asia/Seoul.
+# For a KST daemon, use: 0 5 * * 1
+# PATH must include the host's docker CLI; the image must already be built.
+PATH=/usr/local/bin:/usr/bin:/bin
+0 20 * * 0 /bin/sh /absolute/path/MoreThanHuman/deploy/scripts/generate-language-snacks.sh >> /absolute/path/MoreThanHuman/language-snacks.log 2>&1

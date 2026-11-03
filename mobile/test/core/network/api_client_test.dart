@@ -2,13 +2,47 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:curitalk/core/diagnostics/latency_trace.dart';
 import 'package:curitalk/core/network/network.dart';
+import 'package:curitalk/features/conversation/domain/conversation_models.dart';
 import 'package:curitalk/features/auth/auth.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'turn trace reaches audio playback data without changing its JSON',
+    () async {
+      final ApiClient client = ApiClient(
+        Dio(BaseOptions(baseUrl: 'https://example.com/api/')),
+      );
+      final _FakeHttpClientAdapter adapter = _FakeHttpClientAdapter(
+        response: <String, dynamic>{
+          'success': true,
+          'data': <String, dynamic>{
+            'content_type': 'audio/mpeg',
+            'base64': 'YQ==',
+            'format': 'mp3',
+          },
+        },
+      );
+      client.dio.httpClientAdapter = adapter;
+      addTearDown(client.close);
+      final LatencyTrace trace = LatencyTrace(origin: 'recording_stop');
+      final ApiResponse<VoiceAudioResponse> response = await client
+          .post<VoiceAudioResponse>(
+            'conversations/id/turn/',
+            decodeData: VoiceAudioResponse.fromJson,
+            latencyTrace: trace,
+          );
+      expect(adapter.lastRequest?.headers['X-Request-ID'], trace.id);
+      expect(response.data.latencyTrace, same(trace));
+      expect(response.data.base64, 'YQ==');
+      expect(LatencyTrace.current, isNull);
+    },
+  );
+
   test(
     'core providers create the API client with Supabase session providers',
     () {
@@ -65,6 +99,55 @@ void main() {
       'Bearer supabase-access-token',
     );
   });
+
+  test(
+    'GET requests use distinct trace IDs without logging resource IDs',
+    () async {
+      final ApiClient client = ApiClient(
+        Dio(BaseOptions(baseUrl: 'https://example.com/api/')),
+      );
+      final _FakeHttpClientAdapter adapter = _FakeHttpClientAdapter(
+        response: <String, dynamic>{'success': true, 'data': true},
+      );
+      client.dio.httpClientAdapter = adapter;
+      addTearDown(client.close);
+
+      final List<String> logs = <String>[];
+      final List<Object?> traces = await runZoned<Future<List<Object?>>>(
+        () async {
+          await client.get<bool>(
+            'conversations/private-id/messages/',
+            diagnosticSource: 'conversation_messages',
+            decodeData: (Object? json) => json! as bool,
+          );
+          final Object? firstTrace =
+              adapter.lastRequest?.headers['X-Request-ID'];
+          await client.get<bool>(
+            'conversations/private-id/messages/',
+            diagnosticSource: 'conversation_messages',
+            decodeData: (Object? json) => json! as bool,
+          );
+          return <Object?>[
+            firstTrace,
+            adapter.lastRequest?.headers['X-Request-ID'],
+          ];
+        },
+        zoneSpecification: ZoneSpecification(
+          print: (_, _, _, String line) => logs.add(line),
+        ),
+      );
+      final Object? firstTrace = traces[0];
+      final Object? secondTrace = traces[1];
+      expect(
+        firstTrace,
+        isA<String>().having((value) => value.length, 'length', 32),
+      );
+      expect(secondTrace, isNot(firstTrace));
+      expect(logs.join(), contains('"request_source":"conversation_messages"'));
+      expect(logs.join(), contains('"operation":"message_list"'));
+      expect(logs.join(), isNot(contains('private-id')));
+    },
+  );
 
   test('ApiClient can explicitly skip authentication', () async {
     final ApiClient client = ApiClient.create(
@@ -367,6 +450,14 @@ class _FakeSessionProvider implements SupabaseAuthService {
     required String accessToken,
   }) async {
     this.accessToken = accessToken;
+  }
+
+  @override
+  Future<void> signInWithAppleToken({
+    required String idToken,
+    required String rawNonce,
+  }) async {
+    accessToken = idToken;
   }
 
   @override

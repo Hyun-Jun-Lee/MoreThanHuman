@@ -130,7 +130,7 @@
                 Describe your situation.
             </h1>
 <p class="font-body text-[20px] leading-[1.5] text-on-surface-variant max-w-2xl">
-                Set the scene for your custom roleplay. The AI will adapt perfectly to your scenario, context, and requested difficulty level.
+                Set the scene for your custom roleplay. The AI will adapt to your scenario and context.
             </p>
 </div>
 <!-- Input Section -->
@@ -152,17 +152,6 @@
 <button class="quick-start-btn px-6 py-3 rounded-full border-2 border-primary text-primary font-label text-[14px] font-[600] uppercase tracking-widest hover:bg-primary hover:text-on-primary transition-colors" data-text="I am having a formal job interview for a marketing position and need to discuss my past experience.">Job Interview</button>
 <button class="quick-start-btn px-6 py-3 rounded-full border-2 border-primary text-primary font-label text-[14px] font-[600] uppercase tracking-widest hover:bg-primary hover:text-on-primary transition-colors" data-text="I am at the doctor's office trying to describe a persistent headache and ask for a prescription.">Doctor Visit</button>
 <button class="quick-start-btn px-6 py-3 rounded-full border-2 border-primary text-primary font-label text-[14px] font-[600] uppercase tracking-widest hover:bg-primary hover:text-on-primary transition-colors" data-text="I am a lost tourist trying to ask a local for directions to the nearest subway station.">Lost Tourist</button>
-</div>
-</div>
-<!-- Difficulty Configuration -->
-<div class="flex flex-col gap-4">
-<span class="font-label text-[14px] font-[600] tracking-[0.05em] uppercase text-on-surface-variant ml-2">
-                Difficulty Level
-            </span>
-<div class="flex bg-surface-container rounded-full p-1.5 w-full md:max-w-md">
-<button class="difficulty-btn flex-1 py-3 md:py-4 rounded-full text-center font-label text-[14px] font-[600] tracking-widest uppercase text-on-surface-variant hover:text-primary transition-colors">Beginner</button>
-<button class="difficulty-btn flex-1 py-3 md:py-4 rounded-full text-center font-label text-[14px] font-[600] tracking-widest uppercase bg-primary text-on-primary shadow-sm transition-all scale-[0.98]">Intermediate</button>
-<button class="difficulty-btn flex-1 py-3 md:py-4 rounded-full text-center font-label text-[14px] font-[600] tracking-widest uppercase text-on-surface-variant hover:text-primary transition-colors">Advanced</button>
 </div>
 </div>
 <!-- Action Area -->
@@ -195,20 +184,6 @@
 <!-- Micro-interactions Script -->
 <script>
         document.addEventListener('DOMContentLoaded', () => {
-            // Difficulty Segmented Control Logic
-            const difficultyBtns = document.querySelectorAll('.difficulty-btn');
-            difficultyBtns.forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    difficultyBtns.forEach(b => {
-                        b.classList.remove('bg-primary', 'text-on-primary', 'scale-[0.98]', 'shadow-sm');
-                        b.classList.add('text-on-surface-variant', 'hover:text-primary');
-                    });
-                    const target = e.currentTarget;
-                    target.classList.add('bg-primary', 'text-on-primary', 'scale-[0.98]', 'shadow-sm');
-                    target.classList.remove('text-on-surface-variant', 'hover:text-primary');
-                });
-            });
-
             // Quick Start Pills Logic
             const textarea = document.getElementById('situation-input');
             const quickStartBtns = document.querySelectorAll('.quick-start-btn');

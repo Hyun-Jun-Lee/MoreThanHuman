@@ -1,10 +1,14 @@
 import 'dart:async';
+import 'package:curitalk/features/history/data/conversation_history_repository.dart';
+import 'package:curitalk/features/conversation/conversation.dart';
 
 import 'package:curitalk/app/theme/app_theme.dart';
 import 'package:curitalk/core/storage/storage.dart';
 import 'package:curitalk/features/auth/auth.dart';
 import 'package:curitalk/features/history/history.dart';
 import 'package:curitalk/features/home/home.dart';
+import 'package:curitalk/features/language/language.dart';
+import 'package:curitalk/features/onboarding/onboarding.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -75,35 +79,81 @@ void main() {
     expect(find.text('Osaka food trip'), findsOneWidget);
   });
 
-  testWidgets('bottom navigation opens chat sheet and account sheet', (
-    WidgetTester tester,
-  ) async {
+  testWidgets('header plus opens the shared start sheet', (tester) async {
     ConversationStartType? selectedType;
-    int homeTapCount = 0;
-
     await tester.pumpWidget(
-      _historyApp(
-        onHomeSelected: () => homeTapCount += 1,
-        onStartTypeSelected: (ConversationStartType type) {
-          selectedType = type;
-        },
-      ),
+      _historyApp(onStartTypeSelected: (type) => selectedType = type),
     );
     await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Home'));
-    expect(homeTapCount, 1);
-
-    await tester.tap(find.text('Chat'));
+    expect(find.byType(NavigationBar), findsNothing);
+    await tester.tap(find.byTooltip('New conversation'));
     await tester.pumpAndSettle();
-    expect(find.text('Start a conversation'), findsOneWidget);
+    expect(find.text('Free Chat'), findsOneWidget);
     await tester.tap(find.text('Roleplay'));
     await tester.pumpAndSettle();
     expect(selectedType, ConversationStartType.roleplay);
+  });
 
-    await tester.tap(find.text('Profile'));
+  testWidgets('full slot blocks creating another conversation', (tester) async {
+    await tester.pumpWidget(
+      _historyApp(
+        conversations: <ConversationSummary>[_conversation],
+        access: const ConversationAccess(
+          enabled: true,
+          canCreate: false,
+          usedSlots: 1,
+          slotLimit: 1,
+          remainingSlots: 0,
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
-    expect(find.text('ACCOUNT'), findsOneWidget);
+    expect(find.text('Osaka food trip'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('locked-additional-conversation')),
+      findsNothing,
+    );
+    await tester.tap(find.byTooltip('New conversation'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text(
+        'All active conversation slots are in use. Release a slot in Conversations or subscribe.',
+      ),
+      findsWidgets,
+    );
+    expect(find.text('Free Chat'), findsNothing);
+  });
+
+  testWidgets('pagination does not add a phantom locked conversation', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _historyApp(
+        homeRepository: _FakeHomeRepository(
+          conversations: <ConversationSummary>[_conversation],
+          hasMore: true,
+        ),
+        access: const ConversationAccess(
+          enabled: true,
+          canCreate: false,
+          usedSlots: 1,
+          slotLimit: 1,
+          remainingSlots: 0,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Osaka food trip'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('locked-additional-conversation')),
+      findsNothing,
+    );
+    await tester.tap(find.text('Load more conversations'));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('locked-additional-conversation')),
+      findsNothing,
+    );
   });
 }
 
@@ -133,9 +183,9 @@ final ConversationSummary _conversation = ConversationSummary(
 Widget _historyApp({
   _FakeHomeRepository? homeRepository,
   List<ConversationSummary> conversations = const <ConversationSummary>[],
-  VoidCallback? onHomeSelected,
   ValueChanged<ConversationStartType>? onStartTypeSelected,
   ValueChanged<String>? onConversationSelected,
+  ConversationAccess access = const ConversationAccess.disabled(),
 }) {
   return ProviderScope(
     overrides: [
@@ -143,25 +193,58 @@ Widget _historyApp({
         _MemoryTokenStorage(tokens: _tokens, deviceId: _deviceId),
       ),
       authRepositoryProvider.overrideWithValue(const _FakeAuthRepository()),
+      languagePreferencesRepositoryProvider.overrideWithValue(
+        const _FakeLanguagePreferencesRepository(),
+      ),
+      onboardingStorageProvider.overrideWithValue(
+        const _FakeOnboardingStorage(),
+      ),
       googleIdentityServiceProvider.overrideWithValue(
         const _FakeGoogleIdentityService(),
       ),
       supabaseAuthServiceProvider.overrideWithValue(
         _FakeSupabaseAuthService(hasSession: true),
       ),
-      homeRepositoryProvider.overrideWithValue(
+      conversationHistoryRepositoryProvider.overrideWithValue(
         homeRepository ?? _FakeHomeRepository(conversations: conversations),
       ),
+      conversationAccessRepositoryProvider.overrideWithValue(
+        _FakeConversationAccessRepository(access),
+      ),
+      conversationAccessProvider.overrideWith((ref) async => access),
     ],
     child: MaterialApp(
       theme: AppTheme.light,
+      locale: const Locale('en'),
       home: HistoryScreen(
-        onHomeSelected: onHomeSelected,
         onStartTypeSelected: onStartTypeSelected,
         onConversationSelected: onConversationSelected,
       ),
     ),
   );
+}
+
+class _FakeConversationAccessRepository
+    implements ConversationAccessRepository {
+  const _FakeConversationAccessRepository(this.access);
+
+  final ConversationAccess access;
+
+  @override
+  Future<ConversationAccess> getAccess() async => access;
+
+  @override
+  Future<ConversationTurnAccess> getTurnAccess(String conversationId) async =>
+      const ConversationTurnAccess.disabled();
+
+  @override
+  Future<void> activate(
+    String conversationId, {
+    String? replaceConversationId,
+  }) async {}
+
+  @override
+  Future<void> deactivate(String conversationId) async {}
 }
 
 class _FakeGoogleIdentityService implements GoogleIdentityService {
@@ -183,7 +266,46 @@ class _FakeAuthRepository implements AuthRepository {
   const _FakeAuthRepository();
 
   @override
+  Future<UserProfile> bootstrap(LearningLanguageContext? pendingLanguage) =>
+      getCurrentUser();
+
+  @override
   Future<UserProfile> getCurrentUser() async => _user;
+}
+
+class _FakeLanguagePreferencesRepository
+    implements LanguagePreferencesRepository {
+  const _FakeLanguagePreferencesRepository();
+
+  @override
+  Future<LearningLanguageContext> getLanguagePreferences() async =>
+      LearningLanguageContext.defaultContext;
+
+  @override
+  Future<LearningLanguageContext> updateLanguagePreferences(
+    LearningLanguageContext context,
+  ) async => context;
+}
+
+class _FakeOnboardingStorage implements OnboardingStorage {
+  const _FakeOnboardingStorage();
+
+  @override
+  Future<void> clearPendingLanguageContext() async {}
+
+  @override
+  Future<bool> isCompleted() async => true;
+
+  @override
+  Future<void> markCompleted() async {}
+
+  @override
+  Future<LearningLanguageContext?> readPendingLanguageContext() async => null;
+
+  @override
+  Future<void> writePendingLanguageContext(
+    LearningLanguageContext context,
+  ) async {}
 }
 
 class _FakeSupabaseAuthService implements SupabaseAuthService {
@@ -221,36 +343,43 @@ class _FakeSupabaseAuthService implements SupabaseAuthService {
   }
 
   @override
+  Future<void> signInWithAppleToken({
+    required String idToken,
+    required String rawNonce,
+  }) async {
+    hasSession = true;
+  }
+
+  @override
   Future<void> signOut() async {
     hasSession = false;
   }
 }
 
-class _FakeHomeRepository implements HomeRepository {
+class _FakeHomeRepository implements ConversationHistoryRepository {
   _FakeHomeRepository({
     this.conversations = const <ConversationSummary>[],
     this.errorOnce = false,
     this.pending = false,
+    this.hasMore = false,
   });
 
   final List<ConversationSummary> conversations;
   final bool errorOnce;
   final bool pending;
+  final bool hasMore;
   int requestCount = 0;
 
   @override
-  Future<List<ConversationSummary>> listRecentConversations({int limit = 5}) {
+  Future<ConversationPage> list({int offset = 0, int limit = 20}) async {
     requestCount += 1;
-    if (pending) {
-      return Future<List<ConversationSummary>>.delayed(
-        const Duration(days: 1),
-        () => conversations,
-      );
-    }
-    if (errorOnce && requestCount == 1) {
-      throw StateError('offline');
-    }
-    return Future<List<ConversationSummary>>.value(conversations);
+    if (pending) return Completer<ConversationPage>().future;
+    if (errorOnce && requestCount == 1) throw StateError('offline');
+    return ConversationPage(
+      items: offset == 0 ? conversations : const <ConversationSummary>[],
+      nextOffset: conversations.length,
+      hasMore: hasMore && offset == 0,
+    );
   }
 }
 

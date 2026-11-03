@@ -1,0 +1,156 @@
+import 'package:curitalk/core/widgets/main_tab_scope.dart';
+import 'dart:async';
+import 'package:curitalk/app/theme/tokens/tokens.dart';
+import 'package:curitalk/features/home/application/language_snack_language.dart';
+import 'package:curitalk/features/home/application/language_snacks_controller.dart';
+import 'package:curitalk/features/home/application/daily_snack_basket_controller.dart';
+import 'package:curitalk/features/home/presentation/widgets/snack_tomato_basket.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+class LanguageSnackHomeSection extends ConsumerStatefulWidget {
+  const LanguageSnackHomeSection({super.key});
+  @override
+  ConsumerState<LanguageSnackHomeSection> createState() =>
+      _LanguageSnackHomeSectionState();
+}
+
+class _LanguageSnackHomeSectionState
+    extends ConsumerState<LanguageSnackHomeSection>
+    with WidgetsBindingObserver {
+  Timer? _midnightTimer;
+  bool _interacting = false;
+  bool _active = true;
+  String? _scope;
+  int _localResetVersion = 0;
+
+  void _resetForTesting() {
+    if (ref.read(dailySnackBasketProvider.notifier).resetForTesting()) {
+      setState(() => _localResetVersion++);
+    }
+  }
+
+  void _checkDay() {
+    if (!mounted || !_active || _interacting) return;
+    ref.read(dailySnackBasketProvider.notifier).ensureToday();
+    _midnightTimer?.cancel();
+    final now = ref.read(snackClockProvider)();
+    final midnight = DateTime(now.year, now.month, now.day + 1);
+    _midnightTimer = Timer(midnight.difference(now), _checkDay);
+  }
+
+  void _interactionChanged(bool active) {
+    _interacting = active;
+    ref.read(dailySnackBasketProvider.notifier).setInteractionActive(active);
+    if (!active) _checkDay();
+  }
+
+  void _refreshBasket() {
+    if (!mounted || !_active) return;
+    _checkDay();
+    unawaited(_syncBasket());
+  }
+
+  Future<void> _syncBasket() async {
+    await ref.read(dailySnackBasketProvider.notifier).refreshFromWidget();
+    if (mounted && _active) {
+      await ref.read(dailySnackBasketProvider.notifier).refreshReset();
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    scheduleMicrotask(() {
+      if (mounted) {
+        ref.read(languageSnacksControllerProvider.notifier).refreshIfStale();
+        _refreshBasket();
+      }
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _active) {
+      ref.read(languageSnacksControllerProvider.notifier).refreshIfStale();
+      _refreshBasket();
+    } else {
+      _midnightTimer?.cancel();
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final active = (MainTabScope.maybeOf(context)?.index ?? 0) == 0;
+    if (_active == active) return;
+    _active = active;
+    if (active) {
+      scheduleMicrotask(() {
+        if (!mounted || !_active) return;
+        ref.read(languageSnacksControllerProvider.notifier).refreshIfStale();
+        _refreshBasket();
+      });
+    } else {
+      _midnightTimer?.cancel();
+      _interacting = false;
+      scheduleMicrotask(() {
+        if (mounted) {
+          ref
+              .read(dailySnackBasketProvider.notifier)
+              .setInteractionActive(false);
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _midnightTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final language = ref.watch(languageSnackLanguageProvider);
+    final userId = ref.watch(snackUserIdProvider);
+    final scope = '$userId.$language';
+    if (_scope != scope) {
+      _scope = scope;
+      _interacting = false;
+      scheduleMicrotask(_refreshBasket);
+    }
+    ref.listen(languageSnacksControllerProvider, (_, next) {
+      if (!next.isLoading &&
+          next.value?.isNotEmpty == true &&
+          ref.read(dailySnackBasketProvider).value == null) {
+        ref.read(dailySnackBasketProvider.notifier).ensureToday();
+      }
+    });
+    final value = ref.watch(dailySnackBasketProvider);
+    final basket = value.value;
+    if (value.isLoading ||
+        userId == null ||
+        basket == null ||
+        basket.snacks.any((snack) => snack.contentLanguage != language)) {
+      return const SizedBox.shrink();
+    }
+    return Column(
+      children: [
+        SnackTomatoBasket(
+          key: ValueKey(
+            '$userId.$language.${basket.day}.${basket.resetId}.$_localResetVersion.$_active',
+          ),
+          basket: basket,
+          onBite: () => ref.read(dailySnackBasketProvider.notifier).takeBite(),
+          onInteractionChanged: _interactionChanged,
+          onResetForTesting: kDebugMode ? _resetForTesting : null,
+        ),
+        const SizedBox(height: AppSpacing.sectionGap),
+      ],
+    );
+  }
+}

@@ -5,6 +5,8 @@ status: active
 date: 2026-07-11
 ---
 
+> 역사 문서예요. 현행 홈·대화·내 정보 구성은 [3탭 전환 기록](archive/2026-09-22-001-refactor-mobile-three-tab-navigation-approach.md)과 [모바일 README](../../mobile/README.md)를 참고해요.
+
 # feat: Complete mobile main navigation
 
 ## Summary

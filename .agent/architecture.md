@@ -1,6 +1,6 @@
 # 시스템 아키텍처
 
-> 프로젝트: MoreThanHuman (Convia) · 버전: 0.1.0 · 최종 갱신: 2026-05-26
+> 프로젝트: MoreThanHuman (서비스명: tomatalk) · 버전: 0.1.13 · 최종 갱신: 2026-10-31
 
 ---
 
@@ -41,8 +41,11 @@
 | flutter_secure_storage 10 | 설치 단위 device ID와 온보딩 상태 보관 |
 | supabase_flutter 2 | Supabase Auth 세션 관리 |
 | google_sign_in 7 | Google SDK 기반 모바일 인증 |
+| sign_in_with_apple 8 / crypto 3 | iOS Apple 인증과 nonce 해시 |
 
 현재 저장소는 FastAPI 백엔드 API와 Flutter 모바일 앱을 함께 관리해요.
+
+주간 대화 추천 v1(2026-10-03)은 conversation 도메인의 언어쌍·주간 슬롯별 발행 묶음과 주제를 사용해요. 운영자가 수동 CLI를 실행해 `ko→en`, `en→ko` 공통 주제와 학습 언어 첫 질문을 생성하고 검사를 통과한 묶음만 저장해요. 명시적 재발행은 같은 주차의 활성 주제 ID를 유지하며 문구와 첫 질문을 함께 교체해요. 실패하면 마지막 발행 묶음을 유지하며 cron worker는 아직 없어요. 홈은 대화 수와 관계없이 인증된 목록 API와 계정·언어쌍별 캐시를 사용해요. Flutter는 제목·공통 배경 박스 없이 회색 바탕·검정 글자의 주제 카드를 ‘오늘의 토마토’ 제목과 대화 카드 사이에 보여주고, 탭한 주제는 확인 중 빨간색으로 표시해요. 각 카드는 얕은 곡선을 따라 오른쪽으로 이동하고 손가락 드래그로 좌우 이동한 위치에서 자동 흐름을 이어가며, 축소 동작 설정에서는 정적 목록을 보여줘요. 카드 탭은 주제를 보여주는 확인 팝업을 거치고, 확인 후 API 응답 전까지 ‘대화 시작을 준비하고 있어요’ 로딩 표시로 바꿔 중복 시작을 막아요. 추천 시작 API는 요청 ID를 예약하고 발행 시 저장된 첫 질문 하나가 있는 `FREE_CHAT`을 생성해요. 트랜잭션에서 대화와 첫 AI 메시지를 먼저 DB에 반영한 다음 메시지 FK를 참조하는 예약 기록을 완료해요. 첫 사용자 발화 수는 0이며 기존 슬롯 제한을 적용해요.
 
 ---
 
@@ -55,14 +58,14 @@ backend/
 ├── main.py                  # FastAPI 앱 초기화, 라우터 등록
 ├── config.py                # Pydantic BaseSettings 환경 설정
 ├── database.py              # SQLAlchemy 엔진·세션 팩토리
-├── shared/                  # 공통 타입, 예외, 유틸리티
+├── shared/                  # 공통 타입, 언어 컨텍스트, prompt policy, 예외, 유틸리티
 └── domains/                 # 도메인별 수직 슬라이스
     ├── auth/                # Supabase token 검증, profiles 연결
     ├── conversation/        # 대화 관리
     ├── grammar/             # 문법 체크 및 통계
     ├── llm/                 # LLM 프로바이더 추상화
     ├── search/              # ddgs 검색 + query analysis + LLM source judge + LLM 요약
-    ├── voice/               # STT/TTS provider 추상화와 OpenAI Audio 연동
+    ├── voice/               # STT/TTS provider 추상화와 OpenRouter/OpenAI Audio 연동
     └── web/                 # 서버 렌더링 HTML 라우트
 
 mobile/
@@ -76,8 +79,9 @@ mobile/
 │       ├── auth/            # Riverpod 인증 상태, 모바일 auth API
 │       ├── conversation/    # 대화 API, 메시지 전송, grammar polling, UI
 │       ├── home/            # 최근 대화 API 상태와 Home UI
-│       ├── onboarding/      # 완료 상태 저장과 3장 onboarding UI
-│       ├── roleplay_setup/  # 롤플레이 상황·난이도 선택 UI
+│       ├── language/        # 언어쌍 모델, preference API, selector UI
+│       ├── onboarding/      # 완료 상태와 pending 언어쌍 저장, 4장 onboarding UI
+│       ├── roleplay_setup/  # 롤플레이 상황 선택 UI
 │       └── topic_prep/      # Topic Input, 검색 준비 카드 API 상태와 UI
 ├── test/                    # Flutter 테스트
 └── pubspec.yaml             # Dart/Flutter 의존성
@@ -85,7 +89,31 @@ mobile/
 
 Flutter API 요청은 `ApiClient → AuthTokenInterceptor → TokenRefreshInterceptor → Dio` 순서로 실행돼요. 응답은 공통 envelope parser를 거쳐 feature decoder로 전달해요. Supabase SDK가 access/refresh session을 관리하고, `AuthTokenInterceptor`는 현재 Supabase access token을 `Authorization: Bearer` 헤더로 주입해요. 여러 요청이 동시에 `401`을 받아도 Supabase refresh는 하나만 공유하며, 새 access token으로 각 요청을 한 번만 재시도해요.
 
-Flutter 앱 시작은 `Splash → Onboarding(최초 1회) → Google Login → Home` 순서예요. `go_router`가 onboarding 완료 상태와 Riverpod 인증 상태를 함께 관찰하며, 인증 복원 중에는 Splash를 유지하고 로그인 성공 또는 세션 만료 시 Home/Login으로 redirect해요. Home은 `/api/conversations/?limit=5&offset=0`에서 최근 대화를 불러와 loaded/empty/error 상태를 표시해요. Free Chat 선택 시 `Topic Input → Topic Prep`으로 이어져 `POST /api/search/topic-prep/`의 ready/low-quality/error 상태를 보여주고, 첫 답변 제출 후 `POST /api/conversations/start/free-chat/`로 Conversation 화면에 진입해요. Roleplay 선택 시 `Roleplay Setup`에서 preset/custom 상황과 난이도를 고르고 `POST /api/conversations/start/roleplay/`로 같은 Conversation 화면에 진입해요. Home 최근 대화 카드도 `/conversation/:conversationId`로 이동해 기존 메시지를 이어가요.
+Home의 `language_snacks`는 최근 대화와 독립된 학습 콘텐츠 흐름이에요. v2 feed는 profile.target_language와 content_language가 같은 published 카드 12개를 반환해요. 기본은 최신순이며 Home은 `order=random`으로 전체 발행 목록에서 추출해요. Flutter는 학습 언어 변경 시 즉시 다시 조회하고, Home 재진입·앱 복귀 시 마지막 성공 조회가 5분 이상 지났으면 갱신해요. API 실패에는 언어·설명 언어별 secure storage 캐시를 사용하고 캐시·당일 스냅샷이 모두 없으면 해당 영역만 숨겨요. 이전 언어의 지연 응답은 버려요.
+
+토마토 스낵 v2.1(2026-09-19)은 `DailySnackBasketController`가 사용자 ID·학습 언어·기기 로컬 날짜별 12개 스냅샷과 소비 횟수를 저장해요. `SnackTomatoBasket`은 투명 바구니 4단계·토마토 5단계 이미지를 사용해 토마토 3개를 각 4입 먹고 `LanguageSnackContent` 팝업을 열어요. 4·8·12번째 팝업을 닫으면 남은 2·1·0개 바구니로 돌아가며 다음 토마토는 다시 눌러 꺼내요. 복원 시 완료 경계는 바구니, 진행 중이면 먹던 토마토를 표시하며 별도 저장 필드는 추가하지 않아요. 12개 소진 후에는 빈 바구니에서 재시작해도 추가 터치를 막고, `LanguageSnackHomeSection`의 현지 자정 타이머·앱 복귀 검사로 다음 날짜에 재구성해요. 열린 팝업·애니메이션은 종료 후 갱신해요. 발행 목록이 12개 미만이면 중복 ID를 제거한 목록을 한 번씩 순회한 뒤 반복 배치해요. 당일 피드 재조회는 이미 정한 묶음을 바꾸지 않으며 진행은 기기 간 동기화하지 않아요. 기존 5초 자동 슬라이드는 Home에서 제거했어요.
+
+iOS 홈 화면 스낵 위젯 v1(2026-10-27)은 iOS 17 이상 `systemMedium`·`systemLarge` WidgetKit extension이에요. 두 크기는 같은 App Group 스냅샷을 공유하며 크기별 SwiftUI 레이아웃을 사용해요. Flutter의 일일 스냅샷은 MethodChannel을 거쳐 App Group UserDefaults에도 저장하고, 위젯 `AppIntent`가 바구니에서 토마토 꺼내기·한입 소비·본문 페이지 이동을 그 저장소에서 처리해요. 앱 Home 진입·복귀는 위젯 진행을 보안 저장소에 반영하고, 로그아웃은 위젯 스냅샷을 지워요. 앱을 열지 않은 채 날짜가 바뀌면 위젯은 마지막 12개를 새 날짜에 재사용해요. 상세 동작과 검증 범위는 [iOS 스낵 위젯 계약](_contracts/IOS_SNACK_WIDGET.md)에 있어요.
+
+스낵 v2(2026-09-12)는 세 유형의 `payload`와 지식 `identity`를 JSONB로 저장해요. identity는 NFC·공백 정규화, 객체 키·entry 순서 정렬 후 SHA-256을 계산해 UNIQUE로 보호하며 대소문자·sense는 보존해요. LLM은 같은 content_language의 모든 상태·유형 요약 이력을 보고 별도로 의미 중복을 판정해요. reserved를 먼저 저장하고 본문 구조·품질 검증 후 published로 전환하며 재시도 소진이나 운영 취소는 archived로 남겨 재생성하지 않아요. draft는 향후 편집용 상태로 현재 경로에서는 따로 저장하지 않아요.
+
+주간 CLI는 API 이미지의 별도 작업 컨테이너에서 en/ko run을 순서대로 실행해요. 영속 `run_key`는 주간 슬롯+언어의 재실행을 멱등하게 만들고 예약을 우선 재개해요. scheduled_for 별도 컬럼 대신 run_key의 주간 날짜를 사용해요. metrics에는 후보 rounds, calls, charged_tokens, reported_tokens, published_by_type와 발생한 중복·불확실 수/오류 코드가 저장돼요. 후보 라운드·호출·토큰 상한은 run에 누적되며 본문 시도 횟수는 예약 metadata에 저장돼요. 실행 시간 상한은 언어별 시도에 적용해요. reserved/published/archived 개수로 예약·발행·실패를 추가 집계할 수 있어요.
+
+운영 POST·PATCH와 CLI 쓰기는 같은 PostgreSQL session advisory lock을 획득해 직렬화해요. 전용 direct/session 연결에 잠금을 유지하고 LLM 대기 중 ORM 트랜잭션은 열어두지 않아요. 잠금 연결을 잃으면 추가 저장을 중지해요. SQLite 잠금은 단일 프로세스 개발용이에요. 전체 이력 크기를 넘으면 과거 항목을 생략하지 않고 중단하며 LLM 의미·품질 판정에는 오차가 남아요. API는 구버전 GET에 빈 목록, 구버전 POST에 410을 제공해요. 상세 외부 계약은 [DSL](../docs/DSL.md), 파괴적 migration·cron 설치·롤백은 [운영 가이드](../docs/OPERATIONS.md), 환경변수는 [환경 설정](../docs/ENVIRONMENT.md)이 기준이에요. [README](../README.md)는 실행·CLI 진입점으로 유지해요.
+
+Flutter 앱 시작은 `Splash → Onboarding(최초 1회) → Google 또는 iOS Apple Login → Home` 순서예요. `go_router`가 onboarding 완료 상태와 Riverpod 인증 상태를 함께 관찰하며, 인증 복원 중에는 Splash를 유지하고 로그인 성공 또는 세션 만료 시 Home/Login으로 redirect해요. `AppCopy`는 system locale이 `ko`일 때 한국어, 그 밖에는 영어로 app chrome·접근성 label·클라이언트 오류를 표시하고 학습 언어 context를 바꾸지 않아요. Onboarding은 기기 locale로 `ko -> en`, `en -> ko` 기본값을 고르고, 중국어가 포함된 언어쌍은 화면에 표시하되 선택은 막아요. 사용자가 현재 선택 가능한 지원 언어쌍(`ko -> en`, `en -> ko`) 중 하나를 확정하면 pending language context를 secure storage에 저장해요. 인증이 생기면 `authControllerProvider`가 pending 값을 `POST /api/auth/bootstrap`에 함께 보내 프로필 생성·언어 적용·최종 프로필 응답을 한 요청으로 마친 뒤 Home을 표시해요. Home은 활성 언어쌍과 `/api/conversations/?limit=5&offset=0` 최근 대화 중 최대 2개를 표시해요. 내 정보 탭의 `학습 언어` 설정은 profile default만 갱신하며 새 대화부터 적용돼요. 기존 conversation은 snapshot을 유지하고, 화면의 별도 정책 설명문은 표시하지 않아요. Free Chat 선택 시 `Topic Input → Topic Prep`으로 이어져 `POST /api/search/topic-prep/`의 ready/low-quality/error 상태를 보여주고, 첫 답변 제출 후 `POST /api/conversations/start/free-chat/stream/`로 Conversation 화면에 진입해요. Topic Input 정적 예시 검색어는 system locale이 아니라 native language로 고르고 그대로 검색 요청에 보내요. Roleplay 선택 시 `Roleplay Setup`에서 target language에 맞는 preset/custom 상황을 고르고 `role_character`로 `POST /api/conversations/start/roleplay/stream/`를 호출해요. `turn_started`에서 요청 ID 기반 임시 대화 화면으로 들어가 첫 인사 델타와 음성을 표시·재생하고, `turn_completed`에서 영속 대화 ID로 화면을 교체해요. Topic Prep과 Roleplay 콘텐츠 선택은 target language를 따르고, retry guidance나 짧은 설명은 feedback language를 따르는 정책을 유지해요. Backend LLM prompt policy도 같은 원칙을 써서 target language가 conversation, roleplay, grammar, Topic Prep의 연습·교정 기준을 정하고 feedback language는 설명·retry 안내 언어만 정해요. 이 정책은 STT/TTS나 provider/model routing을 변경하지 않아요. Home 최근 대화 카드도 `/conversation/:conversationId`로 이동해 기존 메시지를 이어가요.
+
+Splash의 Flutter 화면은 새 Toma Talk 이미지와 그 아래의 `오늘의 토마톡!`을 흰 배경의 중앙보다 위쪽에 함께 배치해요. 제목은 Home의 `오늘의 토마토`와 같은 Freesentation 16px Bold 버튼 서체로 표시해요. 이미지 원본의 넓은 흰 여백은 화면에서 잘라 그림과 제목을 가깝게 배치해요. 이미지와 제목은 진입 시 한 번 0.96배로 줄였다가 650ms 안에 원래 크기로 되돌려요. 인증·onboarding 확인이 먼저 끝나도 모션 완료까지 Splash에 머물러요. 동작 줄이기 설정에서는 모션을 생략하고 즉시 화면 이동을 허용해요. 로딩 문구는 표시하지 않고 인증 또는 onboarding 확인 오류일 때만 하단 재시도 아이콘을 표시해요.
+
+모바일 내비게이션 v2 (2026-09-22, 2026-10-04 갱신)는 `StatefulShellRoute.indexedStack`이 홈(`/home`)·내 정보(`/profile`) 두 탭과 각 스크롤을 유지해요. 홈은 스낵 → 최근 2개 파스텔 카드 → 새 대화 순서이고, 홈의 `전체 보기` 버튼은 표시하지 않고, 전체 대화(`/history`) 직접 진입 경로는 shell 밖에 유지해요. 전체 대화는 별도 repository/controller가 기존 limit/offset API로 20개씩 조회하는 행 목록이에요. 추가 조회는 중복 요청·ID와 계정 변경 전 지연 응답을 차단해요. 준비·대화 경로도 shell 밖 루트 stack에 push하며, 생성 성공 시 준비 경로만 제거해 출발 화면을 보존해요. 대화에서 pop하면 두 목록을 갱신하고 전체 목록은 읽던 범위까지 재조회해요. 설정 저장은 인증 loading 전환 없이 profile을 갱신해 현재 탭을 유지하고, 로그아웃은 기존 인증 redirect로 shell을 해제해요. 상세 경로 계약은 [모바일 내비게이션 계약](_contracts/MOBILE_NAVIGATION.md)을 따라요.
+
+홈 헤더는 서비스 이름을 왼쪽, 현재 언어 쌍 배지를 오른쪽 끝에 표시해요. 내 정보 진입은 하단 탭으로 통일해요.
+
+대화 권한 v2 (2026-10-04)는 `CONVERSATION_ACCESS_ENABLED` 스위치로 기본 비활성화해요. Apple의 서명 거래와 현재 구독 상태를 서버에서 검증해 무료 1개·15회, Advance 5개·무제한, Plus 10개·무제한을 판정해요. 프로필 행 잠금 아래에서 활성 대화 슬롯을 조정하고, 대화 행 잠금 아래에서 발화 한도를 검사해요. 기존 다중 대화는 최근 사용 대화 1개만 활성화하며 나머지는 읽기 전용으로 보존해요. Flutter iOS paywall은 StoreKit 상품의 실제 가격을 표시하고 구매·복원을 검증 API에 전달해요. Android 구매 UI는 숨기지만 서버 권한은 공유해요. 서버 알림 V2와 주기적 재조회로 갱신·환불을 반영해요. API 계약은 [DSL](../docs/DSL.md), 환경 설정과 활성화 절차는 [환경 문서](../docs/ENVIRONMENT.md)와 [운영 가이드](../docs/OPERATIONS.md)에 있어요.
+
+대화 목록 조회는 저장된 `slot_active`를 읽어 `locked`를 만들고 슬롯 재조정·프로필 잠금·구독 조회·커밋을 수행하지 않아요. 구독 변동의 슬롯 반영은 별도 갱신 경로가 맡으며, 생성·발화·활성화 경로는 현재 한도를 재검사해요. 갱신 작업이 늦으면 목록 표시가 일시적으로 이전 상태일 수 있어요.
+
+바구니 운영 리셋 v1(2026-09-19)은 `language_snack_basket_resets`에 `(user_id, content_language)`별 최신 UUID·시간만 upsert해요. POST는 운영 키로, GET은 본인 Bearer로 보호해요. 앱은 Home 진입·복귀 때 별도 GET으로 확인하고 일일 스냅샷의 `reset_id`와 다르면 같은 카드 묶음의 소비를 0으로 초기화해요. 요청 중 계정·언어가 바뀌면 응답을 버리고, 팝업·애니메이션 중에는 적용을 미뤄요. 로컬에 ID를 함께 저장해 재실행·자정에도 재적용하지 않으며 네트워크 실패는 기존 진행에 영향을 주지 않아요. 소비 횟수의 기기 간 동기화는 아니에요.
 
 도메인은 기본적으로 아래 계층을 따라요:
 
@@ -101,17 +129,33 @@ domains/{name}/
 
 도메인 특성상 모든 파일이 항상 필요한 것은 아니며, `search`처럼 저장 모델이 없는 도메인은 `service.py`와 `router.py` 중심으로 구성해요.
 
+새 도메인은 `backend/domains/{domain_name}/`에 필요한 모델·스키마·repository·service·router를 추가하고 `backend/main.py`에 라우터를 등록해요. API·설정·실행법의 문서 동기화 대상은 [AGENTS.md §5.8](../AGENTS.md#5-핵심-규칙)을 따라요.
+
+문서 정리(2026-09-13): README의 구조·개발 안내를 이 문서로 통합하고 환경변수·운영 절차를 별도 기준 문서로 연결했어요.
+
 ---
 
 ## 3. 데이터 플로우
 
+### API 구조화 로그와 음성 지연 진단 v2
+
+`shared/latency.py`의 ASGI middleware는 모든 `/api/` 요청과 `/health`에 요청별 ContextVar를 설정해 최종 body 전송까지 측정해요. 요청마다 JSON stdout 완료 로그 한 건을 내고, 보호 API의 인증 확인과 대화의 auth·STT·LLM·TTS·인코딩 단계를 같은 trace로 연결해요. `shared/logging_config.py`는 허용 필드만 직렬화하고 500 오류의 예외 종류·스택 위치에서 메시지와 지역 변수를 제외해요. nginx는 자체 요청 ID와 upstream 시간을 JSON으로 남기며 Docker가 API·nginx 로그를 회전해요. Flutter의 첫 playing 이벤트 측정은 유지해요. [로그 계약](../docs/OBSERVABILITY.md), [음성 실험](../docs/VOICE_LATENCY.md), [스트리밍 설계·단계별 구현](../docs/VOICE_STREAMING.md)을 참조해요.
+
+대화 음성 스트림은 `stream_turns`·`stream_attempts`에 시도·오디오 상태를 기록해요. 주간 추천은 저장된 첫 질문을 합성하고, Free Chat·Roleplay 시작과 기존 대화의 `/turn/stream/`·`/message/stream/`은 LLM 토큰 reader, 문장 분리, 최대 2개씩 제한된 큐와 단일 TTS worker를 사용해요. 확정된 사용자 발화는 생성 전에 저장하고, 완성된 AI 답변만 저장해요. 연결 중 상태 변경은 독립 DB session에서 처리해요. 문장별 MP3는 호스트 bind mount의 staging 디렉터리에 쓰고 완료 후 원자적으로 공개해요. `conversation_audio_cache`는 manifest와 다중 워커 생성 lease를 보관해요. 다시 듣기는 파일 전체를 검사한 뒤 캐시를 재생하고, 누락·손상 시 저장된 텍스트에서 재생성해요. 30일 파일 만료는 운영 cron 작업이 실행하며 대화 삭제 시 파일도 제거해요. 앱은 Dio 증분 decoder·단일 재생 큐로 문장 오디오를 순서대로 재생하고, 완료된 assistant 메시지에 다시 듣기 버튼을 표시해요. 요청별 컨트롤러의 메모리에는 생성 텍스트를 누적하고, 재생 차례의 문장까지만 UI 상태에 공개해 타이핑해요. 첫 글자의 화면 프레임 이후 해당 음성을 재생하고, 앞 문장 재생 중에는 다음 문장을 숨겨요. 완료 이벤트도 대기 문장을 공개하지 않으며 TTS·재생 실패 때는 남은 텍스트를 공개해요. 서버 송출·앱 수신·첫 화면 프레임은 공통 trace ID와 델타 번호로 확인해요. 화면 이탈 때 요청과 큐를 취소해요.
+
 ### 인증
+
+첫 앱 프로필은 `nickname=NULL`로 생성해요. 기존 프로필은 migration에서 현재 `name`을 닉네임으로 이관해 이전 표시 이름을 유지해요. 앱은 초기화 응답의 닉네임이 null이면 Home 위에 필수 입력 팝업을 띄워요. 이때 기기의 우선 시스템 언어가 한국어면 영어, 그 외에는 한국어 randino 닉네임을 입력 칸에 미리 채우며 앱 표시 언어와 학습 언어쌍은 사용하지 않아요. `PUT /api/auth/me/nickname` 저장이 성공해야 팝업을 닫아요. 저장 실패 시 입력을 유지하며 앱 재시작 후에도 다시 표시해요. 내 정보에서 닉네임을 수정할 수 있고, 닉네임은 계정 식별자가 아니므로 중복을 허용해요.
 
 ```text
 [Flutter 앱] → Google Sign-In SDK로 Google id_token 획득
              → Google access_token 획득
              → Supabase Auth signInWithIdToken(provider=google)
              → Supabase session/access_token 발급
+
+[Flutter iOS 앱] → 요청별 원본 nonce 생성, SHA-256 해시를 Apple에 전달
+                 → Apple identityToken과 원본 nonce로 signInWithIdToken(provider=apple)
+                 → Supabase session/access_token 발급
 
 [Flutter 앱] → 인증 API에서 401 수신
              → 진행 중인 Supabase refresh가 있으면 같은 결과 대기
@@ -121,22 +165,31 @@ domains/{name}/
              → refresh가 실패하거나 세션이 없으면 unauthenticated 전환
 
 [FastAPI] → Authorization: Bearer <supabase_access_token>
-          → Supabase Auth /user 검증
-          → profiles upsert/select
+          → auto 모드의 ES256 token은 캐시된 Supabase JWKS 공개 키로 검증
+          → 그 외 token 또는 remote 모드는 Supabase Auth /user 검증
+          → 로그인 초기화 요청에서 profile 생성·선택적 언어 적용
+          → 일반 요청은 ID만 사용하고 언어가 필요한 요청만 profile 조회
           → current_user.id를 ownership boundary로 사용
 ```
 
-인증이 필요한 API는 `Authorization: Bearer <supabase_access_token>` 헤더를 사용해요. 모바일 v1은 Supabase Auth의 Google native sign-in 흐름을 기본 로그인 경로로 사용해요.
+인증이 필요한 API는 `Authorization: Bearer <supabase_access_token>` 헤더를 사용해요. 모바일은 Google native sign-in과 iOS Apple native sign-in을 제공해요.
+`auto` 모드는 워커마다 JWKS를 5분 캐시하고 키 ID가 없으면 갱신을 시도해요. 서명·발급자·대상·역할·만료 검증이 실패하면 요청을 거절해요. 로컬 검증은 토큰 유효 기간 중 Supabase 사용자 상태 변경을 즉시 확인하지 못하므로 즉시 폐기 확인이 필요한 운영에서는 `remote` 모드를 사용해요.
+언어 선호는 profile 기본값(`native_language`, `target_language`, `feedback_language`)으로 저장하고, 기존 값이 없으면 `ko -> en`과 feedback `ko`로 보정해요.
+일반 인증 요청은 기존 profile의 필드와 `updated_at`을 변경하지 않아요. 초기화 요청에 pending 언어가 있거나 언어 선호·앱 표시 언어 변경 API를 호출할 때만 해당 설정을 저장해요. `is_active`는 인증 차단 정책에서 제외하고 기존 저장·응답 필드로 유지해요. Supabase의 이름·사진 등 metadata 변경은 현재 자동 동기화하지 않아요.
 
 ### 대화
+
+대화 재진입 v1.1 (2026-09-22): Flutter는 기존 시간순 offset API의 첫 응답에서 total_count를 확인하고, 40개 초과 시 마지막 40개를 추가 조회해 최초 화면에 표시해요. ConversationState.oldestOffset으로 이전 구간을 40개씩 조회하며, 실패 시 표시 중인 메시지를 유지해 재시도해요. 이전 구간 로딩과 전송은 동시에 실행하지 않아요. 화면은 reverse 목록·역순 위젯 배열과 진입별 ScrollController(keepScrollOffset: false)로 최신 위치에서 시작하고, 과거 열람·교정 카드 확장 때 강제 이동하지 않아요. 대화 provider의 기존 캐시·음성 상태는 유지하며 재진입 시 다른 기기의 변경을 자동 조회하지는 않아요. 서버 API 계약은 변경하지 않아요.
 
 ```text
 [사용자] → POST /api/conversations/start/{free-chat|roleplay}/
          → ConversationRouter
          → ConversationService
+         → profile language defaults를 conversation language snapshot으로 저장
+         → roleplay는 role_character를 저장
          ├── LLMProvider → OpenRouter / Ollama
-         ├── GrammarService 백그라운드 문법 체크
-         └── Response { conversation_id, response, message_id }
+         ├── GrammarService 백그라운드 문법 체크(snapshot language)
+         └── Response { conversation_id, response, message_id, language }
 
 [Flutter 앱] → Topic Prep 첫 답변 또는 Roleplay Setup CTA
              → start conversation API
@@ -151,9 +204,9 @@ domains/{name}/
 [Flutter 앱] → Conversation composer 텍스트/음성 전송
              → POST /api/conversations/{conversation_id}/turn/
              → text 또는 audio_file 중 하나 전달
-             → audio_file이면 VoiceService → STT provider → transcript 생성
-             → ConversationService.continue_conversation(transcript 또는 text)
-             → include_audio_response=true이면 VoiceService → TTS provider
+             → audio_file이면 VoiceService → OpenRouter/OpenAI STT provider → transcript 생성
+             → ConversationService.continue_conversation(transcript 또는 text, conversation language snapshot)
+             → include_audio_response=true이면 VoiceService → OpenRouter/OpenAI TTS provider
              → Response { transcript, response, audio?, audio_error? }
 
 [Flutter 앱] → Free Chat 음성 시작
@@ -185,6 +238,8 @@ domains/{name}/
          → SearchResult { query, enhanced_query, ready, summary?, sources, quality, timestamp }
 ```
 
+Topic Prep은 검색이 필요한 주제에서 출처 품질 판정을 통과한 결과의 제목·검색 요약을 카드 생성 LLM에 참고 데이터로 전달해요. 검색이 필요 없는 주제는 출처 없이 카드의 완성도와 적합성을 판정해요. 두 경로 모두 카드 요약을 앱에 표시하고, 대화 시작 시 그 요약을 `search_context`로 전달해요.
+
 ### 웹 페이지
 
 ```text
@@ -197,14 +252,26 @@ domains/{name}/
 
 ## 4. 외부 의존성
 
+### 외부 HTTP 연결 풀 v1 — 구현 결정 (2026-09-13)
+
+FastAPI lifespan에서 워커의 이벤트 루프별 AI용·Supabase 인증용 `httpx.AsyncClient`를 각각 만들고 dependency → service → provider로 명시적으로 전달해요. provider는 빌린 client를 닫지 않아요. 스낵 CLI도 자신의 이벤트 루프에서 같은 생성 함수를 사용해 실행 전체에 하나의 AI client를 소유해요. HTTP client 생성 시에는 실제 API를 호출하지 않아요.
+
+초기 한도는 풀마다 최대 연결 100개·유휴 연결 20개·유휴 만료 30초이며 환경변수로 조절해요. OpenRouter LLM 30초, Ollama 60초, 음성·인증의 기존 timeout은 요청별로 유지해요. HTTP/2·자동 재시도·provider 변경은 추가하지 않아요. 요청별 인증 헤더를 사용하고 upstream 쿠키 저장을 차단해 사용자 상태가 공유되지 않도록 해요.
+
+백그라운드 문법 task는 워커별 registry가 추적해요. 종료 시 최대 5초(설정 가능) 동안 기다린 뒤 남은 task를 cancel하고 await한 후 HTTP client를 닫아요. 문법 저장에는 요청용 DB session 대신 task가 소유한 별도 session을 사용해요. 종료 중 취소된 문법 피드백은 저장되지 않을 수 있으며 재시작 후 자동 재개하는 작업 큐는 이번 범위에 포함하지 않아요.
+
+검증은 실제 localhost HTTP/1.1 연결 재사용, 동시 요청·인증 헤더/쿠키 분리, timeout·오류 유지, 종료 순서, CLI와 provider 주입 경로를 포함해요. 외부 유료 API 호출과 운영 배포는 수행하지 않아요.
+
 | 서비스 | 용도 | 실패 시 |
 |--------|------|---------|
 | OpenRouter API | LLM 대화 생성 | 502 계열 외부 API 오류 |
 | Ollama | 로컬 LLM 대안 | 502 계열 외부 API 오류 |
-| OpenAI Audio API | STT/TTS 음성 대화 입출력 | STT 실패 시 대화 저장 전 오류, TTS 실패 시 `audio_error` |
+| OpenRouter Audio API | 기본 STT/TTS 음성 대화 입출력 | STT 실패 시 대화 저장 전 오류, TTS 실패 시 `audio_error` |
+| OpenAI Audio API | OpenAI direct STT/TTS fallback | STT 실패 시 대화 저장 전 오류, TTS 실패 시 `audio_error` |
 | DuckDuckGo(ddgs) | 검색 자료 수집 | 검색 실패 오류 |
-| Supabase Auth | Google 로그인, 세션 refresh, token 검증 | 인증 오류 |
+| Supabase Auth | Google·Apple 로그인, 세션 refresh, token 검증 | 인증 오류 |
 | Google Sign-In | 모바일 native Google 계정 선택 | 인증 오류 |
+| Sign in with Apple | iOS native Apple 계정 선택 | 인증 오류 |
 
 ---
 
@@ -212,7 +279,7 @@ domains/{name}/
 
 - API 키와 서버 전용 secret은 환경변수로만 관리해요.
 - 클라이언트에는 OpenRouter, OpenAI, Supabase service role key를 노출하지 않아요.
-- Flutter 앱은 Google `id_token`과 Google `access_token`으로 Supabase 세션을 만들고, FastAPI에는 Supabase access token만 전달해요.
+- Flutter 앱은 Google `id_token`·`access_token` 또는 iOS Apple `identityToken`·원본 nonce로 Supabase 세션을 만들고, FastAPI에는 Supabase access token만 전달해요.
 - Supabase가 refresh token 저장과 rotate를 관리해요.
 - 대화와 메시지는 `user_id`로 소유자를 분리해요.
 - 모바일 앱은 백엔드 API와 HTTPS로 통신하는 별도 클라이언트로 취급해요.

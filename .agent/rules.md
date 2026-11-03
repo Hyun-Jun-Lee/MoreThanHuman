@@ -1,6 +1,6 @@
 # 프로젝트 정책
 
-> SSoT: `AGENTS.md` · 최종 갱신: 2026-05-20
+> SSoT: `AGENTS.md` · 최종 갱신: 2026-09-13
 
 ---
 
@@ -36,7 +36,7 @@
 
 ### 공통
 
-- 환경변수: `.env` 파일, `.env.example` 동기화 필수
+- 환경변수: `.env` 파일로 관리하고 `.env.example`·`docs/ENVIRONMENT.md`·`backend/config.py` 동기화 필수
 - 새 도메인 추가 시: `domains/{name}/` 폴더 → models → schemas → repository → service → router → `main.py` 라우터 등록
 
 ---
@@ -45,6 +45,7 @@
 
 - 인덱스 ↔ 본문 동기화: 본문 변경 시 관련 인덱스 같은 커밋에 갱신
 - N-way sync: `AGENTS.md §5.8` 등록부 참조
+- README는 소개·실행·CLI 중심으로 유지하고, 상세 API는 `docs/DSL.md`, 환경변수는 `docs/ENVIRONMENT.md`, 운영 절차는 `docs/OPERATIONS.md`에서 관리
 - 문서 위치:
   - 기술 문서 → `docs/`
   - AI 에이전트 운영 → `.agent/`

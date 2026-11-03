@@ -1,11 +1,19 @@
+import json
+
+import httpx
 import pytest
 
 from domains.voice.schemas import VoiceSynthesisResult, VoiceTranscriptionResult
 from domains.voice import service as voice_service_module
+from domains.voice.openai_provider import OpenAIVoiceProvider
+from domains.voice.openrouter_provider import OpenRouterVoiceProvider
 from domains.voice.service import VoiceService
-from shared.exceptions import ValidationException
+from shared.exceptions import AppException, ValidationException
 
-WEBM_BYTES = b"\x1A\x45\xDF\xA3fake webm audio"
+WEBM_BYTES = b"\x1A\x45\xDF\xA3" + (b"w" * 2048)
+M4A_BYTES = b"\x00\x00\x00\x18ftypM4A" + (b"m" * 2048)
+WAV_BYTES = b"RIFF\x00\x00\x00\x00WAVEfmt " + (b"w" * 2048)
+HEADER_ONLY_M4A_BYTES = b"\x00\x00\x00\x18ftypM4A"
 
 
 class FakeUpload:
@@ -70,7 +78,39 @@ async def test_text_input_does_not_require_voice_provider_configuration(monkeypa
 
 
 @pytest.mark.asyncio
-async def test_transcribe_upload_returns_non_empty_transcript():
+async def test_create_provider_supports_openrouter(monkeypatch):
+    monkeypatch.setattr(voice_service_module.settings, "stt_provider", "openrouter")
+    monkeypatch.setattr(voice_service_module.settings, "tts_provider", "openrouter")
+
+    async with httpx.AsyncClient() as client:
+        provider = VoiceService(http_client=client).provider
+        assert provider.http_client is client
+
+    assert isinstance(provider, OpenRouterVoiceProvider)
+
+
+@pytest.mark.asyncio
+async def test_create_provider_still_supports_openai(monkeypatch):
+    monkeypatch.setattr(voice_service_module.settings, "stt_provider", "openai")
+    monkeypatch.setattr(voice_service_module.settings, "tts_provider", "openai")
+
+    async with httpx.AsyncClient() as client:
+        provider = VoiceService(http_client=client).provider
+        assert provider.http_client is client
+
+    assert isinstance(provider, OpenAIVoiceProvider)
+
+
+def test_create_provider_rejects_mixed_voice_providers(monkeypatch):
+    monkeypatch.setattr(voice_service_module.settings, "stt_provider", "openrouter")
+    monkeypatch.setattr(voice_service_module.settings, "tts_provider", "openai")
+
+    with pytest.raises(AppException, match="same provider"):
+        _ = VoiceService().provider
+
+
+@pytest.mark.asyncio
+async def test_transcribe_upload_returns_non_empty_transcript(capsys):
     provider = FakeVoiceProvider(transcript="  Let's talk about travel. ")
     service = VoiceService(provider=provider)
 
@@ -78,14 +118,78 @@ async def test_transcribe_upload_returns_non_empty_transcript():
 
     assert result.text == "Let's talk about travel."
     assert provider.transcribe_calls[0]["filename"] == "speech.webm"
+    rows = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line.startswith("{")]
+    upload = next(
+        row for row in rows
+        if "input_bytes" in row and "stage" not in row and "output_chars" not in row
+    )
+    transcript = next(row for row in rows if "output_chars" in row)
+    assert upload["provider"] == "fake"
+    assert upload["input_bytes"] == len(WEBM_BYTES)
+    assert transcript["output_chars"] == len(result.text)
+    assert "Let's talk about travel" not in json.dumps(rows)
 
 
 @pytest.mark.asyncio
-async def test_transcribe_upload_rejects_empty_transcript():
+async def test_transcribe_upload_accepts_x_m4a_content_type():
+    provider = FakeVoiceProvider(transcript="This is from the emulator.")
+    service = VoiceService(provider=provider)
+
+    result = await service.transcribe_upload(
+        FakeUpload(M4A_BYTES, filename="emulator.m4a", content_type="audio/x-m4a")
+    )
+
+    assert result.text == "This is from the emulator."
+    assert provider.transcribe_calls[0]["content_type"] == "audio/x-m4a"
+
+
+@pytest.mark.asyncio
+async def test_transcribe_upload_rejects_undersized_audio_before_provider_call(capsys):
+    provider = FakeVoiceProvider()
+    service = VoiceService(provider=provider)
+
+    with pytest.raises(ValidationException, match="too small"):
+        await service.transcribe_upload(
+            FakeUpload(
+                HEADER_ONLY_M4A_BYTES,
+                filename="header-only.m4a",
+                content_type="audio/m4a",
+            )
+        )
+
+    assert provider.transcribe_calls == []
+    rows = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line.startswith("{")]
+    rejected = next(row for row in rows if row.get("error_code") == "AUDIO_TOO_SMALL")
+    assert rejected["error_code"] == "AUDIO_TOO_SMALL"
+    assert rejected["input_bytes"] == len(HEADER_ONLY_M4A_BYTES)
+    assert "header-only.m4a" not in json.dumps(rows)
+
+
+@pytest.mark.asyncio
+async def test_transcribe_upload_accepts_minimum_size_wav():
+    provider = FakeVoiceProvider()
+    service = VoiceService(provider=provider)
+    wav_bytes = WAV_BYTES[: VoiceService.minimum_audio_bytes]
+
+    result = await service.transcribe_upload(
+        FakeUpload(wav_bytes, filename="speech.wav", content_type="audio/wav")
+    )
+
+    assert result.text == provider.transcript
+    assert provider.transcribe_calls[0]["content_type"] == "audio/wav"
+
+
+@pytest.mark.asyncio
+async def test_transcribe_upload_rejects_empty_transcript(capsys):
     service = VoiceService(provider=FakeVoiceProvider(transcript="   "))
 
     with pytest.raises(ValidationException, match="empty transcript"):
         await service.transcribe_upload(FakeUpload(WEBM_BYTES))
+
+    rows = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line.startswith("{")]
+    empty = next(row for row in rows if row.get("level") == "WARNING" and row.get("provider") == "fake")
+    assert empty["provider"] == "fake"
+    assert empty["input_bytes"] == len(WEBM_BYTES)
 
 
 @pytest.mark.asyncio
@@ -103,7 +207,7 @@ async def test_transcribe_upload_rejects_invalid_audio_signature():
     service = VoiceService(provider=FakeVoiceProvider())
 
     with pytest.raises(ValidationException, match="Invalid audio file signature"):
-        await service.transcribe_upload(FakeUpload(b"fake audio"))
+        await service.transcribe_upload(FakeUpload(b"x" * 2048))
 
 
 @pytest.mark.asyncio

@@ -4,6 +4,8 @@ Dynamic provider selection based on configuration
 """
 from enum import Enum
 
+import httpx
+
 from config import get_settings
 from domains.llm.ollama import OllamaProvider
 from domains.llm.openrouter import OpenRouterProvider
@@ -29,7 +31,9 @@ class LLMProviderFactory:
     }
 
     @classmethod
-    def create_provider(cls, provider_type: str | None = None) -> LLMProvider:
+    def create_provider(
+        cls, provider_type: str | None = None, *, http_client: httpx.AsyncClient | None = None
+    ) -> LLMProvider:
         """
         Provider 생성
 
@@ -55,7 +59,9 @@ class LLMProviderFactory:
             )
 
         provider_class = cls._providers[provider_enum]
-        provider = provider_class()
+        if http_client is None:
+            raise RuntimeError("LLM providers require an app/CLI-owned HTTP client")
+        provider = provider_class(http_client)
 
         # Validate configuration
         if not provider.validate_config():

@@ -8,6 +8,7 @@ class AppSelectionCard extends StatelessWidget {
     required this.selected,
     required this.onTap,
     this.description,
+    this.descriptionStyle,
     this.icon,
     this.trailing,
     this.surfaceColor,
@@ -19,6 +20,7 @@ class AppSelectionCard extends StatelessWidget {
   final bool selected;
   final VoidCallback? onTap;
   final String? description;
+  final TextStyle? descriptionStyle;
   final Widget? icon;
   final Widget? trailing;
   final Color? surfaceColor;
@@ -28,16 +30,20 @@ class AppSelectionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
     final AppSemanticColors semanticColors = AppSemanticColors.of(context);
+    final bool isEnabled = onTap != null;
     final Color borderColor = selected
         ? semanticColors.focusBorder
         : theme.colorScheme.outlineVariant;
     final double borderWidth = selected
         ? AppBorderWidth.focused
         : AppBorderWidth.hairline;
+    final Color contentColor = isEnabled
+        ? theme.colorScheme.onSurface
+        : theme.colorScheme.onSurfaceVariant;
 
     return Semantics(
       button: true,
-      enabled: onTap != null,
+      enabled: isEnabled,
       selected: selected,
       label: semanticLabel,
       excludeSemantics: semanticLabel != null,
@@ -59,7 +65,7 @@ class AppSelectionCard extends StatelessWidget {
                   if (icon != null) ...<Widget>[
                     IconTheme(
                       data: IconThemeData(
-                        color: theme.colorScheme.onSurface,
+                        color: contentColor,
                         size: AppSize.icon,
                       ),
                       child: icon!,
@@ -74,16 +80,17 @@ class AppSelectionCard extends StatelessWidget {
                         Text(
                           title,
                           style: AppTypography.button.copyWith(
-                            color: theme.colorScheme.onSurface,
+                            color: contentColor,
                           ),
                         ),
                         if (description != null) ...<Widget>[
                           const SizedBox(height: AppSpacing.xxs),
                           Text(
                             description!,
-                            style: AppTypography.bodySm.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
+                            style: (descriptionStyle ?? AppTypography.bodySm)
+                                .copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
                           ),
                         ],
                       ],

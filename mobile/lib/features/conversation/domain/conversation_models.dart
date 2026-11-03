@@ -1,3 +1,4 @@
+import 'package:curitalk/core/diagnostics/latency_trace.dart';
 import 'package:curitalk/features/conversation/domain/grammar_feedback.dart';
 
 enum ConversationType {
@@ -69,6 +70,7 @@ class VoiceAudioResponse {
     required this.contentType,
     required this.base64,
     required this.format,
+    this.latencyTrace,
   });
 
   factory VoiceAudioResponse.fromJson(Object? json) {
@@ -92,12 +94,16 @@ class VoiceAudioResponse {
       contentType: contentType,
       base64: base64,
       format: format,
+      latencyTrace: LatencyTrace.current,
     );
   }
 
   final String contentType;
   final String base64;
   final String format;
+
+  /// 서버 JSON과 무관한 진단 정보로, 자동 재생까지 같은 시계를 전달해요.
+  final LatencyTrace? latencyTrace;
 }
 
 class VoiceAudioError {
@@ -220,6 +226,44 @@ class MultimodalConversationResponse extends ConversationResponse {
   final VoiceAudioError? audioError;
 }
 
+class SuggestedConversationResponse {
+  const SuggestedConversationResponse({
+    required this.conversationId,
+    required this.assistantMessageId,
+    required this.response,
+    this.audio,
+    this.audioError,
+  });
+
+  factory SuggestedConversationResponse.fromJson(Object? value) {
+    if (value is! Map<String, dynamic> ||
+        value['conversation_id'] is! String ||
+        value['assistant_message_id'] is! String ||
+        value['response'] is! String) {
+      throw const FormatException(
+        'Suggested conversation response is invalid.',
+      );
+    }
+    return SuggestedConversationResponse(
+      conversationId: value['conversation_id'] as String,
+      assistantMessageId: value['assistant_message_id'] as String,
+      response: value['response'] as String,
+      audio: value['audio'] == null
+          ? null
+          : VoiceAudioResponse.fromJson(value['audio']),
+      audioError: value['audio_error'] == null
+          ? null
+          : VoiceAudioError.fromJson(value['audio_error']),
+    );
+  }
+
+  final String conversationId;
+  final String assistantMessageId;
+  final String response;
+  final VoiceAudioResponse? audio;
+  final VoiceAudioError? audioError;
+}
+
 class MessageResponse {
   const MessageResponse({
     required this.messageId,
@@ -313,6 +357,7 @@ class ConversationMessage {
     this.grammarFeedback,
     this.audio,
     this.audioError,
+    this.audioAvailable = false,
     this.isLocalPending = false,
   });
 
@@ -345,6 +390,7 @@ class ConversationMessage {
       grammarFeedback: json['grammar_feedback'] == null
           ? null
           : GrammarFeedback.fromJson(json['grammar_feedback']),
+      audioAvailable: json['audio_available'] == true,
     );
   }
 
@@ -356,6 +402,7 @@ class ConversationMessage {
   final GrammarFeedback? grammarFeedback;
   final VoiceAudioResponse? audio;
   final VoiceAudioError? audioError;
+  final bool audioAvailable;
   final bool isLocalPending;
 
   ConversationMessage copyWith({
@@ -366,6 +413,7 @@ class ConversationMessage {
     GrammarFeedback? grammarFeedback,
     VoiceAudioResponse? audio,
     VoiceAudioError? audioError,
+    bool? audioAvailable,
     bool? isLocalPending,
   }) {
     return ConversationMessage(
@@ -377,6 +425,7 @@ class ConversationMessage {
       grammarFeedback: grammarFeedback ?? this.grammarFeedback,
       audio: audio ?? this.audio,
       audioError: audioError ?? this.audioError,
+      audioAvailable: audioAvailable ?? this.audioAvailable,
       isLocalPending: isLocalPending ?? this.isLocalPending,
     );
   }

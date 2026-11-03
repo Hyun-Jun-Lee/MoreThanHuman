@@ -14,7 +14,8 @@ settings = get_settings()
 class OpenAIVoiceProvider(VoiceProvider):
     """OpenAI Audio API Provider"""
 
-    def __init__(self):
+    def __init__(self, http_client: httpx.AsyncClient):
+        self.http_client = http_client
         self.api_key = settings.openai_api_key
         self.transcriptions_url = "https://api.openai.com/v1/audio/transcriptions"
         self.speech_url = "https://api.openai.com/v1/audio/speech"
@@ -35,75 +36,73 @@ class OpenAIVoiceProvider(VoiceProvider):
         files = {"file": (filename, audio_bytes, content_type)}
         data = {"model": settings.stt_model}
 
-        async with httpx.AsyncClient() as client:
-            try:
-                response = await client.post(
-                    self.transcriptions_url,
-                    headers=self._headers(),
-                    files=files,
-                    data=data,
-                    timeout=settings.voice_provider_timeout_seconds,
+        try:
+            response = await self.http_client.post(
+                self.transcriptions_url,
+                headers=self._headers(),
+                files=files,
+                data=data,
+                timeout=settings.voice_provider_timeout_seconds,
+            )
+            response.raise_for_status()
+            payload = response.json()
+            return VoiceTranscriptionResult(text=str(payload.get("text", "")))
+        except httpx.HTTPStatusError as e:
+            status_code = e.response.status_code if e.response is not None else None
+            if status_code == 429:
+                raise RateLimitException(
+                    "STT provider rate limit reached. Please try again later.",
+                    details={"provider": self.get_provider_name()},
                 )
-                response.raise_for_status()
-                payload = response.json()
-                return VoiceTranscriptionResult(text=str(payload.get("text", "")))
-            except httpx.HTTPStatusError as e:
-                status_code = e.response.status_code if e.response is not None else None
-                if status_code == 429:
-                    raise RateLimitException(
-                        "STT provider rate limit reached. Please try again later.",
-                        details={"provider": self.get_provider_name()},
-                    )
-                raise ExternalAPIException(
-                    "OpenAI transcription failed.",
-                    details={"provider": self.get_provider_name(), "status_code": status_code},
-                )
-            except httpx.HTTPError as e:
-                raise ExternalAPIException(
-                    "OpenAI transcription failed.",
-                    details={"provider": self.get_provider_name(), "error_type": type(e).__name__},
-                )
+            raise ExternalAPIException(
+                "OpenAI transcription failed.",
+                details={"provider": self.get_provider_name(), "status_code": status_code},
+            )
+        except httpx.HTTPError as e:
+            raise ExternalAPIException(
+                "OpenAI transcription failed.",
+                details={"provider": self.get_provider_name(), "error_type": type(e).__name__},
+            )
 
     async def synthesize_speech(self, *, text: str) -> VoiceSynthesisResult:
         """OpenAI TTS API 호출"""
-        async with httpx.AsyncClient() as client:
-            try:
-                response = await client.post(
-                    self.speech_url,
-                    headers={**self._headers(), "Content-Type": "application/json"},
-                    json={
-                        "model": settings.tts_model,
-                        "voice": settings.tts_voice,
-                        "input": text,
-                        "response_format": settings.tts_response_format,
-                    },
-                    timeout=settings.voice_provider_timeout_seconds,
+        try:
+            response = await self.http_client.post(
+                self.speech_url,
+                headers={**self._headers(), "Content-Type": "application/json"},
+                json={
+                    "model": settings.tts_model,
+                    "voice": settings.tts_voice,
+                    "input": text,
+                    "response_format": settings.tts_response_format,
+                },
+                timeout=settings.voice_provider_timeout_seconds,
+            )
+            response.raise_for_status()
+            return VoiceSynthesisResult(
+                audio_bytes=response.content,
+                content_type=response.headers.get(
+                    "content-type",
+                    f"audio/{settings.tts_response_format}",
+                ),
+                format=settings.tts_response_format,
+            )
+        except httpx.HTTPStatusError as e:
+            status_code = e.response.status_code if e.response is not None else None
+            if status_code == 429:
+                raise RateLimitException(
+                    "TTS provider rate limit reached. Please try again later.",
+                    details={"provider": self.get_provider_name()},
                 )
-                response.raise_for_status()
-                return VoiceSynthesisResult(
-                    audio_bytes=response.content,
-                    content_type=response.headers.get(
-                        "content-type",
-                        f"audio/{settings.tts_response_format}",
-                    ),
-                    format=settings.tts_response_format,
-                )
-            except httpx.HTTPStatusError as e:
-                status_code = e.response.status_code if e.response is not None else None
-                if status_code == 429:
-                    raise RateLimitException(
-                        "TTS provider rate limit reached. Please try again later.",
-                        details={"provider": self.get_provider_name()},
-                    )
-                raise ExternalAPIException(
-                    "OpenAI speech synthesis failed.",
-                    details={"provider": self.get_provider_name(), "status_code": status_code},
-                )
-            except httpx.HTTPError as e:
-                raise ExternalAPIException(
-                    "OpenAI speech synthesis failed.",
-                    details={"provider": self.get_provider_name(), "error_type": type(e).__name__},
-                )
+            raise ExternalAPIException(
+                "OpenAI speech synthesis failed.",
+                details={"provider": self.get_provider_name(), "status_code": status_code},
+            )
+        except httpx.HTTPError as e:
+            raise ExternalAPIException(
+                "OpenAI speech synthesis failed.",
+                details={"provider": self.get_provider_name(), "error_type": type(e).__name__},
+            )
 
     def get_provider_name(self) -> str:
         """Provider 이름 반환"""

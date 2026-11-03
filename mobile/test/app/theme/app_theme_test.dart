@@ -67,7 +67,7 @@ void main() {
         same(AppSemanticColors.light),
       );
       expect(theme.materialTapTargetSize, MaterialTapTargetSize.padded);
-      expect(theme.textTheme.bodyMedium?.fontFamily, 'Pretendard');
+      expect(theme.textTheme.bodyMedium?.fontFamily, 'Freesentation');
     });
 
     testWidgets('is applied at the Curitalk app root', (
@@ -75,7 +75,7 @@ void main() {
     ) async {
       await tester.pumpWidget(const ProviderScope(child: CuritalkApp()));
 
-      final BuildContext context = tester.element(find.text('CURITALK'));
+      final BuildContext context = tester.element(find.byType(Scaffold).first);
       final ThemeData theme = Theme.of(context);
 
       expect(theme.colorScheme.primary, AppPalette.primary);

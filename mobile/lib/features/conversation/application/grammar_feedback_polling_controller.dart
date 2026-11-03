@@ -7,21 +7,23 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 enum GrammarFeedbackPollingStatus { pending, completed, timeout, error }
 
+enum GrammarFeedbackFailureReason { requestFailed }
+
 class GrammarFeedbackPollingState {
   const GrammarFeedbackPollingState({
     required this.status,
     this.feedback,
-    this.errorMessage,
+    this.failureReason,
   });
 
   const GrammarFeedbackPollingState.pending()
     : status = GrammarFeedbackPollingStatus.pending,
       feedback = null,
-      errorMessage = null;
+      failureReason = null;
 
   final GrammarFeedbackPollingStatus status;
   final GrammarFeedback? feedback;
-  final String? errorMessage;
+  final GrammarFeedbackFailureReason? failureReason;
 }
 
 class GrammarFeedbackPollingConfig {
@@ -80,7 +82,7 @@ class GrammarFeedbackPollingController
         if (!_disposed) {
           state = const GrammarFeedbackPollingState(
             status: GrammarFeedbackPollingStatus.error,
-            errorMessage: 'Grammar feedback is unavailable right now.',
+            failureReason: GrammarFeedbackFailureReason.requestFailed,
           );
         }
         return;

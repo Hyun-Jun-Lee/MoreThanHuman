@@ -1,650 +1,173 @@
-# MoreThanHuman
+# tomatalk
 
-AI 기반 영어 회화 학습 플랫폼의 FastAPI 백엔드와 Curitalk Flutter 모바일 앱을 함께 관리해요.
+tomatalk은 관심 있는 주제로 AI와 대화하고 문법 피드백과 짧은 언어 지식을 학습하는 다국어 회화 앱이에요. 이 저장소는 FastAPI 백엔드(`backend/`)와 Flutter iOS·Android 앱(`mobile/`)을 함께 관리해요.
 
-백엔드는 `backend/`, iOS·Android 모바일 앱은 `mobile/`에 있어요.
+## 실행 준비
 
-## 빠른 시작
+- 백엔드: Python 3.12 이상과 uv
+- 모바일: Dart 3.12.2 이상을 포함한 Flutter SDK, iOS용 Xcode 또는 Android SDK
+- 인증·LLM: Google 로그인이 설정된 Supabase 프로젝트와 OpenRouter 설정
+- Docker 실행을 선택할 때만 Docker Engine과 Compose가 필요해요.
 
-### 1. 환경 설정
+**아래 명령 블록은 각각 저장소 루트에서 시작하는 기준이에요.** 이미 .env가 있다면 덮어쓰지 말고 필요한 항목만 추가해요.
 
 ```bash
 cp .env.example .env
 ```
 
-`.env`에서 최소한 아래 값을 설정해요:
+| 필수 설정 | 용도 |
+|-----------|------|
+| `DATABASE_URL` | 로컬 SQLite 예시 또는 운영 PostgreSQL 연결 |
+| `OPENROUTER_API_KEY`, `OPENROUTER_MODEL` | 기본 LLM API 키·모델 |
+| `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` | 사용자 인증 |
+| `JWT_SECRET_KEY` | 현재 설정 로더에서 요구하는 레거시 secret |
 
-| 변수 | 설명 |
-|------|------|
-| `LLM_PROVIDER` | `openrouter` 또는 `ollama` |
-| `OPENROUTER_API_KEY` | OpenRouter API 키 |
-| `OPENROUTER_MODEL` | OpenRouter 모델명 |
-| `OPENAI_API_KEY` | STT/TTS 음성 기능을 사용할 때 필요한 OpenAI API 키 |
-| `OLLAMA_BASE_URL` | Ollama 서버 URL |
-| `OLLAMA_MODEL` | Ollama 모델명 |
-| `SUPABASE_URL` | Supabase project URL |
-| `SUPABASE_PUBLISHABLE_KEY` | Supabase Auth 토큰 검증에 사용하는 publishable key |
+기본 provider는 OpenRouter이며 Ollama도 지원해요. 전체 설정과 우선순위는 [환경변수 문서](docs/ENVIRONMENT.md)를 참고해요. **.env와 서버 전용 키는 커밋하거나 Flutter에 포함하지 않아요.**
 
-### 2. 의존성 설치
+## 실행 방법
 
-권장 방식:
+### 로컬 백엔드
 
 ```bash
 cd backend
 uv sync
-```
-
-호환 방식:
-
-```bash
-pip install -r requirements.txt
-```
-
-`backend/pyproject.toml`이 최신 의존성 기준이에요.
-
-### 3. 데이터베이스
-
-개발 기본값은 SQLite예요.
-
-```env
-DATABASE_URL=sqlite:///./english_learning.db
-```
-
-프로덕션에서는 PostgreSQL을 사용해요.
-
-```env
-DATABASE_URL=postgresql://user:password@localhost:5432/english_learning
-```
-
-스키마 변경은 Alembic이 관리해요.
-
-```bash
-cd backend
 uv run alembic upgrade head
+uv run uvicorn main:app --reload --host 0.0.0.0 --port 8010
 ```
 
-### 4. 서버 실행
+**마이그레이션 실행 전 대상 DB와 백업을 확인하세요. 스낵 v2 마이그레이션은 기존 스낵 데이터를 삭제해요.** 새 콘텐츠는 별도로 생성해야 해요.
 
-```bash
-cd backend
-uv run python main.py
-```
+실행 후 [Swagger](http://localhost:8010/docs)에서 API를 확인하고 [/health](http://localhost:8010/health)로 서버 응답을 확인할 수 있어요.
 
-또는:
-
-```bash
-cd backend
-uv run uvicorn main:app --reload --port 8010
-```
-
-서버 실행 후:
-
-| URL | 설명 |
-|-----|------|
-| `http://localhost:8010/docs` | Swagger API 문서 |
-| `http://localhost:8010/redoc` | ReDoc |
-| `http://localhost:8010/health` | 헬스 체크 |
-
-### 5. 모바일 앱 확인
+### 모바일 앱
 
 ```bash
 cd mobile
 flutter pub get
+flutter run \
+  --dart-define=API_BASE_URL=http://localhost:8010/api/ \
+  --dart-define=SUPABASE_URL=YOUR_SUPABASE_URL \
+  --dart-define=SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY \
+  --dart-define=GOOGLE_CLIENT_ID=YOUR_IOS_CLIENT_ID \
+  --dart-define=GOOGLE_SERVER_CLIENT_ID=YOUR_WEB_CLIENT_ID
+```
+
+Flutter는 서버 .env를 자동으로 읽지 않아요. 위 공개 설정을 실제 값으로 바꾸고, Google 로그인 플랫폼 설정은 [모바일 문서](mobile/README.md#실행-설정)를 따라주세요. Android 에뮬레이터는 API 주소의 호스트를 `10.0.2.2`, 실제 기기는 접근 가능한 개발 PC 주소로 바꿔요.
+
+iOS TestFlight IPA의 앱·위젯 서명 설정은 [운영 가이드](docs/OPERATIONS.md#ios-testflight-배포-서명)를 따라주세요.
+
+### 공개 웹사이트
+
+```bash
+cd website
+npm run build
+npm run dev
+```
+
+`http://localhost:4173`에서 랜딩·지원·개인정보처리방침의 한국어·영어 페이지를 확인할 수 있어요. Vercel에는 `website/`를 Root Directory로 설정해요. 공개 주소와 출시 전 확인 항목은 [웹사이트 문서](docs/WEBSITE.md)를 참고해요.
+
+### Docker 백엔드
+
+외부 PostgreSQL·nginx 구성을 마친 운영 서버에서 API를 갱신하는 명령이에요.
+
+```bash
+docker compose up -d --build --force-recreate --no-deps api
+```
+
+컨테이너 시작 시 마이그레이션도 실행돼요. 음성 캐시를 사용할 때는 첫 배포 전에 호스트의 `/var/lib/curitalk/audio` 디렉터리를 만들고 [만료 작업](docs/OPERATIONS.md#대화-음성-파일-운영)을 등록해요. API의 8010 포트는 호스트에 직접 공개되지 않으며 nginx를 통해 접근해요. 최초 설치·HTTPS·복구는 [운영 가이드](docs/OPERATIONS.md)를 참고해요.
+
+## CLI 명령어
+
+### DB 마이그레이션
+
+`backend/`에서 실행해요. 조회 명령으로 상태를 확인한 뒤 필요한 변경만 적용해요.
+
+| 명령 | 설명 |
+|------|------|
+| `uv run alembic current` | 연결된 DB의 적용 revision 확인 |
+| `uv run alembic heads` | 코드의 최신 revision 확인 |
+| `uv run alembic upgrade head` | 미적용 마이그레이션 반영 |
+
+구독·대화 권한을 활성화하려면 [운영 가이드의 기존 대화 슬롯 초기화](docs/OPERATIONS.md#대화-이용-권한-활성화)와 Apple Sandbox 검증을 먼저 마쳐요. 운영 환경의 `CONVERSATION_ACCESS_ENABLED`는 검증 전 `false`로 유지해요.
+
+계정 삭제 중 외부 장애로 남은 작업은 `backend/`에서 `uv run python -m scripts.retry_account_deletions`로 재시도해요. 서버 키와 정기 실행 절차는 [계정 삭제 운영 가이드](docs/OPERATIONS.md#계정-삭제-처리)를 참고해요.
+
+### 스낵 콘텐츠 생성
+
+로컬에서는 Docker나 API 서버 없이 DB와 LLM에 직접 연결해요. 먼저 의존성 설치와 마이그레이션을 완료해야 해요.
+
+```bash
+cd backend
+uv run python -m scripts.generate_language_snacks \
+  --language en --per-type 3 --run-key initial-v2
+```
+
+위 명령은 영어 콘텐츠를 지역별 표현·용법 차이·동음이의어 **각 3개씩, 총 9개** 목표로 생성해요. 검증 통과 시 즉시 발행하며 실패·중복·예산 제한으로 목표보다 적을 수 있어요.
+
+| 옵션 | 설명 |
+|------|------|
+| `--language en\|ko\|all` | 생성 언어. 기본 all은 두 언어 합계 18개 목표 |
+| `--per-type 3` | 언어별 유형별 목표 수량, 1..6. 생략하면 환경 설정 사용 |
+| `--run-key initial-v2` | 같은 키·언어·수량은 기존 작업을 재개하고 완료된 작업은 추가 생성하지 않아요 |
+| `--dry-run` | 후보만 미리 생성하고 DB에는 저장하지 않아요 |
+| `--help` | 전체 옵션 확인 |
+
+실행 키를 생략하면 현재 주간 슬롯을 사용해요. **실제 생성과 dry-run 모두 LLM 사용량이 발생해요.** 스낵 전용 설정이 없으면 기본 LLM provider·model을 사용해요.
+
+Docker에서는 이미지 빌드와 DB 마이그레이션을 완료한 뒤 저장소 루트에서 실행해요.
+
+```bash
+/bin/sh deploy/scripts/generate-language-snacks.sh \
+  --language en --per-type 3 --run-key initial-v2
+```
+
+이 래퍼만 Docker 실행을 요구해요. 월요일 오전 5시(한국 시간) cron 등록, 오류·재시도·잠금 설정은 [스낵 운영 절차](docs/OPERATIONS.md#언어-스낵-운영)를 참고해요.
+
+### 주간 대화 추천 발행
+
+추천 주제는 예약 작업 없이 운영자가 `backend/`에서 직접 발행해요. 마이그레이션과 LLM 설정을 완료한 뒤 실행해요.
+
+```bash
+cd backend
+uv run python -m scripts.generate_weekly_topics --pair all
+```
+
+`--pair ko-en|en-ko|all`, `--week-start YYYY-MM-DD`, 동일 주차를 다시 생성하는 `--republish`를 지원해요. 주제 보관과 실패 복구는 [주간 대화 추천 운영 절차](docs/OPERATIONS.md#주간-대화-추천-운영)를 참고해요.
+
+### 테스트
+
+로컬 대화 목록 API의 중앙값·p95를 반복 측정하려면 [API 로그 문서의 개발 계정 절차](docs/OBSERVABILITY.md#개발-계정으로-대화-목록-반복-측정)를 따라주세요.
+
+백엔드:
+
+```bash
+cd backend
+uv run pytest -q
+```
+
+모바일:
+
+```bash
+cd mobile
 flutter analyze
 flutter test
 ```
 
-실제 iOS·Android 실행에는 Xcode 또는 Android SDK 설정이 추가로 필요해요.
+스낵 PostgreSQL 통합 테스트는 별도의 격리 테스트 DB를 `SNACK_TEST_POSTGRES_URL`로 지정해야 해요. 운영 DB를 사용하지 않아요.
 
-## 프로젝트 구조
+## 상세 문서
 
-```text
-MoreThanHuman/
-├── backend/
-│   ├── main.py             # FastAPI 앱 초기화 및 라우터 등록
-│   ├── config.py           # 환경 설정
-│   ├── database.py         # SQLAlchemy DB 연결 및 세션 관리
-│   ├── shared/             # 공통 타입, 예외, 유틸리티
-│   └── domains/            # auth, conversation, grammar, llm, search, web
-└── mobile/
-    ├── android/            # Android runner
-    ├── ios/                # iOS runner
-    ├── lib/                # Flutter 애플리케이션 코드
-    ├── test/               # Flutter 테스트
-    └── pubspec.yaml        # Dart/Flutter 의존성
-```
+Topic Prep의 요약·카드 도착 시간은 [API 로그와 지연 진단](docs/OBSERVABILITY.md#앱-주요-흐름-반복-측정)의 `topic-prep-stream`으로 측정해요.
 
-## API 공통 규칙
-
-Base URL: `http://localhost:8010`
-
-성공 응답:
-
-```json
-{
-  "success": true,
-  "message": "optional message",
-  "data": {}
-}
-```
-
-에러 응답:
-
-```json
-{
-  "success": false,
-  "error": "에러 메시지",
-  "details": {}
-}
-```
-
-인증이 필요한 API는 헤더를 사용해요:
-
-```http
-Authorization: Bearer <access_token>
-```
-
-## Auth API
-
-### 세션 정책(모바일 기준)
-
-- Supabase Auth가 Google 로그인, access token, refresh를 관리해요.
-- Flutter 앱은 Google Sign-In SDK로 `id_token`과 Google `access_token`을 받은 뒤 `supabase.auth.signInWithIdToken(provider: google)`로 Supabase 세션을 만들어요.
-- FastAPI는 `Authorization: Bearer <supabase_access_token>`만 검증하고 자체 access/refresh token pair를 발급하지 않아요.
-- `401`이 발생하면 Flutter의 Supabase SDK가 세션을 refresh하고 Dio가 원 요청을 한 번만 재시도해요.
-- 앱 소유 프로필 데이터는 `profiles.id = Supabase auth.users.id` 기준으로 저장해요.
-
-### Swagger 사용 순서
-
-1. 모바일 앱 또는 Supabase Auth tooling에서 로그인된 사용자의 Supabase `access_token`을 복사해요.
-2. Swagger 우측 상단 `Authorize`에 `Bearer <supabase_access_token>` 형식으로 입력해요.
-3. `/api/search/`, `/api/search/topic-prep/`, `/api/conversations/` 같은 인증 API를 호출해요.
-4. 만료되었거나 다른 Supabase project의 token이면 FastAPI가 `401`을 반환해요.
-
-```text
-Flutter App
-→ Google Sign-In SDK로 로그인
-→ Google id_token + access_token 획득
-→ Supabase signInWithIdToken
-→ Supabase access_token 획득
-→ FastAPI API 호출 시 Authorization 헤더 사용
-```
-
-### `GET /api/auth/me`
-
-Supabase access token으로 검증된 현재 사용자 프로필을 반환해요. 프로필이 없으면 Supabase claim을 기준으로 `profiles` row를 생성하거나 갱신해요. 인증이 필요해요.
-
-## Conversation API
-
-모든 conversation API는 인증이 필요해요.
-
-### `POST /api/conversations/start/free-chat/`
-
-자유 대화를 시작해요. JSON 텍스트 요청과 multipart 음성 요청을 모두 지원해요.
-
-```json
-{
-  "first_message": "Hello, I want to practice English.",
-  "search_context": null,
-  "topic": null,
-  "conversation_direction": null,
-  "selected_question": null
-}
-```
-
-음성으로 시작하는 경우:
-
-```http
-POST /api/conversations/start/free-chat/
-Content-Type: multipart/form-data
-
-audio_file=<recording.webm>
-include_audio_response=true
-```
-
-주제 준비 카드에서 시작하는 경우:
-
-| 필드 | 설명 |
+| 문서 | 내용 |
 |------|------|
-| `search_context` | 준비 카드의 검색 기반 요약 |
-| `topic` | 사용자가 입력한 관심 주제 |
-| `conversation_direction` | `CASUAL_CHAT`, `DEBATE`, `INTERVIEW_QA`, `EXPLANATION_PRACTICE` 중 하나 |
-| `selected_question` | 사용자가 선택해 답변하는 AI 첫 질문 |
-
-### `POST /api/conversations/start/roleplay/`
-
-롤플레이 대화를 시작해요.
-
-```json
-{
-  "role_character": "a barista at a coffee shop",
-  "search_context": null
-}
-```
-
-### `POST /api/conversations/{conversation_id}/message/`
-
-진행 중인 대화에 텍스트 메시지를 전송해요. 기존 텍스트 전용 API이며, 새 채팅 composer는 아래 `/turn/` API를 사용하면 텍스트와 음성을 한 경로로 처리할 수 있어요.
-
-```json
-{
-  "message": "I want to order a latte."
-}
-```
-
-### `POST /api/conversations/{conversation_id}/turn/`
-
-진행 중인 대화에 텍스트 또는 음성 파일을 전송해요. `text`와 `audio_file` 중 정확히 하나만 보내야 해요.
-
-텍스트 이어 말하기:
-
-```http
-POST /api/conversations/{conversation_id}/turn/
-Content-Type: application/json
-
-{
-  "text": "I want to order a latte.",
-  "include_audio_response": true
-}
-```
-
-음성 이어 말하기:
-
-```http
-POST /api/conversations/{conversation_id}/turn/
-Content-Type: multipart/form-data
-
-audio_file=<recording.webm>
-include_audio_response=true
-```
-
-응답은 공통 envelope 안에 사용자 입력으로 확정된 `transcript`, AI 텍스트 `response`, 선택적 TTS `audio`, TTS 실패 시 `audio_error`를 포함해요.
-
-```json
-{
-  "success": true,
-  "data": {
-    "message_id": "550e8400-e29b-41d4-a716-446655440000",
-    "response": "Sure. What size would you like?",
-    "grammar_feedback": null,
-    "turn_count": 2,
-    "input_mode": "audio",
-    "transcript": "I want to order a latte.",
-    "audio": {
-      "content_type": "audio/mpeg",
-      "base64": "...",
-      "format": "mp3"
-    },
-    "audio_error": null
-  }
-}
-```
-
-### `GET /api/conversations/`
-
-현재 사용자의 대화 목록을 조회해요. 최신으로 갱신된 대화가 먼저 와요(`updated_at desc`).
-
-Query:
-
-| 파라미터 | 기본값 | 설명 |
-|---------|--------|------|
-| `limit` | `50` | 조회 개수 (`1`~`100`) |
-| `offset` | `0` | 시작 위치 |
-
-응답 예시:
-
-```json
-{
-  "success": true,
-  "data": {
-    "results": [],
-    "pagination": {
-      "limit": 50,
-      "offset": 0,
-      "total_count": 123,
-      "has_more": true,
-      "next_offset": 50
-    }
-  }
-}
-```
-
-### `GET /api/conversations/{conversation_id}/`
-
-현재 사용자의 특정 대화를 조회해요.
-
-### `GET /api/conversations/{conversation_id}/messages/`
-
-대화 메시지 목록을 조회해요. 메시지는 시간순으로 반환돼서 최신 메시지가 아래로 쌓여요(`created_at asc`).
-
-Query:
-
-| 파라미터 | 기본값 | 설명 |
-|---------|--------|------|
-| `limit` | `50` | 조회 개수 (`1`~`100`) |
-| `offset` | `0` | 시작 위치 |
-
-응답 예시:
-
-```json
-{
-  "success": true,
-  "data": {
-    "results": [],
-    "pagination": {
-      "limit": 50,
-      "offset": 100,
-      "total_count": 123,
-      "has_more": false,
-      "next_offset": 123
-    }
-  }
-}
-```
-
-### `PUT /api/conversations/{conversation_id}/end/`
-
-대화를 종료해요.
-
-### `PUT /api/conversations/{conversation_id}/title/`
-
-대화 제목을 수정해요.
-
-```json
-{
-  "title": "Coffee Shop Roleplay"
-}
-```
-
-### `DELETE /api/conversations/{conversation_id}/`
-
-대화와 관련 메시지를 삭제해요.
-
-### `GET /api/conversations/messages/{message_id}/grammar-feedback/stream`
-
-문법 피드백을 SSE로 수신해요. 이 엔드포인트는 토큰을 쿼리 파라미터로 전달해요.
-
-```text
-/api/conversations/messages/{message_id}/grammar-feedback/stream?token=<access_token>
-```
-
-모바일 v1에서는 SSE보다 polling을 우선해요. 앱은 대화 응답의 `message_id`로 `GET /api/grammar/message/{message_id}/`를 반복 호출하고, `404`는 pending 또는 접근 불가 상태로 처리해요. SSE 엔드포인트는 실시간성이 필요해질 때 선택적으로 사용할 수 있어요.
-
-## Grammar API
-
-### `POST /api/grammar/check/`
-
-텍스트 문법을 독립적으로 검사해요.
-
-```json
-{
-  "text": "I want go home."
-}
-```
-
-### `GET /api/grammar/message/{message_id}/`
-
-특정 메시지의 문법 피드백을 조회해요. 모바일 v1의 primary polling endpoint예요.
-
-- `200`: 현재 사용자 소유 메시지의 문법 피드백 생성 완료
-- `404`: 피드백 생성 전 pending, 없는 message, 또는 타 사용자 message
-- `403`: 인증 헤더 없음
-- `401`: access token이 유효하지 않음
-
-서버는 `message_id`가 현재 사용자 소유 대화에 속하는지 확인하고, 소유자가 아니면 ID 존재 여부를 노출하지 않도록 `404`를 반환해요. 앱은 `404`를 pending으로 재시도하다가 자체 timeout 이후 안내 상태로 전환하는 것을 권장해요.
-
-### `GET /api/grammar/stats/`
-
-문법 통계를 조회해요.
-
-Query:
-
-| 파라미터 | 설명 |
-|---------|------|
-| `time_range` | `"7d"`, `"30d"`, `"90d"`, `"all"` |
-
-## Search API
-
-### `POST /api/search/`
-
-관심 주제를 검색하고, 검색 결과가 충분히 관련 있을 때만 LLM으로 요약해요. 인증이 필요해요.
-
-```json
-{
-  "query": "how to order coffee in English"
-}
-```
-
-응답 `data`:
-
-```json
-{
-  "query": "how to order coffee in English",
-  "enhanced_query": "how to order coffee in English",
-  "ready": true,
-  "summary": "Summary text",
-  "sources": [
-    {
-      "title": "Source title",
-      "url": "https://example.com",
-      "snippet": "Source snippet"
-    }
-  ],
-  "quality": {
-    "is_sufficient": true,
-    "source_count": 8,
-    "relevant_source_count": 3,
-    "dropped_source_count": 5,
-    "relevance": true,
-    "freshness": true,
-    "specificity": true
-  },
-  "retry_guidance": null,
-  "example_queries": [],
-  "timestamp": "2026-05-25T00:00:00"
-}
-```
-
-검색 품질이 낮으면 HTTP 오류가 아니라 `success=true` 안의 `ready=false`로 반환해요. 이때 `summary`는 `null`이고, 모바일 클라이언트는 `retry_guidance`와 `example_queries`로 주제 재입력을 유도해요.
-
-```json
-{
-  "query": "요즘 이슈",
-  "enhanced_query": "요즘 최신 뉴스 2026년 6월",
-  "ready": false,
-  "summary": null,
-  "sources": [],
-  "quality": {
-    "is_sufficient": false,
-    "source_count": 5,
-    "relevant_source_count": 0,
-    "dropped_source_count": 5,
-    "relevance": false,
-    "freshness": true,
-    "specificity": false,
-    "reason": "검색 결과가 주제와 충분히 관련되어 있지 않아요.",
-    "retry_suggestion": "팀, 날짜, 사건명, 인물, 장소처럼 구체적인 핵심어를 더 넣어 다시 검색해보세요."
-  },
-  "retry_guidance": "팀, 날짜, 사건명, 인물, 장소처럼 구체적인 핵심어를 더 넣어 다시 검색해보세요.",
-  "example_queries": [
-    "2026년 6월 요즘 이슈 관련 최신 이슈"
-  ],
-  "timestamp": "2026-06-04T00:00:00"
-}
-```
-
-### `POST /api/search/topic-prep/`
-
-관심 주제를 검색해 대화 전 준비 카드를 생성해요. 인증이 필요해요. 이 엔드포인트는 conversation을 생성하지 않으며, 모바일 앱은 사용자가 첫 질문을 선택하고 답변한 뒤 `POST /api/conversations/start/free-chat/`로 대화를 시작해요.
-
-요청:
-
-```json
-{
-  "topic": "recent Dodgers game result"
-}
-```
-
-검색 품질이 충분한 응답:
-
-```json
-{
-  "success": true,
-  "data": {
-    "ready": true,
-    "card": {
-      "topic": "recent Dodgers game result",
-      "summary": "Short search-grounded summary.",
-      "directions": [
-        {
-          "direction": "DEBATE",
-          "title": "Debate",
-          "description": "Take a position and explain your reasons.",
-          "first_questions": [
-            "Was the manager's late-game decision right?",
-            "Which team had the stronger argument after the result?",
-            "What would critics say about the final inning?"
-          ]
-        }
-      ],
-      "sources": [],
-      "quality": {
-        "is_sufficient": true,
-        "source_count": 3,
-        "has_enough_sources": true,
-        "relevance": true,
-        "freshness": true,
-        "specificity": true
-      },
-      "timestamp": "2026-05-28T00:00:00"
-    },
-    "quality": {
-      "is_sufficient": true,
-      "source_count": 3,
-      "has_enough_sources": true,
-      "relevance": true,
-      "freshness": true,
-      "specificity": true
-    },
-    "retry_guidance": null,
-    "example_topics": []
-  }
-}
-```
-
-검색 품질이 낮은 응답:
-
-```json
-{
-  "success": true,
-  "data": {
-    "ready": false,
-    "card": null,
-    "quality": {
-      "is_sufficient": false,
-      "source_count": 1,
-      "has_enough_sources": false,
-      "relevance": false,
-      "freshness": false,
-      "specificity": false,
-      "reason": "대화 준비에 사용할 검색 출처가 충분하지 않아요.",
-      "retry_suggestion": "더 구체적인 사건, 날짜, 팀, 인물, 장소를 넣어 다시 입력해보세요."
-    },
-    "retry_guidance": "더 구체적인 사건, 날짜, 팀, 인물, 장소를 넣어 다시 입력해보세요.",
-    "example_topics": [
-      "2026년 5월 Dodgers 경기 결과"
-    ]
-  }
-}
-```
-
-## Health Check
-
-### `GET /health`
-
-```json
-{
-  "status": "healthy",
-  "database": "connected",
-  "version": "1.0.0"
-}
-```
-
-## 환경 변수
-
-| 변수 | 필수 | 기본값 | 설명 |
-|------|------|--------|------|
-| `DATABASE_URL` | 아니오 | `sqlite:///./english_learning.db` | DB 연결 문자열 |
-| `OPENROUTER_API_KEY` | 예 | 없음 | OpenRouter API 키 |
-| `OPENAI_API_KEY` | 음성 기능 사용 시 | 없음 | OpenAI STT/TTS API 키. Flutter 앱에는 노출하지 않음 |
-| `LLM_PROVIDER` | 아니오 | `openrouter` | 기본 LLM provider. `ollama`는 로컬 Ollama 서버를 의도적으로 사용할 때만 설정 |
-| `OLLAMA_BASE_URL` | Ollama 사용 시 | 없음 | Ollama 서버 URL |
-| `OPENROUTER_MODEL` | OpenRouter 사용 시 | 없음 | 대화용 OpenRouter 모델 |
-| `OLLAMA_MODEL` | Ollama 사용 시 | 없음 | 대화용 Ollama 모델 |
-| `GRAMMAR_MODEL_PROVIDER` | 아니오 | `LLM_PROVIDER` | 문법 체크 전용 provider. 기본 권장은 `openrouter` |
-| `GRAMMAR_OPENROUTER_MODEL` | 아니오 | `OPENROUTER_MODEL` | 문법 체크 전용 OpenRouter 모델 |
-| `GRAMMAR_OLLAMA_MODEL` | 아니오 | `OLLAMA_MODEL` | 문법 체크 전용 Ollama 모델 |
-| `SUPABASE_URL` | 예 | 없음 | Supabase project URL |
-| `SUPABASE_PUBLISHABLE_KEY` | 예 | 없음 | Supabase Auth `/user` 검증에 사용하는 publishable key |
-| `SUPABASE_AUTH_VERIFY_MODE` | 아니오 | `remote` | FastAPI bearer token 검증 방식. 현재는 Supabase `/auth/v1/user` 검증 |
-| `SUPABASE_AUTH_TIMEOUT_SECONDS` | 아니오 | `5` | Supabase Auth 검증 요청 timeout |
-| `AUTO_CREATE_TABLES` | 아니오 | `false` | Alembic 대신 SQLAlchemy `create_all`을 실행할지 여부. 로컬 임시 실행 외에는 `false` 권장 |
-| `JWT_SECRET_KEY` | 레거시 도구 사용 시 | 없음 | 기존 로컬 JWT tooling을 임시 유지할 때만 사용 |
-| `ENV` | 아니오 | `prod` | 실행 환경. `dev`/`development`/`local`이면 개발 전용 API 활성화 |
-| `DEBUG` | 아니오 | `false` | 디버그 모드 |
-| `CORS_ORIGINS` | 아니오 | `[]` | CORS 허용 origin 목록 |
-| `MAX_TOKENS` | 아니오 | `4000` | LLM 최대 토큰 |
-| `TEMPERATURE` | 아니오 | `0.7` | LLM temperature |
-| `STT_PROVIDER` | 아니오 | `openai` | STT provider |
-| `STT_MODEL` | 아니오 | `gpt-4o-mini-transcribe` | 음성 파일을 텍스트로 변환할 STT 모델 |
-| `TTS_PROVIDER` | 아니오 | `openai` | TTS provider |
-| `TTS_MODEL` | 아니오 | `gpt-4o-mini-tts` | AI 응답을 음성으로 변환할 TTS 모델 |
-| `TTS_VOICE` | 아니오 | `alloy` | TTS 음성 preset |
-| `TTS_RESPONSE_FORMAT` | 아니오 | `mp3` | TTS 응답 오디오 포맷 |
-| `TTS_MAX_INPUT_CHARS` | 아니오 | `4000` | TTS로 보낼 최대 텍스트 길이 |
-| `TTS_MAX_OUTPUT_MB` | 아니오 | `5` | base64 인코딩 전 TTS 응답 오디오 최대 크기 |
-| `VOICE_MAX_UPLOAD_MB` | 아니오 | `10` | STT 업로드 음성 파일 최대 크기 |
-| `VOICE_PROVIDER_TIMEOUT_SECONDS` | 아니오 | `60` | STT/TTS provider 요청 timeout |
-| `SEARCH_SUMMARY_MAX_TOKENS` | 아니오 | `600` | 검색 요약 최대 토큰 |
-| `SEARCH_QUERY_ANALYSIS_MAX_TOKENS` | 아니오 | `500` | 검색어 분석 LLM 최대 토큰 |
-| `SEARCH_QUALITY_JUDGE_MAX_TOKENS` | 아니오 | `500` | 검색 품질 판정 LLM 최대 토큰 |
-| `SEARCH_REGION` | 아니오 | `kr-kr` | ddgs 검색 지역 |
-| `SEARCH_SAFESEARCH` | 아니오 | `moderate` | ddgs safe search 옵션 |
-| `SEARCH_RECENT_TIMELIMIT` | 아니오 | `m` | 최신성 의도 쿼리에 적용할 ddgs 기간 옵션 |
-| `SEARCH_BACKEND` | 아니오 | `auto` | ddgs 검색 backend |
-| `SEARCH_MAX_RESULTS` | 아니오 | `12` | 필터링 전 수집할 검색 결과 수 |
-| `SEARCH_MIN_RELEVANT_RESULTS` | 아니오 | `2` | LLM judge가 accept해야 하는 최소 출처 수 |
-| `MAX_HISTORY_TURNS` | 아니오 | `10` | 대화 기록 최대 턴 |
-
-## 개발 가이드
-
-### 새 도메인 추가
-
-1. `backend/domains/{domain_name}/` 폴더를 만들어요.
-2. 필요에 따라 `models.py`, `schemas.py`, `enums.py`를 추가해요.
-3. `repository.py`에 데이터 접근을 분리해요.
-4. `service.py`에 비즈니스 로직을 둬요.
-5. `router.py`에 API 엔드포인트를 정의해요.
-6. `backend/main.py`에 라우터를 등록해요.
-
-### 문서 동기화
-
-API, 환경변수, 도메인 계약이 바뀌면 같은 작업 단위에서 아래 파일을 함께 갱신해요.
-
-| 변경 | 동기화 대상 |
-|------|-------------|
-| API 엔드포인트 | `README.md`, `docs/DSL.md`, `backend/domains/*/router.py` |
-| 환경변수 | `.env.example`, `README.md`, `backend/config.py` |
-
-## 주요 기능
-
-- Supabase Auth 기반 Google 로그인
-- Supabase access token 기반 FastAPI 보호 API
-- `profiles` 기반 앱 사용자 프로필 관리
-- AI 기반 영어 회화 연습
-- 자유 대화와 롤플레이 대화
-- 사용자별 대화 히스토리 관리
-- 문법 체크 및 polling/SSE 기반 비동기 피드백
-- 문법 통계
-- OpenRouter/Ollama LLM provider 추상화
-- ddgs 검색 + query analysis + LLM source judge + LLM 요약
+| [환경변수](docs/ENVIRONMENT.md) | 전체 설정·기본값·provider 선택 |
+| [운영 가이드](docs/OPERATIONS.md) | Docker 배포·인증·cron·복구 |
+| [API 명세](docs/DSL.md) | 요청·응답·인증·도메인 계약 |
+| [API 로그와 지연 진단](docs/OBSERVABILITY.md) | 요청·예외 JSON 로그, nginx 시간, Docker 보관·Loki 검색 계약 |
+| [음성 지연 진단](docs/VOICE_LATENCY.md) | 음성 단계·앱 첫 재생 계측, 10회 실험·연결 풀 v1 |
+| [음성 스트리밍](docs/VOICE_STREAMING.md) | 대화 흐름의 문장별 TTS·앱 재생·수동 복구(1~6단계), 실환경 검증 순서 |
+| [모바일 가이드](mobile/README.md) | 플랫폼·로그인 설정과 앱 개발 |
+| [아키텍처](.agent/architecture.md) | 내부 구조와 데이터 흐름 |
+| [디자인 시스템](docs/design/DESIGN_SYSTEM.md) | UI 토큰과 컴포넌트 기준 |
+| [기여 규칙](AGENTS.md) | 코드·문서·Git 협업 규칙 |

@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Generic, TypeVar
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from domains.conversation.enums import (
     ConversationStatus,
@@ -14,6 +14,7 @@ from domains.conversation.enums import (
     MessageRole,
 )
 from domains.voice.schemas import VoiceAudioError, VoiceAudioResponse, VoiceInputMode
+from shared.language import LearningLanguageContext
 
 SchemaType = TypeVar("SchemaType")
 
@@ -26,6 +27,7 @@ class StartFreeChatRequest(BaseModel):
     topic: str | None = None
     conversation_direction: FreeChatConversationDirection | None = None
     selected_question: str | None = None
+    custom_focus: str | None = Field(default=None, min_length=2, max_length=200)
 
 
 class StartRoleplayRequest(BaseModel):
@@ -33,6 +35,33 @@ class StartRoleplayRequest(BaseModel):
 
     role_character: str
     search_context: str | None = None
+    include_audio_response: bool = False
+
+
+class StartSuggestedFreeChatRequest(BaseModel):
+    topic_id: UUID
+    start_request_id: UUID
+    include_audio_response: bool = False
+
+
+class SuggestedFreeChatResponse(BaseModel):
+    conversation_id: UUID
+    assistant_message_id: UUID
+    conversation_type: ConversationType
+    language: LearningLanguageContext
+    response: str
+    audio: VoiceAudioResponse | None = None
+    audio_error: VoiceAudioError | None = None
+
+
+class WeeklyTopicItem(BaseModel):
+    id: UUID
+    text: str
+
+
+class WeeklyTopicsResponse(BaseModel):
+    week_start: str | None
+    topics: list[WeeklyTopicItem]
 
 
 class SendMessageRequest(BaseModel):
@@ -47,6 +76,29 @@ class UpdateTitleRequest(BaseModel):
     title: str
 
 
+class ConversationAccess(BaseModel):
+    enabled: bool
+    can_create: bool
+    used_slots: int
+    slot_limit: int | None
+    remaining_slots: int | None
+    locked_count: int = 0
+    plan: str = "free"
+    active_conversations: list[dict[str, str]] = []
+
+
+class ConversationTurnAccess(BaseModel):
+    enabled: bool
+    user_turns: int
+    turn_limit: int | None
+    can_send: bool
+    locked: bool = False
+
+
+class ActivateConversationRequest(BaseModel):
+    replace_conversation_id: UUID | None = None
+
+
 class Conversation(BaseModel):
     """대화 스키마"""
 
@@ -54,8 +106,10 @@ class Conversation(BaseModel):
     title: str | None = None
     conversation_type: ConversationType
     role_character: str | None = None
+    language: LearningLanguageContext = Field(default_factory=LearningLanguageContext)
     message_count: int
     status: ConversationStatus
+    locked: bool = False
     created_at: datetime
     updated_at: datetime
 
@@ -72,6 +126,7 @@ class Message(BaseModel):
     content: str
     created_at: datetime
     grammar_feedback: dict | None = None  # GrammarFeedback relationship
+    audio_available: bool = False
 
     class Config:
         from_attributes = True
@@ -84,6 +139,7 @@ class ConversationResponse(BaseModel):
     message_id: UUID  # 사용자 메시지 ID (SSE 연결용)
     conversation_type: ConversationType
     role_character: str | None = None
+    language: LearningLanguageContext = Field(default_factory=LearningLanguageContext)
     response: str
     grammar_feedback: dict | None = None
 

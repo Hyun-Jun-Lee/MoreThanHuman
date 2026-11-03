@@ -3,6 +3,7 @@ LLM Provider Base Interface
 Abstract base class for all LLM providers
 """
 from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator
 
 from domains.llm.schemas import LLMRequest, LLMResponse
 
@@ -25,6 +26,11 @@ class LLMProvider(ABC):
             RateLimitException: Rate limit 도달
             ExternalAPIException: API 호출 실패
         """
+        pass
+
+    @abstractmethod
+    def chat_completion_stream(self, request: LLMRequest) -> AsyncIterator[str]:
+        """완성 응답과 별도로 텍스트 delta를 순서대로 반환해요."""
         pass
 
     @abstractmethod

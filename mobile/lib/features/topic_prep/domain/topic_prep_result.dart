@@ -1,7 +1,8 @@
+import 'package:curitalk/features/language/language.dart';
+
 enum TopicPrepDirectionType {
   casualChat('CASUAL_CHAT'),
   debate('DEBATE'),
-  interviewQa('INTERVIEW_QA'),
   explanationPractice('EXPLANATION_PRACTICE');
 
   const TopicPrepDirectionType(this.value);
@@ -117,6 +118,7 @@ class TopicPrepDirection {
     required this.title,
     required this.description,
     required this.firstQuestions,
+    this.firstQuestionTranslations = const <String>[],
   });
 
   factory TopicPrepDirection.fromJson(Object? json) {
@@ -128,6 +130,7 @@ class TopicPrepDirection {
     final Object? title = json['title'];
     final Object? description = json['description'];
     final Object? questions = json['first_questions'];
+    final Object? translations = json['first_question_translations'];
     if (title is! String ||
         title.trim().isEmpty ||
         description is! String ||
@@ -136,7 +139,13 @@ class TopicPrepDirection {
         questions.length != 3 ||
         questions.any((Object? question) {
           return question is! String || question.trim().isEmpty;
-        })) {
+        }) ||
+        (translations != null &&
+            (translations is! List ||
+                (translations.isNotEmpty && translations.length != 3) ||
+                translations.any(
+                  (Object? value) => value is! String || value.trim().isEmpty,
+                )))) {
       throw const FormatException('Topic prep direction payload is invalid.');
     }
     return TopicPrepDirection(
@@ -147,6 +156,12 @@ class TopicPrepDirection {
           .cast<String>()
           .map((String question) => question.trim())
           .toList(growable: false),
+      firstQuestionTranslations: translations == null
+          ? const <String>[]
+          : (translations as List)
+                .cast<String>()
+                .map((String value) => value.trim())
+                .toList(growable: false),
     );
   }
 
@@ -154,6 +169,7 @@ class TopicPrepDirection {
   final String title;
   final String description;
   final List<String> firstQuestions;
+  final List<String> firstQuestionTranslations;
 }
 
 class TopicPrepCard {
@@ -180,7 +196,7 @@ class TopicPrepCard {
         summary is! String ||
         summary.trim().isEmpty ||
         directions is! List ||
-        directions.length != 4 ||
+        directions.length != 3 ||
         sources is! List ||
         timestamp == null) {
       throw const FormatException('Topic prep card payload is invalid.');
@@ -205,11 +221,93 @@ class TopicPrepCard {
   final DateTime timestamp;
 }
 
+class CustomFocusQuestions {
+  const CustomFocusQuestions({
+    required this.ready,
+    required this.customFocus,
+    required this.firstQuestions,
+    this.firstQuestionTranslations = const <String>[],
+    this.retryGuidance,
+  });
+
+  factory CustomFocusQuestions.fromJson(Object? json) {
+    if (json is! Map<String, dynamic>) {
+      throw const FormatException('Custom focus questions must be an object.');
+    }
+    final Object? ready = json['ready'];
+    final Object? customFocus = json['custom_focus'];
+    final Object? questions = json['first_questions'];
+    final Object? translations = json['first_question_translations'];
+    final Object? retryGuidance = json['retry_guidance'];
+    if (ready is! bool ||
+        customFocus is! String ||
+        customFocus.trim().isEmpty ||
+        questions is! List ||
+        (translations != null &&
+            (translations is! List ||
+                (ready &&
+                    translations.isNotEmpty &&
+                    translations.length != 3) ||
+                translations.any(
+                  (Object? value) => value is! String || value.trim().isEmpty,
+                ))) ||
+        (retryGuidance != null && retryGuidance is! String) ||
+        (ready &&
+            (questions.length != 3 ||
+                questions.any(
+                  (Object? value) => value is! String || value.trim().isEmpty,
+                )))) {
+      throw const FormatException('Custom focus questions payload is invalid.');
+    }
+    return CustomFocusQuestions(
+      ready: ready,
+      customFocus: customFocus.trim(),
+      firstQuestions: questions
+          .whereType<String>()
+          .map((String question) => question.trim())
+          .toList(growable: false),
+      firstQuestionTranslations: translations == null
+          ? const <String>[]
+          : (translations as List)
+                .cast<String>()
+                .map((String value) => value.trim())
+                .toList(growable: false),
+      retryGuidance: retryGuidance as String?,
+    );
+  }
+
+  final bool ready;
+  final String customFocus;
+  final List<String> firstQuestions;
+  final List<String> firstQuestionTranslations;
+  final String? retryGuidance;
+}
+
+class TopicPrepDirections {
+  const TopicPrepDirections(this.directions);
+
+  factory TopicPrepDirections.fromJson(Object? json) {
+    if (json is! Map<String, dynamic> || json['directions'] is! List) {
+      throw const FormatException('Topic prep directions payload is invalid.');
+    }
+    final List<TopicPrepDirection> directions = (json['directions'] as List)
+        .map(TopicPrepDirection.fromJson)
+        .toList(growable: false);
+    if (directions.length != 3) {
+      throw const FormatException('Topic prep directions count is invalid.');
+    }
+    return TopicPrepDirections(directions);
+  }
+
+  final List<TopicPrepDirection> directions;
+}
+
 class TopicPrepResult {
   const TopicPrepResult({
     required this.ready,
     required this.quality,
     required this.exampleTopics,
+    this.language = LearningLanguageContext.defaultContext,
     this.card,
     this.retryGuidance,
   });
@@ -237,12 +335,14 @@ class TopicPrepResult {
       ready: ready,
       card: card,
       quality: TopicPrepQuality.fromJson(json['quality']),
+      language: LearningLanguageContext.fromJson(json['language']),
       retryGuidance: retryGuidance as String?,
       exampleTopics: exampleTopics.cast<String>().toList(growable: false),
     );
   }
 
   final bool ready;
+  final LearningLanguageContext language;
   final TopicPrepCard? card;
   final TopicPrepQuality quality;
   final String? retryGuidance;

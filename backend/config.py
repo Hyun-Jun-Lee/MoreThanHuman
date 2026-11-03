@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Literal
 
 from pydantic_settings import BaseSettings
+from pydantic import Field, model_validator
 from shared.exceptions import AppException
 
 
@@ -23,6 +24,18 @@ class Settings(BaseSettings):
     env: str = "prod"
     debug: bool = False
     cors_origins: list[str] = []
+
+    # 외부 HTTP 풀별 한도 (AI·인증은 각각 별도 풀)
+    http_max_connections: int = Field(100, ge=1)
+    http_max_keepalive_connections: int = Field(20, ge=0)
+    http_keepalive_expiry_seconds: float = Field(30.0, gt=0, allow_inf_nan=False)
+    background_shutdown_grace_seconds: float = Field(5.0, ge=0, allow_inf_nan=False)
+
+    @model_validator(mode="after")
+    def validate_http_pool_limits(self) -> "Settings":
+        if self.http_max_keepalive_connections > self.http_max_connections:
+            raise ValueError("HTTP_MAX_KEEPALIVE_CONNECTIONS must not exceed HTTP_MAX_CONNECTIONS")
+        return self
 
     # LLM Provider Settings
     llm_provider: str = "openrouter"
@@ -48,9 +61,27 @@ class Settings(BaseSettings):
     # Supabase Auth
     supabase_url: str | None = None
     supabase_publishable_key: str | None = None
-    supabase_auth_verify_mode: Literal["remote"] = "remote"
+    supabase_secret_key: str | None = None
+    apple_signin_team_id: str | None = None
+    apple_signin_key_id: str | None = None
+    apple_signin_client_id: str | None = None
+    apple_signin_private_key: str | None = None
+    supabase_auth_verify_mode: Literal["remote", "auto"] = "auto"
     supabase_auth_timeout_seconds: float = 5.0
+    swagger_token_issuer_enabled: bool = False
+    swagger_token_issuer_secret: str | None = None
     auto_create_tables: bool = False
+
+    # Operations-only API Settings
+    language_snacks_operations_key: str | None = None
+    language_snacks_provider: str | None = None
+    language_snacks_model: str | None = None
+    language_snacks_lock_database_url: str | None = None
+    language_snacks_per_type: int = Field(3, ge=1, le=6)
+    language_snacks_max_calls: int = Field(100, ge=1)
+    language_snacks_max_tokens: int = Field(250000, ge=1)
+    language_snacks_history_bytes: int = Field(40000, ge=1)
+    language_snacks_run_seconds: int = Field(600, ge=1)
 
     # Google OAuth2
     google_client_id: str | None = None
@@ -64,28 +95,44 @@ class Settings(BaseSettings):
     # Search Settings
     search_summary_max_tokens: int = 600
     search_query_analysis_max_tokens: int = 500
-    search_quality_judge_max_tokens: int = 500
+    search_quality_judge_max_tokens: int = 1000
+    search_quality_judge_model: str = "google/gemini-3.1-flash-lite"
     search_region: str = "kr-kr"
     search_safesearch: str = "moderate"
     search_recent_timelimit: str = "m"
     search_backend: str = "auto"
-    search_max_results: int = 12
+    search_max_results: int = 6
     search_min_relevant_results: int = 2
 
     # Conversation Settings
     max_history_turns: int = 10
+    conversation_access_enabled: bool = False
+    apple_iap_environment: Literal["sandbox", "production"] | None = None
+    apple_iap_bundle_id: str | None = None
+    apple_iap_app_id: int | None = None
+    apple_iap_issuer_id: str | None = None
+    apple_iap_key_id: str | None = None
+    apple_iap_private_key: str | None = None
 
     # Voice Settings
-    stt_provider: str = "openai"
-    stt_model: str = "gpt-4o-mini-transcribe"
-    tts_provider: str = "openai"
-    tts_model: str = "gpt-4o-mini-tts"
-    tts_voice: str = "alloy"
+    stt_provider: str = "openrouter"
+    stt_model: str = "openai/gpt-4o-mini-transcribe"
+    tts_provider: str = "openrouter"
+    tts_model: str = "microsoft/mai-voice-2-flash"
+    tts_voice: str = "en-US-Harper:MAI-Voice-2-Flash"
     tts_response_format: str = "mp3"
     tts_max_input_chars: int = 4000
     tts_max_output_mb: int = 5
     voice_max_upload_mb: int = 10
     voice_provider_timeout_seconds: float = 60.0
+    audio_cache_dir: str | None = None
+    audio_cache_retention_days: int = Field(30, ge=1)
+
+    @model_validator(mode="after")
+    def validate_audio_cache_format(self) -> "Settings":
+        if self.audio_cache_dir and self.tts_response_format != "mp3":
+            raise ValueError("AUDIO_CACHE_DIR requires TTS_RESPONSE_FORMAT=mp3")
+        return self
 
     @property
     def is_dev(self) -> bool:

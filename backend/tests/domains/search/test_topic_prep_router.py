@@ -1,10 +1,11 @@
+import json
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from domains.auth.dependencies import get_current_user
+from domains.auth.dependencies import get_current_profile
 from domains.search.router import get_search_service, router
 from domains.search.schemas import (
     ConversationDirection,
@@ -13,12 +14,20 @@ from domains.search.schemas import (
     TopicPrepQuality,
     TopicPrepResult,
 )
+from shared.language import LearningLanguageContext
 
 
 def _app_with_overrides(service) -> FastAPI:
     app = FastAPI()
     app.include_router(router)
-    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id="user-1")
+    app.dependency_overrides[get_current_profile] = lambda: SimpleNamespace(
+        id="user-1",
+        language=LearningLanguageContext(
+            native_language="zh",
+            target_language="ko",
+            feedback_language="zh",
+        ),
+    )
     app.dependency_overrides[get_search_service] = lambda: service
     return app
 
@@ -41,6 +50,7 @@ def _ready_result(topic: str) -> TopicPrepResult:
                 title=direction.value,
                 description=f"{direction.value} description",
                 first_questions=["Question one?", "Question two?", "Question three?"],
+                first_question_translations=["First translation?", "Second translation?", "Third translation?"],
             )
             for direction in ConversationDirection
         ],
@@ -53,7 +63,8 @@ def _ready_result(topic: str) -> TopicPrepResult:
 
 def test_prepare_topic_endpoint_returns_card_for_authenticated_user():
     class FakeService:
-        async def prepare_topic(self, topic: str) -> TopicPrepResult:
+        async def prepare_topic(self, topic: str, language_context=None) -> TopicPrepResult:
+            assert language_context.target_language.value == "ko"
             return _ready_result(topic)
 
     client = TestClient(_app_with_overrides(FakeService()))
@@ -64,13 +75,40 @@ def test_prepare_topic_endpoint_returns_card_for_authenticated_user():
     body = response.json()
     assert body["success"] is True
     assert body["data"]["ready"] is True
+    assert body["data"]["search_required"] is True
     assert body["data"]["card"]["topic"] == "recent Dodgers game"
-    assert len(body["data"]["card"]["directions"]) == 4
+    assert len(body["data"]["card"]["directions"]) == 3
+    assert body["data"]["card"]["directions"][0]["first_question_translations"] == [
+        "First translation?", "Second translation?", "Third translation?"
+    ]
+
+
+def test_prepare_topic_endpoint_marks_direct_card_without_sources():
+    class FakeService:
+        async def prepare_topic(self, topic: str, language_context=None) -> TopicPrepResult:
+            ready = _ready_result(topic)
+            quality = ready.quality.model_copy(update={"source_count": 0, "has_enough_sources": False})
+            return ready.model_copy(update={
+                "search_required": False,
+                "quality": quality,
+                "card": ready.card.model_copy(update={"quality": quality}),
+            })
+
+    client = TestClient(_app_with_overrides(FakeService()))
+
+    response = client.post("/api/search/topic-prep/", json={"topic": "interview practice"})
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["ready"] is True
+    assert data["search_required"] is False
+    assert data["quality"]["source_count"] == 0
+    assert data["card"]["sources"] == []
 
 
 def test_prepare_topic_endpoint_returns_retry_guidance_for_low_quality_topic():
     class FakeService:
-        async def prepare_topic(self, _topic: str) -> TopicPrepResult:
+        async def prepare_topic(self, _topic: str, language_context=None) -> TopicPrepResult:
             quality = TopicPrepQuality(
                 is_sufficient=False,
                 source_count=1,
@@ -107,3 +145,35 @@ def test_prepare_topic_endpoint_requires_authentication():
     response = client.post("/api/search/topic-prep/", json={"topic": "recent Dodgers game"})
 
     assert response.status_code in {401, 403}
+
+
+def test_prepare_topic_stream_emits_summary_before_card():
+    class FakeService:
+        async def prepare_topic_stream(self, topic: str, language_context=None):
+            assert language_context.target_language.value == "ko"
+            yield "summary_ready", "A specific topic summary."
+            yield "card_ready", _ready_result(topic)
+
+    client = TestClient(_app_with_overrides(FakeService()))
+    response = client.post("/api/search/topic-prep/stream/", json={"topic": "interview practice"})
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/x-ndjson")
+    events = [json.loads(line) for line in response.text.splitlines()]
+    assert [event["event"] for event in events] == ["summary_ready", "card_ready"]
+    assert events[0]["data"] == "A specific topic summary."
+    assert events[1]["data"]["ready"] is True
+
+
+def test_prepare_topic_stream_reports_failure_after_summary():
+    class FakeService:
+        async def prepare_topic_stream(self, topic: str, language_context=None):
+            yield "summary_ready", "A specific topic summary."
+            raise RuntimeError("private upstream detail")
+
+    client = TestClient(_app_with_overrides(FakeService()))
+    response = client.post("/api/search/topic-prep/stream/", json={"topic": "interview practice"})
+
+    events = [json.loads(line) for line in response.text.splitlines()]
+    assert [event["event"] for event in events] == ["summary_ready", "error"]
+    assert "private upstream detail" not in response.text

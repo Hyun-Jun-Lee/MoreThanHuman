@@ -1,0 +1,198 @@
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+import pytest
+from sqlalchemy import create_engine, event
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+
+from database import Base, get_db
+from shared.http_clients import get_auth_http_client
+from domains.auth.dependencies import get_supabase_auth_verifier
+from domains.auth.router import router
+from domains.auth.service import SupabaseUserClaims
+from domains.conversation.models import ConversationModel  # noqa: F401 - SQLAlchemy relationship registration
+from domains.grammar.models import GrammarFeedbackModel  # noqa: F401 - SQLAlchemy relationship registration
+
+
+class FakeVerifier:
+    def __init__(self):
+        self.claims = SupabaseUserClaims(
+            sub="550e8400-e29b-41d4-a716-446655440000",
+            email="learner@example.com",
+            name="Learner",
+            oauth_provider="google",
+        )
+
+    async def verify_access_token(self, token: str):
+        return self.claims
+
+
+def _client(selects: list[str] | None = None) -> TestClient:
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(bind=engine)
+    if selects is not None:
+        @event.listens_for(engine, "before_cursor_execute")
+        def count_selects(connection, cursor, statement, parameters, context, executemany):
+            if statement.lstrip().upper().startswith("SELECT"):
+                selects.append(statement)
+    session_factory = sessionmaker(bind=engine)
+
+    def override_db():
+        session = session_factory()
+        try:
+            yield session
+        finally:
+            session.close()
+
+    app = FastAPI()
+    # verifier는 fake이며 이 테스트는 HTTP 호출 없이 profile 저장만 검증해요.
+    app.dependency_overrides[get_auth_http_client] = lambda: None
+    app.include_router(router)
+    app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[get_supabase_auth_verifier] = lambda: FakeVerifier()
+    return TestClient(app)
+
+
+def test_me_includes_default_language_preferences():
+    client = _client()
+
+    response = client.get("/api/auth/me", headers={"Authorization": "Bearer token"})
+
+    assert response.status_code == 200
+    assert response.json()["data"]["language"] == {
+        "native_language": "ko",
+        "target_language": "en",
+        "feedback_language": "ko",
+    }
+
+
+@pytest.mark.parametrize("path", ["/api/auth/me", "/api/auth/me/language-preferences"])
+def test_profile_get_reuses_profile_loaded_during_auth(path):
+    selects: list[str] = []
+    client = _client(selects)
+    headers = {"Authorization": "Bearer token"}
+    assert client.get("/api/auth/me", headers=headers).status_code == 200
+    selects.clear()
+
+    response = client.get(path, headers=headers)
+
+    assert response.status_code == 200
+    # 삭제된 JWT 차단 조회는 별도이며 프로필 자체는 한 번만 읽어요.
+    assert sum("FROM profiles" in statement for statement in selects) == 1
+    data = response.json()["data"]
+    language = data["language"] if path == "/api/auth/me" else data
+    assert language == {"native_language": "ko", "target_language": "en", "feedback_language": "ko"}
+
+
+def test_language_preferences_update_is_narrow_and_idempotent():
+    client = _client()
+
+    response = client.put(
+        "/api/auth/me/language-preferences",
+        headers={"Authorization": "Bearer token"},
+        json={
+            "native_language": "en",
+            "target_language": "ko",
+            "feedback_language": "en",
+        },
+    )
+    repeat = client.put(
+        "/api/auth/me/language-preferences",
+        headers={"Authorization": "Bearer token"},
+        json={
+            "native_language": "en",
+            "target_language": "ko",
+            "feedback_language": "en",
+        },
+    )
+
+    assert response.status_code == 200
+    assert repeat.status_code == 200
+    assert response.json()["data"] == repeat.json()["data"]
+    assert response.json()["data"]["target_language"] == "ko"
+
+
+def test_language_preferences_reject_unsupported_pair_without_mutation():
+    client = _client()
+    headers = {"Authorization": "Bearer token"}
+
+    valid = client.put(
+        "/api/auth/me/language-preferences",
+        headers=headers,
+        json={
+            "native_language": "zh",
+            "target_language": "en",
+            "feedback_language": "zh",
+        },
+    )
+    invalid = client.put(
+        "/api/auth/me/language-preferences",
+        headers=headers,
+        json={
+            "native_language": "en",
+            "target_language": "zh",
+            "feedback_language": "en",
+        },
+    )
+    current = client.get("/api/auth/me/language-preferences", headers=headers)
+
+    assert valid.status_code == 200
+    assert invalid.status_code == 422
+    assert current.json()["data"]["native_language"] == "zh"
+    assert current.json()["data"]["target_language"] == "en"
+
+
+def test_language_preferences_reject_overposted_profile_fields():
+    client = _client()
+
+    response = client.put(
+        "/api/auth/me/language-preferences",
+        headers={"Authorization": "Bearer token"},
+        json={
+            "native_language": "en",
+            "target_language": "ko",
+            "feedback_language": "en",
+            "email": "attacker@example.com",
+            "is_active": False,
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_nickname_update_returns_profile_and_survives_auth_read():
+    client = _client()
+    headers = {"Authorization": "Bearer token"}
+    assert client.get("/api/auth/me", headers=headers).json()["data"]["nickname"] is None
+
+    updated = client.put(
+        "/api/auth/me/nickname", headers=headers, json={"nickname": "  토마토  "}
+    )
+
+    assert updated.status_code == 200
+    assert updated.json()["data"]["nickname"] == "토마토"
+    assert client.get("/api/auth/me", headers=headers).json()["data"]["nickname"] == "토마토"
+
+
+@pytest.mark.parametrize("nickname", ["", "   ", "a" * 21, "hello\nworld"])
+def test_nickname_update_rejects_invalid_input(nickname):
+    client = _client()
+    headers = {"Authorization": "Bearer token"}
+    assert client.get("/api/auth/me", headers=headers).status_code == 200
+
+    response = client.put(
+        "/api/auth/me/nickname", headers=headers, json={"nickname": nickname}
+    )
+
+    assert response.status_code == 422
+    assert client.get("/api/auth/me", headers=headers).json()["data"]["nickname"] is None
+
+
+def test_nickname_update_requires_authentication():
+    client = _client()
+    response = client.put("/api/auth/me/nickname", json={"nickname": "Learner"})
+    assert response.status_code in {401, 403}

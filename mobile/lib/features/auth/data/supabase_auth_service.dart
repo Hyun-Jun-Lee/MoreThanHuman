@@ -47,6 +47,11 @@ abstract interface class SupabaseAuthService
     required String accessToken,
   });
 
+  Future<void> signInWithAppleToken({
+    required String idToken,
+    required String rawNonce,
+  });
+
   Future<void> signOut();
 }
 
@@ -117,6 +122,18 @@ class SupabaseFlutterAuthService implements SupabaseAuthService {
       debugPrintStack(stackTrace: stackTrace);
       rethrow;
     }
+  }
+
+  @override
+  Future<void> signInWithAppleToken({
+    required String idToken,
+    required String rawNonce,
+  }) async {
+    await _client.auth.signInWithIdToken(
+      provider: OAuthProvider.apple,
+      idToken: idToken,
+      nonce: rawNonce,
+    );
   }
 
   @override

@@ -1,6 +1,6 @@
-# Curitalk Mobile
+# tomatalk Mobile
 
-관심사 기반 AI 영어 회화 앱 Curitalk의 Flutter iOS·Android 클라이언트예요.
+관심사 기반 AI 다국어 회화 앱 tomatalk의 Flutter iOS·Android 클라이언트예요.
 
 ## 확인
 
@@ -26,10 +26,14 @@ flutter test
 | `dio` | FastAPI HTTP client와 interceptor |
 | `flutter_secure_storage` | installation ID와 온보딩 상태 보관 |
 | `google_sign_in` | Google 모바일 로그인 |
+| `sign_in_with_apple` | iOS 네이티브 Apple 로그인 |
+| `crypto` | Apple 로그인 nonce의 SHA-256 해시 |
 | `supabase_flutter` | Supabase Auth 세션 생성·복원·refresh |
 | `record` | 대화 화면의 음성 입력 녹음 |
 | `path_provider` | 녹음 파일을 저장할 임시 디렉터리 조회 |
 | `audioplayers` | AI 음성 응답 base64 재생 |
+| `in_app_purchase`, `in_app_purchase_storekit` | iOS StoreKit 2 구독 구매·복원과 거래 JWS 수신 |
+| `url_launcher` | 이용약관·개인정보처리방침·Apple 구독 관리 열기 |
 
 ## 현재 구조
 
@@ -53,17 +57,22 @@ lib/
 │   └── widgets/             # 화면 공통 레이아웃과 상호작용 위젯
 └── features/
     ├── auth/                # 인증 API, 세션 모델, Riverpod controller
-    ├── onboarding/          # 완료 상태와 3장 onboarding 화면
+    ├── billing/             # iOS paywall, StoreKit 구매·복원, 서버 권한
+    ├── language/            # 언어쌍 모델, preference API, selector UI
+    ├── onboarding/          # 완료 상태, pending 언어쌍, 4장 onboarding 화면
     ├── conversation/
     │   ├── application/      # 메시지 목록·전송·grammar polling 상태
     │   ├── data/             # conversation, grammar API repository
     │   ├── domain/           # 대화·메시지·문법 피드백 모델
     │   └── presentation/     # Conversation 화면과 widgets
     ├── home/
-    │   └── presentation/widgets/
+    │   ├── application/      # 최근 대화와 언어 스낵의 독립 상태
+    │   ├── data/             # Home, language snack API·캐시 repository
+    │   ├── domain/           # 최근 대화와 language snack 모델
+    │   └── presentation/     # Home 화면과 widgets
     ├── roleplay_setup/
-    │   ├── application/      # roleplay 상황·난이도 선택 상태
-    │   ├── domain/           # preset, difficulty, role_character helper
+    │   ├── application/      # roleplay 상황 선택 상태
+    │   ├── domain/           # preset, role_character helper
     │   └── presentation/     # Roleplay Setup 화면과 widgets
     └── topic_prep/
         ├── application/      # topic prep API 상태
@@ -72,7 +81,7 @@ lib/
         └── presentation/     # Topic Input, Topic Prep 화면과 widgets
 
 assets/
-├── fonts/                   # Pretendard, Newsreader, JetBrains Mono variable font
+├── fonts/                   # Freesentation Light, Regular, Medium, Bold
 └── licenses/                # 번들 font 라이선스
 ```
 
@@ -85,14 +94,14 @@ assets/
 | 토큰 | 역할 |
 |------|------|
 | `AppPalette` | monochrome core, pastel block, 상태 색상 |
-| `AppTypography` | Pretendard·Newsreader·JetBrains Mono 기반 TextStyle |
+| `AppTypography` | Freesentation 4종 굵기 기반 TextStyle |
 | `AppSpacing` | 8px 기반 간격과 화면 padding |
 | `AppRadius` | 입력창, 카드, pill radius |
 | `AppBorderWidth` | 기본·focus 테두리 굵기 |
 | `AppSize` | 접근 가능한 touch target과 component 크기 |
 | `AppMotion` | 버튼·상태 변화에 사용하는 애니메이션 시간 |
 
-`AppColorScheme`은 공통 Material 3 색상 역할을, `AppSemanticColors`는 대화·문법 피드백·검색 상태처럼 Curitalk 전용 역할을 제공해요. `AppComponentThemes`는 버튼·입력창·Chip·카드·Bottom sheet·Bottom navigation의 상태별 스타일을 정의해요. `AppTheme.light`가 세 계층을 등록하며 앱 루트에서 사용해요.
+`AppColorScheme`은 공통 Material 3 색상 역할을, `AppSemanticColors`는 대화·문법 피드백·검색 상태처럼 tomatalk 전용 역할을 제공해요. `AppComponentThemes`는 버튼·입력창·Chip·카드·Bottom sheet·Bottom navigation의 상태별 스타일을 정의해요. `AppTheme.light`가 세 계층을 등록하며 앱 루트에서 사용해요.
 
 토큰 원본은 `docs/design/DESIGN_SYSTEM.md`이며 화면 코드에는 raw Hex나 임의 수치를 직접 작성하지 않아요.
 
@@ -108,9 +117,10 @@ assets/
 | `AppSectionLabel` | uppercase mono 스타일의 섹션 레이블 |
 | `AppColorBlockCard` | 파스텔 color block 기반 콘텐츠 카드 |
 | `AppAsyncStateView` | loading·error·empty 공통 상태 표현 |
+| `AppLoadingIndicator` | 가로형 토마토 5단계 공통 로딩 표시. 화면·버튼 크기와 동작 줄이기 설정에 대응 |
 | `AppPageIndicator` | 온보딩 등에 사용하는 현재 페이지 표시 |
 | `AppModalSheet` | 키보드와 Safe area를 고려한 공통 bottom sheet |
-| `MainNavigationBar` | Home·Chat·History·Profile 주 내비게이션 |
+| `MainNavigationBar` | 홈·내 정보 2탭 내비게이션 |
 
 ## 2차 도메인 컴포넌트
 
@@ -118,11 +128,13 @@ assets/
 
 | 컴포넌트 | 역할 |
 |----------|------|
-| `AppSelectionChip` | 대화 방향·난이도 등의 단일 선택 chip |
+| `AppSelectionChip` | 대화 방향 등의 단일 선택 chip |
 | `AppSelectionCard` | 대화 방식·롤플레이 상황 등의 선택 카드 |
-| `RecentConversationCard` | 대화 타입 뱃지 없이 title·preview 중심으로 보여주는 pastel 최근 대화 카드 |
+| `RecentConversationCard` | 왼쪽 제목·오른쪽 `freechat`/`roleplaying` 배지가 있는 pastel 카드(한국어·영어 동일). 왼쪽 스와이프 또는 길게 누르면 삭제 버튼을 표시하고 확인 후 삭제 |
+| `SnackTomatoBasket` | 바구니와 3개 토마토의 4입 단계·팝업·당일 소진 상태 |
+| `LanguageSnackContent` | 지역별 표현·용법 차이·동음이의어의 공통 표시 본문 |
 | `ChatBubble` | 사용자·AI 역할별 정렬과 semantic color, 문단-aware 텍스트가 적용된 말풍선 |
-| `GrammarFeedbackCard` | 사용자 메시지 아래의 접기·펼치기 가능한 교정 문장과 설명 |
+| `GrammarFeedbackCard` | 사용자 메시지 아래의 교정 문장과 설명 전체 표시 |
 | `TypingIndicator` | Reduce Motion 설정을 따르는 AI 응답 대기 표시 |
 
 ## 3차 입력·상태 컴포넌트
@@ -141,9 +153,9 @@ assets/
 
 `ApiClient`는 백엔드의 `{ success, data, message }` envelope를 `ApiResponse<T>`로 변환하고, FastAPI·네트워크·timeout 오류를 `ApiException`으로 통일해요. 인증 요청에는 Supabase SDK의 현재 access token을 `Authorization: Bearer` 헤더로 자동 추가하며 공개 요청은 `requiresAuth: false`로 제외할 수 있어요.
 
-`SupabaseAuthService`는 `supabase_flutter`를 감싸 Google token sign-in, 현재 session 확인, access token 조회, session refresh, sign-out을 제공해요. `SecureTokenStorage`는 더 이상 FastAPI token pair의 source of truth가 아니며 installation ID와 온보딩 같은 로컬 상태 보관에 사용해요.
+`SupabaseAuthService`는 `supabase_flutter`를 감싸 Google·Apple token sign-in, 현재 session 확인, access token 조회, session refresh, sign-out을 제공해요. iOS Apple 로그인은 매 요청마다 원본 nonce를 만들고 SHA-256 해시를 Apple에 전달한 뒤, Apple identity token과 원본 nonce를 Supabase에 전달해요. Runner의 Debug·Profile·Release 서명 설정에 Sign in with Apple entitlement가 필요해요. Supabase Apple provider의 Client IDs에는 iOS bundle ID `com.morethanhuman.curitalk`가 포함돼야 해요. `SecureTokenStorage`는 더 이상 FastAPI token pair의 source of truth가 아니며 installation ID와 온보딩 같은 로컬 상태 보관에 사용해요.
 
-`authControllerProvider`는 앱 시작 시 Supabase current session을 확인하고 `/auth/me`를 조회해 `authenticated` 또는 `unauthenticated` 상태를 제공해요. Google SDK에서 받은 `idToken`과 `accessToken`은 `signInWithGoogleTokens()`에 전달하고, 로그아웃은 Supabase sign-out과 Google sign-out을 best-effort로 처리해요.
+`authControllerProvider`는 앱 시작 시 Supabase current session을 확인하고 `POST /auth/bootstrap`으로 프로필을 준비해 `authenticated` 또는 `unauthenticated` 상태를 제공해요. Google SDK에서 받은 `idToken`과 `accessToken`은 `signInWithGoogleTokens()`에, Apple에서 받은 identity token과 원본 nonce는 `signInWithAppleToken()`에 전달해요. 로그아웃은 Supabase sign-out과 Google sign-out을 best-effort로 처리해요. 온보딩에서 선택했지만 아직 인증 전인 언어쌍은 secure storage에 pending 상태로 저장해요. 로그인 또는 세션 복원 직후 bootstrap 요청에 함께 보내고, 성공 응답의 최종 프로필로 첫 서비스 화면을 구성한 뒤 pending 값을 지워요.
 
 인증 API가 `401`을 반환하면 `TokenRefreshInterceptor`가 Supabase SDK의 `refreshSession()` 결과를 사용해 원 요청을 한 번 재시도해요. 동시 `401`은 하나의 refresh 작업을 공유해요. refresh 후에도 세션이 없거나 재시도가 다시 `401`이면 Riverpod 상태를 `unauthenticated`로 전환해요.
 
@@ -152,82 +164,124 @@ assets/
 `go_router`는 onboarding 완료 상태와 `authControllerProvider`를 관찰해 아래 순서로 이동해요.
 
 ```text
-Splash → Onboarding(최초 1회) → Google Login → Home
+Splash → Onboarding(최초 1회) → Google 또는 iOS Apple Login → Home
 ```
 
-- Splash: 저장된 세션과 onboarding 완료 여부 확인
-- Onboarding: 3장 소개 후 완료 상태를 secure storage에 저장
-- Login: Google Sign-In SDK의 `idToken`/`accessToken`으로 Supabase 세션 생성 후 `/auth/me` 조회
-- Home: 사용자 이름과 최근 대화 5개를 표시하고, 없으면 시작 제안을 표시
-- Home Navigation: `Chat`은 새 대화 시작 sheet, `History`는 대화 목록 화면, `Profile`은 account sheet를 열어요.
-- Account: 우상단 프로필 아바타 또는 `Profile` 탭에서 이름/email과 `LOG OUT`을 표시하고, 로그아웃 시 앱 token 삭제·서버 revoke·Google sign out을 best-effort로 처리해요.
-- Free Chat: Home sheet에서 Topic Input → Topic Prep으로 이동한 뒤 첫 답변으로 대화를 시작
-- Roleplay: Home sheet에서 Roleplay Setup으로 이동한 뒤 상황과 난이도로 롤플레이 대화를 시작
-- History: 하단 `History` 탭에서 대화 목록을 보고 기존 대화로 다시 진입
+- Splash: 제공된 Toma Talk 이미지와 제목을 화면 중앙보다 위쪽에 함께 놓고, 진입 시 한 번 살짝 눌렀다 놓는 650ms 모션으로 표시해요. 저장된 세션과 onboarding 완료 여부를 확인하며, 확인이 먼저 끝나도 모션이 완료된 뒤 이동해요. 동작 줄이기 설정에서는 모션을 생략하고, 확인 오류 시 하단 재시도 아이콘을 표시해요.
+- Onboarding: 기기 locale 기반 언어쌍 기본값을 보여주고 4장 소개 후 완료 상태와 pending 언어쌍을 secure storage에 저장
+- Login: Google Sign-In SDK의 `idToken`/`accessToken` 또는 iOS Apple identity token/원본 nonce로 Supabase 세션 생성 후 `/auth/bootstrap` 초기화
+- Home: 사용자 이름, 활성 언어쌍, 학습 언어별 스낵, 최근 대화 5개와 시작 제안을 표시해요. 스낵은 바구니에서 꺼낸 토마토 3개를 각각 4입 먹으며 팝업으로 읽어요. 5초 자동 전환은 사용하지 않아요.
+- 스낵 v2 (2026-09-12): target_language 변경 시 즉시 재조회하고 이전 응답을 버려요. API 실패 시 `curitalk.language_snacks.v2.{target_language}.{explanation_language}`의 마지막 성공 목록을 사용하며 캐시가 없으면 영역만 숨겨요. Home 재진입·앱 복귀 시 5분 기준으로 갱신해요.
+- 토마토 스낵 v2.1 (2026-09-19): `order=random&limit=12`로 전체 발행 콘텐츠에서 무작위 추출해요. 당일 묶음·순서·진행은 사용자와 학습 언어별 기기 저장소에 유지하며, 4입마다 팝업을 닫으면 2·1·0개가 남은 바구니로 돌아가요. 다음 토마토는 바구니를 눌러 꺼내고, 12개를 모두 보면 빈 바구니를 현지 자정까지 유지해요. 자정 또는 앱 복귀 시 새 묶음을 구성하고, 열린 팝업·애니메이션이 있으면 종료 후 갱신해요. 12개 미만이면 있는 목록을 반복해요. 기기 간 진행 동기화나 서버 이용 제한은 없어요. 원본 `snack_content_tomato/`의 PNG 9장은 `mobile/assets/images/snack_tomato/`에 복사해 번들링했으며 원본 변경 시 앱 에셋도 함께 갱신해야 해요.
+- 바구니 리셋 v1 (2026-09-19): Home 진입·앱 복귀 시 `GET /api/v2/language-snacks/basket-reset/`을 확인해 새 리셋 ID에만 같은 카드 묶음의 진행을 0으로 돌려요. 팝업·애니메이션 중에는 종료 후 적용하고 오프라인에서는 유지해요. 운영 POST와 마이그레이션은 [테스트용 바구니 리셋](../docs/OPERATIONS.md#테스트용-바구니-리셋)을 참고해요. "오늘의 언어"와 하단 점·체크는 표시하지 않아요.
+- 테스트용 로컬 리셋 v1 (2026-09-20): 기본 `flutter run` 디버그 빌드에서는 열람 수 왼쪽의 restart 아이콘으로 같은 카드 묶음을 유지한 채 토마토 3개·0/12로 초기화해요. 서버 호출·운영 키 없이 기기에 저장되며 다른 기기에는 영향을 주지 않아요. 팝업·모션 중에는 비활성화하고 `--release`/`--profile` 빌드에서는 표시하지 않아요.
+- 설명은 영어 학습자에게 한국어, 한국어 학습자에게 영어로 제공하며 앱 chrome locale과 분리해요. 미지원 유형·버전은 건너뛰고 알려진 유형의 손상된 응답은 캐시로 복원해요. 운영 키나 생성 기능은 앱에 포함하지 않아요.
+- Home Navigation v2 (2026-09-22, 2026-10-05 갱신): 홈은 언어 스낵 → `오늘의 토마토` 제목과 최근 대화 2개(파스텔 카드) → `＋ 새 대화` 순서예요. 제목은 16px 글자 크기·좌우 8px 여백을 사용하고 가운데 정렬하며 오른쪽 `전체 보기` 버튼은 표시하지 않아요.
+- 대화 권한 v2 (2026-10-04): 서버 정책이 켜지면 무료 계정은 활성 대화 1개·대화별 15회, Advance·Plus는 각각 5개·10개와 무제한 발화를 사용해요. 초과 대화는 실제 기록에 읽기 전용으로 표시하고 전체 대화 화면에서 활성 대화를 교체·해제해요. iOS paywall은 이름만 표시하는 Free 카드, `전체 대화 슬롯의 절반 해금` Advance 카드, `전체 대화 슬롯 해금`·`비즈니스 대화 모드` Plus 카드를 순서대로 표시해요. 서버에서 확인한 현재 플랜 카드만 `#A7BF93` 배경과 제목 바로 옆 34dp 크기의 왼쪽을 향한 채운 세모를 사용하며 세모는 2dp 아래로 배치해요. 나머지 카드는 `#BBC87C` 배경을 사용해요. 권한 확인 전에는 모두 `#BBC87C` 배경으로 표시하고 세모를 숨겨요. 유료 카드의 혜택 문구 앞에는 글머리표 `•`를 표시해요. 비즈니스 대화 모드는 향후 Plus 전용으로 구현할 계획이며 현재 동작은 제공하지 않아요. App Store 가격과 구매·복원·구독 관리를 제공해요. Android에서는 구매 버튼을 숨겨요.
+- Account: 하단 `내 정보` 탭의 독립 화면에서 이름/email, 앱·학습 언어 설정을 표시하고, `LOG OUT` 버튼은 설정 아래 마지막에 배치해요. 홈 헤더 오른쪽에는 현재 언어쌍 배지를 표시해요. 언어쌍 변경은 새 대화부터 적용되고 기존 대화는 시작 시점 언어쌍을 유지해요. 저장 후 현재 탭을 유지하며 profile과 Home의 활성 언어쌍을 갱신해요. 로그아웃 시 앱 token 삭제·서버 revoke·Google sign out을 best-effort로 처리해요.
+- Free Chat: 홈·전체 대화 화면의 공통 시작 sheet에서 Topic Input → Topic Prep으로 이동한 뒤 첫 답변으로 대화를 시작
+- Roleplay: 홈·전체 대화 화면의 공통 시작 sheet에서 Roleplay Setup으로 이동한 뒤 상황을 골라 롤플레이 대화를 시작
+- Conversations: 홈에서는 최근 대화 2개를 표시하며 기존 대화 카드에서 다시 진입
 - Conversation: 최근 대화, Free Chat 시작, Roleplay 시작이 모두 `/conversation/:conversationId`로 합류
+
+## 시스템 UI 언어와 학습 언어
+
+`AppCopy.of(context)`는 기기 시스템 locale이 `ko`일 때만 한국어 UI를 표시하고, 영어와 그 밖의 locale은 영어 UI로 표시해요. 이 규칙은 온보딩과 로그인뿐 아니라 내비게이션, 버튼, 로딩·오류 안내, 음성 control, 접근성 label까지 적용돼요.
+
+시스템 UI 언어는 profile의 학습 언어와 별개예요. `LearningLanguageContext`는 native/target/feedback language와 기존 conversation snapshot을 계속 소유하므로, 시스템 언어가 바뀌어도 대화·문법 피드백·역할극·Topic Prep의 원문 콘텐츠와 서버 요청은 바뀌지 않아요. Topic Input의 정적 예시 검색어만 사용자의 native language로 선택하고, 누른 문구를 그대로 검색 요청에 사용해요. 레거시 `zh` 학습 프로필은 유지하며, 이때도 앱 chrome은 영어 fallback을 사용해요.
+
+클라이언트 전송·녹음·재생·문법 조회 실패는 controller가 locale-neutral reason으로 전달하고 presentation이 `AppCopy`의 낮은 압박의 재시도 문구로 표시해요. 서버·provider의 원본 오류 detail은 사용자 화면에 노출하지 않아요.
 
 ## Home Navigation 흐름
 
-Home의 좌측 햄버거 메뉴는 v1에서 제거했어요. 하단 네비게이션은 다음처럼 동작해요.
+하단 바는 `StatefulShellRoute.indexedStack` 공통 shell에서 한 번만 표시해요. 두 목적지는 같은 너비이며 라벨을 항상 표시하고, 탭 전환에는 슬라이드 애니메이션을 넣지 않아요.
 
-| 탭 | 동작 |
+| 탭 | 경로와 동작 |
 |----|------|
-| `Home` | 현재 Home 유지 |
-| `Chat` | `Start a conversation` sheet 열기 |
-| `History` | `/history`로 이동 |
-| `Profile` | account sheet 열기 |
+| 홈 / Home | `/home`: 언어 스낵, 최근 2개 카드, 그 아래 `＋ 새 대화` |
+| 내 정보 / Profile | `/profile`: 계정, 앱 언어, 학습 언어, 로그아웃 |
 
-History 화면은 v1에서 기존 대화 목록 API를 재사용해 목록, loading, empty, error/retry 상태를 보여줘요. 향후 전체 pagination API가 준비되면 History 전용 provider로 확장해요.
+탭 전환은 각 화면과 스크롤을 보존하고, 같은 탭 재선택은 맨 위로 이동해요. 전체 대화 경로 `/history`로 직접 진입하면 shell 위에 열려 하단 바를 숨겨요. 전체 대화 화면의 상단 `＋`와 홈의 새 대화 버튼은 같은 선택 시트를 열고, 선택지 제목은 앱 표시 언어와 관계없이 `Free Chat`·`Roleplay`로 보여줘요. 준비·대화 화면도 shell 위에 열며, 대화 생성 성공 후 완료한 준비 단계는 제거해요. 뒤로가기는 출발 화면으로 복귀하고, 직접 진입한 기존 대화는 홈으로 돌아와요.
+
+전체 목록은 전용 `ConversationHistoryRepository`와 controller가 기존 `GET /api/conversations/`의 limit/offset을 사용해 20개씩 조회해요. 추가 조회 실패는 기존 행을 유지하고 재시도를 제공해요. 중복 ID·동시 조회·계정 변경 뒤 지연 응답을 차단하며, 대화 복귀·삭제 시 최근 목록과 전체 목록을 갱신해요. 이미 읽은 목록 범위는 새 offset 기준으로 다시 조회해 복귀 위치를 유지해요. API 변경은 없어요.
 
 ## Topic Prep 흐름
 
-Home의 `START CONVERSATION`에서 Free Chat을 선택하면 Topic Input 화면으로 이동해요. Topic Input은 2자 미만 입력을 클라이언트에서 막고, 예시 topic chip으로 빠르게 주제를 채울 수 있게 해요.
+홈의 `＋ 새 대화`에서 Free Chat을 선택하면 Topic Input 화면으로 이동해요. Topic Input은 2자 미만 입력을 클라이언트에서 막고, 예시 topic chip으로 빠르게 주제를 채울 수 있게 해요.
 
-Topic Prep 화면은 전달받은 topic으로 `POST /api/search/topic-prep/`를 호출해 loading, ready, low-quality, error 상태를 표시해요.
+Topic Prep 화면은 전달받은 topic으로 `POST /api/search/topic-prep/stream/`을 호출해요. 주제와 준비 중인 각 영역에는 앱 공통 가로형 토마토 로딩 표시를 보여줘요. 축소 동작 설정에서는 첫 프레임을 정지 상태로 표시해요. `summary_ready`에서 요약 영역의 로딩을 끝내고 요약을, `card_ready`에서 나머지 로딩을 끝내고 완성된 방향·첫 질문을 보여줘요. 스트림 오류는 전체 오류 상태로 표시하며 부분 재시도는 아직 없어요. 응답의 `language`는 첫 답변 입력 안내처럼 사용자가 직접 작성해야 하는 copy에 사용하고, 서버가 내려준 retry guidance가 있으면 그 문구를 우선 표시해요.
+
+첫 질문 카드에는 AI가 같은 응답에서 생성한 반대 언어 번역을 회색 12px 보조 글씨로 표시해요. 방향 재생성·직접 입력 방향에도 같은 규칙을 적용하며, 번역이 없는 구형 응답은 원문 질문만 표시해요. 대화 시작에는 원문 질문만 전달해요.
+
+추천 대화 방향 3개 옆의 `직접 입력` 버튼을 누르면 `어떤 이야기를 나눌까요?` 팝업의 한 줄 입력칸에서 원하는 방향을 입력해 첫 질문 3개를 생성해요. 입력 안내는 `나누고 싶은 내용을 적어 주세요`예요. 생성에 성공하면 입력한 방향이 추가 선택 버튼으로 표시되고 새 질문과 반대 언어 번역이 함께 나타나요. 다른 방향을 눌렀다가 직접 입력 방향을 다시 선택할 수 있으며, 다시 입력하면 해당 버튼과 질문을 최신 결과로 교체해요. 본문에는 별도의 직접 입력 폼을 두지 않아요. 제목 옆 14px 검은색 새로고침 이미지 버튼은 배경 없이 기존 추천 방향만 다시 생성해요.
 
 | 상태 | 표시 |
 |------|------|
 | `loading` | 준비 중 안내 |
-| `ready=true` | summary, sources, direction 4개, 선택 direction의 첫 질문 3개 |
+| `ready=true` | summary, direction 4개, 선택 direction의 첫 질문 3개 |
 | `ready=false` | retry guidance, example topic chip, edit topic 복귀 |
 | `error` | 재시도 가능한 오류 상태 |
 
-기본 선택은 `CASUAL_CHAT`과 첫 번째 질문이에요. 사용자는 선택한 첫 질문에 대한 답변을 입력하고, 앱은 `POST /api/conversations/start/free-chat/`에 `first_message`, `search_context`, `topic`, `conversation_direction`, `selected_question`을 보내 Conversation 화면으로 이동해요. 첫 답변은 2자 미만이면 클라이언트에서 막아요.
+기본 선택은 `CASUAL_CHAT`과 첫 번째 질문이에요. 사용자는 선택한 첫 질문에 대한 답변을 활성 target language로 입력하고, 앱은 `POST /api/conversations/start/free-chat/stream/`에 `first_message`, `search_context`, `topic`, `conversation_direction`, `selected_question`을 보내 Conversation 화면으로 이동해요. 첫 답변은 2자 미만이면 클라이언트에서 막아요.
 
-출처 링크는 현재 화면에 표시만 하고, 외부 브라우저 열기는 `url_launcher`를 도입하는 후속 작업에서 연결해요.
+요약을 기다리는 동안 토마토 로딩 표시는 카드 안 가로 가운데에 두고 요약 제목 가까이 배치해요. 요약 문구가 나타나면 기존 제목 간격을 사용해요. 서버 응답의 출처 정보는 화면에 표시하지 않아요.
 
 ## Roleplay Setup 흐름
 
-Home의 `START CONVERSATION`에서 Roleplay를 선택하면 Roleplay Setup 화면으로 이동해요. 사용자는 상단에서 난이도를 먼저 고른 뒤 preset 상황 카드 7개 중 하나를 고르거나, custom 입력으로 원하는 상황을 직접 작성할 수 있어요.
+홈의 `＋ 새 대화`에서 Roleplay를 선택하면 Roleplay Setup 화면으로 이동해요. 사용자는 preset 상황 카드 7개 중 하나를 고르거나, custom 입력으로 원하는 상황을 직접 작성할 수 있어요. Preset 상황은 활성 언어쌍의 target language를 기준으로 골라요. 한국어 연습은 존댓말, 자기소개, 직장 인사, 서비스 요청처럼 한국어 사용 맥락을 우선하고, 영어 연습은 기존 cafe/travel/interview/meeting 같은 broad conversation 상황을 유지해요.
 
 | 선택 | 동작 |
 |------|------|
 | preset 상황 | 선택 즉시 Start Roleplay CTA 활성화 |
 | custom 상황 | 2자 이상 입력 시 Start Roleplay CTA 활성화 |
-| 난이도 | `Easy`, `Normal`, `Challenge`가 한 줄 selector로 표시되며 기본값은 `Normal` |
 
-Start Roleplay를 누르면 선택 결과를 백엔드 계약에 맞는 `role_character` 문자열로 합성하고 `POST /api/conversations/start/roleplay/`를 호출해 Conversation 화면으로 이동해요. Custom 입력은 사용자의 상황이나 사용자 역할을 설명하는 값으로 보고, AI는 그 상황의 상대역을 맡도록 prompt를 합성해요. Roleplay 시작 응답의 `message_id`는 AI 첫 인사 메시지 ID로 취급하므로 사용자 문법 피드백 polling 대상이 아니에요.
+Start Roleplay를 누르면 선택 결과를 백엔드 계약에 맞는 `role_character` 문자열로 합성하고 `POST /api/conversations/start/roleplay/stream/`를 호출해요. `turn_started`에서 임시 대화 화면으로 이동해 AI 첫 인사를 생성 중에 표시하고, 완료되면 영속 Conversation 화면으로 전환해요. Custom 입력은 사용자의 상황이나 사용자 역할을 설명하는 값으로 보고, AI는 그 상황의 상대역을 맡도록 prompt를 합성해요. 서버는 conversation snapshot의 target language로 roleplay scenario examples를 고르고, feedback language는 필요한 설명에만 사용해요. Roleplay 첫 인사의 `assistant_message_id`는 사용자 문법 피드백 polling 대상이 아니에요.
 
 ## Conversation 흐름
 
-Conversation 화면은 Free Chat 시작, Roleplay 시작, Home 최근 대화 진입이 합류하는 대화 화면이에요. 상단에는 명시적인 뒤로가기 버튼을 두고, navigation stack이 없을 때는 Home으로 이동해요.
+대화 재진입 v1.1 (2026-09-22): 메시지는 시간순으로 유지하면서 목록을 아래쪽 기준으로 배치해 진입할 때 최신 메시지가 보여요. 최초 조회의 전체 개수가 40개를 넘으면 기존 offset API로 마지막 40개를 추가 조회한 뒤 표시하고, 상단의 이전 메시지 불러오기로 앞선 구간을 40개씩 이어서 읽어요. 이전 구간 로딩 중에는 중복 조회와 전송을 잠깐 막고, 실패 시 현재 메시지를 유지한 채 재시도할 수 있어요. 화면 재진입 시 스크롤 위치는 복원하지 않으며 화면 안에서 과거 내용을 읽거나 교정 카드를 펼칠 때 강제로 최신 위치로 이동하지 않아요. 기존 대화 상태·음성 캐시는 유지하며 다른 기기의 변경을 재진입 때 자동 동기화하는 기능은 포함하지 않아요.
+
+Conversation 화면은 Free Chat 시작, Roleplay 시작, Home 최근 대화 진입이 합류하는 대화 화면이에요. 상단에는 명시적인 뒤로가기 버튼을 두고, navigation stack이 없을 때는 홈으로 이동해요.
+
+모든 대화 생성 경로는 문장별 음성 NDJSON을 받아요. 주간 추천 시작은 `POST /api/conversations/start/free-chat/suggested/stream/`에 주제·요청 UUID를 보내고 `turn_started`의 대화 ID로 화면을 열어요. Free Chat은 확정된 사용자 발화에서 대화 화면에 들어가고, Roleplay는 `turn_started`에서 요청 ID 기반 임시 대화 화면에 들어가 첫 인사 델타를 보여줘요. 임시 화면은 텍스트 첫 프레임 뒤 음성을 재생하고, `turn_completed`에서 영속 대화 ID로 바꿔요. `audio_segment`는 증분 UTF-8 decoder와 단일 재생 큐로 순서대로 재생해요. 확정 사용자 발화는 남기고 미완성 AI 답변은 실패 안내와 재시도 버튼으로 바꿔요. 연결이 끊기면 상태만 조회하고 사용자가 버튼을 눌렀을 때 다시 생성해요. TTS 또는 재생 실패에는 저장된 답변의 음성 다시 듣기 버튼을 보여줘요. 화면 이탈 때 스트림과 큐를 취소해요.
+
+이전 turn 때문에 새 텍스트 전송이 409로 거절되면 앱은 그 대화의 미해결 turn을 다시 조회해 이전 답변의 상태 확인·재시도 버튼을 보여줘요. 거절된 텍스트는 서버 메시지로 표시하지 않고 입력창에 복원해요.
 
 | 동작 | API |
 |------|-----|
-| 기존 메시지 로드 | `GET /api/conversations/{conversation_id}/messages/?limit=50&offset=0` |
-| 텍스트 turn 전송 | `POST /api/conversations/{conversation_id}/turn/` JSON |
-| 음성 turn 전송 | `POST /api/conversations/{conversation_id}/turn/` multipart |
+| 주간 추천 시작 | `POST /api/conversations/start/free-chat/suggested/stream/` NDJSON |
+| Free Chat 시작 | `POST /api/conversations/start/free-chat/stream/` NDJSON |
+| Roleplay 시작 | `POST /api/conversations/start/roleplay/stream/` NDJSON |
+| 기존 메시지 로드 | `GET /api/conversations/{conversation_id}/messages/?limit=40&offset=0` |
+| 텍스트 turn 전송 | `POST /api/conversations/{conversation_id}/turn/stream/` NDJSON |
+| 음성 turn 전송 | `POST /api/conversations/{conversation_id}/turn/stream/` multipart·NDJSON |
+| 상태 조회·수동 재시도 | `GET /api/conversations/turns/{turn_id}/`, `GET /api/conversations/turns/by-request/{request_id}/`, `POST /api/conversations/turns/{turn_id}/retry/stream/` |
+| 음성 다시 듣기 | `POST /api/conversations/messages/{assistant_message_id}/audio/stream/` NDJSON |
 | 문법 피드백 조회 | `GET /api/grammar/message/{message_id}/` |
 
-메시지는 서버의 시간순 목록을 기준으로 표시해요. 텍스트 전송 중에는 사용자 메시지를 즉시 보여주고 `TypingIndicator`를 표시한 뒤, 성공하면 AI 응답을 반영하고 canonical 메시지 목록을 다시 불러와요. 실패하면 같은 메시지를 Retry할 수 있어요. AI 응답은 서버 원문을 바꾸지 않고 화면 표시 단계에서 문장 단위 줄바꿈과 누락된 공백을 보정해 읽기 쉽게 보여줘요.
+메시지는 서버의 시간순 목록을 기준으로 표시해요. 텍스트 전송 중에는 사용자 메시지를 즉시 보여주고 AI 텍스트를 증분 표시한 뒤, 성공하면 canonical 메시지 목록을 다시 불러와요. 생성 실패 시 임시 AI 텍스트를 지우고 저장된 사용자 발화 아래 재시도 버튼을 표시해요. AI 응답은 서버 원문을 바꾸지 않고 화면 표시 단계에서 문장 단위 줄바꿈과 누락된 공백을 보정해 읽기 쉽게 보여줘요.
 
-새 채팅 composer는 기존 텍스트 전용 `/message/` 대신 `/turn/` API를 사용해요. 텍스트 입력은 JSON body의 `text`와 `include_audio_response=false`를 보내고, 음성 입력은 마이크 버튼으로 `.m4a`를 녹음한 뒤 multipart `audio_file`과 `include_audio_response=false`를 보내요. 음성 turn 응답의 `transcript`는 사용자 말풍선으로 표시하고, `audio`가 포함되면 AI 말풍선 아래에 재생 버튼을 보여줘요. `audio_error`는 대화 전송 실패와 분리된 비차단 안내로 표시해요.
+새 채팅 composer는 `/turn/stream/` API를 사용해요. 텍스트 입력은 JSON body의 `text`를 보내고, 음성 입력은 iOS에서 `.wav`/`audio/wav`, Android에서 `.m4a`/`audio/m4a`를 녹음한 뒤 multipart `audio_file`로 보내요. 1KiB 미만 녹음은 업로드하지 않고 재녹음을 안내해요. `user_message_committed`의 전사 텍스트를 사용자 말풍선으로 표시하고, `audio_error`는 생성 실패와 분리된 비차단 안내로 표시해요.
 
 음성 입력은 `Voice input → Stop recording` 흐름으로 동작하며, 녹음 중에는 타이머와 cancel 버튼을 보여주고 텍스트 입력·전송을 잠가 한 turn에 text와 audio가 섞이지 않게 해요. cancel은 업로드 없이 녹음을 폐기하고, 권한 거부·빈 녹음·녹음 실패는 대화 전송 실패와 분리된 안내로 표시해요. 녹음 임시 파일은 성공적으로 읽은 뒤와 cancel/dispose 시 best-effort로 정리해요. assistant audio 재생은 메시지 단위 loading/playing/error 상태를 가지며, 중복 재생 탭을 막고 playback failure를 send retry와 분리해요.
 
-사용자 메시지의 문법 피드백은 2초 간격으로 최대 30초 polling해요. `404`는 pending으로 보고 계속 기다리며, `200`이면 `has_errors=false`는 `NaturalFeedbackBadge`, `has_errors=true`는 `GrammarFeedbackCard`로 표시해요. 문법 피드백의 교정 문장과 설명도 서버 원문은 유지하고 화면 표시 단계에서 문장 단위 줄바꿈과 누락된 공백을 보정해요. 빈 줄로 나뉜 텍스트는 문단 간격을 두고 표시하며, 1줄을 넘는 피드백은 기본 접힘 상태에서 `SHOW MORE`/`SHOW LESS`로 확장할 수 있어요. 설명 텍스트는 gray 계열을 유지하고 피드백 카드는 일반 AI 말풍선과 다른 semantic color를 사용해요. 30초 동안 준비되지 않으면 timeout 안내를 표시해요.
+사용자 메시지의 문법 피드백은 2초 간격으로 최대 30초 polling해요. `404`는 pending으로 보고 계속 기다리며, `200`이면 `has_errors=false`는 `NaturalFeedbackBadge`, `has_errors=true`는 `GrammarFeedbackCard`로 표시해요. 문법 피드백의 교정 문장과 설명도 서버 원문은 유지하고 화면 표시 단계에서 문장 단위 줄바꿈과 누락된 공백을 보정해요. 빈 줄로 나뉜 텍스트는 문단 간격을 두고 표시하며, 피드백 아이콘을 누르면 교정 문장과 설명 전체를 바로 보여줘요. 설명 텍스트는 gray 계열을 유지하고 피드백 카드는 일반 AI 말풍선과 다른 semantic color를 사용해요. 30초 동안 준비되지 않으면 timeout 안내를 표시해요.
 
-SSE 기반 실시간 피드백, waveform 표시, 50개 이후 pagination은 후속 작업으로 남겨요. 실제 기기 QA에서는 microphone permission denied, 녹음 cancel, stop/upload, assistant audio playback, playback failure를 확인해요.
+SSE 기반 실시간 피드백과 waveform 표시는 후속 작업으로 남겨요. 메시지는 최신 40개부터 조회하며 이전 구간을 40개씩 추가 조회할 수 있어요. 실제 기기 QA에서는 microphone permission denied, 녹음 cancel, stop/upload, assistant audio playback, playback failure를 확인해요.
+
+## 실행 설정
+
+### iOS 홈 화면 스낵 위젯
+
+iOS 17 이상에서는 `systemMedium`과 `systemLarge` 두 크기의 **오늘의 토마토** 위젯을 제공해요. 앱에 로그인하고 Home에서 오늘의 스낵을 한 번 준비한 뒤 홈 화면의 위젯 갤러리에서 원하는 크기를 추가해요. 기본 화면은 상단 중앙의 제목과 그 아래 토마토 3개가 담긴 바구니를 보여주며, 큰 크기에서는 바구니를 위젯 중앙에 놓아요. 바구니를 누르면 토마토 한 개가 나오고 토마토를 누르면 앱을 열지 않고 한입을 소비하며 위젯 전체가 앱 팝업과 닮은 색상별 스낵 카드로 바뀌어요. 4입마다 남은 2·1·0개 바구니로 돌아가요. 카드에는 중앙 정렬된 두 표현을 보여주고, 좌우 화살표로 설명·예문·번역을 넘기며 닫기 버튼으로 토마토 화면에 돌아가요. 두 크기 모두 같은 종류의 두 표현 설명을 한 페이지에 나란히 보여주고 긴 설명은 말줄임표로 처리해요. 두 크기는 같은 진행을 공유하고 앱 Home 진입·복귀에도 반영돼요. 앱을 열지 않은 채 날짜가 바뀌면 마지막 12개를 새 날짜에 재사용해요.
+
+Simulator에서는 iOS 17 이상 기기에 앱을 설치한 뒤 홈 화면을 길게 눌러 위젯을 추가해요. Xcode에서 `SnackWidget` target을 실행하면 위젯만 디버깅할 수도 있어요. 실기기 배포 전에는 Apple Developer의 앱 ID와 위젯 extension ID에 `group.com.morethanhuman.curitalk` App Group을 등록하고, 양쪽 provisioning profile에 반영해야 해요. 구현 계약은 [iOS 스낵 위젯](../.agent/_contracts/IOS_SNACK_WIDGET.md)을 참고해요.
+
+TestFlight 아카이브에서는 Runner와 SnackWidget의 Release·Profile 구성을 각각 App Group이 포함된 App Store Connect 배포 프로파일로 수동 서명해요. 두 프로파일은 같은 Apple Distribution 인증서를 포함해야 해요. IPA 내보내기에도 `ios/ExportOptions.plist`로 같은 두 프로파일과 인증서를 지정해요. 프로파일 재발급이나 인증서 교체 시 Xcode 프로젝트와 내보내기 옵션의 UUID·지문을 함께 갱신해요. `build_testflight_ipa.sh`는 IPA 포장 시 Xcode가 macOS 기본 `rsync`를 사용하도록 PATH를 설정해요.
+
+로컬 Simulator용 수정 빌드는 `mobile/`에서 `flutter build ios --simulator --debug --dart-define-from-file=.env.local.json`으로 만들어요. 기존 중간 크기 위젯은 유지할 수 있고, 큰 크기를 원하면 위젯 갤러리에서 추가해요.
+
+### 앱 실행
 
 Google Sign-In 실행 시 다음 `dart-define`을 사용할 수 있어요.
 
@@ -238,6 +292,8 @@ flutter run \
   --dart-define=GOOGLE_CLIENT_ID=<ios-oauth-client-id> \
   --dart-define=GOOGLE_SERVER_CLIENT_ID=<web-oauth-client-id>
 ```
+
+iOS 구독 화면에는 공개 개인정보처리방침 링크가 필요해요. 구매 버튼을 활성화하려면 실제 HTTPS 주소를 `--dart-define=PRIVACY_POLICY_URL=https://...`로 전달해요. 별도 이용약관을 사용하면 `--dart-define=SUBSCRIPTION_TERMS_URL=https://...`도 전달해요. 기본 이용약관 링크는 Apple 표준 EULA예요. 앱은 제품 가격을 App Store에서 직접 조회하므로 가격용 `dart-define`은 없어요.
 
 Android에서 `google-services.json`을 사용하지 않으면 `GOOGLE_SERVER_CLIENT_ID`가 필요해요. iOS는 `GOOGLE_CLIENT_ID`와 별개로 OAuth 설정의 `REVERSED_CLIENT_ID` URL scheme을 `Info.plist`에 등록해야 실제 로그인이 동작해요. `GOOGLE_SERVER_CLIENT_ID`는 Supabase Google Provider에 등록한 Web OAuth client ID와 같아야 해요.
 

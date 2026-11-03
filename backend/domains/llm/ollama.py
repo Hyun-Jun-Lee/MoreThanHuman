@@ -1,6 +1,9 @@
 """
 Ollama LLM Provider
 """
+import json
+from collections.abc import AsyncIterator
+
 import httpx
 
 from config import get_settings
@@ -14,7 +17,8 @@ settings = get_settings()
 class OllamaProvider(LLMProvider):
     """Ollama Local LLM Provider"""
 
-    def __init__(self):
+    def __init__(self, http_client: httpx.AsyncClient):
+        self.http_client = http_client
         self.base_url = settings.ollama_base_url
 
     async def chat_completion(self, request: LLMRequest) -> LLMResponse:
@@ -33,39 +37,80 @@ class OllamaProvider(LLMProvider):
         # Convert LLMMessage to dict format
         messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
 
-        async with httpx.AsyncClient() as client:
-            try:
-                response = await client.post(
-                    f"{self.base_url}/v1/chat/completions",
-                    headers={
-                        "Content-Type": "application/json",
+        try:
+            response = await self.http_client.post(
+                f"{self.base_url}/v1/chat/completions",
+                headers={
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": request.model,
+                    "messages": messages,
+                    "options": {
+                        "num_predict": request.max_tokens,
+                        "temperature": request.temperature,
                     },
-                    json={
-                        "model": request.model,
-                        "messages": messages,
-                        "options": {
-                            "num_predict": request.max_tokens,
-                            "temperature": request.temperature,
-                        },
-                        **(request.extra_params or {}),
-                    },
-                    timeout=60.0,  # Ollama may be slower on local hardware
-                )
-                response.raise_for_status()
-                data = response.json()
+                    **(request.extra_params or {}),
+                },
+                timeout=60.0,  # Ollama may be slower on local hardware
+            )
+            response.raise_for_status()
+            data = response.json()
 
-                return LLMResponse(
-                    content=data["choices"][0]["message"]["content"],
-                    model=data.get("model"),
-                    usage=data.get("usage"),
-                )
-            except httpx.HTTPStatusError as e:
-                response_body = e.response.text[:500] if e.response is not None else ""
-                raise ExternalAPIException(
-                    f"Ollama API call failed: status={e.response.status_code}, body={response_body}"
-                )
-            except httpx.HTTPError as e:
-                raise ExternalAPIException(f"Ollama API call failed: {str(e)}")
+            return LLMResponse(
+                content=data["choices"][0]["message"]["content"],
+                model=data.get("model"),
+                usage=data.get("usage"),
+            )
+        except httpx.HTTPStatusError as e:
+            response_body = e.response.text[:500] if e.response is not None else ""
+            raise ExternalAPIException(
+                f"Ollama API call failed: status={e.response.status_code}, body={response_body}"
+            )
+        except httpx.HTTPError as e:
+            raise ExternalAPIException(f"Ollama API call failed: {str(e)}")
+
+    async def chat_completion_stream(self, request: LLMRequest) -> AsyncIterator[str]:
+        messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
+        try:
+            async with self.http_client.stream(
+                "POST", f"{self.base_url}/v1/chat/completions",
+                headers={"Content-Type": "application/json"},
+                json={
+                    "model": request.model, "messages": messages,
+                    "max_tokens": request.max_tokens, "temperature": request.temperature,
+                    **(request.extra_params or {}), "stream": True,
+                },
+                timeout=60.0,
+            ) as response:
+                response.raise_for_status()
+                done = False
+                async for line in response.aiter_lines():
+                    if not line.startswith("data:"):
+                        continue
+                    payload = line[5:].strip()
+                    if payload == "[DONE]":
+                        done = True
+                        break
+                    if not payload:
+                        continue
+                    data = json.loads(payload)
+                    if data.get("error"):
+                        raise ExternalAPIException("Ollama stream returned an error event")
+                    choices = data.get("choices") or []
+                    if not choices:
+                        continue
+                    if choices[0].get("finish_reason") == "length":
+                        raise ExternalAPIException("Ollama stream reached the output limit")
+                    delta = choices[0].get("delta", {}).get("content")
+                    if isinstance(delta, str) and delta:
+                        yield delta
+                if not done:
+                    raise ExternalAPIException("Ollama stream ended before DONE")
+        except httpx.HTTPStatusError as error:
+            raise ExternalAPIException(f"Ollama stream failed: status={error.response.status_code}") from error
+        except (httpx.HTTPError, ValueError, KeyError, IndexError) as error:
+            raise ExternalAPIException(f"Ollama stream failed: {type(error).__name__}") from error
 
     def validate_config(self) -> bool:
         """Ollama 설정 검증 (URL 존재 여부)"""

@@ -1,6 +1,7 @@
 export 'app_async_state_view.dart';
 export 'app_bottom_action_bar.dart';
 export 'app_color_block_card.dart';
+export 'app_loading_indicator.dart';
 export 'app_modal_sheet.dart';
 export 'app_page_indicator.dart';
 export 'app_paragraph_text.dart';

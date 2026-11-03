@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:curitalk/core/network/network.dart';
 import 'package:curitalk/features/auth/auth.dart';
+import 'package:curitalk/features/language/language.dart';
+import 'package:curitalk/features/onboarding/onboarding.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -43,6 +45,8 @@ void main() {
       expect(session.isAuthenticated, isTrue);
       expect(session.user?.email, 'learner@example.com');
       expect(repository.profileRequestCount, 1);
+      expect(repository.bootstrapRequestCount, 1);
+      expect(repository.getCurrentUserCount, 0);
     },
   );
 
@@ -76,6 +80,130 @@ void main() {
       expect(repository.profileRequestCount, 1);
     },
   );
+
+  test(
+    'Apple token login forwards the raw nonce and publishes the user',
+    () async {
+      final _FakeSupabaseAuthService supabaseAuth = _FakeSupabaseAuthService();
+      final _FakeAuthRepository repository = _FakeAuthRepository(user: _user);
+      final ProviderContainer container = _createContainer(
+        supabaseAuth,
+        repository,
+      );
+      addTearDown(container.dispose);
+      await container.read(authControllerProvider.future);
+
+      await container
+          .read(authControllerProvider.notifier)
+          .signInWithAppleToken(
+            const AppleIdentityTokens(
+              idToken: ' apple-id-token ',
+              rawNonce: ' raw-nonce ',
+            ),
+          );
+
+      expect(supabaseAuth.lastAppleIdToken, 'apple-id-token');
+      expect(supabaseAuth.lastRawNonce, 'raw-nonce');
+      expect(repository.profileRequestCount, 1);
+      expect(
+        container.read(authControllerProvider).requireValue.isAuthenticated,
+        isTrue,
+      );
+    },
+  );
+
+  test(
+    'syncs pending onboarding language before publishing the user',
+    () async {
+      final _FakeSupabaseAuthService supabaseAuth = _FakeSupabaseAuthService();
+      final _FakeAuthRepository repository = _FakeAuthRepository(user: _user);
+      final _FakeOnboardingStorage onboardingStorage = _FakeOnboardingStorage(
+        pendingLanguage: const LearningLanguageContext(
+          nativeLanguage: LearningLanguageCode.zh,
+          targetLanguage: LearningLanguageCode.ko,
+          feedbackLanguage: LearningLanguageCode.zh,
+        ),
+      );
+      final _FakeLanguagePreferencesRepository languageRepository =
+          _FakeLanguagePreferencesRepository();
+      final ProviderContainer container = _createContainer(
+        supabaseAuth,
+        repository,
+        onboardingStorage: onboardingStorage,
+        languageRepository: languageRepository,
+      );
+      addTearDown(container.dispose);
+      await container.read(authControllerProvider.future);
+
+      await container
+          .read(authControllerProvider.notifier)
+          .signInWithGoogleTokens(
+            const GoogleIdentityTokens(
+              idToken: 'google-id-token',
+              accessToken: 'google-access-token',
+            ),
+          );
+
+      expect(
+        repository.bootstrapLanguage?.targetLanguage,
+        LearningLanguageCode.ko,
+      );
+      expect(languageRepository.updated, isEmpty);
+      expect(onboardingStorage.pendingLanguage, isNull);
+      expect(
+        container.read(authControllerProvider).requireValue.isAuthenticated,
+        isTrue,
+      );
+      expect(
+        container
+            .read(authControllerProvider)
+            .requireValue
+            .user
+            ?.language
+            .targetLanguage,
+        LearningLanguageCode.ko,
+      );
+    },
+  );
+
+  test('updates the signed-in user app locale', () async {
+    final _FakeSupabaseAuthService supabaseAuth = _FakeSupabaseAuthService(
+      hasSession: true,
+    );
+    final _FakeAuthRepository repository = _FakeAuthRepository(user: _user);
+    final ProviderContainer container = _createContainer(
+      supabaseAuth,
+      repository,
+    );
+    addTearDown(container.dispose);
+    await container.read(authControllerProvider.future);
+
+    await container.read(authControllerProvider.notifier).updateAppLocale('ko');
+
+    expect(repository.updatedAppLocale, 'ko');
+    expect(
+      container.read(authControllerProvider).requireValue.user?.appLocale,
+      'ko',
+    );
+  });
+
+  test('saving a nickname updates the authenticated profile', () async {
+    final supabaseAuth = _FakeSupabaseAuthService(hasSession: true);
+    final repository = _FakeAuthRepository(user: _user);
+    final container = _createContainer(supabaseAuth, repository);
+    addTearDown(container.dispose);
+    await container.read(authControllerProvider.future);
+
+    await container
+        .read(authControllerProvider.notifier)
+        .updateNickname('Tomato');
+
+    expect(repository.updatedNickname, 'Tomato');
+    expect(
+      container.read(authControllerProvider).requireValue.user?.nickname,
+      'Tomato',
+    );
+  });
 
   test(
     'session expiration immediately publishes unauthenticated state',
@@ -115,9 +243,13 @@ void main() {
           message: 'offline',
         ),
       );
+      final _FakeOnboardingStorage onboardingStorage = _FakeOnboardingStorage(
+        pendingLanguage: LearningLanguageContext.defaultContext,
+      );
       final ProviderContainer container = _createContainer(
         supabaseAuth,
         repository,
+        onboardingStorage: onboardingStorage,
       );
       addTearDown(container.dispose);
       final Completer<Object?> errorCompleter = Completer<Object?>();
@@ -137,6 +269,7 @@ void main() {
 
       expect(error, isA<ApiException>());
       expect(supabaseAuth.hasSession, isTrue);
+      expect(onboardingStorage.pendingLanguage, isNotNull);
     },
   );
 
@@ -211,6 +344,8 @@ ProviderContainer _createContainer(
   _FakeAuthRepository repository, {
   AuthSessionCoordinator? sessionCoordinator,
   _FakeGoogleIdentityService? googleIdentityService,
+  _FakeOnboardingStorage? onboardingStorage,
+  _FakeLanguagePreferencesRepository? languageRepository,
 }) {
   final AuthSessionCoordinator coordinator =
       sessionCoordinator ?? AuthSessionCoordinator();
@@ -218,6 +353,12 @@ ProviderContainer _createContainer(
     overrides: [
       authSessionCoordinatorProvider.overrideWithValue(coordinator),
       authRepositoryProvider.overrideWithValue(repository),
+      onboardingStorageProvider.overrideWithValue(
+        onboardingStorage ?? _FakeOnboardingStorage(),
+      ),
+      languagePreferencesRepositoryProvider.overrideWithValue(
+        languageRepository ?? _FakeLanguagePreferencesRepository(),
+      ),
       supabaseAuthServiceProvider.overrideWithValue(supabaseAuth),
       googleIdentityServiceProvider.overrideWithValue(
         googleIdentityService ?? _FakeGoogleIdentityService(),
@@ -226,20 +367,114 @@ ProviderContainer _createContainer(
   );
 }
 
-class _FakeAuthRepository implements AuthRepository {
+class _FakeOnboardingStorage implements OnboardingStorage {
+  _FakeOnboardingStorage({this.pendingLanguage});
+
+  LearningLanguageContext? pendingLanguage;
+
+  @override
+  Future<void> clearPendingLanguageContext() async {
+    pendingLanguage = null;
+  }
+
+  @override
+  Future<bool> isCompleted() async => true;
+
+  @override
+  Future<void> markCompleted() async {}
+
+  @override
+  Future<LearningLanguageContext?> readPendingLanguageContext() async {
+    return pendingLanguage;
+  }
+
+  @override
+  Future<void> writePendingLanguageContext(
+    LearningLanguageContext context,
+  ) async {
+    pendingLanguage = context;
+  }
+}
+
+class _FakeLanguagePreferencesRepository
+    implements LanguagePreferencesRepository {
+  final List<LearningLanguageContext> updated = <LearningLanguageContext>[];
+
+  @override
+  Future<LearningLanguageContext> getLanguagePreferences() async {
+    if (updated.isEmpty) {
+      return LearningLanguageContext.defaultContext;
+    }
+    return updated.last;
+  }
+
+  @override
+  Future<LearningLanguageContext> updateLanguagePreferences(
+    LearningLanguageContext context,
+  ) async {
+    updated.add(context);
+    return context;
+  }
+}
+
+class _FakeAuthRepository
+    implements AuthRepository, AppLocaleRepository, NicknameRepository {
   _FakeAuthRepository({this.user, this.profileError});
 
   final UserProfile? user;
   final Object? profileError;
   int profileRequestCount = 0;
+  int bootstrapRequestCount = 0;
+  int getCurrentUserCount = 0;
+  LearningLanguageContext? bootstrapLanguage;
+  String? updatedAppLocale;
+  String? updatedNickname;
 
   @override
   Future<UserProfile> getCurrentUser() async {
     profileRequestCount += 1;
+    getCurrentUserCount += 1;
     if (profileError case final Object error) {
       throw error;
     }
     return user ?? _user;
+  }
+
+  @override
+  Future<UserProfile> bootstrap(
+    LearningLanguageContext? pendingLanguage,
+  ) async {
+    profileRequestCount += 1;
+    bootstrapRequestCount += 1;
+    bootstrapLanguage = pendingLanguage;
+    if (profileError case final Object error) {
+      throw error;
+    }
+    final current = user ?? _user;
+    return UserProfile(
+      id: current.id,
+      email: current.email,
+      name: current.name,
+      nickname: current.nickname,
+      isActive: current.isActive,
+      createdAt: current.createdAt,
+      updatedAt: current.updatedAt,
+      language: pendingLanguage ?? current.language,
+      appLocale: current.appLocale,
+      oauthProvider: current.oauthProvider,
+    );
+  }
+
+  @override
+  Future<UserProfile> updateAppLocale(String appLocale) async {
+    updatedAppLocale = appLocale;
+    return (user ?? _user).copyWith(appLocale: appLocale);
+  }
+
+  @override
+  Future<UserProfile> updateNickname(String nickname) async {
+    updatedNickname = nickname;
+    return (user ?? _user).copyWith(nickname: nickname);
   }
 }
 
@@ -249,6 +484,8 @@ class _FakeSupabaseAuthService implements SupabaseAuthService {
   bool hasSession;
   String? lastIdToken;
   String? lastAccessToken;
+  String? lastAppleIdToken;
+  String? lastRawNonce;
   final StreamController<SupabaseSessionChange> _controller =
       StreamController<SupabaseSessionChange>.broadcast();
 
@@ -279,6 +516,22 @@ class _FakeSupabaseAuthService implements SupabaseAuthService {
   }) async {
     lastIdToken = idToken;
     lastAccessToken = accessToken;
+    hasSession = true;
+    _controller.add(
+      const SupabaseSessionChange(
+        event: SupabaseSessionEvent.signedIn,
+        hasSession: true,
+      ),
+    );
+  }
+
+  @override
+  Future<void> signInWithAppleToken({
+    required String idToken,
+    required String rawNonce,
+  }) async {
+    lastAppleIdToken = idToken;
+    lastRawNonce = rawNonce;
     hasSession = true;
     _controller.add(
       const SupabaseSessionChange(

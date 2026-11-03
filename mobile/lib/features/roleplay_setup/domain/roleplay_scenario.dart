@@ -1,3 +1,4 @@
+import 'package:curitalk/features/language/language.dart';
 import 'package:flutter/material.dart';
 
 class RoleplayScenario {
@@ -16,7 +17,7 @@ class RoleplayScenario {
   final IconData icon;
 }
 
-const List<RoleplayScenario> roleplayPresetScenarios = <RoleplayScenario>[
+const List<RoleplayScenario> enRoleplayScenarios = <RoleplayScenario>[
   RoleplayScenario(
     id: 'cafe_order',
     title: 'Cafe order',
@@ -67,3 +68,79 @@ const List<RoleplayScenario> roleplayPresetScenarios = <RoleplayScenario>[
     icon: Icons.record_voice_over_outlined,
   ),
 ];
+
+const List<RoleplayScenario> koRoleplayScenarios = <RoleplayScenario>[
+  RoleplayScenario(
+    id: 'cafe_polite_order',
+    title: 'Polite cafe order',
+    description: 'Order, ask for options, and close politely in Korean.',
+    roleCharacter:
+        'a Korean cafe staff member helping with a polite drink order',
+    icon: Icons.local_cafe_outlined,
+  ),
+  RoleplayScenario(
+    id: 'front_desk_help',
+    title: 'Front desk help',
+    description: 'Ask for help with booking, directions, or check-in details.',
+    roleCharacter:
+        'a Korean front desk staff member helping with travel or check-in',
+    icon: Icons.hotel_outlined,
+  ),
+  RoleplayScenario(
+    id: 'self_introduction',
+    title: 'Self-introduction',
+    description: 'Introduce yourself with the right level of formality.',
+    roleCharacter:
+        'a Korean classmate or colleague listening to a self-introduction',
+    icon: Icons.badge_outlined,
+  ),
+  RoleplayScenario(
+    id: 'workplace_greeting',
+    title: 'Workplace greeting',
+    description: 'Greet coworkers and make simple professional small talk.',
+    roleCharacter:
+        'a Korean coworker greeting the learner at work for the first time',
+    icon: Icons.groups_2_outlined,
+  ),
+  RoleplayScenario(
+    id: 'polite_request',
+    title: 'Polite request',
+    description: 'Ask for a favor, respond, and soften refusals naturally.',
+    roleCharacter:
+        'a Korean acquaintance responding to a polite request or favor',
+    icon: Icons.record_voice_over_outlined,
+  ),
+  RoleplayScenario(
+    id: 'friend_catch_up',
+    title: 'Friend catch-up',
+    description: 'Talk casually about your day, plans, and opinions.',
+    roleCharacter: 'a Korean friend having a casual catch-up conversation',
+    icon: Icons.forum_outlined,
+  ),
+  RoleplayScenario(
+    id: 'clinic_visit',
+    title: 'Clinic visit',
+    description: 'Explain symptoms and understand simple follow-up questions.',
+    roleCharacter:
+        'a Korean clinic receptionist or nurse asking practical questions',
+    icon: Icons.local_hospital_outlined,
+  ),
+];
+
+List<RoleplayScenario> roleplayPresetScenariosFor(
+  LearningLanguageCode targetLanguage,
+) {
+  return switch (targetLanguage) {
+    LearningLanguageCode.ko => koRoleplayScenarios,
+    LearningLanguageCode.en => enRoleplayScenarios,
+    LearningLanguageCode.zh => enRoleplayScenarios,
+  };
+}
+
+String roleplayCustomSituationHintFor(LearningLanguageCode targetLanguage) {
+  return switch (targetLanguage) {
+    LearningLanguageCode.ko => 'I am asking a clinic receptionist for help.',
+    LearningLanguageCode.en => 'I am checking in at a hotel front desk.',
+    LearningLanguageCode.zh => 'I am asking for help at a front desk.',
+  };
+}

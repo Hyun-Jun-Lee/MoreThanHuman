@@ -3,10 +3,11 @@ Auth 도메인 SQLAlchemy 모델 정의
 """
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, DateTime, String
+from sqlalchemy import Boolean, Column, DateTime, Integer, String
 from sqlalchemy.orm import relationship
 
 from database import Base
+from shared.language import DEFAULT_LANGUAGE_CONTEXT, LearningLanguageContext, language_context_from_values
 
 
 class ProfileModel(Base):
@@ -17,10 +18,38 @@ class ProfileModel(Base):
     id = Column(String(36), primary_key=True)
     email = Column(String(255), unique=True, index=True, nullable=False)
     name = Column(String(100), nullable=False)
+    nickname = Column(String(100), nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
     oauth_provider = Column(String(50), nullable=True)
     avatar_url = Column(String(500), nullable=True)
+    native_language = Column(String(8), default=DEFAULT_LANGUAGE_CONTEXT.native_language.value, nullable=False)
+    target_language = Column(String(8), default=DEFAULT_LANGUAGE_CONTEXT.target_language.value, nullable=False)
+    feedback_language = Column(String(8), default=DEFAULT_LANGUAGE_CONTEXT.feedback_language.value, nullable=False)
+    app_locale = Column(String(2), nullable=True)
+    legacy_conversation_slots = Column(Integer, nullable=True)
+    slot_limit_snapshot = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
     conversations = relationship("ConversationModel", back_populates="user", cascade="all, delete-orphan")
+
+    @property
+    def language(self) -> LearningLanguageContext:
+        """프로필 저장값을 검증된 언어 컨텍스트로 반환"""
+        return language_context_from_values(
+            native_language=self.native_language,
+            target_language=self.target_language,
+            feedback_language=self.feedback_language,
+        )
+
+
+class AccountDeletionModel(Base):
+    """삭제 요청과 JWT 차단을 위한 최소 영속 기록이에요."""
+
+    __tablename__ = "account_deletions"
+
+    user_id = Column(String(36), primary_key=True)
+    receipt_hash = Column(String(64), unique=True, nullable=False)
+    status = Column(String(16), nullable=False, default="processing")
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    completed_at = Column(DateTime, nullable=True)

@@ -10,7 +10,7 @@ abstract final class AppTheme {
     brightness: Brightness.light,
     colorScheme: AppColorScheme.light,
     scaffoldBackgroundColor: AppColorScheme.light.surface,
-    fontFamily: AppTypography.sansFontFamily,
+    fontFamily: AppTypography.fontFamily,
     materialTapTargetSize: MaterialTapTargetSize.padded,
     filledButtonTheme: AppComponentThemes.filledButton,
     outlinedButtonTheme: AppComponentThemes.outlinedButton,

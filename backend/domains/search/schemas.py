@@ -4,7 +4,9 @@ Search 도메인 모델 정의
 from datetime import datetime
 from enum import Enum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, StrictBool
+
+from shared.language import LearningLanguageContext
 
 
 class SearchResultItem(BaseModel):
@@ -29,8 +31,24 @@ class SearchQuality(BaseModel):
     retry_suggestion: str | None = None
 
 
+class SearchQueryAnalysisResult(BaseModel):
+    """LLM 검색어 분석 응답"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    canonical_topic: str
+    required_phrases: list[str]
+    required_tokens: list[str]
+    context_terms: list[str]
+    recency_intent: bool
+    search_required: StrictBool
+    exclude_terms: list[str]
+
+
 class RejectedSearchSource(BaseModel):
     """LLM이 탈락시킨 검색 출처"""
+
+    model_config = ConfigDict(extra="forbid")
 
     id: int
     reason: str
@@ -39,9 +57,11 @@ class RejectedSearchSource(BaseModel):
 class SearchQualityJudgeResult(BaseModel):
     """LLM source judge 응답"""
 
+    model_config = ConfigDict(extra="forbid")
+
     is_sufficient: bool
-    accepted_source_ids: list[int] = Field(default_factory=list)
-    rejected_sources: list[RejectedSearchSource] = Field(default_factory=list)
+    accepted_source_ids: list[int]
+    rejected_sources: list[RejectedSearchSource]
     relevance: bool
     freshness: bool
     specificity: bool
@@ -54,6 +74,7 @@ class SearchResult(BaseModel):
 
     query: str
     enhanced_query: str
+    language: LearningLanguageContext = Field(default_factory=LearningLanguageContext)
     ready: bool
     summary: str | None = None
     sources: list[SearchResultItem]
@@ -68,7 +89,6 @@ class ConversationDirection(str, Enum):
 
     CASUAL_CHAT = "CASUAL_CHAT"
     DEBATE = "DEBATE"
-    INTERVIEW_QA = "INTERVIEW_QA"
     EXPLANATION_PRACTICE = "EXPLANATION_PRACTICE"
 
 
@@ -76,6 +96,18 @@ class TopicPrepRequest(BaseModel):
     """주제 준비 카드 생성 요청"""
 
     topic: str = Field(..., min_length=2, max_length=200)
+
+
+class CustomFocusQuestionsRequest(TopicPrepRequest):
+    """직접 입력한 대화 방향의 첫 질문 생성 요청"""
+
+    custom_focus: str = Field(..., min_length=2, max_length=200)
+
+
+class TopicPrepDirectionsRequest(TopicPrepRequest):
+    """같은 주제의 새로운 추천 방향 생성 요청"""
+
+    previous_directions: list[str] = Field(default_factory=list, max_length=3)
 
 
 class TopicPrepQuality(BaseModel):
@@ -98,14 +130,16 @@ class TopicPrepDirection(BaseModel):
     title: str
     description: str
     first_questions: list[str] = Field(..., min_length=3, max_length=3)
+    first_question_translations: list[str] = Field(default_factory=list, max_length=3)
 
 
 class TopicPrepCard(BaseModel):
     """대화 전 주제 준비 카드"""
 
     topic: str
+    language: LearningLanguageContext = Field(default_factory=LearningLanguageContext)
     summary: str
-    directions: list[TopicPrepDirection] = Field(..., min_length=4, max_length=4)
+    directions: list[TopicPrepDirection] = Field(..., min_length=3, max_length=3)
     sources: list[SearchResultItem]
     quality: TopicPrepQuality
     timestamp: datetime
@@ -115,7 +149,25 @@ class TopicPrepResult(BaseModel):
     """주제 준비 카드 생성 결과"""
 
     ready: bool
+    search_required: bool = True
+    language: LearningLanguageContext = Field(default_factory=LearningLanguageContext)
     card: TopicPrepCard | None = None
     quality: TopicPrepQuality
     retry_guidance: str | None = None
     example_topics: list[str] = Field(default_factory=list)
+
+
+class CustomFocusQuestionsResult(BaseModel):
+    """직접 입력 방향에 맞춘 첫 질문 결과"""
+
+    ready: bool
+    custom_focus: str
+    first_questions: list[str] = Field(default_factory=list, max_length=3)
+    first_question_translations: list[str] = Field(default_factory=list, max_length=3)
+    retry_guidance: str | None = None
+
+
+class TopicPrepDirectionsResult(BaseModel):
+    """재생성한 추천 방향 결과"""
+
+    directions: list[TopicPrepDirection] = Field(..., min_length=3, max_length=3)

@@ -1,9 +1,13 @@
 import 'package:curitalk/app/theme/tokens/tokens.dart';
+import 'package:curitalk/core/copy/copy.dart';
 import 'package:curitalk/core/network/network.dart';
 import 'package:curitalk/core/widgets/widgets.dart';
 import 'package:curitalk/features/auth/auth.dart';
+import 'package:curitalk/features/auth/data/account_local_data.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -13,10 +17,43 @@ class LoginScreen extends ConsumerStatefulWidget {
 }
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
-  String? _errorMessage;
+  LoginFailureReason? _failureReason;
+  bool _isSigningIn = false;
+  bool _checkingDeletionStatus = false;
+  String? _deletionStatus;
+
+  @override
+  void initState() {
+    super.initState();
+    Future<void>.microtask(_checkDeletionStatus);
+  }
+
+  Future<void> _checkDeletionStatus() async {
+    if (_checkingDeletionStatus) return;
+    setState(() => _checkingDeletionStatus = true);
+    try {
+      final storage = ref.read(accountLocalDataProvider);
+      final receipt = await storage.readReceipt();
+      if (receipt == null) return;
+      final repository = ref.read(authRepositoryProvider);
+      if (repository is! AccountDeletionRepository) return;
+      final status = await (repository as AccountDeletionRepository)
+          .deletionStatus(receipt);
+      if (status == 'completed') await storage.clearReceipt();
+      if (mounted) setState(() => _deletionStatus = status);
+    } on Object {
+      if (mounted) setState(() => _deletionStatus = 'unavailable');
+    } finally {
+      if (mounted) setState(() => _checkingDeletionStatus = false);
+    }
+  }
 
   Future<void> _signIn() async {
-    setState(() => _errorMessage = null);
+    if (_isSigningIn) return;
+    setState(() {
+      _failureReason = null;
+      _isSigningIn = true;
+    });
     try {
       if (ref.read(authControllerProvider).hasError) {
         await ref.read(authControllerProvider.notifier).restoreSession();
@@ -32,23 +69,59 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           .read(authControllerProvider.notifier)
           .signInWithGoogleTokens(tokens);
     } on GoogleIdentityException catch (error) {
-      _showError(error.message);
+      debugPrint('CuritalkAuth login screen GoogleIdentityException: $error');
+      _showFailure(LoginFailureReason.identity);
     } on ApiException catch (error) {
       debugPrint('CuritalkAuth login screen ApiException: $error');
       if (!ref.read(authControllerProvider).hasError) {
         await _signOutGoogleSafely();
       }
-      _showError(error.message);
+      _showFailure(LoginFailureReason.request);
     } on Object catch (error, stackTrace) {
       debugPrint('CuritalkAuth login screen unexpected error: $error');
       debugPrintStack(stackTrace: stackTrace);
-      _showError('Sign-in could not be completed. Please try again.');
+      _showFailure(LoginFailureReason.unknown);
+    } finally {
+      if (mounted) setState(() => _isSigningIn = false);
     }
   }
 
-  void _showError(String message) {
+  Future<void> _signInWithApple() async {
+    if (_isSigningIn) return;
+    setState(() {
+      _failureReason = null;
+      _isSigningIn = true;
+    });
+    try {
+      if (ref.read(authControllerProvider).hasError) {
+        await ref.read(authControllerProvider.notifier).restoreSession();
+        return;
+      }
+      final AppleIdentityTokens? tokens = await ref
+          .read(appleIdentityServiceProvider)
+          .signIn();
+      if (tokens == null) return;
+      await ref
+          .read(authControllerProvider.notifier)
+          .signInWithAppleToken(tokens);
+    } on AppleIdentityException catch (error) {
+      debugPrint('CuritalkAuth login screen AppleIdentityException: $error');
+      _showFailure(LoginFailureReason.appleIdentity);
+    } on ApiException catch (error) {
+      debugPrint('CuritalkAuth login screen ApiException: $error');
+      _showFailure(LoginFailureReason.request);
+    } on Object catch (error, stackTrace) {
+      debugPrint('CuritalkAuth login screen unexpected Apple error: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      _showFailure(LoginFailureReason.unknown);
+    } finally {
+      if (mounted) setState(() => _isSigningIn = false);
+    }
+  }
+
+  void _showFailure(LoginFailureReason reason) {
     if (mounted) {
-      setState(() => _errorMessage = message);
+      setState(() => _failureReason = reason);
     }
   }
 
@@ -63,37 +136,64 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final AsyncValue<AuthSession> auth = ref.watch(authControllerProvider);
+    final AppCopy appCopy = AppCopy.of(context);
+    final AppLoginCopy copy = appCopy.login;
     return AppScaffold(
       body: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Text('CURITALK', style: AppTypography.headlineMd),
+            Text('tomatalk', style: AppTypography.headlineMd),
             const SizedBox(height: AppSpacing.xxl),
-            Text(
-              'Practice English with your own topics.',
-              style: AppTypography.displayLg,
-            ),
+            Text(copy.title, style: AppTypography.displayLg),
             const SizedBox(height: AppSpacing.lg),
             Text(
-              'Build fluency by discussing what actually matters to you. Your interests lead the conversation.',
+              copy.description,
               style: AppTypography.body.copyWith(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
+            if (_deletionStatus != null) ...[
+              const SizedBox(height: AppSpacing.md),
+              Semantics(
+                liveRegion: true,
+                child: Text(switch (_deletionStatus) {
+                  'completed' => appCopy.deletionCompleted,
+                  'processing' => appCopy.deletionProcessing,
+                  _ => appCopy.deletionStatusUnavailable,
+                }),
+              ),
+              if (_deletionStatus != 'completed')
+                TextButton(
+                  onPressed: _checkingDeletionStatus
+                      ? null
+                      : _checkDeletionStatus,
+                  child: Text(appCopy.checkDeletionStatus),
+                ),
+            ],
             const SizedBox(height: AppSpacing.xl),
             AppPrimaryButton(
-              label: auth.hasError ? 'TRY AGAIN' : 'CONTINUE WITH GOOGLE',
+              label: auth.hasError ? copy.tryAgainLabel : copy.googleLabel,
               leading: const _GoogleMark(),
-              isLoading: auth.isLoading,
-              onPressed: _signIn,
+              isLoading: auth.isLoading || _isSigningIn,
+              onPressed: auth.isLoading || _isSigningIn ? null : _signIn,
             ),
-            if (_errorMessage != null) ...<Widget>[
+            if (!kIsWeb &&
+                defaultTargetPlatform == TargetPlatform.iOS) ...<Widget>[
+              const SizedBox(height: AppSpacing.md),
+              SignInWithAppleButton(
+                text: copy.appleLabel,
+                onPressed: auth.isLoading || _isSigningIn
+                    ? null
+                    : _signInWithApple,
+              ),
+            ],
+            if (_failureReason != null) ...<Widget>[
               const SizedBox(height: AppSpacing.md),
               Semantics(
                 liveRegion: true,
                 child: Text(
-                  _errorMessage!,
+                  appCopy.loginFailureMessage(_failureReason!.name),
                   style: AppTypography.bodySm.copyWith(
                     color: Theme.of(context).colorScheme.error,
                   ),
@@ -101,21 +201,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ),
             ],
             const SizedBox(height: AppSpacing.xxl),
-            const AppColorBlockCard(
+            AppColorBlockCard(
               color: AppPalette.blockPink,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Text('Your topics', style: AppTypography.headlineMd),
-                  SizedBox(height: AppSpacing.lg),
+                  Text(copy.topicCardTitle, style: AppTypography.headlineMd),
+                  const SizedBox(height: AppSpacing.lg),
                   Wrap(
                     spacing: AppSpacing.xs,
                     runSpacing: AppSpacing.xs,
                     children: <Widget>[
-                      Chip(label: Text('GLOBAL NEWS')),
-                      Chip(label: Text('TRAVEL')),
-                      Chip(label: Text('BASEBALL')),
-                      Chip(label: Text('TECHNOLOGY')),
+                      for (final String topic in copy.topicChips)
+                        Chip(label: Text(topic)),
                     ],
                   ),
                 ],
@@ -127,6 +225,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 }
+
+enum LoginFailureReason { identity, appleIdentity, request, unknown }
 
 class _GoogleMark extends StatelessWidget {
   const _GoogleMark();
@@ -143,7 +243,7 @@ class _GoogleMark extends StatelessWidget {
       ),
       child: Text(
         'G',
-        style: AppTypography.captionMono.copyWith(
+        style: AppTypography.caption.copyWith(
           color: Theme.of(context).colorScheme.onSurface,
         ),
       ),

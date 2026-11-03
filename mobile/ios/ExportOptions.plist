@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>method</key>
+	<string>app-store-connect</string>
+	<key>destination</key>
+	<string>export</string>
+	<key>signingStyle</key>
+	<string>manual</string>
+	<key>teamID</key>
+	<string>3XPSSBB5NG</string>
+	<key>signingCertificate</key>
+	<string>E01530C118CE3223A8A463B2A09FACC1BF5F4359</string>
+	<key>provisioningProfiles</key>
+	<dict>
+		<key>com.morethanhuman.curitalk</key>
+		<string>90487ed5-c679-4248-8e0e-e20f65db443b</string>
+		<key>com.morethanhuman.curitalk.SnackWidget</key>
+		<string>03d05297-aa2a-4e75-a04e-195365edeb14</string>
+	</dict>
+</dict>
+</plist>

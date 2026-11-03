@@ -1,0 +1,721 @@
+import 'package:flutter/material.dart';
+
+class AppCopy {
+  const AppCopy._(this.localeCode);
+
+  factory AppCopy.forLocale(Locale locale) {
+    return AppCopy._(resolveLocaleCode(locale));
+  }
+
+  factory AppCopy.of(BuildContext context) {
+    return AppCopy.forLocale(Localizations.localeOf(context));
+  }
+
+  final String localeCode;
+
+  bool get isKorean => localeCode == 'ko';
+
+  static String resolveLocaleCode(Locale locale) {
+    return locale.languageCode == 'ko' ? 'ko' : 'en';
+  }
+
+  String languageName(String code) {
+    return switch ((localeCode, code)) {
+      ('ko', 'en') => '영어',
+      ('ko', 'ko') => '한국어',
+      ('ko', 'zh') => '중국어',
+      (_, 'en') => 'English',
+      (_, 'ko') => 'Korean',
+      (_, 'zh') => 'Chinese',
+      _ => code,
+    };
+  }
+
+  String languagePairDescription({
+    required String nativeCode,
+    required String targetCode,
+    required String feedbackCode,
+  }) {
+    final String target = languageName(targetCode);
+    final String feedback = languageName(feedbackCode);
+    return isKorean
+        ? '대화: $target · 피드백: $feedback'
+        : 'Conversation: $target · Feedback: $feedback';
+  }
+
+  String languagePairLabel({
+    required String nativeCode,
+    required String targetCode,
+  }) {
+    return '${languageName(nativeCode)} -> ${languageName(targetCode)}';
+  }
+
+  String get comingSoonLabel => isKorean ? '준비 중' : 'Coming soon';
+
+  String firstAnswerHint(String targetCode) {
+    final String target = languageName(targetCode);
+    return isKorean
+        ? '$target로 첫 답변을 입력하세요...'
+        : 'Type your first answer in $target...';
+  }
+
+  String firstAnswerSemanticLabel(String targetCode) {
+    final String target = languageName(targetCode);
+    return isKorean ? '$target 첫 답변' : 'First answer in $target';
+  }
+
+  AppOnboardingCopy get onboarding {
+    return isKorean ? AppOnboardingCopy.korean : AppOnboardingCopy.english;
+  }
+
+  AppLoginCopy get login {
+    return isKorean ? AppLoginCopy.korean : AppLoginCopy.english;
+  }
+
+  String loginFailureMessage(String reason) {
+    return switch (reason) {
+      'identity' =>
+        isKorean
+            ? 'Google 로그인을 완료할 수 없어요. 다시 시도해 주세요.'
+            : 'Google sign-in could not be completed. Please try again.',
+      'appleIdentity' =>
+        isKorean
+            ? 'Apple 로그인을 완료할 수 없어요. 다시 시도해 주세요.'
+            : 'Apple sign-in could not be completed. Please try again.',
+      'request' =>
+        isKorean
+            ? '로그인을 완료할 수 없어요. 다시 시도해 주세요.'
+            : 'Sign-in could not be completed. Please try again.',
+      _ =>
+        isKorean
+            ? '로그인을 완료할 수 없어요. 다시 시도해 주세요.'
+            : 'Sign-in could not be completed. Please try again.',
+    };
+  }
+
+  String failureMessage(String reason) {
+    return switch (reason) {
+      'textRequestFailed' =>
+        isKorean
+            ? '메시지를 보내지 못했어요. 다시 시도해 주세요.'
+            : 'Your message could not be sent. Please try again.',
+      'audioRequestFailed' =>
+        isKorean
+            ? '음성 메시지를 보내지 못했어요. 다시 시도해 주세요.'
+            : 'Your voice message could not be sent. Please try again.',
+      'turnLimitReached' => conversationTurnLimitReached,
+      'conversationLocked' => conversationLockedReadOnly,
+      'slotsFull' => additionalConversationLocked,
+      'freeChatRequestFailed' =>
+        isKorean
+            ? '대화를 시작하지 못했어요. 다시 시도해 주세요.'
+            : 'The conversation could not be started. Please try again.',
+      'roleplayRequestFailed' =>
+        isKorean
+            ? '역할극을 시작하지 못했어요. 다시 시도해 주세요.'
+            : 'Roleplay could not be started. Please try again.',
+      'grammarRequestFailed' =>
+        isKorean
+            ? '문법 피드백을 지금 불러오지 못했어요.'
+            : 'Grammar feedback is unavailable right now.',
+      'assistantAudioUnavailable' =>
+        isKorean
+            ? '응답 음성을 재생할 수 없어요. 텍스트로 계속 대화할 수 있어요.'
+            : 'Audio for this response is unavailable. You can keep chatting with the text.',
+      'permissionDenied' =>
+        isKorean ? '마이크 권한이 필요해요.' : 'Microphone permission is required.',
+      'emptyRecording' =>
+        isKorean
+            ? '음성이 인식되지 않았어요. 조금 더 크게 또는 길게 말해 주세요.'
+            : 'We could not hear enough audio. Try speaking a little longer.',
+      'startFailed' =>
+        isKorean
+            ? '녹음을 시작하지 못했어요. 다시 시도해 주세요.'
+            : 'Recording could not be started. Please try again.',
+      'stopFailed' =>
+        isKorean
+            ? '녹음을 마치지 못했어요. 다시 시도해 주세요.'
+            : 'Recording could not be finished. Please try again.',
+      'playbackFailed' =>
+        isKorean
+            ? '음성을 재생하지 못했어요. 다시 시도해 주세요.'
+            : 'Audio could not be played. Please try again.',
+      _ =>
+        isKorean
+            ? '지금은 완료하지 못했어요. 다시 시도해 주세요.'
+            : 'This could not be completed right now. Please try again.',
+    };
+  }
+
+  String voiceStatus(String phase) {
+    return switch (phase) {
+      'starting' => isKorean ? '녹음을 시작하는 중...' : 'Starting recording...',
+      'recording' => isKorean ? '녹음 중...' : 'Recording...',
+      'stopping' => isKorean ? '녹음을 마무리하는 중...' : 'Finishing recording...',
+      'sending' => isKorean ? '음성 메시지를 보내는 중...' : 'Sending voice message...',
+      'startingConversation' =>
+        isKorean ? '음성으로 대화를 시작하는 중...' : 'Starting with your voice...',
+      _ => '',
+    };
+  }
+
+  String get retryLabel => isKorean ? '다시 시도' : 'Retry';
+  String get subscriptionTitle => isKorean ? '구독' : 'Subscription';
+  String get subscriptionDialogActionLabel => isKorean ? '구독' : 'SUBSCRIPT';
+  String get subscriptionIntro =>
+      isKorean ? '원하는 만큼 대화를 이어가세요' : 'Keep the conversation going';
+  String currentPlan(String plan) => isKorean
+      ? '현재 플랜: ${plan == 'free' ? '무료' : plan}'
+      : 'Current plan: ${plan == 'free' ? 'Free' : plan}';
+  String get subscriptionStatusUnavailable =>
+      isKorean ? '구독 상태를 확인하지 못했어요.' : 'Could not load subscription status.';
+  String get purchaseIosOnly => isKorean
+      ? '현재 iOS에서만 구독할 수 있어요.'
+      : 'Subscriptions are currently available on iOS.';
+  String planBenefits(bool plus) => switch ((isKorean, plus)) {
+    (true, true) => '전체 대화 슬롯 해금',
+    (true, false) => '전체 대화 슬롯의 절반 해금',
+    (false, true) => 'Unlock all conversation slots',
+    (false, false) => 'Unlock half of all conversation slots',
+  };
+  String get plusBusinessConversationBenefit =>
+      isKorean ? '비즈니스 대화 모드' : 'Business Conversation Mode';
+  String get priceUnavailable => isKorean ? '가격을 불러오는 중이에요.' : 'Loading price';
+  String monthlyPrice(String price) =>
+      isKorean ? '$price / 월' : '$price / month';
+  String subscribeTo(String plan) =>
+      isKorean ? '$plan 구독하기' : 'Subscribe to $plan';
+  String get restorePurchases => isKorean ? '구매 복원' : 'Restore purchases';
+  String get manageSubscription => isKorean ? '구독 관리' : 'Manage subscription';
+  String get termsOfUse => isKorean ? '이용약관' : 'Terms of Use';
+  String get privacyPolicy => isKorean ? '개인정보처리방침' : 'Privacy Policy';
+  String billingMessage(String code) => switch ((isKorean, code)) {
+    (true, 'verified') => '구독이 확인되었어요.',
+    (false, 'verified') => 'Subscription verified.',
+    (true, 'account_conflict') => '이 구매는 다른 tomatalk 계정에 연결되어 있어요.',
+    (false, 'account_conflict') =>
+      'This purchase belongs to another tomatalk account.',
+    (true, 'purchase_canceled') => '구매를 취소했어요.',
+    (false, 'purchase_canceled') => 'Purchase canceled.',
+    (true, 'restore_requested') => '복원한 구매를 확인하고 있어요.',
+    (false, 'restore_requested') => 'Checking restored purchases.',
+    (true, 'products_unavailable') => 'App Store 상품을 불러오지 못했어요.',
+    (false, 'products_unavailable') => 'Could not load App Store products.',
+    (true, _) => '결제를 확인하지 못했어요. 다시 시도하거나 구매를 복원해 주세요.',
+    (false, _) => 'Could not verify the purchase. Retry or restore purchases.',
+  };
+  String get conversationLockedReadOnly => isKorean
+      ? '이 대화는 읽기 전용이에요. 다른 활성 대화를 바꾸거나 구독을 시작할 수 있어요.'
+      : 'This conversation is read-only. Switch your active conversation or subscribe.';
+  String get activateConversation =>
+      isKorean ? '활성 대화로 선택' : 'Use this conversation';
+  String get deactivateConversation =>
+      isKorean ? '활성 대화 해제' : 'Release active slot';
+  String get lockedConversationLabel => isKorean ? '읽기 전용' : 'Read-only';
+  String get backLabel => isKorean ? '뒤로' : 'Back';
+  String get backToHomeLabel => isKorean ? '홈으로 돌아가기' : 'Back to home';
+  String get conversationTitle => isKorean ? '대화' : 'Conversation';
+  String get additionalConversationLabel =>
+      isKorean ? '추가 대화' : 'Additional conversation';
+  String get additionalConversationLocked => isKorean
+      ? '활성 대화 슬롯이 모두 사용 중이에요. 대화 목록에서 슬롯을 해제하거나 구독해 주세요.'
+      : 'All active conversation slots are in use. Release a slot in Conversations or subscribe.';
+  String get additionalConversationLockedSemantic =>
+      isKorean ? '읽기 전용 대화' : 'Read-only conversation';
+  String get switchConversationTitle =>
+      isKorean ? '활성 대화 바꾸기' : 'Switch active conversation';
+  String get switchConversationMessage => isKorean
+      ? '대신 읽기 전용으로 전환할 대화를 선택해 주세요.'
+      : 'Choose a conversation to make read-only instead.';
+  String get slotChangeFailed => isKorean
+      ? '대화 슬롯을 변경하지 못했어요. 다시 시도해 주세요.'
+      : 'Could not change the active conversation. Try again.';
+  String get accessDialogConfirm => isKorean ? '확인' : 'OK';
+  String get conversationTurnLimitReached => isKorean
+      ? '이 대화의 무료 15턴을 모두 사용했어요. 이전 대화는 계속 볼 수 있어요.'
+      : 'You have used all 15 free turns in this conversation. You can still read it.';
+  String get deleteConversationTooltip =>
+      isKorean ? '대화 삭제' : 'Delete conversation';
+  String deleteConversationTitle(String title) =>
+      isKorean ? '"$title" 대화를 삭제할까요?' : 'Delete "$title"?';
+  String get deleteConversationMessage => isKorean
+      ? '대화와 관련 메시지, 문법 피드백이 영구적으로 삭제돼요.'
+      : 'This permanently deletes the conversation, its messages, and grammar feedback.';
+  String get deleteLabel => isKorean ? '삭제' : 'Delete';
+  String get deletingConversation =>
+      isKorean ? '대화를 삭제하는 중...' : 'Deleting conversation...';
+  String get deleteConversationFailed => isKorean
+      ? '대화를 삭제하지 못했어요. 다시 시도해 주세요.'
+      : 'Could not delete the conversation. Please try again.';
+  String get loadingMessages =>
+      isKorean ? '대화를 불러오는 중...' : 'Loading messages...';
+  String get loadConversationFailedTitle =>
+      isKorean ? '대화를 불러오지 못했어요.' : 'Could not load this conversation.';
+  String get connectionRetryMessage => isKorean
+      ? '연결을 확인하고 다시 시도해 주세요.'
+      : 'Check your connection and try again.';
+  String get loadOlderMessagesLabel =>
+      isKorean ? '이전 메시지 불러오기' : 'Load earlier messages';
+  String get loadOlderMessagesFailed => isKorean
+      ? '이전 메시지를 불러오지 못했어요. 다시 시도해 주세요.'
+      : 'Earlier messages could not be loaded. Please try again.';
+  String get noMessagesTitle => isKorean ? '아직 메시지가 없어요.' : 'No messages yet.';
+  String get noMessagesMessage => isKorean
+      ? '첫 답변을 보내며 대화를 시작해 보세요.'
+      : 'Send your first reply to begin practicing.';
+  String get grammarCheckingLabel =>
+      isKorean ? '문법을 확인하는 중...' : 'Grammar: checking...';
+  String get grammarDelayedLabel => isKorean
+      ? '문법 피드백이 평소보다 오래 걸리고 있어요.'
+      : 'Grammar feedback is taking longer than usual.';
+  String get audioLoadingLabel => isKorean ? '음성 불러오는 중' : 'Loading audio';
+  String get audioPlayingLabel => isKorean ? '응답 음성 재생 중' : 'Playing response';
+  String get audioReplayLabel => isKorean ? '응답 음성 다시 듣기' : 'Replay response';
+  String get stopAudioResponseLabel =>
+      isKorean ? '음성 응답 중단' : 'Stop audio response';
+  String get audioPlayLabel => isKorean ? '응답 음성 듣기' : 'Play response';
+  String get customRoleplayInputTooShort =>
+      isKorean ? '두 글자 이상 입력해 주세요.' : 'Enter at least 2 characters.';
+  String get freeChatTitle => isKorean ? '자유 대화' : 'Free Chat';
+  String get topicInputTitle =>
+      isKorean ? '어떤 주제로 이야기하고 싶나요?' : 'What topic do you want to talk about?';
+  String get topicInputDescription => isKorean
+      ? '뉴스, 취미, 여행, 스포츠처럼 지금 마음이 가는 주제를 골라 보세요.'
+      : 'Bring a news story, hobby, trip idea, sports result, or anything you actually care about.';
+  String get conversationTopicLabel =>
+      isKorean ? '대화 주제' : 'Conversation topic';
+  String get examplesLabel => isKorean ? '예시' : 'Examples';
+  String get prepareLabel => isKorean ? '준비하기' : 'PREPARE';
+  String get homeLabel => isKorean ? '홈' : 'Home';
+  String get chatLabel => isKorean ? '대화' : 'Chat';
+  String get historyLabel => isKorean ? '기록' : 'History';
+  String get profileLabel => isKorean ? '내 정보' : 'Profile';
+  String get nicknameSetupTitle =>
+      isKorean ? '닉네임을 정해주세요' : 'Choose a nickname';
+  String get nicknameEditTitle => isKorean ? '닉네임 변경' : 'Change nickname';
+  String get nicknameHint => isKorean ? '닉네임' : 'Nickname';
+  String get nicknameSaveLabel => isKorean ? '저장' : 'Save';
+  String get nicknameEditLabel => isKorean ? '닉네임 수정' : 'Edit nickname';
+  String get nicknameInvalid => isKorean
+      ? '닉네임은 1~20자로 입력해 주세요.'
+      : 'Enter a nickname of 1–20 characters.';
+  String get nicknameSaveFailed => isKorean
+      ? '닉네임을 저장하지 못했어요. 다시 시도해 주세요.'
+      : 'Could not save your nickname. Please try again.';
+  String get conversationOptionsLabel =>
+      isKorean ? '대화 옵션' : 'Conversation options';
+  String get conversationsLabel => isKorean ? '대화' : 'Conversations';
+  String get newConversationLabel => isKorean ? '새 대화' : 'New conversation';
+  String get loadMoreConversationsLabel =>
+      isKorean ? '이전 대화 더 보기' : 'Load more conversations';
+  String get moreConversationsFailed =>
+      isKorean ? '이전 대화를 불러오지 못했어요.' : 'Could not load more conversations.';
+  String get appLanguageSectionLabel => isKorean ? '앱 언어' : 'App language';
+  String get appLanguageKoreanLabel => isKorean ? '한국어' : 'Korean';
+  String get appLanguageEnglishLabel => isKorean ? '영어' : 'English';
+  String get appLanguageSaveFailed => isKorean
+      ? '앱 언어를 저장하지 못했어요. 다시 시도해 주세요.'
+      : 'Could not save app language. Please try again.';
+  String get preferenceChangeConfirmationTitle =>
+      isKorean ? '변경하시겠습니까?' : 'Save this change?';
+  String changeAppLanguageMessage(String language) => isKorean
+      ? '앱 언어를 $language로 변경할까요?'
+      : 'Change the app language to $language?';
+  String changeLanguagePairMessage(String pair) =>
+      isKorean ? '언어쌍을 $pair로 변경할까요?' : 'Change the language pair to $pair?';
+  String get confirmChangeLabel => isKorean ? '변경' : 'CHANGE';
+  String get startConversationLabel =>
+      isKorean ? '대화 시작하기' : 'START CONVERSATION';
+  String get startConversationTooltip =>
+      isKorean ? '대화 시작하기' : 'Start conversation';
+  String get languageSnackLabel => isKorean ? '오늘의 언어' : 'Language note';
+  String get openSnackBasket => isKorean ? '토마토 꺼내기' : 'Take a tomato';
+  String snackTomatoLabel(int number, int remaining) => isKorean
+      ? '$number번째 토마토, $remaining입 남음'
+      : 'Tomato $number, $remaining bites left';
+  String get snackBasketTooltip => isKorean ? '바구니 보기' : 'View basket';
+  String get resetSnackBasketTooltip =>
+      isKorean ? '바구니 리셋 (테스트용)' : 'Reset basket (test)';
+  String get snackBasketFinished =>
+      isKorean ? '오늘의 스낵을 모두 봤어요' : 'All done for today';
+  String get snackBasketNextDay =>
+      isKorean ? '자정에 다시 채워져요' : 'Refills at midnight';
+  String languageSnackTypeLabel(String type) => switch (type) {
+    'regional_variant' => isKorean ? '지역마다 다른 표현' : 'Regional expressions',
+    'usage_contrast' => isKorean ? '비슷하지만 다른 쓰임' : 'Usage differences',
+    'homonym' => isKorean ? '같은 소리, 다른 뜻' : 'Same sound, different meanings',
+    _ => languageSnackLabel,
+  };
+  String get previousLanguageSnackTooltip =>
+      isKorean ? '이전 언어 카드' : 'Previous language snack';
+  String get nextLanguageSnackTooltip =>
+      isKorean ? '다음 언어 카드' : 'Next language snack';
+  String languageSnackPageTooltip(int page) =>
+      isKorean ? '$page번째 언어 카드 보기' : 'Show language snack $page';
+  String languageSnackSemanticLabel({
+    required String leftLabel,
+    required String leftWord,
+    required String rightLabel,
+    required String rightWord,
+    required String meaning,
+  }) => '$leftLabel $leftWord. $rightLabel $rightWord. $meaning';
+  String get todayTomatoLabel => isKorean ? '오늘의 토마토' : "Today's Tomatoes";
+  String get loadingRecentConversations =>
+      isKorean ? '최근 대화를 불러오는 중...' : 'Loading recent conversations...';
+  String get recentConversationsLoadFailed => isKorean
+      ? '최근 대화를 불러오지 못했어요.'
+      : 'Recent conversations could not be loaded.';
+  String get updatingConversations =>
+      isKorean ? '대화를 업데이트하는 중...' : 'Updating conversations...';
+  String get homeEmptyTitle => isKorean ? '대화를 시작하세요' : 'Start a conversation';
+  String get confirmSuggestedConversationTitle =>
+      isKorean ? '대화를 시작할까요?' : 'Start a conversation?';
+  String get preparingSuggestedConversation =>
+      isKorean ? '대화 시작을 준비하고 있어요...' : 'Getting your conversation ready...';
+  String get showAllLabel => isKorean ? '모두 보기' : 'SHOW ALL';
+  String get showLessLabel => isKorean ? '접기' : 'SHOW LESS';
+  String get showMoreLabel => isKorean ? '더 보기' : 'Show more';
+  String get updatingConversationsSemanticLabel =>
+      isKorean ? '대화를 업데이트하는 중' : 'Updating conversations';
+  String get accountLabel => isKorean ? '계정' : 'Account';
+  String get languagePairSectionLabel =>
+      isKorean ? '학습 언어' : 'Learning Language';
+  String get logOutLabel => isKorean ? '로그 아웃' : 'LOG OUT';
+  String get deleteAccountLabel => isKorean ? '계정 삭제' : 'Delete account';
+  String get deleteAccountWarning => isKorean
+      ? '계정과 대화·학습 기록이 영구적으로 삭제돼요. 재가입해도 이 기록은 복구되지 않아요.'
+      : 'Your account and learning history will be permanently deleted. Rejoining will not restore this history.';
+  String get deleteAccountSubscriptionWarning => isKorean
+      ? '계정을 삭제해도 Apple 구독은 자동으로 취소되지 않으며 계속 결제될 수 있어요. Apple 구독 관리에서 직접 해지할 수 있어요. 재가입 후에는 남은 구독 권한만 구매 복원으로 다시 연결할 수 있어요.'
+      : 'Deleting your account does not cancel your Apple subscription. Billing may continue. You can cancel it in Apple subscription settings. If you rejoin, Restore Purchases can reconnect only the remaining subscription access.';
+  String get deleteAccountAppleWarning => isKorean
+      ? 'Apple 로그인을 다시 요청할 수 있어요. 연결 해제에 실패해도 계정 삭제는 계속되며, Apple 계정 설정에서 앱 연결을 직접 해제할 수 있어요.'
+      : 'You may be asked to sign in with Apple again. If disconnection fails, account deletion continues and you can remove the app in Apple Account settings.';
+  String get deletionProcessing => isKorean
+      ? '삭제 요청을 접수했어요. 서버에서 삭제를 완료하는 중이에요.'
+      : 'Deletion requested. The server is still finishing it.';
+  String get deletionStatusUnavailable => isKorean
+      ? '삭제 진행 상태를 확인하지 못했어요. 다시 확인해 주세요.'
+      : 'Could not check deletion status. Please try again.';
+  String get checkDeletionStatus =>
+      isKorean ? '삭제 상태 확인' : 'Check deletion status';
+  String get deletionCompleted =>
+      isKorean ? '계정 삭제가 완료되었어요.' : 'Account deletion is complete.';
+  String get deletionAppleManual => isKorean
+      ? 'Apple 계정 설정에서 tomatalk 연결도 해제해 주세요.'
+      : 'Please also disconnect tomatalk in your Apple Account settings.';
+  String get deletionFailed => isKorean
+      ? '계정 삭제 요청에 실패했어요. 다시 시도해 주세요.'
+      : 'Could not request account deletion. Please try again.';
+  String get deletionLocalCleanupFailed => isKorean
+      ? '기기 데이터 일부를 지우지 못했어요. 앱을 삭제하면 기기에 남은 자료를 제거할 수 있어요.'
+      : 'Some on-device data could not be cleared. Removing the app will remove remaining local data.';
+  String get languagePairSaveFailed =>
+      isKorean ? '언어쌍을 저장하지 못했어요.' : 'Language pair could not be saved.';
+  String get startConversationTitle =>
+      isKorean ? '대화 시작하기' : 'Start a conversation';
+  String get freeChatDescription =>
+      isKorean ? '내가 고른 주제로 대화하기' : 'Bring your own topic';
+  String get roleplayTitle => isKorean ? '역할극' : 'Roleplay';
+  String get roleplayDescription =>
+      isKorean ? '현실 상황을 연습하기' : 'Practice a real-world situation';
+  String get cancelLabel => isKorean ? '취소' : 'CANCEL';
+  String get historyTitle => isKorean ? '대화 기록' : 'History';
+  String get loadingHistory =>
+      isKorean ? '대화 기록을 불러오는 중...' : 'Loading conversation history...';
+  String get historyLoadFailed => isKorean
+      ? '대화 기록을 불러오지 못했어요.'
+      : 'Conversation history could not be loaded.';
+  String get historyEmptyMessage => isKorean
+      ? '대화를 시작하면 연습 기록이 여기에 보여요.'
+      : 'Start a chat and your practice history will appear here.';
+  String get noConversationsYetTitle =>
+      isKorean ? '아직 대화가 없어요.' : 'No conversations yet.';
+  String conversationCategory(String kind) => switch (kind) {
+    'roleplay' => 'roleplaying',
+    _ => 'freechat',
+  };
+  String conversationPreview({
+    required int messageCount,
+    required bool isActive,
+  }) {
+    if (isKorean) {
+      return '$messageCount개 메시지 · ${isActive ? '계속 대화하기' : '완료'}';
+    }
+    final String messageLabel = messageCount == 1 ? 'message' : 'messages';
+    return '$messageCount $messageLabel · ${isActive ? 'Continue speaking' : 'Completed'}';
+  }
+
+  String recentConversationSemanticLabel(String category, String title) =>
+      isKorean ? '$category 대화: $title' : '$category conversation: $title';
+  String get topicPrepTitle => isKorean ? '주제 준비' : 'Topic Prep';
+  String get preparingConversation =>
+      isKorean ? '대화를 준비하는 중...' : 'Preparing your conversation...';
+  String get topicPrepFailedTitle =>
+      isKorean ? '이 주제를 준비하지 못했어요.' : 'Could not prepare this topic.';
+  String get summaryLabel => isKorean ? '요약' : 'Summary';
+  String get sourcesLabel => isKorean ? '출처' : 'Sources';
+  String get chooseDirectionLabel =>
+      isKorean ? '어떤 주제가 좋으세요?' : 'What would you like to talk about?';
+  String get customFocusLabel =>
+      isKorean ? '어떤 이야기를 나눌까요?' : 'What would you like to discuss?';
+  String get customFocusOpenLabel => isKorean ? '직접 입력' : 'Write your own';
+  String get customFocusPlaceholder =>
+      isKorean ? '나누고 싶은 내용을 적어 주세요' : "Enter what you'd like to discuss";
+  String get customFocusSubmitLabel => isKorean ? '질문 만들기' : 'Create questions';
+  String get customFocusEmptyError =>
+      isKorean ? '대화 방향을 입력해 주세요.' : 'Enter a conversation focus.';
+  String get preparingCustomQuestions =>
+      isKorean ? '질문을 준비하는 중...' : 'Preparing questions...';
+  String get customFocusQuestionsFailed => isKorean
+      ? '원하는 방향의 질문을 준비하지 못했어요. 다시 시도해 주세요.'
+      : 'We could not prepare questions for that focus. Please try again.';
+  String get regenerateDirectionsLabel =>
+      isKorean ? '대화 방향 새로고침' : 'Refresh directions';
+  String get preparingDirections =>
+      isKorean ? '새로운 대화 방향을 준비하는 중...' : 'Preparing new directions...';
+  String get regenerateDirectionsFailed => isKorean
+      ? '새로운 대화 방향을 준비하지 못했어요. 다시 시도해 주세요.'
+      : 'We could not prepare new directions. Please try again.';
+  String get pickFirstQuestionLabel =>
+      isKorean ? '첫 질문 고르기' : 'Pick a first question';
+  String get answerToBeginLabel => isKorean ? '답변하고 시작하기' : 'Answer to begin';
+  String get tryOneOfTheseLabel =>
+      isKorean ? '이 중 하나로 시도해 보세요' : 'Try one of these';
+  String get chooseSituationTitle =>
+      isKorean ? '상황을 골라 보세요' : 'Choose a situation';
+  String get chooseSituationDescription => isKorean
+      ? '연습할 현실 상황을 고르거나 직접 상황을 적어 보세요.'
+      : 'Pick a real-world moment to practice, or write your own custom roleplay.';
+  String get differentSituationLabel =>
+      isKorean ? '다른 상황을 원하나요?' : 'Want a different situation?';
+  String get customRoleplayLabel => isKorean ? '직접 역할극 만들기' : 'CUSTOM ROLEPLAY';
+  String get customRoleplaySemanticLabel => isKorean
+      ? '직접 입력하는 역할극 상황 또는 내 역할'
+      : 'Custom roleplay situation or your role';
+  String roleplayScenarioSemanticLabel(String title) =>
+      isKorean ? '역할극 상황: $title' : 'Roleplay scenario: $title';
+  String get startRoleplayLabel => isKorean ? '역할극 시작하기' : 'START ROLEPLAY';
+  String get chatMessageHint =>
+      isKorean ? '메시지를 입력하세요...' : 'Type a message...';
+  String recordingElapsedLabel(String elapsed) =>
+      isKorean ? '녹음 중 $elapsed' : 'Recording $elapsed';
+  String get stopRecordingTooltip => isKorean ? '녹음 중지' : 'Stop recording';
+  String get voiceInputTooltip => isKorean ? '음성 입력' : 'Voice input';
+  String get cancelRecordingTooltip => isKorean ? '녹음 취소' : 'Cancel recording';
+  String get sendMessageTooltip => isKorean ? '메시지 보내기' : 'Send message';
+  String pageLabel(int current, int count) =>
+      isKorean ? '$count개 중 $current번째 페이지' : 'Page $current of $count';
+  String sourceSemanticLabel(String title) =>
+      isKorean ? '출처: $title' : 'Source: $title';
+  String get typingSemanticLabel =>
+      isKorean ? 'AI가 답변을 작성하는 중' : 'AI is typing';
+  String firstQuestionSemanticLabel(
+    int number,
+    String question, [
+    String? translation,
+  ]) {
+    final String label = isKorean
+        ? '첫 질문 $number: $question'
+        : 'First question $number: $question';
+    if (translation == null) return label;
+    return isKorean
+        ? '$label, 번역: $translation'
+        : '$label, translation: $translation';
+  }
+
+  String get defaultLoadingLabel => isKorean ? '불러오는 중...' : 'Loading...';
+  String get defaultErrorTitle =>
+      isKorean ? '문제가 발생했어요.' : 'Something went wrong.';
+  String get defaultEmptyTitle =>
+      isKorean ? '아직 내용이 없어요.' : 'Nothing here yet.';
+  String get grammarFeedbackSemanticLabel =>
+      isKorean ? '문법 피드백' : 'Grammar feedback';
+  String get showGrammarFeedbackLabel =>
+      isKorean ? '문법 피드백 보기' : 'Show grammar feedback';
+  String get hideGrammarFeedbackLabel =>
+      isKorean ? '문법 피드백 숨기기' : 'Hide grammar feedback';
+  String get grammarReasonLabel => isKorean ? '이유' : 'Why';
+  String get splashTagline =>
+      isKorean ? '무엇이든 이야기해요.' : 'Speak about anything.';
+  String get tryAgainLabel => isKorean ? '다시 시도' : 'Try again';
+  String get looksNaturalLabel => isKorean ? '자연스러워요' : 'Looks natural';
+}
+
+class AppOnboardingCopy {
+  const AppOnboardingCopy({
+    required this.backLabel,
+    required this.skipLabel,
+    required this.continueLabel,
+    required this.getStartedLabel,
+    required this.languagePair,
+    required this.interest,
+    required this.topicPrep,
+    required this.feedback,
+  });
+
+  static const AppOnboardingCopy korean = AppOnboardingCopy(
+    backLabel: '뒤로',
+    skipLabel: '건너뛰기',
+    continueLabel: '계속',
+    getStartedLabel: '시작하기',
+    languagePair: AppOnboardingPageCopy(
+      title: '무엇을 연습할까요?',
+      description: '대화 언어와 피드백 언어를 먼저 선택하세요.',
+    ),
+    interest: AppOnboardingInterestCopy(
+      title: '진짜 관심사를\n이야기해요.',
+      description: '뉴스, 취미, 스포츠, 여행처럼 마음에 있는 주제로 회화를 연습해요.',
+      leftMessage: '어디로 가세요?',
+      rightMessage: '다음 주에 오사카에 가요!',
+      chips: <String>['오사카 맛집', '야구', 'AI 뉴스'],
+    ),
+    topicPrep: AppOnboardingTopicPrepCopy(
+      title: '주제만 정하면,\n바로 이야기할 수 있는 질문이 준비돼요.',
+      description: '대화하고 싶은 주제를 고르면, 바로 이야기할 수 있는 질문을 받아볼 수 있어요.',
+      sectionLabel: '주제 요약',
+      topicTitle: '커리어 전환\n준비하기',
+      helperText: '대화를 위한 질문 3개가 준비됐어요.',
+    ),
+    feedback: AppOnboardingFeedbackCopy(
+      title: '완벽하지 않아도 괜찮아요.\n대화하며 자연스럽게 배워요.',
+      description: '재미있게 대화하고 자연스레 학습해요.',
+      originalMessage: 'I go to Dotonbori yesterday.',
+      correctionText: '제안: I went to Dotonbori yesterday.',
+      reasonText: '이유: 과거 시제 + 장소',
+    ),
+  );
+
+  static const AppOnboardingCopy english = AppOnboardingCopy(
+    backLabel: 'BACK',
+    skipLabel: 'SKIP',
+    continueLabel: 'CONTINUE',
+    getStartedLabel: 'GET STARTED',
+    languagePair: AppOnboardingPageCopy(
+      title: 'What do you want\nto practice?',
+      description: 'Choose your conversation language and feedback language.',
+    ),
+    interest: AppOnboardingInterestCopy(
+      title: 'Talk about what\nyou actually care about.',
+      description:
+          'Practice conversation with news, hobbies, sports, travel, or anything on your mind.',
+      leftMessage: 'Where are you heading?',
+      rightMessage: "I'm going to Osaka next week!",
+      chips: <String>['OSAKA FOOD', 'BASEBALL', 'AI NEWS'],
+    ),
+    topicPrep: AppOnboardingTopicPrepCopy(
+      title: 'Pick a topic,\nand questions are ready to get you talking.',
+      description:
+          'Choose what you want to talk about, and get questions you can answer right away.',
+      sectionLabel: 'Topic summary',
+      topicTitle: 'Navigating\nCareer Transitions',
+      helperText: 'Three useful questions are ready for your conversation.',
+    ),
+    feedback: AppOnboardingFeedbackCopy(
+      title: "You don't have to be perfect.\nLearn naturally as you chat.",
+      description: 'Enjoy the conversation and let learning happen naturally.',
+      originalMessage: 'I go to Dotonbori yesterday.',
+      correctionText: 'Try: I went to Dotonbori yesterday.',
+      reasonText: 'Why: past tense + place',
+    ),
+  );
+
+  final String backLabel;
+  final String skipLabel;
+  final String continueLabel;
+  final String getStartedLabel;
+  final AppOnboardingPageCopy languagePair;
+  final AppOnboardingInterestCopy interest;
+  final AppOnboardingTopicPrepCopy topicPrep;
+  final AppOnboardingFeedbackCopy feedback;
+}
+
+class AppOnboardingPageCopy {
+  const AppOnboardingPageCopy({required this.title, required this.description});
+
+  final String title;
+  final String description;
+}
+
+class AppOnboardingInterestCopy extends AppOnboardingPageCopy {
+  const AppOnboardingInterestCopy({
+    required super.title,
+    required super.description,
+    required this.leftMessage,
+    required this.rightMessage,
+    required this.chips,
+  });
+
+  final String leftMessage;
+  final String rightMessage;
+  final List<String> chips;
+}
+
+class AppOnboardingTopicPrepCopy extends AppOnboardingPageCopy {
+  const AppOnboardingTopicPrepCopy({
+    required super.title,
+    required super.description,
+    required this.sectionLabel,
+    required this.topicTitle,
+    required this.helperText,
+  });
+
+  final String sectionLabel;
+  final String topicTitle;
+  final String helperText;
+}
+
+class AppOnboardingFeedbackCopy extends AppOnboardingPageCopy {
+  const AppOnboardingFeedbackCopy({
+    required super.title,
+    required super.description,
+    required this.originalMessage,
+    required this.correctionText,
+    required this.reasonText,
+  });
+
+  final String originalMessage;
+  final String correctionText;
+  final String reasonText;
+}
+
+class AppLoginCopy {
+  const AppLoginCopy({
+    required this.title,
+    required this.description,
+    required this.googleLabel,
+    required this.appleLabel,
+    required this.tryAgainLabel,
+    required this.topicCardTitle,
+    required this.topicChips,
+  });
+
+  static const AppLoginCopy korean = AppLoginCopy(
+    title: '내가 고른 주제로\n대화해요.',
+    description: '나에게 중요한 이야기를 나누며 회화를 연습해요. 관심사가 대화를 이끌어요.',
+    googleLabel: 'Google로 계속하기',
+    appleLabel: 'Apple로 계속하기',
+    tryAgainLabel: '다시 시도',
+    topicCardTitle: '나의 주제',
+    topicChips: <String>['글로벌 뉴스', '여행', '야구', '기술'],
+  );
+
+  static const AppLoginCopy english = AppLoginCopy(
+    title: 'Practice conversation with your own topics.',
+    description:
+        'Build fluency by discussing what actually matters to you. Your interests lead the conversation.',
+    googleLabel: 'CONTINUE WITH GOOGLE',
+    appleLabel: 'CONTINUE WITH APPLE',
+    tryAgainLabel: 'TRY AGAIN',
+    topicCardTitle: 'Your topics',
+    topicChips: <String>['GLOBAL NEWS', 'TRAVEL', 'BASEBALL', 'TECHNOLOGY'],
+  );
+
+  final String title;
+  final String description;
+  final String googleLabel;
+  final String appleLabel;
+  final String tryAgainLabel;
+  final String topicCardTitle;
+  final List<String> topicChips;
+}

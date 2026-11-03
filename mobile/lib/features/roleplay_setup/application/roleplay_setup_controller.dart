@@ -1,20 +1,19 @@
-import 'package:curitalk/features/roleplay_setup/domain/roleplay_difficulty.dart';
 import 'package:curitalk/features/roleplay_setup/domain/roleplay_scenario.dart';
 import 'package:curitalk/features/roleplay_setup/domain/roleplay_setup_payload.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+enum RoleplaySetupValidationReason { customInputTooShort }
 
 class RoleplaySetupState {
   const RoleplaySetupState({
     this.selectedScenario,
     this.customInput = '',
     this.isCustomMode = false,
-    this.difficulty = RoleplayDifficulty.normal,
   });
 
   final RoleplayScenario? selectedScenario;
   final String customInput;
   final bool isCustomMode;
-  final RoleplayDifficulty difficulty;
 
   String get normalizedCustomInput => customInput.trim();
   bool get hasValidCustomInput => normalizedCustomInput.length >= 2;
@@ -26,25 +25,23 @@ class RoleplaySetupState {
     if (selectedScenario != null) {
       return RoleplaySetupPayload(
         situation: PresetRoleplaySituation(selectedScenario!),
-        difficulty: difficulty,
       );
     }
     if (isCustomMode && hasValidCustomInput) {
       return RoleplaySetupPayload(
         situation: CustomRoleplaySituation(normalizedCustomInput),
-        difficulty: difficulty,
       );
     }
     return null;
   }
 
-  String? get customErrorText {
+  RoleplaySetupValidationReason? get customValidationReason {
     if (!isCustomMode ||
         normalizedCustomInput.isEmpty ||
         normalizedCustomInput.length >= 2) {
       return null;
     }
-    return 'Enter at least 2 characters.';
+    return RoleplaySetupValidationReason.customInputTooShort;
   }
 
   RoleplaySetupState copyWith({
@@ -52,7 +49,6 @@ class RoleplaySetupState {
     bool clearSelectedScenario = false,
     String? customInput,
     bool? isCustomMode,
-    RoleplayDifficulty? difficulty,
   }) {
     return RoleplaySetupState(
       selectedScenario: clearSelectedScenario
@@ -60,7 +56,6 @@ class RoleplaySetupState {
           : selectedScenario ?? this.selectedScenario,
       customInput: customInput ?? this.customInput,
       isCustomMode: isCustomMode ?? this.isCustomMode,
-      difficulty: difficulty ?? this.difficulty,
     );
   }
 }
@@ -81,10 +76,6 @@ class RoleplaySetupController extends Notifier<RoleplaySetupState> {
 
   void updateCustomInput(String input) {
     state = state.copyWith(customInput: input);
-  }
-
-  void selectDifficulty(RoleplayDifficulty difficulty) {
-    state = state.copyWith(difficulty: difficulty);
   }
 
   RoleplaySetupPayload? prepareStart() {

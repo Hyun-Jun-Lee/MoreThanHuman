@@ -1,26 +1,35 @@
 """
 Conversation API Router
 HTTP 요청/응답 처리
+
+진단 v1 (2026-09-13): 시작·turn·message POST의 선택 X-Request-ID 헤더는
+LatencyMiddleware에서 처리해요. JSON 계약은 유지하며 상세는 docs/DSL.md를 참조해요.
 """
 import asyncio
 import json
 import logging
-from uuid import UUID
+from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+import httpx
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from config import get_settings
-from database import get_db
-from domains.auth.dependencies import get_current_user, get_current_user_from_token_param
+from database import SessionLocal, get_db
+from domains.auth.dependencies import AuthenticatedUser, get_current_profile, get_current_user, get_current_user_from_token_param
 from domains.auth.models import ProfileModel
 from domains.conversation.enums import ConversationType
+from domains.conversation.models import ConversationModel, MessageModel, StreamTurnModel
 from domains.conversation.repository import ConversationRepository
+from domains.conversation.repository import ConversationLocked, ConversationSlotsFull, ConversationTurnsFull, PreviousTurnUnresolved, SuggestedStartInProgress
 from domains.conversation.schemas import (
+    ActivateConversationRequest,
     Conversation,
+    ConversationAccess,
     ConversationResponse,
+    ConversationTurnAccess,
     MessageResponse,
     MultimodalConversationResponse,
     MultimodalMessageResponse,
@@ -29,11 +38,21 @@ from domains.conversation.schemas import (
     SendMessageRequest,
     StartFreeChatRequest,
     StartRoleplayRequest,
+    StartSuggestedFreeChatRequest,
+    SuggestedFreeChatResponse,
     UpdateTitleRequest,
 )
 from domains.conversation.service import ConversationService
-from domains.voice.schemas import VoiceAudioError, VoiceAudioResponse
+from domains.conversation.audio_cache_flow import cache_files, new_writer, persist_writer
+from domains.conversation.audio_cache_store import AudioCacheStore
+from domains.conversation.stream_audio import completed_sentences, event_line
+from domains.conversation.stream_flow import PreparedGeneration, complete_generated_text, prepare_generation
+from domains.conversation.stream_pipeline import stream_answer
+from domains.conversation.stream_turns import StreamTurnConflict, StreamTurnStore, turn_status
+from domains.voice.schemas import VoiceAudioError, VoiceAudioResponse, VoiceInputMode
 from domains.voice.service import VoiceService
+from shared.language import ensure_language_context, language_context_to_dict
+from shared.latency import current_trace_id, latency_span
 from shared.exceptions import (
     AppException,
     ExternalAPIException,
@@ -42,11 +61,21 @@ from shared.exceptions import (
     ValidationException,
 )
 from shared.types import ErrorResponse, SuccessResponse
+from shared.background_tasks import BackgroundTaskRegistry, get_background_tasks
+from shared.http_clients import get_ai_http_client
+from shared.logging_config import log_event, log_exception
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/conversations", tags=["conversations"])
 settings = get_settings()
+
+
+def _access_conflict(code: str, message: str) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail={"code": code, "message": message},
+    )
 
 
 FREE_CHAT_REQUEST_BODY_OPENAPI = {
@@ -135,18 +164,136 @@ TURN_REQUEST_BODY_OPENAPI = {
 
 
 # Dependency
-def get_conversation_service(db: Session = Depends(get_db)) -> ConversationService:
+def get_conversation_service(
+    db: Session = Depends(get_db),
+    http_client: httpx.AsyncClient = Depends(get_ai_http_client),
+    background_tasks: BackgroundTaskRegistry = Depends(get_background_tasks),
+) -> ConversationService:
     """Conversation Service 의존성"""
-    from domains.grammar.repository import GrammarRepository
-
     repository = ConversationRepository(db)
-    grammar_repository = GrammarRepository(db)
-    return ConversationService(repository, grammar_repository)
+    return ConversationService(repository, http_client=http_client, background_tasks=background_tasks)
 
 
-def get_voice_service() -> VoiceService:
+def get_voice_service(http_client: httpx.AsyncClient = Depends(get_ai_http_client)) -> VoiceService:
     """Voice Service 의존성"""
-    return VoiceService()
+    return VoiceService(http_client=http_client)
+
+
+def _prepared_stream_response(
+    prepared: PreparedGeneration, *, user_id: str, service: ConversationService,
+    voice_service: VoiceService,
+) -> StreamingResponse:
+    trace_id = current_trace_id()
+    deltas = service.stream_response(prepared.system_prompt, prepared.history, prepared.prompt)
+    service.repository.db.close()
+
+    def mark_audio(error_code: str | None) -> None:
+        with SessionLocal() as db:
+            StreamTurnStore(db).complete_audio(
+                prepared.turn_id, error_code=error_code, attempt_id=prepared.attempt_id,
+            )
+
+    def mark_failed(error_code: str) -> None:
+        with SessionLocal() as db:
+            StreamTurnStore(db).fail(prepared.turn_id, error_code, attempt_id=prepared.attempt_id)
+
+    return StreamingResponse(
+        stream_answer(
+            turn_id=prepared.turn_id, attempt_id=prepared.attempt_id,
+            trace_id=trace_id, deltas=deltas, voice_service=voice_service,
+            conversation_id=prepared.conversation_id,
+            user_message_id=prepared.user_message_id,
+            input_mode=prepared.input_mode, user_text=prepared.user_text,
+            save_answer=lambda answer: complete_generated_text(user_id, prepared, answer),
+            mark_audio=mark_audio, mark_failed=mark_failed,
+        ),
+        media_type="application/x-ndjson; charset=utf-8",
+        headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},
+    )
+
+
+def _prepare_stream_or_http_error(**kwargs) -> PreparedGeneration:
+    try:
+        return prepare_generation(**kwargs)
+    except LookupError as error:
+        raise HTTPException(status_code=404, detail="turn을 찾을 수 없어요") from error
+    except StreamTurnConflict as error:
+        raise _access_conflict(error.code, "요청 상태를 확인한 뒤 다시 시도해 주세요") from error
+    except ConversationSlotsFull as error:
+        raise _access_conflict("CONVERSATION_SLOTS_FULL", error.message) from error
+    except ConversationTurnsFull as error:
+        raise _access_conflict("CONVERSATION_TURNS_FULL", error.message) from error
+    except ConversationLocked as error:
+        raise _access_conflict("CONVERSATION_LOCKED", error.message) from error
+    except PreviousTurnUnresolved as error:
+        raise _access_conflict("PREVIOUS_TURN_UNRESOLVED", error.message) from error
+    except NotFoundException as error:
+        raise HTTPException(status_code=404, detail=error.message) from error
+    except AppException as error:
+        raise HTTPException(status_code=400, detail=error.message) from error
+
+
+def _saved_question_audio_response(
+    *, turn_id: str, attempt_id: str, trace_id: str | None,
+    conversation_id: str, assistant_message_id: str, text: str,
+    voice_service: VoiceService,
+) -> StreamingResponse:
+    async def events():
+        seq = 0
+        audio_done = False
+        audio_status = "completed"
+        cache_writer = new_writer()
+        try:
+            yield event_line("turn_started", seq, turn_id, attempt_id,
+                             trace_id=trace_id, conversation_id=conversation_id)
+            seq += 1
+            yield event_line("text_delta", seq, turn_id, attempt_id, delta=text)
+            seq += 1
+            sentences = completed_sentences(text)
+            if not sentences:
+                raise ValueError("Saved first question is empty")
+            for segment_index, sentence in enumerate(sentences):
+                audio = await voice_service.synthesize_response(sentence)
+                yield event_line("audio_segment", seq, turn_id, attempt_id,
+                                 segment_index=segment_index, text=sentence,
+                                 content_type=audio.content_type, format=audio.format,
+                                 base64=audio.base64)
+                seq += 1
+                if cache_writer is not None:
+                    try:
+                        await cache_writer.add(segment_index, sentence, audio)
+                    except Exception:
+                        logger.exception("Suggested question audio cache write failed", extra={"turn_id": turn_id})
+                        await cache_writer.abort()
+                        cache_writer = None
+            if cache_writer is not None:
+                await persist_writer(cache_writer, assistant_message_id, text)
+                cache_writer = None
+            with SessionLocal() as db:
+                StreamTurnStore(db).complete_audio(turn_id, attempt_id=attempt_id)
+            audio_done = True
+        except Exception:
+            logger.exception("Suggested first-question audio streaming failed", extra={"turn_id": turn_id})
+            audio_status = "failed"
+            with SessionLocal() as db:
+                StreamTurnStore(db).complete_audio(turn_id, error_code="AUDIO_FAILED", attempt_id=attempt_id)
+            audio_done = True
+            yield event_line("audio_error", seq, turn_id, attempt_id, code="AUDIO_FAILED")
+            seq += 1
+        finally:
+            if cache_writer is not None:
+                await cache_writer.abort()
+            if not audio_done:
+                with SessionLocal() as db:
+                    StreamTurnStore(db).complete_audio(turn_id, error_code="STREAM_DISCONNECTED", attempt_id=attempt_id)
+        if audio_done:
+            yield event_line("turn_completed", seq, turn_id, attempt_id,
+                             conversation_id=conversation_id,
+                             assistant_message_id=assistant_message_id,
+                             text=text, audio_status=audio_status)
+
+    return StreamingResponse(events(), media_type="application/x-ndjson; charset=utf-8",
+                             headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
 
 
 def _parse_bool_form_value(value: object, *, default: bool = False) -> bool:
@@ -227,6 +374,7 @@ async def _parse_free_chat_input(http_request: Request) -> tuple[StartFreeChatRe
             "topic": form.get("topic"),
             "conversation_direction": form.get("conversation_direction"),
             "selected_question": form.get("selected_question"),
+            "custom_focus": form.get("custom_focus"),
         }
         return StartFreeChatRequest.model_validate(payload), include_audio_response, audio_file
 
@@ -291,12 +439,14 @@ async def _synthesize_optional_audio(
 )
 async def start_free_chat_conversation(
     http_request: Request,
-    current_user: ProfileModel = Depends(get_current_user),
+    current_user: ProfileModel = Depends(get_current_profile),
     service: ConversationService = Depends(get_conversation_service),
     voice_service: VoiceService = Depends(get_voice_service),
 ):
     """자유 대화 시작"""
     try:
+        if settings.conversation_access_enabled:
+            service.assert_can_create(current_user.id)
         request, include_audio_response, audio_file = await _parse_free_chat_input(http_request)
         input_mode, first_message = await voice_service.resolve_input_text(
             text=request.first_message,
@@ -313,6 +463,8 @@ async def start_free_chat_conversation(
                 else None
             ),
             selected_question=request.selected_question,
+            custom_focus=request.custom_focus,
+            language_context=ensure_language_context(getattr(current_user, "language", None)),
         )
         audio, audio_error = await _synthesize_optional_audio(
             include_audio_response=include_audio_response,
@@ -329,44 +481,526 @@ async def start_free_chat_conversation(
         return SuccessResponse(data=data, message="자유 대화가 시작되었습니다")
     except ValidationError as e:
         raise _validation_error_response(e)
+    except ConversationSlotsFull as e:
+        raise _access_conflict("CONVERSATION_SLOTS_FULL", e.message)
     except RateLimitException as e:
-        logger.warning(f"RateLimitException in start_free_chat_conversation: {e.message}")
+        log_exception(e, status_code=429, error_code="RATE_LIMITED")
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=e.message)
     except ExternalAPIException as e:
-        logger.error(f"ExternalAPIException in start_free_chat_conversation: {e.message}", exc_info=True)
+        log_exception(e, status_code=502, error_code="EXTERNAL_API_FAILED")
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=e.message)
     except AppException as e:
-        logger.error(f"AppException in start_free_chat_conversation: {e.message}", exc_info=True)
+        log_exception(e, status_code=400, error_code=type(e).__name__)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Unexpected error in start_free_chat_conversation: {str(e)}", exc_info=True)
+        log_exception(e, status_code=500, error_code="UNHANDLED_EXCEPTION")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
-@router.post("/start/roleplay/", response_model=SuccessResponse[ConversationResponse])
+@router.post(
+    "/start/free-chat/suggested/",
+    response_model=SuccessResponse[SuggestedFreeChatResponse],
+)
+async def start_suggested_free_chat(
+    request: StartSuggestedFreeChatRequest,
+    current_user: ProfileModel = Depends(get_current_profile),
+    service: ConversationService = Depends(get_conversation_service),
+    voice_service: VoiceService = Depends(get_voice_service),
+):
+    try:
+        response = await service.start_suggested_free_chat(
+            str(request.topic_id), str(request.start_request_id), current_user.id,
+            ensure_language_context(current_user.language),
+        )
+        audio, audio_error = await _synthesize_optional_audio(
+            include_audio_response=request.include_audio_response,
+            response_text=response.response,
+            voice_service=voice_service,
+        )
+        return SuccessResponse(data=response.model_copy(update={"audio": audio, "audio_error": audio_error}))
+    except ConversationSlotsFull as error:
+        raise _access_conflict("CONVERSATION_SLOTS_FULL", error.message)
+    except SuggestedStartInProgress as error:
+        raise _access_conflict("START_IN_PROGRESS", error.message)
+    except NotFoundException as error:
+        raise HTTPException(status_code=404, detail=error.message)
+    except RateLimitException as error:
+        raise HTTPException(status_code=429, detail=error.message)
+    except ExternalAPIException as error:
+        raise HTTPException(status_code=502, detail=error.message)
+    except AppException as error:
+        raise HTTPException(status_code=400, detail=error.message)
+
+
+@router.post(
+    "/start/free-chat/suggested/stream/",
+    response_class=StreamingResponse,
+    responses={
+        200: {"content": {"application/x-ndjson": {"schema": {"type": "string"}}}}
+    },
+)
+async def start_suggested_free_chat_stream(
+    body: StartSuggestedFreeChatRequest,
+    idempotency_key: UUID = Header(alias="Idempotency-Key"),
+    current_user: ProfileModel = Depends(get_current_profile),
+    service: ConversationService = Depends(get_conversation_service),
+    voice_service: VoiceService = Depends(get_voice_service),
+):
+    """저장된 첫 질문을 문장별 완성 오디오와 함께 전송해요."""
+    if idempotency_key != body.start_request_id:
+        raise HTTPException(status_code=400, detail="Idempotency-Key와 start_request_id가 달라요")
+    trace_id = current_trace_id()
+    user_id = current_user.id
+    with SessionLocal() as db:
+        store = StreamTurnStore(db)
+        try:
+            turn = store.reserve(
+                user_id=user_id, request_id=str(idempotency_key), kind="suggested_start",
+                input_data={"topic_id": str(body.topic_id), "start_request_id": str(body.start_request_id)},
+            )
+        except StreamTurnConflict as error:
+            raise _access_conflict(error.code, "요청 상태를 조회한 뒤 다시 시도해 주세요")
+        turn_id, attempt_id = turn.id, turn.attempt_id
+    try:
+        response = await service.start_suggested_free_chat(
+            str(body.topic_id), str(body.start_request_id), user_id,
+            ensure_language_context(current_user.language),
+        )
+        with SessionLocal() as db:
+            StreamTurnStore(db).complete_text(
+                turn_id, conversation_id=str(response.conversation_id),
+                assistant_message_id=str(response.assistant_message_id),
+                attempt_id=attempt_id,
+            )
+    except Exception as error:
+        with SessionLocal() as db:
+            StreamTurnStore(db).fail(turn_id, "START_FAILED")
+        if isinstance(error, ConversationSlotsFull):
+            raise _access_conflict("CONVERSATION_SLOTS_FULL", error.message)
+        if isinstance(error, SuggestedStartInProgress):
+            raise _access_conflict("START_IN_PROGRESS", error.message)
+        if isinstance(error, NotFoundException):
+            raise HTTPException(status_code=404, detail=error.message)
+        if isinstance(error, AppException):
+            raise HTTPException(status_code=400, detail=error.message)
+        raise
+
+    service.repository.db.close()
+    return _saved_question_audio_response(
+        turn_id=turn_id, attempt_id=attempt_id, trace_id=trace_id,
+        conversation_id=str(response.conversation_id),
+        assistant_message_id=str(response.assistant_message_id),
+        text=response.response, voice_service=voice_service,
+    )
+
+
+@router.get("/turns/{turn_id}/", response_model=SuccessResponse[dict])
+async def get_stream_turn(
+    turn_id: UUID,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    with latency_span("handler", operation="turn_status"):
+        turn = StreamTurnStore(db).get(current_user.id, str(turn_id))
+        if turn is None:
+            raise HTTPException(status_code=404, detail="turn을 찾을 수 없어요")
+        return SuccessResponse(data=turn_status(turn))
+
+
+@router.get("/turns/by-request/{request_id}/", response_model=SuccessResponse[dict])
+async def get_stream_turn_by_request(
+    request_id: UUID,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    with latency_span("handler", operation="turn_by_request"):
+        turn = db.query(StreamTurnModel).filter_by(
+            user_id=current_user.id, request_id=str(request_id),
+        ).one_or_none()
+        if turn is None:
+            raise HTTPException(status_code=404, detail="turn을 찾을 수 없어요")
+        return SuccessResponse(data=turn_status(StreamTurnStore(db).get(current_user.id, turn.id)))
+
+
+@router.get("/{conversation_id}/turns/", response_model=SuccessResponse[list[dict]])
+async def list_stream_turns(
+    conversation_id: UUID,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    with latency_span("handler", operation="turn_list"):
+        conversation = db.query(ConversationModel).filter_by(id=str(conversation_id), user_id=current_user.id).one_or_none()
+        if conversation is None:
+            raise HTTPException(status_code=404, detail="대화를 찾을 수 없어요")
+        turns = StreamTurnStore(db).unresolved(current_user.id, str(conversation_id))
+        log_event(
+            "conversation.stream.unresolved",
+            pending_count=sum(turn.status == "pending" for turn in turns),
+            failed_count=sum(turn.status == "failed" for turn in turns),
+        )
+        return SuccessResponse(data=[turn_status(turn) for turn in turns])
+
+
+_STREAM_RESPONSES = {200: {"content": {"application/x-ndjson": {"schema": {"type": "string"}}}}}
+
+
+@router.post("/start/free-chat/stream/", response_class=StreamingResponse,
+             responses=_STREAM_RESPONSES, openapi_extra={"requestBody": FREE_CHAT_REQUEST_BODY_OPENAPI})
+async def start_free_chat_stream(
+    http_request: Request,
+    idempotency_key: UUID = Header(alias="Idempotency-Key"),
+    current_user: ProfileModel = Depends(get_current_profile),
+    service: ConversationService = Depends(get_conversation_service),
+    voice_service: VoiceService = Depends(get_voice_service),
+):
+    try:
+        body, _, audio_file = await _parse_free_chat_input(http_request)
+        input_mode, first_message = await voice_service.resolve_input_text(
+            text=body.first_message, audio_file=audio_file,
+        )
+    except ValidationError as error:
+        raise _validation_error_response(error) from error
+    except AppException as error:
+        raise HTTPException(status_code=400, detail=error.message) from error
+    prepared = _prepare_stream_or_http_error(
+        user_id=current_user.id, request_id=str(idempotency_key), kind="free_chat_start",
+        input_data={
+            "text": first_message, "input_mode": input_mode.value,
+            "search_context": body.search_context, "topic": body.topic,
+            "conversation_direction": body.conversation_direction.value if body.conversation_direction else None,
+            "selected_question": body.selected_question, "custom_focus": body.custom_focus,
+            "language": language_context_to_dict(ensure_language_context(current_user.language)),
+        },
+        http_client=service.http_client, background_tasks=service.background_tasks,
+    )
+    return _prepared_stream_response(prepared, user_id=current_user.id,
+                                     service=service, voice_service=voice_service)
+
+
+@router.post("/start/roleplay/stream/", response_class=StreamingResponse, responses=_STREAM_RESPONSES)
+async def start_roleplay_stream(
+    body: StartRoleplayRequest,
+    idempotency_key: UUID = Header(alias="Idempotency-Key"),
+    current_user: ProfileModel = Depends(get_current_profile),
+    service: ConversationService = Depends(get_conversation_service),
+    voice_service: VoiceService = Depends(get_voice_service),
+):
+    prepared = _prepare_stream_or_http_error(
+        user_id=current_user.id, request_id=str(idempotency_key), kind="roleplay_start",
+        input_data={
+            "role_character": body.role_character, "search_context": body.search_context,
+            "language": language_context_to_dict(ensure_language_context(current_user.language)),
+        },
+        http_client=service.http_client, background_tasks=service.background_tasks,
+    )
+    return _prepared_stream_response(prepared, user_id=current_user.id,
+                                     service=service, voice_service=voice_service)
+
+
+@router.post("/{conversation_id}/turn/stream/", response_class=StreamingResponse,
+             responses=_STREAM_RESPONSES, openapi_extra={"requestBody": TURN_REQUEST_BODY_OPENAPI})
+async def send_turn_stream(
+    conversation_id: UUID,
+    http_request: Request,
+    idempotency_key: UUID = Header(alias="Idempotency-Key"),
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    service: ConversationService = Depends(get_conversation_service),
+    voice_service: VoiceService = Depends(get_voice_service),
+):
+    try:
+        text, _, audio_file = await _parse_turn_input(http_request)
+        input_mode, user_text = await voice_service.resolve_input_text(text=text, audio_file=audio_file)
+    except AppException as error:
+        raise HTTPException(status_code=400, detail=error.message) from error
+    prepared = _prepare_stream_or_http_error(
+        user_id=current_user.id, request_id=str(idempotency_key), kind="turn",
+        input_data={"conversation_id": str(conversation_id), "text": user_text,
+                    "input_mode": input_mode.value},
+        http_client=service.http_client, background_tasks=service.background_tasks,
+    )
+    return _prepared_stream_response(prepared, user_id=current_user.id,
+                                     service=service, voice_service=voice_service)
+
+
+@router.post("/{conversation_id}/message/stream/", response_class=StreamingResponse,
+             responses=_STREAM_RESPONSES)
+async def send_message_stream(
+    conversation_id: UUID,
+    body: SendMessageRequest,
+    idempotency_key: UUID = Header(alias="Idempotency-Key"),
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    service: ConversationService = Depends(get_conversation_service),
+    voice_service: VoiceService = Depends(get_voice_service),
+):
+    user_text = VoiceService.normalize_text(body.message)
+    if user_text is None:
+        raise HTTPException(status_code=422, detail="message가 비어 있어요")
+    prepared = _prepare_stream_or_http_error(
+        user_id=current_user.id, request_id=str(idempotency_key), kind="message",
+        input_data={"conversation_id": str(conversation_id), "text": user_text,
+                    "input_mode": "text"},
+        http_client=service.http_client, background_tasks=service.background_tasks,
+    )
+    return _prepared_stream_response(prepared, user_id=current_user.id,
+                                     service=service, voice_service=voice_service)
+
+
+@router.post("/turns/{turn_id}/retry/stream/", response_class=StreamingResponse,
+             responses=_STREAM_RESPONSES)
+async def retry_stream_turn(
+    turn_id: UUID,
+    idempotency_key: UUID = Header(alias="Idempotency-Key"),
+    current_user: ProfileModel = Depends(get_current_profile),
+    service: ConversationService = Depends(get_conversation_service),
+    voice_service: VoiceService = Depends(get_voice_service),
+):
+    with SessionLocal() as db:
+        turn = StreamTurnStore(db).get(current_user.id, str(turn_id))
+        if turn is None:
+            raise HTTPException(status_code=404, detail="turn을 찾을 수 없어요")
+        if turn.conversation_id:
+            ConversationRepository(db).find_by_id(turn.conversation_id, current_user.id)
+            if settings.conversation_access_enabled and turn.kind in {"turn", "message", "free_chat_start"}:
+                # 이미 확정된 사용자 발화는 다시 세지 않지만 현재 잠금은 확인해요.
+                conversation = db.query(ConversationModel).filter_by(id=turn.conversation_id).one()
+                if not conversation.slot_active:
+                    raise _access_conflict("CONVERSATION_LOCKED", "읽기 전용 대화예요")
+        kind = turn.kind
+        saved_input = json.loads(turn.input_json)
+    if kind == "suggested_start":
+        with SessionLocal() as db:
+            try:
+                retried = StreamTurnStore(db).retry(
+                    user_id=current_user.id, turn_id=str(turn_id),
+                    request_id=str(idempotency_key),
+                )
+            except StreamTurnConflict as error:
+                raise _access_conflict(error.code, "요청 상태를 확인한 뒤 다시 시도해 주세요") from error
+            attempt_id = retried.attempt_id
+        try:
+            response = await service.start_suggested_free_chat(
+                saved_input["topic_id"], saved_input["start_request_id"],
+                current_user.id, ensure_language_context(current_user.language),
+            )
+            with SessionLocal() as db:
+                StreamTurnStore(db).complete_text(
+                    str(turn_id), conversation_id=str(response.conversation_id),
+                    assistant_message_id=str(response.assistant_message_id),
+                    attempt_id=attempt_id,
+                )
+        except Exception as error:
+            with SessionLocal() as db:
+                StreamTurnStore(db).fail(str(turn_id), "START_FAILED", attempt_id=attempt_id)
+            if isinstance(error, ConversationSlotsFull):
+                raise _access_conflict("CONVERSATION_SLOTS_FULL", error.message) from error
+            if isinstance(error, NotFoundException):
+                raise HTTPException(status_code=404, detail=error.message) from error
+            if isinstance(error, AppException):
+                raise HTTPException(status_code=400, detail=error.message) from error
+            raise
+        service.repository.db.close()
+        return _saved_question_audio_response(
+            turn_id=str(turn_id), attempt_id=attempt_id,
+            trace_id=current_trace_id(), conversation_id=str(response.conversation_id),
+            assistant_message_id=str(response.assistant_message_id),
+            text=response.response, voice_service=voice_service,
+        )
+    prepared = _prepare_stream_or_http_error(
+        user_id=current_user.id, request_id=str(idempotency_key), kind=None,
+        input_data=None, retry_turn_id=str(turn_id),
+        http_client=service.http_client, background_tasks=service.background_tasks,
+    )
+    return _prepared_stream_response(prepared, user_id=current_user.id,
+                                     service=service, voice_service=voice_service)
+
+
+@router.post("/messages/{assistant_message_id}/audio/stream/", response_class=StreamingResponse,
+             responses=_STREAM_RESPONSES)
+async def retry_stream_audio(
+    assistant_message_id: UUID,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    voice_service: VoiceService = Depends(get_voice_service),
+):
+    message_id = str(assistant_message_id)
+    with SessionLocal() as db:
+        turn = db.query(StreamTurnModel).filter_by(
+            user_id=current_user.id, assistant_message_id=message_id,
+        ).one_or_none()
+        if turn is None:
+            raise HTTPException(status_code=404, detail="음성 turn을 찾을 수 없어요")
+        ConversationRepository(db).find_by_id(turn.conversation_id, current_user.id)
+        message = db.query(MessageModel).filter_by(
+            id=message_id, conversation_id=turn.conversation_id,
+        ).one()
+        turn = StreamTurnStore(db).get(current_user.id, turn.id)
+        turn_id, attempt_id = turn.id, turn.attempt_id
+        text = message.content
+        manifest = AudioCacheStore(db).manifest(message_id)
+        audio_status = turn.audio_status
+
+    if audio_status == "pending":
+        raise _access_conflict("AUDIO_RETRY_IN_PROGRESS", "음성이 생성 중이에요")
+    cache = cache_files()
+    try:
+        cached_audio = await cache.load(message_id, manifest, text) if cache and manifest else None
+    except OSError as error:
+        logger.exception("Conversation audio cache read failed", extra={"message_id": message_id})
+        raise HTTPException(status_code=503, detail={"code": "AUDIO_STORAGE_UNAVAILABLE",
+                                                     "message": "음성 파일을 읽을 수 없어요"}) from error
+    if cached_audio is not None:
+        log_event("conversation.audio_cache.hit")
+        replay_attempt_id = str(uuid4())
+
+        async def cached_events():
+            seq = 0
+            yield event_line("audio_started", seq, turn_id, attempt_id,
+                             assistant_message_id=message_id, audio_attempt_id=replay_attempt_id)
+            seq += 1
+            for index, (sentence, audio) in enumerate(cached_audio):
+                yield event_line("audio_segment", seq, turn_id, attempt_id,
+                                 assistant_message_id=message_id, audio_attempt_id=replay_attempt_id,
+                                 segment_index=index, text=sentence, content_type=audio.content_type,
+                                 format=audio.format, base64=audio.base64)
+                seq += 1
+            yield event_line("audio_completed", seq, turn_id, attempt_id,
+                             assistant_message_id=message_id, audio_attempt_id=replay_attempt_id)
+
+        return StreamingResponse(cached_events(), media_type="application/x-ndjson; charset=utf-8",
+                                 headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
+
+    lease_id = None
+    log_event("conversation.audio_cache.miss")
+    if cache:
+        with SessionLocal() as db:
+            lease_id = AudioCacheStore(db).claim(message_id, expected_manifest=manifest)
+        if lease_id is None:
+            raise _access_conflict("AUDIO_RETRY_IN_PROGRESS", "음성이 생성 중이에요")
+    try:
+        with SessionLocal() as db:
+            turn = StreamTurnStore(db).retry_audio(user_id=current_user.id, turn_id=turn_id)
+            audio_attempt_id = turn.audio_attempt_id
+    except StreamTurnConflict as error:
+        if lease_id:
+            with SessionLocal() as db:
+                AudioCacheStore(db).release(message_id, lease_id)
+        raise _access_conflict(error.code, "음성 재시도 상태를 확인해 주세요") from error
+
+    async def events():
+        seq = 0
+        finished = False
+        cache_writer = new_writer()
+        active_lease_id = lease_id
+        try:
+            yield event_line("audio_started", seq, turn_id, attempt_id,
+                             assistant_message_id=str(assistant_message_id),
+                             audio_attempt_id=audio_attempt_id)
+            seq += 1
+            for index, sentence in enumerate(completed_sentences(text)):
+                if active_lease_id:
+                    with SessionLocal() as db:
+                        if not AudioCacheStore(db).renew(message_id, active_lease_id):
+                            raise RuntimeError("Audio cache generation lease was replaced")
+                        if not StreamTurnStore(db).renew_audio(turn_id, audio_attempt_id):
+                            raise RuntimeError("Audio retry attempt was replaced")
+                audio = await voice_service.synthesize_response(sentence)
+                yield event_line("audio_segment", seq, turn_id, attempt_id,
+                                 assistant_message_id=str(assistant_message_id),
+                                 audio_attempt_id=audio_attempt_id, segment_index=index,
+                                 text=sentence, content_type=audio.content_type,
+                                 format=audio.format, base64=audio.base64)
+                seq += 1
+                if cache_writer is not None:
+                    try:
+                        await cache_writer.add(index, sentence, audio)
+                    except Exception:
+                        logger.exception("Stored answer audio cache write failed", extra={"turn_id": turn_id})
+                        await cache_writer.abort()
+                        cache_writer = None
+            if cache_writer is not None:
+                await persist_writer(cache_writer, message_id, text, lease_id=active_lease_id)
+                cache_writer = None
+                active_lease_id = None
+            log_event("conversation.audio_cache.regenerated")
+            with SessionLocal() as db:
+                StreamTurnStore(db).complete_audio(turn_id, audio_attempt_id=audio_attempt_id)
+            finished = True
+            yield event_line("audio_completed", seq, turn_id, attempt_id,
+                             assistant_message_id=str(assistant_message_id),
+                             audio_attempt_id=audio_attempt_id)
+        except Exception:
+            logger.exception("Stored answer audio retry failed", extra={"turn_id": turn_id})
+            with SessionLocal() as db:
+                StreamTurnStore(db).complete_audio(
+                    turn_id, error_code="AUDIO_FAILED", audio_attempt_id=audio_attempt_id,
+                )
+            finished = True
+            yield event_line("audio_error", seq, turn_id, attempt_id,
+                             assistant_message_id=str(assistant_message_id),
+                             audio_attempt_id=audio_attempt_id, code="AUDIO_FAILED")
+        finally:
+            if cache_writer is not None:
+                await cache_writer.abort()
+            if active_lease_id:
+                with SessionLocal() as db:
+                    AudioCacheStore(db).release(message_id, active_lease_id)
+            if not finished:
+                with SessionLocal() as db:
+                    StreamTurnStore(db).complete_audio(
+                        turn_id, error_code="STREAM_DISCONNECTED", audio_attempt_id=audio_attempt_id,
+                    )
+
+    return StreamingResponse(events(), media_type="application/x-ndjson; charset=utf-8",
+                             headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
+
+
+@router.post(
+    "/start/roleplay/",
+    response_model=SuccessResponse[MultimodalConversationResponse],
+)
 async def start_roleplay_conversation(
     request: StartRoleplayRequest,
-    current_user: ProfileModel = Depends(get_current_user),
+    current_user: ProfileModel = Depends(get_current_profile),
     service: ConversationService = Depends(get_conversation_service),
+    voice_service: VoiceService = Depends(get_voice_service),
 ):
     """롤플레이 대화 시작 (AI가 먼저 인사)"""
     try:
+        if settings.conversation_access_enabled:
+            service.assert_can_create(current_user.id)
         response = await service.start_roleplay_conversation(
             request.role_character,
             request.search_context,
             user_id=current_user.id,
+            language_context=ensure_language_context(getattr(current_user, "language", None)),
         )
-        return SuccessResponse(data=response, message="롤플레이 대화가 시작되었습니다")
+        audio, audio_error = await _synthesize_optional_audio(
+            include_audio_response=request.include_audio_response,
+            response_text=response.response,
+            voice_service=voice_service,
+        )
+        data = MultimodalConversationResponse(
+            **response.model_dump(),
+            input_mode=VoiceInputMode.TEXT,
+            transcript=None,
+            audio=audio,
+            audio_error=audio_error,
+        )
+        return SuccessResponse(data=data, message="롤플레이 대화가 시작되었습니다")
+    except ConversationSlotsFull as e:
+        raise _access_conflict("CONVERSATION_SLOTS_FULL", e.message)
     except RateLimitException as e:
-        logger.warning(f"RateLimitException in start_roleplay_conversation: {e.message}")
+        log_exception(e, status_code=429, error_code="RATE_LIMITED")
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=e.message)
+    except ExternalAPIException as e:
+        log_exception(e, status_code=502, error_code="EXTERNAL_API_FAILED")
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=e.message)
     except AppException as e:
-        logger.error(f"AppException in start_roleplay_conversation: {e.message}", exc_info=True)
+        log_exception(e, status_code=400, error_code=type(e).__name__)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
     except Exception as e:
-        logger.error(f"Unexpected error in start_roleplay_conversation: {str(e)}", exc_info=True)
+        log_exception(e, status_code=500, error_code="UNHANDLED_EXCEPTION")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
@@ -374,7 +1008,7 @@ async def start_roleplay_conversation(
 async def send_message(
     conversation_id: UUID,
     request: SendMessageRequest,
-    current_user: ProfileModel = Depends(get_current_user),
+    current_user: AuthenticatedUser = Depends(get_current_user),
     service: ConversationService = Depends(get_conversation_service),
 ):
     """메시지 전송"""
@@ -383,17 +1017,23 @@ async def send_message(
             str(conversation_id), request.message, user_id=current_user.id
         )
         return SuccessResponse(data=response)
+    except PreviousTurnUnresolved as e:
+        raise _access_conflict("PREVIOUS_TURN_UNRESOLVED", e.message)
+    except ConversationTurnsFull as e:
+        raise _access_conflict("CONVERSATION_TURNS_FULL", e.message)
+    except ConversationLocked as e:
+        raise _access_conflict("CONVERSATION_LOCKED", e.message)
     except RateLimitException as e:
-        logger.warning(f"RateLimitException in send_message: {e.message}")
+        log_exception(e, status_code=429, error_code="RATE_LIMITED")
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=e.message)
     except NotFoundException as e:
-        logger.error(f"NotFoundException in send_message: {e.message}")
+        log_exception(e, status_code=404, error_code="NOT_FOUND")
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
     except AppException as e:
-        logger.error(f"AppException in send_message: {e.message}", exc_info=True)
+        log_exception(e, status_code=400, error_code=type(e).__name__)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
     except Exception as e:
-        logger.error(f"Unexpected error in send_message: {str(e)}", exc_info=True)
+        log_exception(e, status_code=500, error_code="UNHANDLED_EXCEPTION")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
@@ -405,12 +1045,14 @@ async def send_message(
 async def send_multimodal_turn(
     conversation_id: UUID,
     http_request: Request,
-    current_user: ProfileModel = Depends(get_current_user),
+    current_user: AuthenticatedUser = Depends(get_current_user),
     service: ConversationService = Depends(get_conversation_service),
     voice_service: VoiceService = Depends(get_voice_service),
 ):
     """텍스트 또는 음성 파일로 대화 이어가기"""
     try:
+        if settings.conversation_access_enabled:
+            service.assert_can_send(str(conversation_id), current_user.id)
         text, include_audio_response, audio_file = await _parse_turn_input(http_request)
         input_mode, user_text = await voice_service.resolve_input_text(
             text=text,
@@ -436,36 +1078,101 @@ async def send_multimodal_turn(
         return SuccessResponse(data=data)
     except ValidationError as e:
         raise _validation_error_response(e)
+    except PreviousTurnUnresolved as e:
+        raise _access_conflict("PREVIOUS_TURN_UNRESOLVED", e.message)
+    except ConversationTurnsFull as e:
+        raise _access_conflict("CONVERSATION_TURNS_FULL", e.message)
+    except ConversationLocked as e:
+        raise _access_conflict("CONVERSATION_LOCKED", e.message)
     except RateLimitException as e:
-        logger.warning(f"RateLimitException in send_multimodal_turn: {e.message}")
+        log_exception(e, status_code=429, error_code="RATE_LIMITED")
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=e.message)
     except ExternalAPIException as e:
-        logger.error(f"ExternalAPIException in send_multimodal_turn: {e.message}", exc_info=True)
+        log_exception(e, status_code=502, error_code="EXTERNAL_API_FAILED")
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=e.message)
     except NotFoundException as e:
-        logger.error(f"NotFoundException in send_multimodal_turn: {e.message}")
+        log_exception(e, status_code=404, error_code="NOT_FOUND")
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
     except AppException as e:
-        logger.error(f"AppException in send_multimodal_turn: {e.message}", exc_info=True)
+        log_exception(e, status_code=400, error_code=type(e).__name__)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Unexpected error in send_multimodal_turn: {str(e)}", exc_info=True)
+        log_exception(e, status_code=500, error_code="UNHANDLED_EXCEPTION")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.get("/access/", response_model=SuccessResponse[ConversationAccess])
+def get_conversation_access(
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    service: ConversationService = Depends(get_conversation_service),
+):
+    """계정의 새 대화 생성 권한을 반환해요."""
+    with latency_span("handler", operation="access_summary"):
+        return SuccessResponse(data=ConversationAccess(**service.get_access(current_user.id)))
+
+
+@router.get("/{conversation_id}/access/", response_model=SuccessResponse[ConversationTurnAccess])
+def get_conversation_turn_access(
+    conversation_id: UUID,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    service: ConversationService = Depends(get_conversation_service),
+):
+    """대화별 사용자 발화 한도를 반환해요."""
+    try:
+        with latency_span("handler", operation="turn_access"):
+            return SuccessResponse(
+                data=ConversationTurnAccess(**service.get_turn_access(str(conversation_id), current_user.id))
+            )
+    except NotFoundException as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
+
+
+@router.post("/{conversation_id}/activate/", response_model=SuccessResponse[ConversationAccess])
+def activate_conversation(
+    conversation_id: UUID,
+    payload: ActivateConversationRequest,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    service: ConversationService = Depends(get_conversation_service),
+):
+    try:
+        service.activate_conversation(
+            str(conversation_id), current_user.id,
+            str(payload.replace_conversation_id) if payload.replace_conversation_id else None,
+        )
+        return SuccessResponse(data=ConversationAccess(**service.get_access(current_user.id)))
+    except ConversationSlotsFull as exc:
+        raise _access_conflict("CONVERSATION_SLOTS_FULL", exc.message)
+    except NotFoundException as exc:
+        raise HTTPException(status_code=404, detail=exc.message)
+
+
+@router.post("/{conversation_id}/deactivate/", response_model=SuccessResponse[ConversationAccess])
+def deactivate_conversation(
+    conversation_id: UUID,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    service: ConversationService = Depends(get_conversation_service),
+):
+    try:
+        service.deactivate_conversation(str(conversation_id), current_user.id)
+        return SuccessResponse(data=ConversationAccess(**service.get_access(current_user.id)))
+    except NotFoundException as exc:
+        raise HTTPException(status_code=404, detail=exc.message)
 
 
 @router.get("/", response_model=SuccessResponse[PaginatedConversations])
 def get_conversations(
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    current_user: ProfileModel = Depends(get_current_user),
+    current_user: AuthenticatedUser = Depends(get_current_user),
     service: ConversationService = Depends(get_conversation_service),
 ):
     """대화 목록 조회"""
     try:
-        conversations = service.get_conversations(current_user.id, limit, offset)
-        return SuccessResponse(data=conversations)
+        with latency_span("handler", operation="conversation_list"):
+            conversations = service.get_conversations(current_user.id, limit, offset)
+            return SuccessResponse(data=conversations)
     except AppException as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
 
@@ -473,7 +1180,7 @@ def get_conversations(
 @router.get("/{conversation_id}/", response_model=SuccessResponse[Conversation])
 def get_conversation(
     conversation_id: UUID,
-    current_user: ProfileModel = Depends(get_current_user),
+    current_user: AuthenticatedUser = Depends(get_current_user),
     service: ConversationService = Depends(get_conversation_service),
 ):
     """대화 조회"""
@@ -491,13 +1198,14 @@ def get_messages(
     conversation_id: UUID,
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    current_user: ProfileModel = Depends(get_current_user),
+    current_user: AuthenticatedUser = Depends(get_current_user),
     service: ConversationService = Depends(get_conversation_service),
 ):
     """메시지 목록 조회"""
     try:
-        messages = service.get_messages(str(conversation_id), current_user.id, limit, offset)
-        return SuccessResponse(data=messages)
+        with latency_span("handler", operation="message_list"):
+            messages = service.get_messages(str(conversation_id), current_user.id, limit, offset)
+            return SuccessResponse(data=messages)
     except NotFoundException as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
     except AppException as e:
@@ -507,7 +1215,7 @@ def get_messages(
 @router.put("/{conversation_id}/end/", response_model=SuccessResponse[dict])
 def end_conversation(
     conversation_id: UUID,
-    current_user: ProfileModel = Depends(get_current_user),
+    current_user: AuthenticatedUser = Depends(get_current_user),
     service: ConversationService = Depends(get_conversation_service),
 ):
     """대화 종료"""
@@ -524,7 +1232,7 @@ def end_conversation(
 def update_conversation_title(
     conversation_id: UUID,
     request: UpdateTitleRequest,
-    current_user: ProfileModel = Depends(get_current_user),
+    current_user: AuthenticatedUser = Depends(get_current_user),
     service: ConversationService = Depends(get_conversation_service),
 ):
     """대화 제목 수정"""
@@ -540,12 +1248,19 @@ def update_conversation_title(
 @router.delete("/{conversation_id}/", response_model=SuccessResponse[dict])
 def delete_conversation(
     conversation_id: UUID,
-    current_user: ProfileModel = Depends(get_current_user),
+    current_user: AuthenticatedUser = Depends(get_current_user),
     service: ConversationService = Depends(get_conversation_service),
 ):
     """대화 삭제"""
     try:
-        service.repository.delete_by_id(str(conversation_id), current_user.id)
+        audio_message_ids = service.repository.delete_by_id(str(conversation_id), current_user.id)
+        cache = cache_files()
+        if cache:
+            for message_id in audio_message_ids:
+                try:
+                    cache.delete_message(message_id)
+                except (ValueError, OSError):
+                    logger.exception("Conversation audio cache deletion failed", extra={"message_id": message_id})
         return SuccessResponse(data={}, message="대화가 삭제되었습니다")
     except NotFoundException as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
@@ -556,7 +1271,7 @@ def delete_conversation(
 @router.get("/messages/{message_id}/grammar-feedback/stream")
 async def stream_grammar_feedback(
     message_id: UUID,
-    current_user: ProfileModel = Depends(get_current_user_from_token_param),
+    current_user: AuthenticatedUser = Depends(get_current_user_from_token_param),
     service: ConversationService = Depends(get_conversation_service),
 ):
     """선택적 SSE 문법 피드백 스트리밍 (토큰은 쿼리 파라미터로 전달)"""
@@ -609,7 +1324,7 @@ async def stream_grammar_feedback(
 
         except Exception as e:
             # NotFoundException이 아닌 실제 에러만 여기서 처리
-            logger.error(f"SSE stream error for message {message_id}: {str(e)}", exc_info=True)
+            log_exception(e, status_code=500, error_code="SSE_STREAM_ERROR")
             error_data = {'error': str(e)}
             yield f"data: {json.dumps(error_data)}\n\n"
 

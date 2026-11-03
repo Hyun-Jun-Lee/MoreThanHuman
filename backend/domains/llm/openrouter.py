@@ -1,6 +1,9 @@
 """
 OpenRouter LLM Provider
 """
+import json
+from collections.abc import AsyncIterator
+
 import httpx
 
 from config import get_settings
@@ -14,7 +17,8 @@ settings = get_settings()
 class OpenRouterProvider(LLMProvider):
     """OpenRouter API Provider"""
 
-    def __init__(self):
+    def __init__(self, http_client: httpx.AsyncClient):
+        self.http_client = http_client
         self.api_key = settings.openrouter_api_key
         self.base_url = "https://openrouter.ai/api/v1/chat/completions"
 
@@ -35,44 +39,108 @@ class OpenRouterProvider(LLMProvider):
         # Convert LLMMessage to dict format
         messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
 
-        async with httpx.AsyncClient() as client:
-            try:
-                response = await client.post(
-                    self.base_url,
-                    headers={
-                        "Authorization": f"Bearer {self.api_key}",
-                        "HTTP-Referer": "https://github.com/MoreThanHuman",
-                        "Content-Type": "application/json",
-                    },
-                    json={
-                        "model": request.model,
-                        "messages": messages,
-                        "max_tokens": request.max_tokens,
-                        "temperature": request.temperature,
-                        **(request.extra_params or {}),
-                    },
-                    timeout=30.0,
-                )
-                response.raise_for_status()
-                data = response.json()
+        try:
+            response = await self.http_client.post(
+                self.base_url,
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "HTTP-Referer": "https://github.com/MoreThanHuman",
+                    "Content-Type": "application/json",
+                    "X-OpenRouter-Metadata": "enabled",
+                },
+                json={
+                    "model": request.model,
+                    "messages": messages,
+                    "max_tokens": request.max_tokens,
+                    "temperature": request.temperature,
+                    **(request.extra_params or {}),
+                },
+                timeout=30.0,
+            )
+            response.raise_for_status()
+            data = response.json()
+            metadata = data.get("openrouter_metadata")
+            metadata = metadata if isinstance(metadata, dict) else {}
+            endpoints = metadata.get("endpoints")
+            available = endpoints.get("available", []) if isinstance(endpoints, dict) else []
+            selected = next(
+                (item for item in available if isinstance(item, dict) and item.get("selected") is True),
+                None,
+            ) if isinstance(available, list) else None
+            upstream_provider = selected.get("provider") if selected else None
+            service_tier = data.get("service_tier")
+            generation_time = metadata.get("generation_time")
 
-                return LLMResponse(
-                    content=data["choices"][0]["message"]["content"],
-                    model=data.get("model"),
-                    usage=data.get("usage"),
+            return LLMResponse(
+                content=data["choices"][0]["message"]["content"],
+                model=data.get("model"),
+                usage=data.get("usage"),
+                upstream_provider=upstream_provider if isinstance(upstream_provider, str) else None,
+                service_tier=service_tier if isinstance(service_tier, str) else None,
+                upstream_generation_ms=float(generation_time)
+                if isinstance(generation_time, (int, float)) and not isinstance(generation_time, bool)
+                else None,
+            )
+        except httpx.HTTPStatusError as e:
+            response_body = e.response.text[:500] if e.response is not None else ""
+            if e.response.status_code == 429:
+                raise RateLimitException(
+                    "무료 모델의 사용 한도에 도달했습니다. 잠시 후 다시 시도해주세요.",
+                    details={"retry_after": "1-2 minutes"},
                 )
-            except httpx.HTTPStatusError as e:
-                response_body = e.response.text[:500] if e.response is not None else ""
-                if e.response.status_code == 429:
-                    raise RateLimitException(
-                        "무료 모델의 사용 한도에 도달했습니다. 잠시 후 다시 시도해주세요.",
-                        details={"retry_after": "1-2 minutes"},
-                    )
-                raise ExternalAPIException(
-                    f"OpenRouter API call failed: status={e.response.status_code}, body={response_body}"
-                )
-            except httpx.HTTPError as e:
-                raise ExternalAPIException(f"OpenRouter API call failed: {str(e)}")
+            raise ExternalAPIException(
+                f"OpenRouter API call failed: status={e.response.status_code}, body={response_body}"
+            )
+        except httpx.HTTPError as e:
+            raise ExternalAPIException(f"OpenRouter API call failed: {str(e)}")
+
+    async def chat_completion_stream(self, request: LLMRequest) -> AsyncIterator[str]:
+        messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
+        try:
+            async with self.http_client.stream(
+                "POST", self.base_url,
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "HTTP-Referer": "https://github.com/MoreThanHuman",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": request.model, "messages": messages,
+                    "max_tokens": request.max_tokens, "temperature": request.temperature,
+                    **(request.extra_params or {}), "stream": True,
+                },
+                timeout=60.0,
+            ) as response:
+                response.raise_for_status()
+                done = False
+                async for line in response.aiter_lines():
+                    if not line.startswith("data:"):
+                        continue
+                    payload = line[5:].strip()
+                    if payload == "[DONE]":
+                        done = True
+                        break
+                    if not payload:
+                        continue
+                    data = json.loads(payload)
+                    if data.get("error"):
+                        raise ExternalAPIException("OpenRouter stream returned an error event")
+                    choices = data.get("choices") or []
+                    if not choices:
+                        continue
+                    if choices[0].get("finish_reason") == "length":
+                        raise ExternalAPIException("OpenRouter stream reached the output limit")
+                    delta = choices[0].get("delta", {}).get("content")
+                    if isinstance(delta, str) and delta:
+                        yield delta
+                if not done:
+                    raise ExternalAPIException("OpenRouter stream ended before DONE")
+        except httpx.HTTPStatusError as error:
+            if error.response.status_code == 429:
+                raise RateLimitException("무료 모델의 사용 한도에 도달했습니다. 잠시 후 다시 시도해주세요.") from error
+            raise ExternalAPIException(f"OpenRouter stream failed: status={error.response.status_code}") from error
+        except (httpx.HTTPError, ValueError, KeyError, IndexError) as error:
+            raise ExternalAPIException(f"OpenRouter stream failed: {type(error).__name__}") from error
 
     def validate_config(self) -> bool:
         """OpenRouter 설정 검증"""

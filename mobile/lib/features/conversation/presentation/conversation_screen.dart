@@ -1,10 +1,14 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:curitalk/app/router/app_router.dart';
 import 'package:curitalk/app/theme/tokens/tokens.dart';
+import 'package:curitalk/core/copy/copy.dart';
 import 'package:curitalk/core/widgets/widgets.dart';
 import 'package:curitalk/features/conversation/application/conversation_audio_services.dart';
 import 'package:curitalk/features/conversation/application/conversation_controller.dart';
+import 'package:curitalk/features/conversation/application/start_conversation_controller.dart';
+import 'package:curitalk/features/conversation/data/conversation_access_repository.dart';
 import 'package:curitalk/features/conversation/domain/conversation_models.dart';
 import 'package:curitalk/features/conversation/domain/conversation_repository.dart';
 import 'package:curitalk/features/conversation/presentation/widgets/widgets.dart';
@@ -24,6 +28,9 @@ class ConversationScreen extends ConsumerStatefulWidget {
 class _ConversationScreenState extends ConsumerState<ConversationScreen> {
   late final TextEditingController _composerController;
   late final ConversationAudioRecorder _recorder;
+  late final StartConversationController _startController;
+  late final StartStreamPreviewController _startPreviewController;
+  ConversationController? _conversationController;
   Timer? _recordingTimer;
   _VoiceInputState _voiceInput = const _VoiceInputState.idle();
 
@@ -32,6 +39,10 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
     super.initState();
     _composerController = TextEditingController();
     _recorder = ref.read(conversationAudioRecorderProvider);
+    _startController = ref.read(startConversationControllerProvider.notifier);
+    _startPreviewController = ref.read(
+      startStreamPreviewProvider(widget.conversationId).notifier,
+    );
   }
 
   @override
@@ -39,6 +50,13 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
     _recordingTimer?.cancel();
     if (_voiceInput.isRecordingActive) {
       unawaited(_recorder.cancel());
+    }
+    unawaited(_startController.cancelSuggestedStreamFor(widget.conversationId));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _startPreviewController.clear();
+    });
+    if (_conversationController case final controller?) {
+      unawaited(controller.cancelActiveStream());
     }
     _composerController.dispose();
     super.dispose();
@@ -49,28 +67,61 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
     final AsyncValue<ConversationState> conversation = ref.watch(
       conversationControllerProvider(widget.conversationId),
     );
-    final bool isSending = conversation.value?.isSending == true;
+    _conversationController = ref.read(
+      conversationControllerProvider(widget.conversationId).notifier,
+    );
+    final AppCopy copy = AppCopy.of(context);
+    final StartStreamPreview? startPreview = ref.watch(
+      startStreamPreviewProvider(widget.conversationId),
+    );
+    if (startPreview?.isTextFullyDisplayed == true &&
+        conversation.value?.messages.any(
+              (message) =>
+                  message.role == ConversationMessageRole.assistant &&
+                  message.content == startPreview!.fullAssistantText,
+            ) ==
+            true) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _startPreviewController.clear();
+      });
+    }
+    final bool isSending =
+        conversation.value?.isSending == true || startPreview?.isActive == true;
+    final bool suggestedAudioFailed = ref.watch(
+      suggestedAudioFailureProvider(widget.conversationId),
+    );
+    final access = ref
+        .watch(conversationTurnAccessProvider(widget.conversationId))
+        .value;
+    final bool turnLimitReached = access?.canSend == false;
 
     return AppScaffold(
       appBar: AppBar(
         leading: IconButton(
-          tooltip: 'Back to home',
+          tooltip: copy.backLabel,
           icon: const Icon(Icons.arrow_back_rounded),
           onPressed: _goBack,
         ),
-        title: const Text('Conversation'),
+        title: Text(copy.conversationTitle),
       ),
       bottomNavigationBar: AppBottomActionBar(
         child: ChatComposer(
           controller: _composerController,
-          enabled: conversation.hasValue,
+          enabled:
+              conversation.hasValue &&
+              conversation.value?.isLoadingOlder != true &&
+              conversation.value?.failedTurnId == null &&
+              conversation.value?.pendingTurnId == null &&
+              conversation.value?.pendingRequestId == null &&
+              startPreview?.isActive != true &&
+              !turnLimitReached,
           isSending: isSending,
           isRecording: _voiceInput.phase == _VoiceInputPhase.recording,
           isVoiceBusy: _voiceInput.isBusy,
           recordingElapsedText: _voiceInput.phase == _VoiceInputPhase.recording
               ? _formatElapsed(_voiceInput.elapsed)
               : null,
-          voiceStatusLabel: _voiceInput.statusLabel,
+          voiceStatusLabel: _voiceInput.statusLabel(copy),
           onSend: _sendMessage,
           onVoiceInput: _toggleVoiceInput,
           onCancelVoiceInput: _voiceInput.isRecordingActive
@@ -79,11 +130,24 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
         ),
       ),
       body: conversation.when(
-        loading: () =>
-            const AppAsyncStateView.loading(message: 'Loading messages...'),
+        loading: () => startPreview == null
+            ? AppAsyncStateView.loading(message: copy.loadingMessages)
+            : _ConversationMessageList(
+                key: ValueKey(widget.conversationId),
+                conversationId: widget.conversationId,
+                state: _withStartPreview(
+                  const ConversationState.empty(),
+                  startPreview,
+                ),
+                voiceFailureReason: null,
+                canLoadOlder: false,
+                turnLimitReached: false,
+                locked: false,
+                suggestedAudioFailed: false,
+              ),
         error: (_, _) => AppAsyncStateView.error(
-          title: 'Could not load this conversation.',
-          message: 'Check your connection and try again.',
+          title: copy.loadConversationFailedTitle,
+          message: copy.connectionRetryMessage,
           onRetry: () => ref
               .read(
                 conversationControllerProvider(widget.conversationId).notifier,
@@ -91,21 +155,80 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
               .reload(),
         ),
         data: (ConversationState state) => _ConversationMessageList(
+          key: ValueKey(widget.conversationId),
           conversationId: widget.conversationId,
-          state: state,
-          voiceErrorMessage: _voiceInput.errorMessage,
+          state: _withStartPreview(state, startPreview),
+          voiceFailureReason: _voiceInput.failureReason,
+          canLoadOlder: !_voiceInput.isRecordingActive && !_voiceInput.isBusy,
+          turnLimitReached: turnLimitReached,
+          locked: access?.locked == true,
+          suggestedAudioFailed: suggestedAudioFailed,
         ),
       ),
     );
   }
 
+  ConversationState _withStartPreview(
+    ConversationState state,
+    StartStreamPreview? preview,
+  ) {
+    if (preview == null) return state;
+    final messages = <ConversationMessage>[...state.messages];
+    if (preview.userText != null &&
+        !messages.any((message) => message.id == preview.userMessageId)) {
+      messages.add(
+        ConversationMessage(
+          id: preview.userMessageId ?? 'start-user',
+          conversationId: widget.conversationId,
+          role: ConversationMessageRole.user,
+          content: preview.userText!,
+          createdAt: DateTime.now(),
+          isLocalPending: true,
+        ),
+      );
+    }
+    messages.removeWhere(
+      (message) => message.role == ConversationMessageRole.assistant,
+    );
+    if (preview.assistantText.isNotEmpty) {
+      messages.add(
+        ConversationMessage(
+          id: 'start-assistant',
+          conversationId: widget.conversationId,
+          role: ConversationMessageRole.assistant,
+          content: preview.assistantText,
+          createdAt: DateTime.now(),
+          isLocalPending: preview.isActive,
+        ),
+      );
+    }
+    return state.copyWith(
+      messages: messages,
+      isSending: preview.isActive || state.isSending,
+      revealingAssistantId: preview.assistantText.isNotEmpty
+          ? 'start-assistant'
+          : null,
+      minVisibleAssistantChars: preview.minVisibleAssistantChars,
+    );
+  }
+
   void _sendMessage(String message) {
     _composerController.clear();
-    unawaited(
-      ref
-          .read(conversationControllerProvider(widget.conversationId).notifier)
-          .send(message),
+    final controller = ref.read(
+      conversationControllerProvider(widget.conversationId).notifier,
     );
+    unawaited(() async {
+      await _startController.cancelSuggestedStreamFor(widget.conversationId);
+      if (!mounted) return;
+      await controller.send(message);
+      if (!mounted || _composerController.text.isNotEmpty) return;
+      final current = ref
+          .read(conversationControllerProvider(widget.conversationId))
+          .value;
+      if (current?.unconfirmedText == message) {
+        _composerController.text = message;
+      }
+    }());
   }
 
   Future<void> _toggleVoiceInput() async {
@@ -116,6 +239,8 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
         _voiceInput.phase == _VoiceInputPhase.failed ||
         _voiceInput.phase == _VoiceInputPhase.permissionDenied) {
       try {
+        await _startController.cancelSuggestedStreamFor(widget.conversationId);
+        if (!mounted) return;
         setState(() => _voiceInput = const _VoiceInputState.starting());
         await _recorder.start();
         if (!mounted) {
@@ -132,8 +257,8 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
             () => _voiceInput =
                 error.reason ==
                     ConversationAudioExceptionReason.permissionDenied
-                ? _VoiceInputState.permissionDenied(error.message)
-                : _VoiceInputState.failed(error.message),
+                ? _VoiceInputState.permissionDenied(error.reason)
+                : _VoiceInputState.failed(error.reason),
           );
         }
       }
@@ -145,11 +270,18 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
     }
 
     try {
+      final Duration recordingElapsed = _voiceInput.elapsed;
       _stopRecordingTimer();
       setState(() => _voiceInput = const _VoiceInputState.stopping());
       final ConversationAudioFile audioFile = await _recorder.stop();
       if (!mounted) {
         return;
+      }
+      if (recordingElapsed < minimumVoiceRecordingDuration) {
+        throw const ConversationAudioException(
+          voiceNotRecognizedMessage,
+          reason: ConversationAudioExceptionReason.emptyRecording,
+        );
       }
       if (audioFile.bytes.isEmpty) {
         throw const ConversationAudioException(
@@ -166,7 +298,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
       if (mounted) {
         _stopRecordingTimer();
         setState(() {
-          _voiceInput = _VoiceInputState.failed(error.message);
+          _voiceInput = _VoiceInputState.failed(error.reason);
         });
       }
     }
@@ -189,13 +321,13 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
 
   void _startRecordingTimer() {
     _recordingTimer?.cancel();
-    _recordingTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+    _recordingTimer = Timer.periodic(voiceRecordingTimerTick, (_) {
       if (!mounted) {
         return;
       }
       setState(() {
         _voiceInput = _voiceInput.copyWith(
-          elapsed: _voiceInput.elapsed + const Duration(seconds: 1),
+          elapsed: _voiceInput.elapsed + voiceRecordingTimerTick,
         );
       });
     });
@@ -236,7 +368,7 @@ class _VoiceInputState {
   const _VoiceInputState._({
     required this.phase,
     this.elapsed = Duration.zero,
-    this.errorMessage,
+    this.failureReason,
   });
 
   const _VoiceInputState.idle() : this._(phase: _VoiceInputPhase.idle);
@@ -250,15 +382,16 @@ class _VoiceInputState {
 
   const _VoiceInputState.sending() : this._(phase: _VoiceInputPhase.sending);
 
-  const _VoiceInputState.failed(String message)
-    : this._(phase: _VoiceInputPhase.failed, errorMessage: message);
+  const _VoiceInputState.failed(ConversationAudioExceptionReason reason)
+    : this._(phase: _VoiceInputPhase.failed, failureReason: reason);
 
-  const _VoiceInputState.permissionDenied(String message)
-    : this._(phase: _VoiceInputPhase.permissionDenied, errorMessage: message);
+  const _VoiceInputState.permissionDenied(
+    ConversationAudioExceptionReason reason,
+  ) : this._(phase: _VoiceInputPhase.permissionDenied, failureReason: reason);
 
   final _VoiceInputPhase phase;
   final Duration elapsed;
-  final String? errorMessage;
+  final ConversationAudioExceptionReason? failureReason;
 
   bool get isBusy =>
       phase == _VoiceInputPhase.starting ||
@@ -270,12 +403,12 @@ class _VoiceInputState {
       phase == _VoiceInputPhase.recording ||
       phase == _VoiceInputPhase.stopping;
 
-  String? get statusLabel {
+  String? statusLabel(AppCopy copy) {
     return switch (phase) {
-      _VoiceInputPhase.starting => 'Starting recording...',
-      _VoiceInputPhase.recording => 'Recording...',
-      _VoiceInputPhase.stopping => 'Finishing recording...',
-      _VoiceInputPhase.sending => 'Sending voice message...',
+      _VoiceInputPhase.starting => copy.voiceStatus('starting'),
+      _VoiceInputPhase.recording => copy.voiceStatus('recording'),
+      _VoiceInputPhase.stopping => copy.voiceStatus('stopping'),
+      _VoiceInputPhase.sending => copy.voiceStatus('sending'),
       _ => null,
     };
   }
@@ -284,85 +417,255 @@ class _VoiceInputState {
     return _VoiceInputState._(
       phase: phase,
       elapsed: elapsed ?? this.elapsed,
-      errorMessage: errorMessage,
+      failureReason: failureReason,
     );
   }
 }
 
-class _ConversationMessageList extends ConsumerWidget {
+class _ConversationMessageList extends ConsumerStatefulWidget {
   const _ConversationMessageList({
     required this.conversationId,
     required this.state,
-    this.voiceErrorMessage,
+    required this.canLoadOlder,
+    required this.turnLimitReached,
+    required this.locked,
+    required this.suggestedAudioFailed,
+    this.voiceFailureReason,
+    super.key,
   });
 
   final String conversationId;
   final ConversationState state;
-  final String? voiceErrorMessage;
+  final bool canLoadOlder;
+  final bool turnLimitReached;
+  final bool locked;
+  final bool suggestedAudioFailed;
+  final ConversationAudioExceptionReason? voiceFailureReason;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_ConversationMessageList> createState() =>
+      _ConversationMessageListState();
+}
+
+class _ConversationMessageListState
+    extends ConsumerState<_ConversationMessageList> {
+  final ScrollController _scrollController = ScrollController(
+    keepScrollOffset: false,
+  );
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ConversationState state = widget.state;
+    final String conversationId = widget.conversationId;
+    final ConversationAudioExceptionReason? voiceFailureReason =
+        widget.voiceFailureReason;
+    final AppCopy copy = AppCopy.of(context);
     if (state.messages.isEmpty &&
         state.failedMessage == null &&
         state.failedAudioFile == null &&
-        state.errorMessage == null &&
+        state.failureReason == null &&
         !state.isSending) {
-      return const AppAsyncStateView.empty(
-        title: 'No messages yet.',
-        message: 'Send your first reply to begin practicing.',
+      final AppCopy copy = AppCopy.of(context);
+      return AppAsyncStateView.empty(
+        title: copy.noMessagesTitle,
+        message: copy.noMessagesMessage,
       );
     }
 
     final List<Widget> children = <Widget>[
       const SizedBox(height: AppSpacing.lg),
+      if (state.hasOlderMessages) ...<Widget>[
+        if (state.olderMessagesFailed)
+          Text(copy.loadOlderMessagesFailed, textAlign: TextAlign.center),
+        TextButton(
+          onPressed:
+              state.isLoadingOlder || state.isSending || !widget.canLoadOlder
+              ? null
+              : () => ref
+                    .read(
+                      conversationControllerProvider(conversationId).notifier,
+                    )
+                    .loadOlderMessages(),
+          child: Text(
+            state.isLoadingOlder
+                ? copy.loadingMessages
+                : copy.loadOlderMessagesLabel,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+      ],
       for (final ConversationMessage message in state.messages) ...<Widget>[
-        ConversationMessageTile(key: ValueKey(message.id), message: message),
+        ConversationMessageTile(
+          key: message.id == state.revealingAssistantId
+              ? const ValueKey('streaming-assistant')
+              : ValueKey(message.id),
+          message: message,
+          revealText: message.id == state.revealingAssistantId,
+          minVisibleChars: state.minVisibleAssistantChars,
+          onVisibleChars: message.id == state.revealingAssistantId
+              ? (count) {
+                  if (message.id == 'start-assistant') {
+                    ref
+                        .read(startConversationControllerProvider.notifier)
+                        .onConversationFrameReady(conversationId, count);
+                  } else {
+                    ref
+                        .read(
+                          conversationControllerProvider(
+                            conversationId,
+                          ).notifier,
+                        )
+                        .onAssistantTextFrameReady(message.id, count);
+                  }
+                }
+              : null,
+          autoPlayAudio: state.autoPlayAudioMessageIds.contains(message.id),
+          onAutoPlayStarted: () => ref
+              .read(conversationControllerProvider(conversationId).notifier)
+              .consumeAutoPlayAudio(message.id),
+          onReplayAudio: (messageId) => ref
+              .read(conversationControllerProvider(conversationId).notifier)
+              .playAssistantAudio(messageId),
+          onStopAudio: (messageId) => ref
+              .read(conversationControllerProvider(conversationId).notifier)
+              .stopAssistantAudio(messageId),
+        ),
         const SizedBox(height: AppSpacing.md),
       ],
       if (state.isSending) ...<Widget>[
         const TypingIndicator(),
         const SizedBox(height: AppSpacing.md),
       ],
-      if (state.failedMessage != null || state.errorMessage != null)
+      if (state.failedMessage != null || state.failureReason != null)
         _SendFailureCard(
-          message: state.errorMessage ?? 'Message could not be sent.',
-          onRetry: () {
-            final ConversationController controller = ref.read(
-              conversationControllerProvider(conversationId).notifier,
-            );
-            if (state.failedAudioFile != null) {
-              controller.retryFailedAudio();
-            } else {
-              controller.retryFailedMessage();
-            }
-          },
+          reason:
+              state.failureReason ??
+              ConversationSendFailureReason.textRequestFailed,
+          onRetry:
+              state.failureReason ==
+                      ConversationSendFailureReason.turnLimitReached ||
+                  state.failureReason ==
+                      ConversationSendFailureReason.conversationLocked
+              ? null
+              : () {
+                  final ConversationController controller = ref.read(
+                    conversationControllerProvider(conversationId).notifier,
+                  );
+                  if (state.failedAudioFile != null) {
+                    controller.retryFailedAudio();
+                  } else {
+                    controller.retryFailedMessage();
+                  }
+                },
         ),
-      if (state.audioErrorMessage != null) ...<Widget>[
+      if (state.pendingTurnId != null ||
+          state.pendingRequestId != null) ...<Widget>[
         AppColorBlockCard(
           color: AppPalette.blockCream,
-          child: Text(state.audioErrorMessage!, style: AppTypography.bodySm),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              const Text('답변 상태를 확인하고 있어요.', style: AppTypography.bodySm),
+              TextButton(
+                onPressed: () => ref
+                    .read(
+                      conversationControllerProvider(conversationId).notifier,
+                    )
+                    .refreshTurnStatus(),
+                child: const Text('상태 확인'),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: AppSpacing.md),
       ],
-      if (voiceErrorMessage != null) ...<Widget>[
+      if (widget.turnLimitReached &&
+          state.failureReason !=
+              ConversationSendFailureReason.turnLimitReached &&
+          state.failureReason !=
+              ConversationSendFailureReason.conversationLocked)
+        AppColorBlockCard(
+          color: AppPalette.blockCream,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                widget.locked
+                    ? copy.conversationLockedReadOnly
+                    : copy.conversationTurnLimitReached,
+                style: AppTypography.bodySm,
+              ),
+              if (Platform.isIOS)
+                TextButton(
+                  onPressed: () => context.push(AppRoute.paywall),
+                  child: Text(copy.subscriptionTitle),
+                ),
+            ],
+          ),
+        ),
+      if (state.assistantAudioStatus != null ||
+          widget.suggestedAudioFailed) ...<Widget>[
+        AppColorBlockCard(
+          color: AppPalette.blockCream,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                AppCopy.of(context).failureMessage('assistantAudioUnavailable'),
+                style: AppTypography.bodySm,
+              ),
+              if (state.audioRetryMessageId != null)
+                OutlinedButton.icon(
+                  onPressed: state.isSending
+                      ? null
+                      : () => ref
+                            .read(
+                              conversationControllerProvider(
+                                conversationId,
+                              ).notifier,
+                            )
+                            .retryAssistantAudio(),
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('음성 다시 듣기'),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+      ],
+      if (voiceFailureReason != null) ...<Widget>[
         AppColorBlockCard(
           color: AppPalette.blockPink,
-          child: Text(voiceErrorMessage!, style: AppTypography.bodySm),
+          child: Text(
+            AppCopy.of(context).failureMessage(voiceFailureReason.name),
+            style: AppTypography.bodySm,
+          ),
         ),
         const SizedBox(height: AppSpacing.md),
       ],
       const SizedBox(height: AppSpacing.xl),
     ];
 
-    return ListView(children: children);
+    // 아래쪽을 스크롤 원점으로 삼아 높이 계산 후 점프 없이 최신 대화를 보여줘요.
+    return ListView(
+      controller: _scrollController,
+      reverse: true,
+      children: children.reversed.toList(growable: false),
+    );
   }
 }
 
 class _SendFailureCard extends StatelessWidget {
-  const _SendFailureCard({required this.message, required this.onRetry});
+  const _SendFailureCard({required this.reason, required this.onRetry});
 
-  final String message;
-  final VoidCallback onRetry;
+  final ConversationSendFailureReason reason;
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -371,13 +674,18 @@ class _SendFailureCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text(message, style: AppTypography.bodySm),
-          const SizedBox(height: AppSpacing.sm),
-          OutlinedButton.icon(
-            onPressed: onRetry,
-            icon: const Icon(Icons.refresh_rounded),
-            label: const Text('Retry'),
+          Text(
+            AppCopy.of(context).failureMessage(reason.name),
+            style: AppTypography.bodySm,
           ),
+          if (onRetry != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            OutlinedButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh_rounded),
+              label: Text(AppCopy.of(context).retryLabel),
+            ),
+          ],
         ],
       ),
     );

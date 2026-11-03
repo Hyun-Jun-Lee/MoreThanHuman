@@ -6,6 +6,8 @@ class AppScaffold extends StatelessWidget {
     required this.body,
     this.appBar,
     this.bottomNavigationBar,
+    this.floatingActionButton,
+    this.floatingActionButtonLocation,
     this.backgroundColor,
     this.padding = const EdgeInsets.symmetric(
       horizontal: AppSpacing.screenPadding,
@@ -19,6 +21,8 @@ class AppScaffold extends StatelessWidget {
   final Widget body;
   final PreferredSizeWidget? appBar;
   final Widget? bottomNavigationBar;
+  final Widget? floatingActionButton;
+  final FloatingActionButtonLocation? floatingActionButtonLocation;
   final Color? backgroundColor;
   final EdgeInsetsGeometry padding;
   final bool? safeAreaTop;
@@ -37,6 +41,8 @@ class AppScaffold extends StatelessWidget {
         child: Padding(padding: padding, child: body),
       ),
       bottomNavigationBar: bottomNavigationBar,
+      floatingActionButton: floatingActionButton,
+      floatingActionButtonLocation: floatingActionButtonLocation,
     );
   }
 }

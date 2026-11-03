@@ -1,0 +1,163 @@
+import 'package:curitalk/app/navigation/main_shell.dart';
+import 'package:curitalk/app/router/app_router.dart';
+import 'package:curitalk/app/theme/app_theme.dart';
+import 'package:curitalk/core/widgets/main_tab_scope.dart';
+import 'package:curitalk/features/auth/auth.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+
+void main() {
+  testWidgets('tabs retain scroll position and reselection scrolls to top', (
+    tester,
+  ) async {
+    final router = _router();
+    addTearDown(router.dispose);
+    await tester.pumpWidget(_testApp(router));
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(ListView), const Offset(0, -700));
+    await tester.pumpAndSettle();
+    final controller = MainTabScope.maybeOf(
+      tester.element(find.byType(ListView)),
+    )!.controllers[0];
+    final offset = controller.offset;
+    expect(offset, greaterThan(0));
+    await tester.tap(find.text('Profile'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Home'));
+    await tester.pumpAndSettle();
+    expect(controller.offset, offset);
+    await tester.tap(find.text('Home'));
+    await tester.pumpAndSettle();
+    expect(controller.offset, 0);
+  });
+
+  for (final origin in [AppRoute.home, AppRoute.profile]) {
+    for (final preparation in [AppRoute.topicInput, AppRoute.roleplaySetup]) {
+      testWidgets(
+        '$origin returns from $preparation without completed preparation',
+        (tester) async {
+          final router = _router(initialLocation: origin);
+          addTearDown(router.dispose);
+          await tester.pumpWidget(_testApp(router));
+          await tester.pumpAndSettle();
+          router.push(preparation);
+          await tester.pumpAndSettle();
+          expect(find.byType(NavigationBar), findsNothing);
+          expect(
+            tester
+                .widget<MainTabScope>(
+                  find.byType(MainTabScope, skipOffstage: false),
+                )
+                .index,
+            -1,
+          );
+          if (preparation == AppRoute.topicInput) {
+            router.push(AppRoute.topicPrep);
+            await tester.pumpAndSettle();
+          }
+          await tester.tap(find.text('Finish preparation'));
+          await tester.pumpAndSettle();
+          expect(find.text('Conversation'), findsOneWidget);
+          expect(find.byType(NavigationBar), findsNothing);
+          expect(
+            tester
+                .widget<MainTabScope>(
+                  find.byType(MainTabScope, skipOffstage: false),
+                )
+                .index,
+            -1,
+          );
+          router.pop();
+          await tester.pumpAndSettle();
+          expect(router.routeInformationProvider.value.uri.path, origin);
+          expect(find.text('Finish preparation'), findsNothing);
+          expect(find.byType(NavigationBar), findsOneWidget);
+          expect(router.canPop(), isFalse);
+        },
+      );
+    }
+  }
+
+  testWidgets('history opens above home and conversation returns to history', (
+    tester,
+  ) async {
+    final router = _router();
+    addTearDown(router.dispose);
+    await tester.pumpWidget(_testApp(router));
+    await tester.pumpAndSettle();
+    router.push(AppRoute.history);
+    await tester.pumpAndSettle();
+    expect(find.byType(NavigationBar), findsNothing);
+    router.push(AppRoute.topicInput);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Finish preparation'));
+    await tester.pumpAndSettle();
+    router.pop();
+    await tester.pumpAndSettle();
+    expect(find.text('History'), findsOneWidget);
+    expect(find.byType(NavigationBar), findsNothing);
+    router.pop();
+    await tester.pumpAndSettle();
+    expect(router.routeInformationProvider.value.uri.path, AppRoute.home);
+    expect(find.byType(NavigationBar), findsOneWidget);
+  });
+}
+
+GoRouter _router({String initialLocation = AppRoute.home}) => GoRouter(
+  initialLocation: initialLocation,
+  routes: [
+    StatefulShellRoute.indexedStack(
+      builder: (_, _, shell) => MainShell(navigationShell: shell),
+      branches: [
+        for (final (index, path) in [AppRoute.home, AppRoute.profile].indexed)
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: path,
+                builder: (context, _) => ListView.builder(
+                  controller: MainTabScope.maybeOf(context)!.controllers[index],
+                  itemCount: 40,
+                  itemExtent: 60,
+                  itemBuilder: (_, item) => Text('$path $item'),
+                ),
+              ),
+            ],
+          ),
+      ],
+    ),
+    GoRoute(
+      path: AppRoute.history,
+      builder: (_, _) => const Scaffold(body: Text('History')),
+    ),
+    for (final path in [
+      AppRoute.topicInput,
+      AppRoute.topicPrep,
+      AppRoute.roleplaySetup,
+    ])
+      GoRoute(
+        path: path,
+        builder: (context, _) => Scaffold(
+          body: TextButton(
+            onPressed: () => openStartedConversation(context, 'created'),
+            child: const Text('Finish preparation'),
+          ),
+        ),
+      ),
+    GoRoute(
+      path: '${AppRoute.conversation}/:id',
+      builder: (_, _) => const Scaffold(body: Text('Conversation')),
+    ),
+  ],
+);
+
+Widget _testApp(GoRouter router) => ProviderScope(
+  overrides: [authControllerProvider.overrideWith(_ShellAuthController.new)],
+  child: MaterialApp.router(theme: AppTheme.light, routerConfig: router),
+);
+
+class _ShellAuthController extends AuthController {
+  @override
+  Future<AuthSession> build() async => const AuthSession.unauthenticated();
+}

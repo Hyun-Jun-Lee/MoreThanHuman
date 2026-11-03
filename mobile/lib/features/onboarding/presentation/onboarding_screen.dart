@@ -1,5 +1,7 @@
 import 'package:curitalk/app/theme/tokens/tokens.dart';
+import 'package:curitalk/core/copy/copy.dart';
 import 'package:curitalk/core/widgets/widgets.dart';
+import 'package:curitalk/features/language/language.dart';
 import 'package:curitalk/features/onboarding/application/onboarding_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,11 +14,26 @@ class OnboardingScreen extends ConsumerStatefulWidget {
 }
 
 class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
-  static const int _pageCount = 3;
+  static const int _pageCount = 4;
 
   final PageController _pageController = PageController();
   int _currentIndex = 0;
   bool _isCompleting = false;
+  bool _initializedLanguage = false;
+  LearningLanguageContext _selectedLanguage =
+      LearningLanguageContext.defaultContext;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_initializedLanguage) {
+      return;
+    }
+    _selectedLanguage = defaultLanguageContextForLocale(
+      Localizations.localeOf(context).languageCode,
+    );
+    _initializedLanguage = true;
+  }
 
   @override
   void dispose() {
@@ -30,7 +47,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     }
     setState(() => _isCompleting = true);
     try {
-      await ref.read(onboardingControllerProvider.notifier).complete();
+      await ref
+          .read(onboardingControllerProvider.notifier)
+          .complete(_selectedLanguage);
     } finally {
       if (mounted) {
         setState(() => _isCompleting = false);
@@ -51,6 +70,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final AppCopy appCopy = AppCopy.of(context);
+    final AppOnboardingCopy copy = appCopy.onboarding;
+
     return Scaffold(
       body: SafeArea(
         child: Padding(
@@ -74,13 +96,13 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                           curve: Curves.easeOut,
                         ),
                         icon: const Icon(Icons.arrow_back_rounded),
-                        label: const Text('BACK'),
+                        label: Text(copy.backLabel),
                       )
                     else
                       const SizedBox.shrink(),
                     TextButton(
                       onPressed: _isCompleting ? null : _complete,
-                      child: const Text('SKIP'),
+                      child: Text(copy.skipLabel),
                     ),
                   ],
                 ),
@@ -92,10 +114,17 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                   onPageChanged: (int index) {
                     setState(() => _currentIndex = index);
                   },
-                  children: const <Widget>[
-                    _InterestPage(),
-                    _TopicPrepPage(),
-                    _FeedbackPage(),
+                  children: <Widget>[
+                    _LanguagePairPage(
+                      copy: copy.languagePair,
+                      selected: _selectedLanguage,
+                      onChanged: (LearningLanguageContext next) {
+                        setState(() => _selectedLanguage = next);
+                      },
+                    ),
+                    _InterestPage(copy: copy.interest),
+                    _TopicPrepPage(copy: copy.topicPrep),
+                    _FeedbackPage(copy: copy.feedback),
                   ],
                 ),
               ),
@@ -104,8 +133,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               const SizedBox(height: AppSpacing.lg),
               AppPrimaryButton(
                 label: _currentIndex == _pageCount - 1
-                    ? 'GET STARTED'
-                    : 'CONTINUE',
+                    ? copy.getStartedLabel
+                    : copy.continueLabel,
                 isLoading: _isCompleting,
                 trailing: _currentIndex == _pageCount - 1
                     ? null
@@ -120,41 +149,64 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   }
 }
 
-class _InterestPage extends StatelessWidget {
-  const _InterestPage();
+class _LanguagePairPage extends StatelessWidget {
+  const _LanguagePairPage({
+    required this.copy,
+    required this.selected,
+    required this.onChanged,
+  });
+
+  final AppOnboardingPageCopy copy;
+  final LearningLanguageContext selected;
+  final ValueChanged<LearningLanguageContext> onChanged;
 
   @override
   Widget build(BuildContext context) {
     return _OnboardingPageLayout(
-      title: 'Talk about what\nyou actually care about.',
-      description:
-          'Practice English with news, hobbies, sports, travel, or anything on your mind.',
+      title: copy.title,
+      description: copy.description,
+      illustration: LanguagePairSelector(
+        selected: selected,
+        onChanged: onChanged,
+      ),
+    );
+  }
+}
+
+class _InterestPage extends StatelessWidget {
+  const _InterestPage({required this.copy});
+
+  final AppOnboardingInterestCopy copy;
+
+  @override
+  Widget build(BuildContext context) {
+    return _OnboardingPageLayout(
+      title: copy.title,
+      description: copy.description,
       illustration: AppColorBlockCard(
         color: AppPalette.blockLilacSoft,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
             _ChatLine(
-              text: "Where are you heading?",
+              text: copy.leftMessage,
               alignment: Alignment.centerLeft,
               color: Theme.of(context).colorScheme.surface,
             ),
             const SizedBox(height: AppSpacing.md),
-            const _ChatLine(
-              text: "I'm going to Osaka next week!",
+            _ChatLine(
+              text: copy.rightMessage,
               alignment: Alignment.centerRight,
               color: AppPalette.primary,
               textColor: AppPalette.onPrimary,
             ),
             const SizedBox(height: AppSpacing.lg),
-            const Wrap(
+            Wrap(
               alignment: WrapAlignment.center,
               spacing: AppSpacing.xs,
               runSpacing: AppSpacing.xs,
               children: <Widget>[
-                Chip(label: Text('OSAKA FOOD')),
-                Chip(label: Text('BASEBALL')),
-                Chip(label: Text('AI NEWS')),
+                for (final String chip in copy.chips) Chip(label: Text(chip)),
               ],
             ),
           ],
@@ -165,30 +217,25 @@ class _InterestPage extends StatelessWidget {
 }
 
 class _TopicPrepPage extends StatelessWidget {
-  const _TopicPrepPage();
+  const _TopicPrepPage({required this.copy});
+
+  final AppOnboardingTopicPrepCopy copy;
 
   @override
   Widget build(BuildContext context) {
     return _OnboardingPageLayout(
-      title: 'Get ready before\nyou speak.',
-      description:
-          'Curitalk gathers helpful context and gives you starter questions, so beginning feels easy.',
-      illustration: const AppColorBlockCard(
+      title: copy.title,
+      description: copy.description,
+      illustration: AppColorBlockCard(
         color: AppPalette.blockLime,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            AppSectionLabel('Topic summary'),
-            SizedBox(height: AppSpacing.lg),
-            Text(
-              'Navigating\nCareer Transitions',
-              style: AppTypography.headlineLg,
-            ),
-            SizedBox(height: AppSpacing.lg),
-            Text(
-              'Three useful questions are ready for your conversation.',
-              style: AppTypography.bodySm,
-            ),
+            AppSectionLabel(copy.sectionLabel),
+            const SizedBox(height: AppSpacing.lg),
+            Text(copy.topicTitle, style: AppTypography.headlineLg),
+            const SizedBox(height: AppSpacing.lg),
+            Text(copy.helperText, style: AppTypography.bodySm),
           ],
         ),
       ),
@@ -197,35 +244,30 @@ class _TopicPrepPage extends StatelessWidget {
 }
 
 class _FeedbackPage extends StatelessWidget {
-  const _FeedbackPage();
+  const _FeedbackPage({required this.copy});
+
+  final AppOnboardingFeedbackCopy copy;
 
   @override
   Widget build(BuildContext context) {
     return _OnboardingPageLayout(
-      title: 'Improve without\npressure.',
-      description:
-          'See gentle suggestions under your messages while the conversation keeps flowing.',
+      title: copy.title,
+      description: copy.description,
       illustration: Column(
-        children: const <Widget>[
+        children: <Widget>[
           AppColorBlockCard(
             color: AppPalette.blockLilac,
-            child: Text(
-              'I go to Dotonbori yesterday.',
-              style: AppTypography.body,
-            ),
+            child: Text(copy.originalMessage, style: AppTypography.body),
           ),
-          SizedBox(height: AppSpacing.md),
+          const SizedBox(height: AppSpacing.md),
           AppColorBlockCard(
             color: AppPalette.blockCream,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Text(
-                  'Try: I went to Dotonbori yesterday.',
-                  style: AppTypography.body,
-                ),
-                SizedBox(height: AppSpacing.xs),
-                Text('Why: past tense + place', style: AppTypography.bodySm),
+                Text(copy.correctionText, style: AppTypography.body),
+                const SizedBox(height: AppSpacing.xs),
+                Text(copy.reasonText, style: AppTypography.bodySm),
               ],
             ),
           ),

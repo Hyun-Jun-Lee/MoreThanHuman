@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:curitalk/app/theme/tokens/tokens.dart';
+import 'package:curitalk/core/copy/copy.dart';
 import 'package:curitalk/features/conversation/application/conversation_audio_services.dart';
 import 'package:curitalk/features/conversation/application/grammar_feedback_polling_controller.dart';
 import 'package:curitalk/features/conversation/domain/conversation_models.dart';
@@ -10,9 +13,26 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class ConversationMessageTile extends ConsumerWidget {
-  const ConversationMessageTile({required this.message, super.key});
+  const ConversationMessageTile({
+    required this.message,
+    this.autoPlayAudio = false,
+    this.onAutoPlayStarted,
+    this.onReplayAudio,
+    this.onStopAudio,
+    this.revealText = false,
+    this.minVisibleChars = 0,
+    this.onVisibleChars,
+    super.key,
+  });
 
   final ConversationMessage message;
+  final bool autoPlayAudio;
+  final VoidCallback? onAutoPlayStarted;
+  final Future<void> Function(String messageId)? onReplayAudio;
+  final Future<void> Function(String messageId)? onStopAudio;
+  final bool revealText;
+  final int minVisibleChars;
+  final ValueChanged<int>? onVisibleChars;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -21,7 +41,7 @@ class ConversationMessageTile extends ConsumerWidget {
         child: Text(
           message.content,
           textAlign: TextAlign.center,
-          style: AppTypography.captionMono.copyWith(
+          style: AppTypography.caption.copyWith(
             color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
         ),
@@ -37,15 +57,33 @@ class ConversationMessageTile extends ConsumerWidget {
         ChatBubble(
           message: message.content,
           speaker: isUser ? ChatSpeaker.user : ChatSpeaker.assistant,
+          typing: !isUser && revealText,
+          minVisibleChars: minVisibleChars,
+          onVisibleChars: onVisibleChars,
+          footer:
+              !isUser &&
+                  (message.audio != null ||
+                      (message.audioAvailable && onReplayAudio != null))
+              ? _AssistantAudioSlot(
+                  message: message,
+                  autoPlayAudio: autoPlayAudio,
+                  onAutoPlayStarted: onAutoPlayStarted,
+                  onReplayAudio: onReplayAudio,
+                  onStopAudio: onStopAudio,
+                )
+              : null,
         ),
         if (isUser && !message.isLocalPending) ...<Widget>[
           const SizedBox(height: AppSpacing.xs),
           _GrammarFeedbackSlot(message: message),
         ],
-        if (!isUser &&
-            (message.audio != null || message.audioError != null)) ...<Widget>[
+        if (!isUser && message.audioError != null) ...<Widget>[
           const SizedBox(height: AppSpacing.xs),
-          _AssistantAudioSlot(message: message),
+          _FeedbackStatusText(
+            label: AppCopy.of(
+              context,
+            ).failureMessage('assistantAudioUnavailable'),
+          ),
         ],
       ],
     );
@@ -53,9 +91,19 @@ class ConversationMessageTile extends ConsumerWidget {
 }
 
 class _AssistantAudioSlot extends ConsumerStatefulWidget {
-  const _AssistantAudioSlot({required this.message});
+  const _AssistantAudioSlot({
+    required this.message,
+    required this.autoPlayAudio,
+    this.onAutoPlayStarted,
+    this.onReplayAudio,
+    this.onStopAudio,
+  });
 
   final ConversationMessage message;
+  final bool autoPlayAudio;
+  final VoidCallback? onAutoPlayStarted;
+  final Future<void> Function(String messageId)? onReplayAudio;
+  final Future<void> Function(String messageId)? onStopAudio;
 
   @override
   ConsumerState<_AssistantAudioSlot> createState() =>
@@ -64,76 +112,109 @@ class _AssistantAudioSlot extends ConsumerStatefulWidget {
 
 class _AssistantAudioSlotState extends ConsumerState<_AssistantAudioSlot> {
   _AssistantAudioPhase _phase = _AssistantAudioPhase.idle;
-  String? _playbackError;
+  bool _autoPlayStarted = false;
+
+  @override
+  void dispose() {
+    if (widget.message.audio == null &&
+        (_phase == _AssistantAudioPhase.loading ||
+            _phase == _AssistantAudioPhase.playing)) {
+      final stop = widget.onStopAudio;
+      if (stop != null) unawaited(_stopOnDispose(stop, widget.message.id));
+    }
+    super.dispose();
+  }
+
+  Future<void> _stopOnDispose(
+    Future<void> Function(String messageId) stop,
+    String messageId,
+  ) async {
+    try {
+      await stop(messageId);
+    } on Object {
+      // 화면 이탈 중 재생 취소 실패는 이미 사라진 위젯에 표시하지 않아요.
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleAutoPlayIfNeeded();
+  }
 
   @override
   void didUpdateWidget(covariant _AssistantAudioSlot oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (_audioIdentity(oldWidget.message) != _audioIdentity(widget.message)) {
       _phase = _AssistantAudioPhase.idle;
-      _playbackError = null;
+      _autoPlayStarted = false;
     }
+    _scheduleAutoPlayIfNeeded();
   }
 
   @override
   Widget build(BuildContext context) {
-    final VoiceAudioError? audioError = widget.message.audioError;
-    if (audioError != null) {
-      return _FeedbackStatusText(label: audioError.message);
-    }
-
     final VoiceAudioResponse? audio = widget.message.audio;
-    if (audio == null) {
+    if (audio == null &&
+        (!widget.message.audioAvailable || widget.onReplayAudio == null)) {
       return const SizedBox.shrink();
     }
 
     final bool isBusy =
         _phase == _AssistantAudioPhase.loading ||
         _phase == _AssistantAudioPhase.playing;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Align(
-          alignment: Alignment.centerLeft,
-          child: OutlinedButton.icon(
-            onPressed: isBusy ? null : () => _play(audio),
-            icon: _phase == _AssistantAudioPhase.loading
-                ? SizedBox.square(
-                    dimension: AppSize.icon,
-                    child: CircularProgressIndicator(
-                      strokeWidth: AppBorderWidth.focused,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  )
-                : Icon(
-                    _phase == _AssistantAudioPhase.playing
-                        ? Icons.graphic_eq_rounded
-                        : Icons.volume_up_rounded,
-                  ),
-            label: Text(switch (_phase) {
-              _AssistantAudioPhase.loading => 'Loading audio',
-              _AssistantAudioPhase.playing => 'Playing response',
-              _ => 'Play response',
-            }),
+    final AppCopy copy = AppCopy.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.xs),
+      child: Tooltip(
+        message: isBusy ? copy.stopAudioResponseLabel : copy.audioReplayLabel,
+        child: IconButton(
+          onPressed: isBusy ? _stop : _play,
+          iconSize: 20,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+          style: IconButton.styleFrom(
+            backgroundColor: AppPalette.blockLime,
+            foregroundColor: AppPalette.ink,
+            minimumSize: const Size.square(32),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           ),
+          icon: Icon(isBusy ? Icons.stop_rounded : Icons.volume_up_rounded),
         ),
-        if (_playbackError != null) ...<Widget>[
-          const SizedBox(height: AppSpacing.xxs),
-          _FeedbackStatusText(label: _playbackError!),
-        ],
-      ],
+      ),
     );
   }
 
-  Future<void> _play(VoiceAudioResponse audio) async {
+  void _scheduleAutoPlayIfNeeded() {
+    if (!widget.autoPlayAudio || _autoPlayStarted) {
+      return;
+    }
+    final VoiceAudioResponse? audio = widget.message.audio;
+    if (audio == null) {
+      return;
+    }
+    _autoPlayStarted = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        widget.onAutoPlayStarted?.call();
+        unawaited(_play());
+      }
+    });
+  }
+
+  Future<void> _play() async {
+    if (_phase == _AssistantAudioPhase.loading ||
+        _phase == _AssistantAudioPhase.playing) {
+      return;
+    }
     setState(() {
       _phase = _AssistantAudioPhase.loading;
-      _playbackError = null;
     });
     try {
-      final Future<void> playFuture = ref
-          .read(conversationAudioPlayerProvider)
-          .play(audio);
+      final VoiceAudioResponse? audio = widget.message.audio;
+      final Future<void> playFuture = audio != null
+          ? ref.read(conversationAudioPlayerProvider).play(audio)
+          : widget.onReplayAudio!(widget.message.id);
       if (!mounted) {
         return;
       }
@@ -142,22 +223,61 @@ class _AssistantAudioSlotState extends ConsumerState<_AssistantAudioSlot> {
       if (mounted) {
         setState(() => _phase = _AssistantAudioPhase.idle);
       }
-    } on ConversationAudioException catch (error) {
+    } on Object catch (error) {
       if (mounted) {
         setState(() {
           _phase = _AssistantAudioPhase.error;
-          _playbackError = error.message;
         });
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(error.message)));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              AppCopy.of(context).failureMessage(
+                error is ConversationAudioException
+                    ? error.reason.name
+                    : 'assistantAudioUnavailable',
+              ),
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _stop() async {
+    if (_phase != _AssistantAudioPhase.loading &&
+        _phase != _AssistantAudioPhase.playing) {
+      return;
+    }
+    try {
+      if (widget.message.audio != null) {
+        await ref.read(conversationAudioPlayerProvider).stop();
+      } else {
+        await widget.onStopAudio?.call(widget.message.id);
+      }
+    } on Object catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              AppCopy.of(context).failureMessage(
+                error is ConversationAudioException
+                    ? error.reason.name
+                    : 'assistantAudioUnavailable',
+              ),
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _phase = _AssistantAudioPhase.idle);
       }
     }
   }
 
   String _audioIdentity(ConversationMessage message) {
     final VoiceAudioResponse? audio = message.audio;
-    return '${message.id}:${audio?.contentType}:${audio?.format}:${audio?.base64.hashCode}:${message.audioError?.message}';
+    return '${message.id}:${message.audioAvailable}:${audio?.contentType}:${audio?.format}:${audio?.base64.hashCode}:${message.audioError?.message}';
   }
 }
 
@@ -180,18 +300,20 @@ class _GrammarFeedbackSlot extends ConsumerWidget {
     );
     return switch (state.status) {
       GrammarFeedbackPollingStatus.pending => _FeedbackStatusText(
-        label: 'Grammar: checking...',
+        label: AppCopy.of(context).grammarCheckingLabel,
         liveRegion: true,
       ),
       GrammarFeedbackPollingStatus.completed =>
         state.feedback == null
             ? const SizedBox.shrink()
             : _CompletedGrammarFeedback(feedback: state.feedback!),
-      GrammarFeedbackPollingStatus.timeout => const _FeedbackStatusText(
-        label: 'Grammar feedback is taking longer than usual.',
+      GrammarFeedbackPollingStatus.timeout => _FeedbackStatusText(
+        label: AppCopy.of(context).grammarDelayedLabel,
       ),
       GrammarFeedbackPollingStatus.error => _FeedbackStatusText(
-        label: state.errorMessage ?? 'Grammar feedback is unavailable.',
+        label: AppCopy.of(
+          context,
+        ).failureMessage(state.failureReason?.name ?? 'grammarRequestFailed'),
       ),
     };
   }
@@ -205,12 +327,71 @@ class _CompletedGrammarFeedback extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!feedback.hasErrors) {
-      return NaturalFeedbackBadge(onTap: () {});
+      return const NaturalFeedbackBadge();
     }
 
-    return GrammarFeedbackCard(
-      suggestion: feedback.correctedText,
-      explanation: feedback.explanation,
+    return _ExpandableGrammarFeedback(feedback: feedback);
+  }
+}
+
+class _ExpandableGrammarFeedback extends StatefulWidget {
+  const _ExpandableGrammarFeedback({required this.feedback});
+
+  final GrammarFeedback feedback;
+
+  @override
+  State<_ExpandableGrammarFeedback> createState() =>
+      _ExpandableGrammarFeedbackState();
+}
+
+class _ExpandableGrammarFeedbackState
+    extends State<_ExpandableGrammarFeedback> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppCopy copy = AppCopy.of(context);
+    final String tooltip = _expanded
+        ? copy.hideGrammarFeedbackLabel
+        : copy.showGrammarFeedbackLabel;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Tooltip(
+          message: tooltip,
+          child: Semantics(
+            button: true,
+            label: tooltip,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () {
+                setState(() => _expanded = !_expanded);
+              },
+              child: const SizedBox(
+                width: AppSize.touchTarget,
+                height: AppSize.touchTarget,
+                child: Center(
+                  child: Icon(
+                    Icons.error_outline_rounded,
+                    color: AppPalette.semanticError,
+                    size: AppSize.icon,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        if (_expanded) ...<Widget>[
+          const SizedBox(height: AppSpacing.xs),
+          GrammarFeedbackCard(
+            suggestion: widget.feedback.correctedText,
+            explanation: widget.feedback.explanation,
+            errors: widget.feedback.errors,
+          ),
+        ],
+      ],
     );
   }
 }

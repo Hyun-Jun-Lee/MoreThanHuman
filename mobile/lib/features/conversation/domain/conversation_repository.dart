@@ -1,3 +1,4 @@
+import 'package:curitalk/core/diagnostics/latency_trace.dart';
 import 'package:curitalk/features/conversation/domain/conversation_models.dart';
 
 class ConversationAudioFile {
@@ -5,25 +6,38 @@ class ConversationAudioFile {
     required this.bytes,
     required this.filename,
     required this.contentType,
+    this.latencyTrace,
   });
 
   final List<int> bytes;
   final String filename;
   final String contentType;
+  final LatencyTrace? latencyTrace;
 }
 
 abstract interface class ConversationRepository {
-  Future<ConversationResponse> startFreeChat({
+  Future<MultimodalConversationResponse> startFreeChat({
     required String firstMessage,
     String? searchContext,
     String? topic,
     String? conversationDirection,
     String? selectedQuestion,
+    bool includeAudioResponse = true,
   });
 
-  Future<ConversationResponse> startRoleplay({
+  Future<MultimodalConversationResponse> startFreeChatWithAudio({
+    required ConversationAudioFile audioFile,
+    String? searchContext,
+    String? topic,
+    String? conversationDirection,
+    String? selectedQuestion,
+    bool includeAudioResponse = true,
+  });
+
+  Future<MultimodalConversationResponse> startRoleplay({
     required String roleCharacter,
     String? searchContext,
+    bool includeAudioResponse = true,
   });
 
   Future<PaginatedMessages> listMessages(
@@ -40,12 +54,44 @@ abstract interface class ConversationRepository {
   Future<MultimodalMessageResponse> sendTextTurn({
     required String conversationId,
     required String text,
-    bool includeAudioResponse = false,
+    bool includeAudioResponse = true,
   });
 
   Future<MultimodalMessageResponse> sendAudioTurn({
     required String conversationId,
     required ConversationAudioFile audioFile,
-    bool includeAudioResponse = false,
+    bool includeAudioResponse = true,
+  });
+}
+
+abstract interface class CustomFocusConversationRepository {
+  Future<MultimodalConversationResponse> startFreeChatWithCustomFocus({
+    required String firstMessage,
+    String? searchContext,
+    String? topic,
+    String? selectedQuestion,
+    required String customFocus,
+    bool includeAudioResponse = true,
+  });
+
+  Future<MultimodalConversationResponse> startFreeChatWithAudioAndCustomFocus({
+    required ConversationAudioFile audioFile,
+    String? searchContext,
+    String? topic,
+    String? selectedQuestion,
+    required String customFocus,
+    bool includeAudioResponse = true,
+  });
+}
+
+abstract interface class ConversationDeletionRepository {
+  Future<void> deleteConversation(String conversationId);
+}
+
+abstract interface class SuggestedConversationRepository {
+  Future<SuggestedConversationResponse> startSuggestedFreeChat({
+    required String topicId,
+    required String startRequestId,
+    bool includeAudioResponse = true,
   });
 }

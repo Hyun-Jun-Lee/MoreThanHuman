@@ -1,6 +1,7 @@
+import 'package:curitalk/core/copy/copy.dart';
 import 'package:flutter/material.dart';
 
-enum MainNavigationDestination { home, chat, history, profile }
+enum MainNavigationDestination { home, profile }
 
 class MainNavigationBar extends StatelessWidget {
   const MainNavigationBar({
@@ -19,25 +20,16 @@ class MainNavigationBar extends StatelessWidget {
       onDestinationSelected: (int index) {
         onDestinationSelected(MainNavigationDestination.values[index]);
       },
-      destinations: const <NavigationDestination>[
+      destinations: <NavigationDestination>[
         NavigationDestination(
           icon: Icon(Icons.home_outlined),
           selectedIcon: Icon(Icons.home_rounded),
-          label: 'Home',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.chat_bubble_outline_rounded),
-          selectedIcon: Icon(Icons.chat_bubble_rounded),
-          label: 'Chat',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.history_rounded),
-          label: 'History',
+          label: AppCopy.of(context).homeLabel,
         ),
         NavigationDestination(
           icon: Icon(Icons.person_outline_rounded),
           selectedIcon: Icon(Icons.person_rounded),
-          label: 'Profile',
+          label: AppCopy.of(context).profileLabel,
         ),
       ],
     );

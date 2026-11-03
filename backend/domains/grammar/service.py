@@ -5,6 +5,8 @@ import json
 from typing import Protocol
 from uuid import uuid4
 
+import httpx
+
 from config import get_grammar_model_config, get_settings
 from domains.grammar.models import GrammarFeedbackModel
 from domains.grammar.repository import GrammarRepository
@@ -12,6 +14,13 @@ from domains.grammar.schemas import GrammarAnalysis, GrammarFeedback, GrammarSta
 from domains.llm.factory import LLMProviderFactory
 from domains.llm.schemas import LLMMessage, LLMRequest
 from shared.exceptions import ExternalAPIException, NotFoundException, RateLimitException
+from shared.language import (
+    LanguageCode,
+    LearningLanguageContext,
+    ensure_language_context,
+    language_name,
+)
+from shared.language_prompt_policy import format_correction_priorities
 
 settings = get_settings()
 
@@ -30,11 +39,19 @@ class GrammarService:
         self,
         repository: GrammarRepository,
         message_ownership_repository: MessageOwnershipRepository | None = None,
+        *,
+        http_client: httpx.AsyncClient | None = None,
     ):
         self.repository = repository
         self.message_ownership_repository = message_ownership_repository
+        self.http_client = http_client
 
-    async def check_grammar(self, text: str, previous_ai_message: str | None = None) -> GrammarFeedback:
+    async def check_grammar(
+        self,
+        text: str,
+        previous_ai_message: str | None = None,
+        language_context: LearningLanguageContext | None = None,
+    ) -> GrammarFeedback:
         """
         문법 체크
 
@@ -46,7 +63,8 @@ class GrammarService:
             문법 피드백
         """
         # LLM을 통한 문법 분석
-        analysis = await self.analyze_grammar(text, previous_ai_message)
+        language_context = ensure_language_context(language_context)
+        analysis = await self.analyze_grammar(text, previous_ai_message, language_context=language_context)
 
         return GrammarFeedback(
             id=str(uuid4()),
@@ -99,7 +117,12 @@ class GrammarService:
         feedback = self.repository.find_by_message_id(message_id)
         return GrammarFeedback.model_validate(feedback)
 
-    async def analyze_grammar(self, text: str, previous_ai_message: str | None = None) -> GrammarAnalysis:
+    async def analyze_grammar(
+        self,
+        text: str,
+        previous_ai_message: str | None = None,
+        language_context: LearningLanguageContext | None = None,
+    ) -> GrammarAnalysis:
         """
         LLM을 사용한 문법 분석
 
@@ -118,10 +141,11 @@ class GrammarService:
         grammar_provider, grammar_model = get_grammar_model_config()
 
         # Create provider with grammar-specific settings
-        provider = LLMProviderFactory.create_provider(grammar_provider)
+        provider = LLMProviderFactory.create_provider(grammar_provider, http_client=self.http_client)
 
         # Build prompt
-        prompt = self.build_grammar_prompt(text, previous_ai_message)
+        language_context = ensure_language_context(language_context)
+        prompt = self.build_grammar_prompt(text, previous_ai_message, language_context=language_context)
 
         # Create request with grammar-specific model (최적화: 토큰 절반, 온도 낮춤)
         request = LLMRequest(
@@ -135,7 +159,12 @@ class GrammarService:
         response = await provider.chat_completion(request)
         return self.parse_grammar_response(response.content)
 
-    def build_grammar_prompt(self, text: str, previous_ai_message: str | None = None) -> str:
+    def build_grammar_prompt(
+        self,
+        text: str,
+        previous_ai_message: str | None = None,
+        language_context: LearningLanguageContext | None = None,
+    ) -> str:
         """
         문법 체크용 프롬프트 생성
 
@@ -146,29 +175,65 @@ class GrammarService:
         Returns:
             프롬프트
         """
+        language_context = ensure_language_context(language_context)
+        target_name = language_name(language_context.target_language)
+        feedback_name = language_name(language_context.feedback_language)
+        correction_priorities = format_correction_priorities(language_context.target_language)
         context_part = ""
         if previous_ai_message:
             context_part = f"""
 Context (previous AI message): "{previous_ai_message}"
 
 IMPORTANT: Consider the conversation context when analyzing.
+"""
 
+        if language_context.target_language == LanguageCode.KOREAN:
+            return f"""Analyze the following Korean response for grammar and naturalness issues.
+{context_part}
+User's response: "{text}"
+
+CRITICAL CORRECTION RULES:
+1. The corrected sentence must stay in Korean and preserve the user's intent.
+2. Check Korean-specific issues:
+{correction_priorities}
+3. Do not correct, mention, or create errors for Korean transcript formatting artifacts:
+   - spacing differences unless they change meaning
+   - punctuation, commas, periods, question marks, quotation marks, or sentence boundaries
+   - fillers, hesitations, repeated words, or self-corrections that do not block meaning
+   - pure spelling differences that may come from speech recognition
+4. Focus Korean corrections on particles, verb endings, tense/aspect, sentence-final endings,
+   honorific/formality level, natural Korean word order, and spoken phrasing.
+5. Do not apply English grammar rules such as subject-verb agreement or sentence completeness to Korean.
+   Omitted subjects, omitted objects, and short elliptical answers are natural when context is clear.
+6. Explain issues in {feedback_name}.
+
+Respond in JSON format:
+{{
+  "has_errors": true/false,
+  "corrected_sentence": "fully corrected, natural Korean sentence",
+  "errors": [
+    {{
+      "original": "incorrect part",
+      "corrected": "correct part",
+      "explanation": "brief explanation in {feedback_name}"
+    }}
+  ]
+}}
+
+If there are no errors, return has_errors: false and an empty errors array.
+Keep explanations concise and helpful."""
+
+        if language_context.target_language == LanguageCode.ENGLISH:
+            return f"""Analyze the following English response for grammar errors.
+{context_part}
 NATURAL CONVERSATIONAL RESPONSES (Do NOT mark as errors):
 - Short responses like "Went to the park" are natural replies to questions like "What did you do?"
 - Elliptical answers that omit subjects/verbs when context is clear
 - Casual expressions like "gonna", "wanna", "yeah", "nope" in informal conversation
+- Fillers, hesitations, repeated words, and self-corrections unless they block meaning
 
 MUST CHECK FOR THESE ERRORS:
-1. Basic Grammar Errors:
-   - Subject-verb agreement (e.g., "I likes" → "I like")
-   - Question formation: Must have proper word order
-     * Questions need: Wh-word (if any) + Auxiliary (do/does/did/can/will) + Subject + Main verb
-     * Examples: "what you think?" → "What do you think?"
-     * Examples: "other groups you know?" → "What other groups do you know?" or "Do you know other groups?"
-   - Spelling mistakes
-   - Punctuation errors
-   - Word order problems
-   - Missing words (articles, auxiliary verbs, prepositions, question words)
+{correction_priorities}
 
 2. Contextual Appropriateness:
    - Tense consistency: If AI asks about past, user should use past tense, not future/present
@@ -178,23 +243,30 @@ MUST CHECK FOR THESE ERRORS:
 3. Examples of contextual errors:
    - AI: "What did you do yesterday?" → User: "I will go shopping" ❌ (should be "I went shopping")
    - AI: "Where did you go?" → User: "I enjoyed it" ❌ (doesn't answer the location question)
-"""
-
-        return f"""Analyze the following English response for grammar errors.
-{context_part}
 User's response: "{text}"
 
 CRITICAL CORRECTION RULES:
 1. The corrected sentence MUST make logical sense and be grammatically complete
 2. If a word seems out of place or makes no sense, consider it might be:
-   - A typo (e.g., "know" might be "now")
+   - A speech recognition substitution (e.g., "know" might be "now")
    - Should be removed entirely
    - Part of a different intended phrase
-3. Fix ALL errors to create a natural, meaningful sentence
-4. Examples:
-   - "hi know i want seat of mine" → "Hi, I want my seat." (remove nonsensical "know")
-   - "what you think where is best?" → "What do you think is the best?" (fix question structure)
-   - "other groups you know?" → "What other groups do you know?" (add missing question word)
+3. Do not correct, mention, or create errors for uppercase/lowercase capitalization.
+   Speech transcripts may not preserve capitalization, so ignore sentence starts, "i" vs "I",
+   proper nouns, names, acronyms, and titles.
+4. Do not correct, mention, or create errors for transcript formatting artifacts:
+   - punctuation, commas, periods, question marks, quotation marks, or hyphens
+   - apostrophes or contraction spelling such as dont/don't and lets/let's
+   - pure spelling differences that may come from speech recognition
+   - sentence boundary formatting, run-on sentences, or comma splices caused only by missing punctuation
+   - fillers, hesitations, repeated words, or self-corrections that do not block meaning
+5. When writing corrected_sentence, preserve the user's original capitalization and punctuation unless the text changes
+   for a non-capitalization grammar, wording, or meaning reason.
+6. Fix only non-formatting errors to create a natural, meaningful sentence
+7. Examples:
+   - "hi know i want seat of mine" → "hi i want my seat" (remove nonsensical "know")
+   - "what you think where is best" → "what do you think is the best" (fix question structure)
+   - "other groups you know" → "what other groups do you know" (add missing question word)
 
 Respond in JSON format:
 {{
@@ -204,7 +276,33 @@ Respond in JSON format:
     {{
       "original": "incorrect part",
       "corrected": "correct part",
-      "explanation": "brief explanation"
+      "explanation": "brief explanation in {feedback_name}"
+    }}
+  ]
+}}
+
+If there are no errors, return has_errors: false and an empty errors array.
+Keep explanations concise and helpful."""
+
+        return f"""Analyze the following {target_name} response for grammar and naturalness issues.
+{context_part}
+User's response: "{text}"
+
+CRITICAL CORRECTION RULES:
+1. The corrected sentence must stay in {target_name} and preserve the user's intent.
+2. Check target-language issues:
+{correction_priorities}
+3. Explain issues in {feedback_name}.
+
+Respond in JSON format:
+{{
+  "has_errors": true/false,
+  "corrected_sentence": "fully corrected, natural {target_name} sentence",
+  "errors": [
+    {{
+      "original": "incorrect part",
+      "corrected": "correct part",
+      "explanation": "brief explanation in {feedback_name}"
     }}
   ]
 }}

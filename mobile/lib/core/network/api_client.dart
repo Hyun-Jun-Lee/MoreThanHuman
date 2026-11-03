@@ -1,4 +1,5 @@
 import 'package:curitalk/core/config/app_config.dart';
+import 'package:curitalk/core/diagnostics/latency_trace.dart';
 import 'package:curitalk/core/network/api_exception.dart';
 import 'package:curitalk/core/network/api_response.dart';
 import 'package:curitalk/core/network/auth_session_coordinator.dart';
@@ -47,6 +48,7 @@ class ApiClient {
     Map<String, dynamic>? queryParameters,
     bool requiresAuth = true,
     CancelToken? cancelToken,
+    String? diagnosticSource,
   }) {
     return request<T>(
       path,
@@ -55,6 +57,7 @@ class ApiClient {
       queryParameters: queryParameters,
       requiresAuth: requiresAuth,
       cancelToken: cancelToken,
+      diagnosticSource: diagnosticSource,
     );
   }
 
@@ -66,6 +69,7 @@ class ApiClient {
     String? contentType,
     bool requiresAuth = true,
     CancelToken? cancelToken,
+    LatencyTrace? latencyTrace,
   }) {
     return request<T>(
       path,
@@ -76,6 +80,7 @@ class ApiClient {
       contentType: contentType,
       requiresAuth: requiresAuth,
       cancelToken: cancelToken,
+      latencyTrace: latencyTrace,
     );
   }
 
@@ -88,7 +93,25 @@ class ApiClient {
     String? contentType,
     bool requiresAuth = true,
     CancelToken? cancelToken,
+    LatencyTrace? latencyTrace,
+    String? diagnosticSource,
   }) async {
+    final bool isConversationTurn =
+        method == 'POST' &&
+        RegExp(
+          r'^conversations/(?:start/(?:free-chat|roleplay)|[^/]+/(?:turn|message))/?$',
+        ).hasMatch(_normalizePath(path));
+    final LatencyTrace? trace = isConversationTurn
+        ? (latencyTrace ?? LatencyTrace()).claimRequest()
+        : method == 'GET'
+        ? LatencyTrace()
+        : null;
+    final int started = trace?.elapsedMicroseconds ?? 0;
+    String latencyStatus = 'error';
+    bool authRetried = false;
+    int? httpStatus;
+    final String operation = _diagnosticOperation(method, path);
+    final String source = _diagnosticSource(diagnosticSource);
     try {
       final Response<Object?> response = await dio.request<Object?>(
         _normalizePath(path),
@@ -98,13 +121,41 @@ class ApiClient {
         options: Options(
           method: method,
           contentType: contentType,
+          headers: trace == null
+              ? null
+              : <String, Object>{'X-Request-ID': trace.id},
           extra: <String, Object?>{
             AuthTokenInterceptor.requiresAuthKey: requiresAuth,
           },
         ),
       );
-      return ApiResponse<T>.fromJson(response.data, decodeData);
+      authRetried =
+          response.requestOptions.extra[TokenRefreshInterceptor
+              .retryAttemptedKey] ==
+          true;
+      httpStatus = response.statusCode;
+      trace?.mark(
+        'http_response',
+        startedAtMicroseconds: started,
+        fields: <String, Object?>{
+          'operation': operation,
+          'request_source': source,
+          'status_code': httpStatus,
+        },
+      );
+      final ApiResponse<T> parsed = trace == null
+          ? ApiResponse<T>.fromJson(response.data, decodeData)
+          : trace.duringDecode(
+              () => ApiResponse<T>.fromJson(response.data, decodeData),
+            );
+      latencyStatus = 'ok';
+      return parsed;
     } on DioException catch (error) {
+      authRetried =
+          error.requestOptions.extra[TokenRefreshInterceptor
+              .retryAttemptedKey] ==
+          true;
+      httpStatus = error.response?.statusCode;
       throw ApiException.fromDio(error);
     } on ApiException {
       rethrow;
@@ -113,6 +164,18 @@ class ApiClient {
         kind: ApiErrorKind.invalidResponse,
         message: 'The server response could not be parsed.',
         cause: error,
+      );
+    } finally {
+      trace?.mark(
+        'http_total',
+        status: latencyStatus,
+        startedAtMicroseconds: started,
+        fields: <String, Object?>{
+          'operation': operation,
+          'request_source': source,
+          'status_code': httpStatus,
+          'auth_retry': authRetried,
+        },
       );
     }
   }
@@ -147,6 +210,36 @@ class ApiClient {
 
   static String _normalizePath(String value) {
     return value.startsWith('/') ? value.substring(1) : value;
+  }
+
+  static String _diagnosticOperation(String method, String path) {
+    if (method != 'GET') return 'conversation_turn';
+    final parts = _normalizePath(path).split('/')
+      ..removeWhere((part) => part.isEmpty);
+    if (parts.isEmpty) return 'other_get';
+    if (parts.first == 'auth') return 'auth_profile';
+    if (parts.first == 'grammar') return 'grammar_feedback';
+    if (parts.first == 'conversation-topics') return 'weekly_topics';
+    if (parts.first != 'conversations') return 'other_get';
+    if (parts.length == 1) return 'conversation_list';
+    if (parts.length == 2 && parts[1] == 'access') return 'access_summary';
+    if (parts.length == 3 && parts[2] == 'access') return 'turn_access';
+    if (parts.length == 3 && parts[2] == 'messages') return 'message_list';
+    if (parts.length == 3 && parts[2] == 'turns') return 'turn_list';
+    if (parts.length >= 2 && parts[1] == 'turns') return 'turn_status';
+    return 'other_get';
+  }
+
+  static String _diagnosticSource(String? source) {
+    const allowed = <String>{
+      'home_recent',
+      'history_list',
+      'conversation_messages',
+      'conversation_access',
+      'conversation_turn_access',
+      'turn_recovery',
+    };
+    return source != null && allowed.contains(source) ? source : 'unspecified';
   }
 }
 

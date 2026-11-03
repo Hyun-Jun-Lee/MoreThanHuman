@@ -1,4 +1,3 @@
-import 'package:curitalk/features/roleplay_setup/domain/roleplay_difficulty.dart';
 import 'package:curitalk/features/roleplay_setup/domain/roleplay_scenario.dart';
 
 sealed class RoleplaySituation {
@@ -38,7 +37,7 @@ class CustomRoleplaySituation extends RoleplaySituation {
   String get promptBase {
     return 'a realistic counterpart in a learner-defined roleplay where the learner described their situation or role as "$normalizedInput"; '
         'if the learner describes their own role, play the opposite role in that situation; '
-        'for example, if the learner is working as a cafe barista, play a customer placing an order';
+        'for example, if the learner is a hotel guest asking for help, play the front desk staff member';
   }
 
   @override
@@ -46,17 +45,11 @@ class CustomRoleplaySituation extends RoleplaySituation {
 }
 
 class RoleplaySetupPayload {
-  const RoleplaySetupPayload({
-    required this.situation,
-    required this.difficulty,
-  });
+  const RoleplaySetupPayload({required this.situation});
 
   final RoleplaySituation situation;
-  final RoleplayDifficulty difficulty;
 
   bool get isValid => situation.isValid;
 
-  String get roleCharacter {
-    return '${situation.promptBase} who ${difficulty.promptInstruction}';
-  }
+  String get roleCharacter => situation.promptBase;
 }

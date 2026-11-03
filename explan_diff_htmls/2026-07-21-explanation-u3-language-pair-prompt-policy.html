@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>U3 언어쌍 Prompt Policy 설명</title>
+  <style>
+    :root {
+      --paper: #fbfaf7;
+      --ink: #202428;
+      --muted: #65717c;
+      --line: #dde1dc;
+      --accent: #335f88;
+      --accent-soft: #dce9f6;
+      --rose: #f1dddd;
+      --gold: #f5e4b9;
+      --green: #e2eddc;
+      --code: #152026;
+      --code-ink: #e9f3f1;
+      --shadow: 0 18px 42px rgba(32, 36, 40, 0.08);
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { margin: 0; background: var(--paper); color: var(--ink); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; line-height: 1.7; }
+    .page { max-width: 1120px; margin: 0 auto; padding: 34px 22px 80px; }
+    .hero { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr); gap: 24px; padding: 36px; border: 1px solid var(--line); border-radius: 20px; background: #fffdf8; box-shadow: var(--shadow); }
+    .eyebrow { margin: 0 0 8px; color: var(--accent); font-size: 13px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
+    h1 { margin: 0; font-size: clamp(34px, 5vw, 60px); line-height: 1.05; letter-spacing: 0; }
+    h2 { margin: 0 0 14px; font-size: clamp(27px, 4vw, 42px); line-height: 1.16; letter-spacing: 0; }
+    h3 { margin: 30px 0 10px; font-size: 22px; line-height: 1.25; }
+    p { margin: 12px 0; }
+    a { color: var(--accent); text-decoration: none; }
+    .subtitle { margin: 20px 0 0; max-width: 740px; color: var(--muted); font-size: 18px; }
+    .hero-card { padding: 20px; border-radius: 18px; border: 1px solid rgba(51, 95, 136, 0.2); background: linear-gradient(180deg, #eaf3fb, #fff7e3); }
+    .policy-stack { display: grid; gap: 10px; margin-top: 14px; }
+    .policy { padding: 12px; border-radius: 12px; background: rgba(255, 255, 255, 0.82); border: 1px solid var(--line); }
+    .policy strong { display: block; color: var(--accent); }
+    .toc { margin: 26px 0 0; padding: 18px; border: 1px solid var(--line); border-radius: 16px; background: rgba(255, 255, 255, 0.68); }
+    .toc strong { display: block; margin-bottom: 10px; }
+    .toc nav { display: flex; flex-wrap: wrap; gap: 10px; }
+    .toc a { padding: 8px 12px; border-radius: 999px; background: #fff; border: 1px solid var(--line); font-size: 14px; font-weight: 700; }
+    section { margin-top: 54px; }
+    .lead { font-size: 18px; color: #3d464d; }
+    .callout { margin: 22px 0; padding: 17px 19px; border-left: 5px solid var(--accent); border-radius: 14px; background: var(--accent-soft); }
+    .callout strong { display: block; margin-bottom: 4px; }
+    .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin: 22px 0; }
+    .card { padding: 17px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255, 255, 255, 0.74); }
+    .card h4 { margin: 0 0 8px; font-size: 17px; }
+    .card p { margin: 0; color: var(--muted); font-size: 15px; }
+    .flow { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; align-items: stretch; margin: 24px 0; }
+    .flow .node { padding: 16px; border-radius: 14px; border: 1px solid var(--line); background: #fff; min-height: 112px; }
+    .flow .arrow { display: grid; place-items: center; color: var(--accent); font-size: 26px; font-weight: 900; }
+    .node .label { color: var(--accent); font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.06em; }
+    .node .value { margin-top: 8px; font-weight: 800; }
+    .before-after { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 22px 0; }
+    .before { background: var(--rose); }
+    .after { background: var(--green); }
+    pre { margin: 16px 0; padding: 18px; overflow-x: auto; white-space: pre-wrap; border-radius: 14px; background: var(--code); color: var(--code-ink); font-size: 14px; line-height: 1.58; }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+    .quiz-card { margin: 18px 0; padding: 18px; border: 1px solid var(--line); border-radius: 16px; background: #fff; }
+    .quiz-card p { font-weight: 800; }
+    .quiz-card button { display: block; width: 100%; margin: 8px 0; padding: 11px 12px; border: 1px solid var(--line); border-radius: 10px; background: #fbfaf7; color: var(--ink); text-align: left; font: inherit; cursor: pointer; }
+    .quiz-card button.correct { border-color: #23865f; background: #e4f4eb; }
+    .quiz-card button.incorrect { border-color: #b65454; background: #f7e2e2; }
+    .feedback { margin-top: 8px; color: var(--muted); font-size: 15px; }
+    @media (max-width: 940px) {
+      .hero, .before-after { grid-template-columns: 1fr; }
+      .flow { grid-template-columns: 1fr; }
+      .flow .arrow { transform: rotate(90deg); min-height: 28px; }
+      .grid { grid-template-columns: 1fr; }
+      .page { padding: 20px 14px 60px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">U3 · Prompt Policy</p>
+        <h1>LLM prompt에 언어별 학습 기준을 심은 작업</h1>
+        <p class="subtitle">U3는 “Korean으로 말하라”에서 한 걸음 더 나아가 “Korean을 배울 때 무엇을 봐야 하는가”를 prompt contract로 만든 작업이에요. conversation, roleplay, grammar, Topic Prep이 같은 기준을 공유하게 됩니다.</p>
+      </div>
+      <aside class="hero-card">
+        <strong>Target policy snapshot</strong>
+        <div class="policy-stack">
+          <div class="policy"><strong>Korean</strong>조사, 어미, 높임/격식, 띄어쓰기, 자연스러운 구어체</div>
+          <div class="policy"><strong>English</strong>시제, 관사, 전치사, 질문 구조, 문장 완성도</div>
+        </div>
+      </aside>
+    </header>
+
+    <div class="toc">
+      <strong>목차</strong>
+      <nav>
+        <a href="#background">Background</a>
+        <a href="#intuition">Intuition</a>
+        <a href="#code">Code</a>
+        <a href="#quiz">Quiz</a>
+      </nav>
+    </div>
+
+    <main>
+      <section id="background">
+        <h2>Background</h2>
+        <p class="lead">언어쌍이 일급 도메인이 되면 backend prompt도 단순히 출력 언어만 바꾸면 부족합니다. 같은 “문법 피드백”이라도 한국어와 영어에서 봐야 하는 오류의 종류가 다르기 때문이에요.</p>
+        <p>U3 이전에도 prompt는 `LearningLanguageContext`를 받았습니다. 하지만 conversation prompt는 일반적인 대화 규칙에 가까웠고, grammar prompt는 Korean 분기만 구체적이었으며, Topic Prep은 언어 구분은 하되 학습 포인트는 얇았습니다. 이런 상태에서는 화면은 한국어 학습처럼 보이는데 feedback은 영어식 기준에 가까워지는 drift가 생길 수 있어요.</p>
+        <div class="callout">
+          <strong>정책의 불변식</strong>
+          target language는 연습과 교정 기준을 정합니다. feedback language는 설명 언어를 정합니다. Provider, model, API schema는 U3에서 바뀌지 않습니다.
+        </div>
+        <div class="grid">
+          <div class="card"><h4>Conversation</h4><p>free chat과 roleplay 모두 같은 practice priorities를 받습니다.</p></div>
+          <div class="card"><h4>Grammar</h4><p>언어별 correction priorities를 쓰되 JSON schema는 유지합니다.</p></div>
+          <div class="card"><h4>Topic Prep</h4><p>요약, 질문, 품질 판정이 target-language practice에 맞게 유도됩니다.</p></div>
+        </div>
+      </section>
+
+      <section id="intuition">
+        <h2>Intuition</h2>
+        <p>좋은 prompt 정책은 여러 prompt에 같은 문장을 복붙하는 것이 아니라, 같은 사고방식을 여러 prompt가 공유하게 만드는 것입니다. 그래서 U3는 작은 shared module을 만들고, 각 domain prompt가 필요한 형태로 포맷해서 가져가게 했습니다.</p>
+        <div class="flow" aria-label="U3 prompt policy flow">
+          <div class="node"><div class="label">Snapshot</div><div class="value">LearningLanguageContext</div></div>
+          <div class="arrow">→</div>
+          <div class="node"><div class="label">Target</div><div class="value">ko 또는 en</div></div>
+          <div class="arrow">→</div>
+          <div class="node"><div class="label">Policy</div><div class="value">practice / correction / topic prep</div></div>
+          <div class="arrow">→</div>
+          <div class="node"><div class="label">Prompts</div><div class="value">conversation, grammar, search</div></div>
+        </div>
+        <div class="before-after">
+          <div class="card before"><h4>이전</h4><p>prompt마다 언어별 기준이 흩어져 있었고, generic English-shaped rule이 다른 target에도 섞일 위험이 있었습니다.</p></div>
+          <div class="card after"><h4>이후</h4><p>공통 policy helper가 target-language 기준을 만들고, 각 prompt는 그 기준을 자기 역할에 맞게 삽입합니다.</p></div>
+        </div>
+      </section>
+
+      <section id="code">
+        <h2>Code</h2>
+        <h3>1. Prompt policy를 shared module로 분리한다</h3>
+        <p>`backend/shared/language_prompt_policy.py`는 enum/context primitive와 분리된 prompt-oriented helper입니다. 언어 검증이 아니라 LLM에게 줄 학습 기준 문장을 담습니다.</p>
+        <pre><code>@dataclass(frozen=True)
+class TargetLanguagePromptPolicy:
+    practice_priorities: tuple[str, ...]
+    correction_priorities: tuple[str, ...]
+    topic_prep_priorities: tuple[str, ...]
+
+def target_language_prompt_policy(
+    language: LanguageCode | str,
+) -&gt; TargetLanguagePromptPolicy:
+    code = language if isinstance(language, LanguageCode) else LanguageCode(language)
+    if code == LanguageCode.KOREAN:
+        return KOREAN_PROMPT_POLICY
+    if code == LanguageCode.ENGLISH:
+        return ENGLISH_PROMPT_POLICY
+    return GENERIC_PROMPT_POLICY</code></pre>
+        <h3>2. Conversation prompt에 practice priorities를 넣는다</h3>
+        <p>free chat과 roleplay는 모두 “짧게, 자연스럽게, target language로”라는 규칙을 유지하면서 그 앞에 target-specific learning priorities를 추가합니다.</p>
+        <pre><code>practice_priorities = format_practice_priorities(
+    language_context.target_language
+)
+
+base_prompt = f"""You are a friendly and helpful {target_name} conversation learning assistant.
+
+## Learner Language Context:
+- Native language: {native_name}
+- Practice target language: {target_name}
+- Feedback/explanation language: {feedback_name}
+
+## Target Language Practice Priorities:
+{practice_priorities}
+"""</code></pre>
+        <h3>3. Grammar prompt는 Korean과 English를 명시적으로 분기한다</h3>
+        <p>Korean branch는 영어식 subject-verb agreement를 적용하지 말라는 방어선을 유지합니다. English branch는 generic prompt가 아니라 영어의 핵심 오류 범주를 직접 봅니다.</p>
+        <pre><code>if language_context.target_language == LanguageCode.KOREAN:
+    return f"""Analyze the following Korean response...
+2. Check Korean-specific issues:
+{correction_priorities}
+3. Do not apply English grammar rules such as subject-verb agreement to Korean.
+4. Explain issues in {feedback_name}.
+"""
+
+if language_context.target_language == LanguageCode.ENGLISH:
+    return f"""Analyze the following English response for grammar errors.
+MUST CHECK FOR THESE ERRORS:
+{correction_priorities}
+"""</code></pre>
+        <h3>4. Topic Prep과 search prompt에도 practice summary를 넣는다</h3>
+        <p>검색 품질 판정과 요약은 단지 좋은 검색 결과를 찾는 일이 아닙니다. 대화 연습으로 쓸 수 있는 결과를 고르는 일이므로 target-language practice priority가 품질 판단에도 들어갑니다.</p>
+        <pre><code>practice_summary = practice_priority_summary(
+    language_context.target_language
+)
+
+content=(
+    f"You are the primary source quality judge for a {target_name} conversation app. "
+    f"Judge usefulness for target-language practice priorities: {practice_summary}. "
+)</code></pre>
+      </section>
+
+      <section id="quiz">
+        <h2>Quiz</h2>
+        <div class="quiz-card">
+          <p>1. U3에서 새로 만든 shared module의 주된 목적은 무엇인가요?</p>
+          <button data-correct="false">언어쌍 DB schema를 변경하기 위해서</button>
+          <button data-correct="true">여러 backend prompt가 같은 target-language 학습 기준을 쓰게 하기 위해서</button>
+          <button data-correct="false">모델 provider를 자동 선택하기 위해서</button>
+          <div class="feedback"></div>
+        </div>
+        <div class="quiz-card">
+          <p>2. Korean correction policy에 들어간 대표 항목은 무엇인가요?</p>
+          <button data-correct="true">조사, 어미, 높임/격식, 띄어쓰기</button>
+          <button data-correct="false">관사, 조동사, subject-verb agreement</button>
+          <button data-correct="false">provider latency와 token price</button>
+          <div class="feedback"></div>
+        </div>
+        <div class="quiz-card">
+          <p>3. Grammar prompt에서 feedback language는 무엇을 결정하나요?</p>
+          <button data-correct="false">교정할 target language</button>
+          <button data-correct="true">오류 설명을 작성할 언어</button>
+          <button data-correct="false">JSON schema의 필드 이름</button>
+          <div class="feedback"></div>
+        </div>
+        <div class="quiz-card">
+          <p>4. U3에서 유지한 중요한 invariant는 무엇인가요?</p>
+          <button data-correct="true">Grammar JSON response schema를 바꾸지 않았습니다.</button>
+          <button data-correct="false">모든 prompt를 한국어로 번역했습니다.</button>
+          <button data-correct="false">DeepSeek/Qwen 라우팅을 구현했습니다.</button>
+          <div class="feedback"></div>
+        </div>
+        <div class="quiz-card">
+          <p>5. Search quality judge에 practice priority를 넣은 이유는 무엇인가요?</p>
+          <button data-correct="false">검색 결과 수를 늘리기 위해서</button>
+          <button data-correct="true">대화 연습에 실제로 쓸 수 있는 source인지 판단하게 하기 위해서</button>
+          <button data-correct="false">retry guidance를 항상 target language로 쓰기 위해서</button>
+          <div class="feedback"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script>
+    document.querySelectorAll(".quiz-card").forEach((card) => {
+      const feedback = card.querySelector(".feedback");
+      card.querySelectorAll("button").forEach((button) => {
+        button.addEventListener("click", () => {
+          card.querySelectorAll("button").forEach((item) => item.classList.remove("correct", "incorrect"));
+          const correct = button.dataset.correct === "true";
+          button.classList.add(correct ? "correct" : "incorrect");
+          feedback.textContent = correct
+            ? "정답이에요. U3는 target language policy를 prompt 전반에 일관되게 흘려보냅니다."
+            : "다시 확인해보세요. U3는 provider나 schema가 아니라 prompt 정책의 정렬에 초점이 있습니다.";
+        });
+      });
+    });
+  </script>
+</body>
+</html>

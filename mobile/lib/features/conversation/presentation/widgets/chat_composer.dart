@@ -1,5 +1,7 @@
 import 'package:curitalk/app/theme/app_semantic_colors.dart';
 import 'package:curitalk/app/theme/tokens/tokens.dart';
+import 'package:curitalk/core/copy/copy.dart';
+import 'package:curitalk/core/widgets/app_loading_indicator.dart';
 import 'package:flutter/material.dart';
 
 class ChatComposer extends StatefulWidget {
@@ -7,7 +9,7 @@ class ChatComposer extends StatefulWidget {
     required this.controller,
     required this.onSend,
     this.onVoiceInput,
-    this.hintText = 'Type in English...',
+    this.hintText,
     this.enabled = true,
     this.isSending = false,
     this.isRecording = false,
@@ -15,13 +17,15 @@ class ChatComposer extends StatefulWidget {
     this.recordingElapsedText,
     this.voiceStatusLabel,
     this.onCancelVoiceInput,
+    this.semanticLabel,
+    this.onChanged,
     super.key,
   });
 
   final TextEditingController controller;
   final ValueChanged<String> onSend;
   final VoidCallback? onVoiceInput;
-  final String hintText;
+  final String? hintText;
   final bool enabled;
   final bool isSending;
   final bool isRecording;
@@ -29,6 +33,8 @@ class ChatComposer extends StatefulWidget {
   final String? recordingElapsedText;
   final String? voiceStatusLabel;
   final VoidCallback? onCancelVoiceInput;
+  final String? semanticLabel;
+  final ValueChanged<String>? onChanged;
 
   @override
   State<ChatComposer> createState() => _ChatComposerState();
@@ -71,6 +77,7 @@ class _ChatComposerState extends State<ChatComposer> {
 
   void _handleTextChanged() {
     final bool hasText = _containsMessage(widget.controller.text);
+    widget.onChanged?.call(widget.controller.text);
     if (hasText == _hasText) {
       return;
     }
@@ -89,13 +96,14 @@ class _ChatComposerState extends State<ChatComposer> {
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
+    final AppCopy copy = AppCopy.of(context);
     final AppSemanticColors colors = AppSemanticColors.of(context);
     final bool voiceEnabled =
         widget.enabled && !widget.isSending && !widget.isVoiceBusy;
     final bool showVoiceStatus =
         widget.isRecording || widget.voiceStatusLabel != null;
     final String voiceStatusText = widget.isRecording
-        ? 'Recording ${widget.recordingElapsedText ?? '0:00'}'
+        ? copy.recordingElapsedLabel(widget.recordingElapsedText ?? '0:00')
         : widget.voiceStatusLabel ?? '';
 
     return Material(
@@ -116,8 +124,8 @@ class _ChatComposerState extends State<ChatComposer> {
               IconButton(
                 onPressed: voiceEnabled ? widget.onVoiceInput : null,
                 tooltip: widget.isRecording
-                    ? 'Stop recording'
-                    : widget.voiceStatusLabel ?? 'Voice input',
+                    ? copy.stopRecordingTooltip
+                    : widget.voiceStatusLabel ?? copy.voiceInputTooltip,
                 style: IconButton.styleFrom(
                   backgroundColor: widget.isRecording
                       ? colors.selectedSurface
@@ -143,37 +151,45 @@ class _ChatComposerState extends State<ChatComposer> {
                           horizontal: AppSpacing.xs,
                           vertical: AppSpacing.sm,
                         ),
-                        child: Text(
-                          voiceStatusText,
-                          style: AppTypography.bodySm.copyWith(
-                            color: widget.isRecording
-                                ? theme.colorScheme.onSurface
-                                : theme.colorScheme.onSurfaceVariant,
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: Text(
+                            voiceStatusText,
+                            textAlign: TextAlign.center,
+                            style: AppTypography.bodySm.copyWith(
+                              color: widget.isRecording
+                                  ? theme.colorScheme.onSurface
+                                  : theme.colorScheme.onSurfaceVariant,
+                            ),
                           ),
                         ),
                       ),
                     )
-                  : TextField(
-                      controller: widget.controller,
-                      enabled:
-                          widget.enabled &&
-                          !widget.isSending &&
-                          !widget.isRecording &&
-                          !widget.isVoiceBusy,
-                      minLines: 1,
-                      maxLines: 4,
-                      textInputAction: TextInputAction.send,
-                      onSubmitted: (_) => _send(),
-                      decoration: InputDecoration(
-                        hintText: widget.hintText,
-                        filled: false,
-                        border: InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        focusedBorder: InputBorder.none,
-                        disabledBorder: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.xs,
-                          vertical: AppSpacing.sm,
+                  : Semantics(
+                      label: widget.semanticLabel,
+                      textField: true,
+                      child: TextField(
+                        controller: widget.controller,
+                        enabled:
+                            widget.enabled &&
+                            !widget.isSending &&
+                            !widget.isRecording &&
+                            !widget.isVoiceBusy,
+                        minLines: 1,
+                        maxLines: 4,
+                        textInputAction: TextInputAction.send,
+                        onSubmitted: (_) => _send(),
+                        decoration: InputDecoration(
+                          hintText: widget.hintText ?? copy.chatMessageHint,
+                          filled: false,
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          disabledBorder: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.xs,
+                            vertical: AppSpacing.sm,
+                          ),
                         ),
                       ),
                     ),
@@ -183,12 +199,12 @@ class _ChatComposerState extends State<ChatComposer> {
                 onPressed: widget.isVoiceBusy
                     ? null
                     : widget.onCancelVoiceInput,
-                tooltip: 'Cancel recording',
+                tooltip: copy.cancelRecordingTooltip,
                 icon: const Icon(Icons.close_rounded),
               ),
             IconButton(
               onPressed: _canSend ? _send : null,
-              tooltip: 'Send message',
+              tooltip: copy.sendMessageTooltip,
               style: IconButton.styleFrom(
                 backgroundColor: colors.selectedSurface,
                 foregroundColor: colors.onSelected,
@@ -200,13 +216,7 @@ class _ChatComposerState extends State<ChatComposer> {
                     : colors.onDisabled,
               ),
               icon: widget.isSending
-                  ? SizedBox.square(
-                      dimension: AppSize.icon,
-                      child: CircularProgressIndicator(
-                        color: colors.onSelected,
-                        strokeWidth: AppBorderWidth.focused,
-                      ),
-                    )
+                  ? const AppLoadingIndicator(width: 44)
                   : const Icon(Icons.arrow_upward_rounded),
             ),
           ],

@@ -1,5 +1,8 @@
 import 'package:curitalk/app/theme/app_semantic_colors.dart';
 import 'package:curitalk/app/theme/app_theme.dart';
+import 'package:curitalk/app/theme/tokens/tokens.dart';
+import 'package:curitalk/core/widgets/app_loading_indicator.dart';
+import 'package:curitalk/features/conversation/domain/grammar_feedback.dart';
 import 'package:curitalk/features/conversation/presentation/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -55,11 +58,11 @@ void main() {
       ),
     );
 
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.byType(AppLoadingIndicator), findsOneWidget);
     expect(tester.widget<TextField>(find.byType(TextField)).enabled, isFalse);
     final IconButton sendButton = tester.widget<IconButton>(
       find.ancestor(
-        of: find.byType(CircularProgressIndicator),
+        of: find.byType(AppLoadingIndicator),
         matching: find.byType(IconButton),
       ),
     );
@@ -141,15 +144,17 @@ void main() {
     },
   );
 
-  testWidgets('NaturalFeedbackBadge reports taps', (WidgetTester tester) async {
-    int tapCount = 0;
-    await tester.pumpWidget(
-      _themedApp(NaturalFeedbackBadge(onTap: () => tapCount += 1)),
-    );
+  testWidgets('NaturalFeedbackBadge renders a green icon only', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(_themedApp(const NaturalFeedbackBadge()));
 
-    expect(find.text('LOOKS NATURAL'), findsOneWidget);
-    await tester.tap(find.byType(ActionChip));
-    expect(tapCount, 1);
+    expect(find.text('LOOKS NATURAL'), findsNothing);
+    expect(find.byType(ActionChip), findsNothing);
+    final Icon icon = tester.widget<Icon>(
+      find.byIcon(Icons.check_circle_rounded),
+    );
+    expect(icon.color, AppPalette.semanticSuccess);
   });
 
   testWidgets('ChatBubble applies speaker alignment and semantic colors', (
@@ -212,19 +217,68 @@ void main() {
     expect(find.text('What can I get started for you today?'), findsOneWidget);
   });
 
-  testWidgets('GrammarFeedbackCard renders suggestion and explanation', (
+  testWidgets(
+    'streamed assistant text types forward and exposes a ready sentence',
+    (WidgetTester tester) async {
+      final visibleCounts = <int>[];
+      await tester.pumpWidget(
+        _themedApp(
+          ChatBubble(
+            message: 'Hello. How are you?',
+            speaker: ChatSpeaker.assistant,
+            typing: true,
+            onVisibleChars: visibleCounts.add,
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(find.text('Hello.'), findsNothing);
+      expect(visibleCounts.first, 1);
+
+      await tester.pumpWidget(
+        _themedApp(
+          ChatBubble(
+            message: 'Hello. How are you?',
+            speaker: ChatSpeaker.assistant,
+            typing: true,
+            minVisibleChars: 'Hello.'.length,
+            onVisibleChars: visibleCounts.add,
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(find.text('Hello.'), findsOneWidget);
+      expect(visibleCounts.last, greaterThanOrEqualTo('Hello.'.length));
+      for (var tick = 0; tick < 30; tick++) {
+        await tester.pump(const Duration(milliseconds: 24));
+      }
+      expect(find.text('How are you?'), findsOneWidget);
+    },
+  );
+
+  testWidgets('GrammarFeedbackCard highlights corrected text only', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
       _themedApp(
         const GrammarFeedbackCard(
-          suggestion: 'I went to Dotonbori yesterday.',
+          suggestion: 'I was surprised.',
           explanation: 'Use the past tense for a completed action.',
+          errors: <GrammarError>[
+            GrammarError(
+              original: 'surprise',
+              corrected: 'surprised',
+              explanation: 'Use the past tense for a completed action.',
+            ),
+          ],
         ),
       ),
     );
 
-    expect(find.textContaining('I went to Dotonbori'), findsOneWidget);
+    expect(find.text('YOUR SENTENCE'), findsNothing);
+    expect(find.text('SUGGESTED'), findsNothing);
+    expect(find.text('I was surprise.'), findsNothing);
+    expect(find.text('I was surprised.'), findsOneWidget);
     expect(find.text('WHY'), findsOneWidget);
     expect(find.byIcon(Icons.lightbulb_outline_rounded), findsNothing);
     expect(find.textContaining('Try'), findsNothing);
@@ -241,6 +295,16 @@ void main() {
         );
     expect(semantics.properties.label, 'Grammar feedback');
 
+    final Text suggested = tester.widget<Text>(
+      find.byKey(const ValueKey<String>('grammar-feedback-suggestion-text')),
+    );
+    final TextSpan suggestedCorrection = _spanWithText(
+      suggested.textSpan! as TextSpan,
+      'surprised',
+    );
+    expect(suggestedCorrection.style?.color, AppPalette.semanticSuccess);
+    expect(suggestedCorrection.style?.fontWeight, FontWeight.w700);
+
     final Material card = tester.widget<Material>(
       find.descendant(
         of: find.byType(GrammarFeedbackCard),
@@ -250,7 +314,7 @@ void main() {
     expect(card.color, AppSemanticColors.light.grammarSuggestionSurface);
   });
 
-  testWidgets('GrammarFeedbackCard expands dense feedback text', (
+  testWidgets('GrammarFeedbackCard shows all dense feedback immediately', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
@@ -266,16 +330,20 @@ void main() {
       ),
     );
 
-    expect(find.text('SHOW MORE'), findsOneWidget);
+    expect(find.text('SHOW MORE'), findsNothing);
     expect(find.text('SHOW LESS'), findsNothing);
-    expect(find.text('I went there yesterday.'), findsNothing);
-
-    await tester.tap(find.text('SHOW MORE'));
-    await tester.pump();
-
-    expect(find.text('SHOW LESS'), findsOneWidget);
-    expect(find.text('I went there yesterday.'), findsOneWidget);
-    expect(find.text('It was fun.'), findsOneWidget);
+    expect(
+      tester
+          .widget<Text>(
+            find.byKey(
+              const ValueKey<String>('grammar-feedback-suggestion-text'),
+            ),
+          )
+          .maxLines,
+      isNull,
+    );
+    expect(find.textContaining('I went there yesterday.'), findsOneWidget);
+    expect(find.textContaining('It was fun.'), findsOneWidget);
     expect(find.text('Use past tense for completed actions.'), findsOneWidget);
     expect(find.text('Add a space after punctuation.'), findsOneWidget);
   });
@@ -295,6 +363,12 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
     expect(tester.binding.transientCallbackCount, 0);
   });
+}
+
+TextSpan _spanWithText(TextSpan parent, String text) {
+  return parent.children!.whereType<TextSpan>().firstWhere(
+    (TextSpan child) => child.text == text,
+  );
 }
 
 Widget _themedApp(Widget child, {bool disableAnimations = false}) {
