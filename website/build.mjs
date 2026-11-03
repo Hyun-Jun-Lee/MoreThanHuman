@@ -155,7 +155,7 @@ function pageShell(locale, page, body) {
   <a class="skip-link" href="#main">${locale === 'ko' ? '본문으로 이동' : 'Skip to content'}</a>
   <header class="site-header">
     <div class="header-inner">
-      <a class="brand" href="${urls[locale].home}" aria-label="tomatalk"><img src="/assets/app-icon.png" alt="" width="42" height="42"><span>tomatalk</span></a>
+      <a class="brand" href="${urls[locale].home}" aria-label="tomatalk"><img src="/assets/wordmark.png" alt="" width="170" height="57"></a>
       <nav class="site-nav" aria-label="${locale === 'ko' ? '주 메뉴' : 'Main navigation'}">
         ${isHome ? `<a href="#features">${c.nav.features}</a><a href="#preview">${c.nav.preview}</a>` : `<a href="${urls[locale].home}">${locale === 'ko' ? '홈' : 'Home'}</a>`}
         <a href="${urls[locale].support}" ${page === 'support' ? 'aria-current="page"' : ''}>${c.nav.support}</a>
@@ -166,7 +166,7 @@ function pageShell(locale, page, body) {
   <main id="main">${body}</main>
   <footer class="site-footer">
     <div class="footer-top">
-      <div><div class="footer-brand">tomatalk<span class="brand-dot">.</span></div><p>${c.footer.tagline}</p></div>
+      <div><a class="footer-brand" href="${urls[locale].home}" aria-label="${locale === 'ko' ? 'tomatalk 홈' : 'tomatalk home'}"><img src="/assets/wordmark.png" alt="" width="220" height="73"></a><p>${c.footer.tagline}</p></div>
       <nav aria-label="${locale === 'ko' ? '하단 메뉴' : 'Footer navigation'}"><a href="${urls[locale].support}">${c.nav.support}</a><a href="${urls[locale].privacy}">${c.nav.privacy}</a><a href="${appleEula}" target="_blank" rel="noopener noreferrer">${c.footer.eula}</a><a href="${urls[other][page]}" lang="${other}" hreflang="${other}">${c.nav.language}</a></nav>
     </div>
     <div class="footer-bottom"><span>${c.footer.operator} · ${c.footer.business}</span><span>${c.footer.address}</span><a href="mailto:${email}">${email}</a></div>
