@@ -54,6 +54,16 @@ flutter run \
 
 Flutter는 서버 .env를 자동으로 읽지 않아요. 위 공개 설정을 실제 값으로 바꾸고, Google 로그인 플랫폼 설정은 [모바일 문서](mobile/README.md#실행-설정)를 따라주세요. Android 에뮬레이터는 API 주소의 호스트를 `10.0.2.2`, 실제 기기는 접근 가능한 개발 PC 주소로 바꿔요.
 
+### 공개 웹사이트
+
+```bash
+cd website
+npm run build
+npm run dev
+```
+
+`http://localhost:4173`에서 랜딩·지원·개인정보처리방침의 한국어·영어 페이지를 확인할 수 있어요. Vercel에는 `website/`를 Root Directory로 설정해요. 공개 주소와 출시 전 확인 항목은 [웹사이트 문서](docs/WEBSITE.md)를 참고해요.
+
 ### Docker 백엔드
 
 외부 PostgreSQL·nginx 구성을 마친 운영 서버에서 API를 갱신하는 명령이에요.
