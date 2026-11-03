@@ -58,6 +58,14 @@ class _SnackTomatoBasketState extends State<SnackTomatoBasket>
   NavigatorState? _navigator;
 
   @override
+  void didUpdateWidget(covariant SnackTomatoBasket oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_busy && oldWidget.basket.consumed != widget.basket.consumed) {
+      _opened = widget.basket.consumed % DailySnackBasket.bitesPerTomato != 0;
+    }
+  }
+
+  @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (!_precached) {

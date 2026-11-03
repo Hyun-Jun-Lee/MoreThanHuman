@@ -9,4 +9,5 @@
 | Codex | iOS 연결 API의 대화 잠금·생성 제한 활성화 | 원격 API 적용 범위 결정 대기 | 2026-10-01 |
 | Codex side conversation | 인증 초기화 및 ID 전용 인증 분리 | 구현·검증 완료, 코드 리뷰 대기 | 2026-10-19 |
 | Codex side conversation | 계정 삭제·구독 권한 복원 | 격리 브랜치 구현·검증 완료, 통합 리뷰 대기 | 2026-11-01 |
+| Codex | iOS 스낵 위젯 medium·large 동시 제공 | IPA 내보내기 검증 완료, 사용자 화면 확인 대기 | 2026-10-29 |
 <!-- 작업 시작 시 행 추가, 완료 시 CHANGELOG.md로 이동 후 행 삭제 -->

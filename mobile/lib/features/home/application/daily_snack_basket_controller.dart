@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:curitalk/core/storage/storage.dart';
+import 'package:curitalk/core/storage/snack_widget_bridge.dart';
 import 'package:curitalk/features/auth/auth.dart';
 import 'package:curitalk/features/home/application/language_snack_language.dart';
 import 'package:curitalk/features/home/application/language_snacks_controller.dart';
@@ -20,6 +21,9 @@ class DailySnackBasketController extends AsyncNotifier<DailySnackBasket?> {
   Future<void> _writes = Future.value();
   late String _key;
   late SecureStorageBackend _storage;
+  late SnackWidgetBridge _widgetBridge;
+  late String _userId;
+  late String _language;
   int _generation = 0;
   int? _checkingGeneration;
   bool _interacting = false;
@@ -34,9 +38,12 @@ class DailySnackBasketController extends AsyncNotifier<DailySnackBasket?> {
     final userId = ref.watch(snackUserIdProvider);
     final language = ref.watch(languageSnackLanguageProvider);
     _storage = ref.watch(secureStorageBackendProvider);
+    _widgetBridge = ref.watch(snackWidgetBridgeProvider);
     final storage = _storage;
     final now = ref.watch(snackClockProvider);
     if (userId == null) return null;
+    _userId = userId;
+    _language = language;
     final key =
         'curitalk.snack_basket.v1.${Uri.encodeComponent(userId)}.$language';
     _key = key;
@@ -45,12 +52,20 @@ class DailySnackBasketController extends AsyncNotifier<DailySnackBasket?> {
     String? resetId;
     ref.onDispose(() => active = false);
     await _writes;
+    final widgetBasket = await _readWidgetBasket(userId, language);
+    if (!active) return null;
+    if (widgetBasket != null &&
+        widgetBasket.day == DailySnackBasket.dayOf(now())) {
+      _persist(widgetBasket);
+      return widgetBasket;
+    }
     try {
       final raw = await storage.read(key);
       if (raw != null) {
         final restored = DailySnackBasket.fromJson(jsonDecode(raw), language);
         resetId = restored.resetId;
         if (restored.day == DailySnackBasket.dayOf(now())) {
+          _persist(restored);
           return restored;
         }
         previousDay = true;
@@ -74,6 +89,60 @@ class DailySnackBasketController extends AsyncNotifier<DailySnackBasket?> {
     );
     if (basket != null) _persist(basket);
     return basket;
+  }
+
+  Future<DailySnackBasket?> _readWidgetBasket(
+    String userId,
+    String language,
+  ) async {
+    try {
+      final raw = await _widgetBridge.read();
+      if (raw == null) return null;
+      final snapshot = jsonDecode(raw);
+      if (snapshot is! Map<String, dynamic> ||
+          snapshot['user_id'] != userId ||
+          snapshot['language'] != language) {
+        return null;
+      }
+      return DailySnackBasket.fromJson(snapshot['basket'], language);
+    } on Object {
+      return null;
+    }
+  }
+
+  Future<void> refreshFromWidget() async {
+    if (state.isLoading ||
+        state.value == null ||
+        _interacting ||
+        ref.read(snackUserIdProvider) == null) {
+      return;
+    }
+    final generation = _generation;
+    await _writes;
+    if (generation != _generation) return;
+    final basket = await _readWidgetBasket(_userId, _language);
+    if (generation != _generation || basket == null) return;
+    if (basket.day != DailySnackBasket.dayOf(ref.read(snackClockProvider)())) {
+      return;
+    }
+    final current = state.value;
+    if (current == null ||
+        current.day != basket.day ||
+        current.consumed != basket.consumed ||
+        current.resetId != basket.resetId ||
+        !_sameSnacks(current, basket)) {
+      state = AsyncData(basket);
+      _persist(basket);
+    }
+  }
+
+  bool _sameSnacks(DailySnackBasket a, DailySnackBasket b) {
+    for (var i = 0; i < DailySnackBasket.capacity; i++) {
+      if (a.snacks[i].id != b.snacks[i].id) {
+        return false;
+      }
+    }
+    return true;
   }
 
   void ensureToday() {
@@ -160,11 +229,26 @@ class DailySnackBasketController extends AsyncNotifier<DailySnackBasket?> {
     final key = _key;
     final storage = _storage;
     final encoded = jsonEncode(basket.toJson());
+    final widgetEncoded = jsonEncode({
+      'user_id': _userId,
+      'language': _language,
+      'basket': basket.toJson(),
+      'page': 0,
+    });
+    final widgetBridge = _widgetBridge;
+    final userId = _userId;
     _writes = _writes.then((_) async {
       try {
         await storage.write(key, encoded);
       } on Object {
         // 진행은 메모리에서 유지하며 저장 실패를 학습 실패로 처리하지 않아요.
+      }
+      try {
+        if (ref.mounted && ref.read(snackUserIdProvider) == userId) {
+          await widgetBridge.write(widgetEncoded);
+        }
+      } on Object {
+        // 위젯 저장 실패는 앱의 스낵 소비를 막지 않아요.
       }
     });
   }

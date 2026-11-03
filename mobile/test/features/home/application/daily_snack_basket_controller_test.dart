@@ -6,6 +6,8 @@ import 'package:curitalk/features/home/data/api_language_snack_repository.dart';
 import 'package:curitalk/features/home/data/language_snack_cache.dart';
 import 'package:curitalk/features/home/data/snack_basket_reset_repository.dart';
 import 'dart:async';
+import 'dart:convert';
+import 'package:curitalk/core/storage/snack_widget_bridge.dart';
 import 'package:curitalk/features/home/domain/language_snack.dart';
 import 'package:curitalk/features/home/domain/language_snack_repository.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -19,6 +21,7 @@ void main() {
   late DateTime now;
   late String user;
   late String language;
+  late _MemoryWidgetBridge widgetBridge;
   ProviderContainer create() => ProviderContainer(
     overrides: [
       snackBasketResetRepositoryProvider.overrideWithValue(resets),
@@ -27,6 +30,7 @@ void main() {
       languageSnackLanguageProvider.overrideWith((ref) => language),
       languageSnacksEnabledProvider.overrideWithValue(true),
       secureStorageBackendProvider.overrideWithValue(storage),
+      snackWidgetBridgeProvider.overrideWithValue(widgetBridge),
       languageSnackRepositoryProvider.overrideWithValue(repository),
       languageSnackCacheProvider.overrideWith(
         (ref) => SecureLanguageSnackCache(
@@ -43,6 +47,62 @@ void main() {
     now = DateTime(2026, 9, 18);
     user = 'user-1';
     language = 'en';
+    widgetBridge = _MemoryWidgetBridge();
+  });
+
+  test('widget bite appears in app and survives restart', () async {
+    final c = create();
+    addTearDown(c.dispose);
+    final first = (await c.read(dailySnackBasketProvider.future))!;
+    await Future<void>.delayed(Duration.zero);
+    final snapshot = jsonDecode(widgetBridge.value!) as Map<String, dynamic>;
+    expect(snapshot['user_id'], 'user-1');
+    expect(snapshot['language'], 'en');
+    final basket = snapshot['basket'] as Map<String, dynamic>;
+    expect(basket['snacks'], hasLength(12));
+    basket['consumed'] = 1;
+    await widgetBridge.write(jsonEncode(snapshot));
+    await c.read(dailySnackBasketProvider.notifier).refreshFromWidget();
+    expect(c.read(dailySnackBasketProvider).value!.consumed, 1);
+    expect(
+      c.read(dailySnackBasketProvider).value!.snacks.first.id,
+      first.snacks.first.id,
+    );
+    await Future<void>.delayed(Duration.zero);
+    final restarted = create();
+    addTearDown(restarted.dispose);
+    expect(
+      (await restarted.read(dailySnackBasketProvider.future))!.consumed,
+      1,
+    );
+  });
+
+  test('widget exhaustion finishes the home basket', () async {
+    final c = create();
+    addTearDown(c.dispose);
+    await c.read(dailySnackBasketProvider.future);
+    await Future<void>.delayed(Duration.zero);
+    final snapshot = jsonDecode(widgetBridge.value!) as Map<String, dynamic>;
+    (snapshot['basket'] as Map<String, dynamic>)['consumed'] = 12;
+    await widgetBridge.write(jsonEncode(snapshot));
+    await c.read(dailySnackBasketProvider.notifier).refreshFromWidget();
+    final basket = c.read(dailySnackBasketProvider).value!;
+    expect(basket.consumed, 12);
+    expect(basket.isFinished, isTrue);
+    expect(c.read(dailySnackBasketProvider.notifier).takeBite(), isNull);
+  });
+
+  test('widget snapshot from another account is ignored', () async {
+    final c = create();
+    addTearDown(c.dispose);
+    await c.read(dailySnackBasketProvider.future);
+    await Future<void>.delayed(Duration.zero);
+    final snapshot = jsonDecode(widgetBridge.value!) as Map<String, dynamic>;
+    snapshot['user_id'] = 'other';
+    (snapshot['basket'] as Map<String, dynamic>)['consumed'] = 4;
+    await widgetBridge.write(jsonEncode(snapshot));
+    await c.read(dailySnackBasketProvider.notifier).refreshFromWidget();
+    expect(c.read(dailySnackBasketProvider).value!.consumed, 0);
   });
 
   test(
@@ -285,4 +345,17 @@ class _Repository implements LanguageSnackRepository {
     if (fail) throw StateError('offline');
     return snacks;
   }
+}
+
+class _MemoryWidgetBridge implements SnackWidgetBridge {
+  String? value;
+
+  @override
+  Future<String?> read() async => value;
+
+  @override
+  Future<void> write(String snapshot) async => value = snapshot;
+
+  @override
+  Future<void> clear() async => value = null;
 }

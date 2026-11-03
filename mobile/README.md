@@ -271,6 +271,18 @@ SSE 기반 실시간 피드백과 waveform 표시는 후속 작업으로 남겨�
 
 ## 실행 설정
 
+### iOS 홈 화면 스낵 위젯
+
+iOS 17 이상에서는 `systemMedium`과 `systemLarge` 두 크기의 **오늘의 토마토** 위젯을 제공해요. 앱에 로그인하고 Home에서 오늘의 스낵을 한 번 준비한 뒤 홈 화면의 위젯 갤러리에서 원하는 크기를 추가해요. 기본 화면은 상단 중앙의 제목과 그 아래 토마토 3개가 담긴 바구니를 보여주며, 큰 크기에서는 바구니를 위젯 중앙에 놓아요. 바구니를 누르면 토마토 한 개가 나오고 토마토를 누르면 앱을 열지 않고 한입을 소비하며 위젯 전체가 앱 팝업과 닮은 색상별 스낵 카드로 바뀌어요. 4입마다 남은 2·1·0개 바구니로 돌아가요. 카드에는 중앙 정렬된 두 표현을 보여주고, 좌우 화살표로 설명·예문·번역을 넘기며 닫기 버튼으로 토마토 화면에 돌아가요. 두 크기 모두 같은 종류의 두 표현 설명을 한 페이지에 나란히 보여주고 긴 설명은 말줄임표로 처리해요. 두 크기는 같은 진행을 공유하고 앱 Home 진입·복귀에도 반영돼요. 앱을 열지 않은 채 날짜가 바뀌면 마지막 12개를 새 날짜에 재사용해요.
+
+Simulator에서는 iOS 17 이상 기기에 앱을 설치한 뒤 홈 화면을 길게 눌러 위젯을 추가해요. Xcode에서 `SnackWidget` target을 실행하면 위젯만 디버깅할 수도 있어요. 실기기 배포 전에는 Apple Developer의 앱 ID와 위젯 extension ID에 `group.com.morethanhuman.curitalk` App Group을 등록하고, 양쪽 provisioning profile에 반영해야 해요. 구현 계약은 [iOS 스낵 위젯](../.agent/_contracts/IOS_SNACK_WIDGET.md)을 참고해요.
+
+TestFlight 아카이브에서는 Runner와 SnackWidget의 Release·Profile 구성을 각각 App Group이 포함된 App Store Connect 배포 프로파일로 수동 서명해요. 두 프로파일은 같은 Apple Distribution 인증서를 포함해야 해요. IPA 내보내기에도 `ios/ExportOptions.plist`로 같은 두 프로파일과 인증서를 지정해요. 프로파일 재발급이나 인증서 교체 시 Xcode 프로젝트와 내보내기 옵션의 UUID·지문을 함께 갱신해요. `build_testflight_ipa.sh`는 IPA 포장 시 Xcode가 macOS 기본 `rsync`를 사용하도록 PATH를 설정해요.
+
+로컬 Simulator용 수정 빌드는 `mobile/`에서 `flutter build ios --simulator --debug --dart-define-from-file=.env.local.json`으로 만들어요. 기존 중간 크기 위젯은 유지할 수 있고, 큰 크기를 원하면 위젯 갤러리에서 추가해요.
+
+### 앱 실행
+
 Google Sign-In 실행 시 다음 `dart-define`을 사용할 수 있어요.
 
 ```bash

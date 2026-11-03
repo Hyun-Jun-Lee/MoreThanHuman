@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:curitalk/core/network/network.dart';
+import 'package:curitalk/core/storage/snack_widget_bridge.dart';
 import 'package:curitalk/features/auth/data/api_auth_repository.dart';
 import 'package:curitalk/features/auth/data/account_local_data.dart';
 import 'package:curitalk/features/auth/data/apple_identity_service.dart';
@@ -12,7 +13,6 @@ import 'package:curitalk/features/auth/domain/user_profile.dart';
 import 'package:curitalk/features/language/language.dart';
 import 'package:curitalk/features/onboarding/data/onboarding_storage.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class AuthController extends AsyncNotifier<AuthSession> {
@@ -22,6 +22,7 @@ class AuthController extends AsyncNotifier<AuthSession> {
   late OnboardingStorage _onboardingStorage;
   late AccountLocalData _accountLocalData;
   late AuthSessionCoordinator _sessionCoordinator;
+  late SnackWidgetBridge _snackWidgetBridge;
   StreamSubscription<SupabaseSessionChange>? _authSubscription;
 
   @override
@@ -31,6 +32,7 @@ class AuthController extends AsyncNotifier<AuthSession> {
     _googleIdentityService = ref.watch(googleIdentityServiceProvider);
     _onboardingStorage = ref.watch(onboardingStorageProvider);
     _accountLocalData = ref.watch(accountLocalDataProvider);
+    _snackWidgetBridge = ref.watch(snackWidgetBridgeProvider);
     final AuthSessionCoordinator sessionCoordinator = ref.watch(
       authSessionCoordinatorProvider,
     );
@@ -132,6 +134,7 @@ class AuthController extends AsyncNotifier<AuthSession> {
     _sessionCoordinator.deactivateSession();
     await _signOutSafely();
     state = const AsyncData<AuthSession>(AuthSession.unauthenticated());
+    await _clearSnackWidget();
   }
 
   Future<AccountDeletionResult> deleteAccount({
@@ -166,14 +169,8 @@ class AuthController extends AsyncNotifier<AuthSession> {
         localCleanupFailed = true;
       }
       try {
-        if (defaultTargetPlatform == TargetPlatform.iOS) {
-          await const MethodChannel(
-            'com.morethanhuman.curitalk/snack_widget',
-          ).invokeMethod<void>('clear');
-        }
-      } on MissingPluginException {
-        // 위젯 확장이 없는 빌드에서도 계정 삭제는 계속해요.
-      } on PlatformException catch (error) {
+        await _snackWidgetBridge.clear();
+      } on Object catch (error) {
         localCleanupFailed = true;
         debugPrint('Could not clear local widget state: $error');
       }
@@ -225,6 +222,7 @@ class AuthController extends AsyncNotifier<AuthSession> {
     final bool hasSession = await _supabaseAuthService.hasCurrentSession();
     if (!hasSession) {
       _sessionCoordinator.deactivateSession();
+      await _clearSnackWidget();
       return const AuthSession.unauthenticated();
     }
 
@@ -238,6 +236,7 @@ class AuthController extends AsyncNotifier<AuthSession> {
       }
       _sessionCoordinator.deactivateSession();
       await _signOutSafely();
+      await _clearSnackWidget();
       return const AuthSession.unauthenticated();
     }
   }
@@ -246,11 +245,21 @@ class AuthController extends AsyncNotifier<AuthSession> {
     if (change.event == SupabaseSessionEvent.signedOut) {
       _sessionCoordinator.deactivateSession();
       state = const AsyncData<AuthSession>(AuthSession.unauthenticated());
+      unawaited(_clearSnackWidget());
     }
   }
 
   void _handleSessionExpired() {
     state = const AsyncData<AuthSession>(AuthSession.unauthenticated());
+    unawaited(_clearSnackWidget());
+  }
+
+  Future<void> _clearSnackWidget() async {
+    try {
+      await _snackWidgetBridge.clear();
+    } on Object {
+      // 위젯 연결 실패가 로그아웃을 막지 않아요.
+    }
   }
 
   Future<void> _signOutSafely() async {

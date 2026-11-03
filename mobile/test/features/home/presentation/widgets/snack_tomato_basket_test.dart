@@ -107,6 +107,18 @@ void main() {
     expect(find.byType(Dialog), findsNothing);
   });
 
+  testWidgets('external widget bite restores the bitten tomato on Home', (
+    tester,
+  ) async {
+    final harness = _Harness();
+    await tester.pumpWidget(harness.app());
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('tomato-stage-0')), findsNothing);
+    harness.setState(() => harness.basket = harness.basket.withConsumed(1));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('tomato-stage-1')), findsOneWidget);
+  });
+
   testWidgets('leaving during pickup cancels it without spending a bite', (
     tester,
   ) async {

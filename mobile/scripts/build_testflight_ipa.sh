@@ -13,6 +13,7 @@ BUILD_NUMBER="$2"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MOBILE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 DEFINE_FILE="${3:-$MOBILE_DIR/.env.prod.json}"
+EXPORT_OPTIONS="$MOBILE_DIR/ios/ExportOptions.plist"
 
 if [[ ! -f "$DEFINE_FILE" ]]; then
   echo "Dart define file not found: $DEFINE_FILE"
@@ -21,7 +22,9 @@ fi
 
 cd "$MOBILE_DIR"
 
-flutter build ipa --release \
+# Xcode's IPA packaging expects the macOS rsync implementation for its -E option.
+PATH="/usr/bin:/bin:/usr/sbin:/sbin:$PATH" flutter build ipa --release \
   --build-name="$BUILD_NAME" \
   --build-number="$BUILD_NUMBER" \
-  --dart-define-from-file="$DEFINE_FILE"
+  --dart-define-from-file="$DEFINE_FILE" \
+  --export-options-plist="$EXPORT_OPTIONS"

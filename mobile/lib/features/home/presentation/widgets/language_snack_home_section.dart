@@ -49,7 +49,14 @@ class _LanguageSnackHomeSectionState
   void _refreshBasket() {
     if (!mounted || !_active) return;
     _checkDay();
-    unawaited(ref.read(dailySnackBasketProvider.notifier).refreshReset());
+    unawaited(_syncBasket());
+  }
+
+  Future<void> _syncBasket() async {
+    await ref.read(dailySnackBasketProvider.notifier).refreshFromWidget();
+    if (mounted && _active) {
+      await ref.read(dailySnackBasketProvider.notifier).refreshReset();
+    }
   }
 
   @override

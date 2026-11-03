@@ -54,6 +54,8 @@ flutter run \
 
 Flutter는 서버 .env를 자동으로 읽지 않아요. 위 공개 설정을 실제 값으로 바꾸고, Google 로그인 플랫폼 설정은 [모바일 문서](mobile/README.md#실행-설정)를 따라주세요. Android 에뮬레이터는 API 주소의 호스트를 `10.0.2.2`, 실제 기기는 접근 가능한 개발 PC 주소로 바꿔요.
 
+iOS TestFlight IPA의 앱·위젯 서명 설정은 [운영 가이드](docs/OPERATIONS.md#ios-testflight-배포-서명)를 따라주세요.
+
 ### 공개 웹사이트
 
 ```bash

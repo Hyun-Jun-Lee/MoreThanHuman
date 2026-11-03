@@ -25,6 +25,14 @@
 - API 컨테이너의 8010 포트는 내부 네트워크에만 노출돼요. 외부 접근은 nginx의 80/443 포트를 통해 제공해요.
 - 음성 캐시용 호스트 디렉터리를 API 시작 전에 만들어야 해요. Compose는 bind source를 자동 생성하지 않고, API는 영속 마운트가 아니면 시작을 거부해요.
 
+## iOS TestFlight 배포 서명
+
+`mobile/scripts/build_testflight_ipa.sh`는 `flutter build ipa`를 실행하고 IPA 내보내기 옵션을 전달해요. Xcode 프로젝트의 Runner와 SnackWidget Release 서명 설정이 아카이브에 적용돼요. 두 타깃의 App ID(`com.morethanhuman.curitalk`, `com.morethanhuman.curitalk.SnackWidget`) 모두 Apple Developer에서 `group.com.morethanhuman.curitalk` App Group에 속해야 해요.
+
+두 App ID에 각각 App Store Connect 배포 프로파일을 발급하고, 두 프로파일이 같은 Apple Distribution 인증서를 포함하는지 확인해요. 프로젝트는 Runner와 SnackWidget의 Release·Profile 구성에 프로파일 UUID와 인증서 SHA-1을 지정해요. 프로파일·인증서가 재발급되면 `mobile/ios/Runner.xcodeproj/project.pbxproj`의 두 타깃 값을 새 값으로 함께 갱신해요. 프로파일 이름이 같은 구형 파일만 선택하면 App Group이나 인증서가 일치하지 않을 수 있어요. TestFlight 배포 프로파일에는 등록 기기가 필요하지 않아요.
+
+서명 값이 일치하면 실제 버전과 빌드 번호로 `mobile/scripts/build_testflight_ipa.sh`를 실행해요. 세 번째 인수를 생략하면 `mobile/.env.prod.json`을 사용해요. 스크립트는 `mobile/ios/ExportOptions.plist`를 IPA 내보내기에 전달해 Runner·SnackWidget 각각의 프로파일 UUID와 공통 배포 인증서 SHA-1을 고정해요. 프로파일이나 인증서를 재발급하면 Xcode 프로젝트뿐 아니라 이 파일도 같은 값으로 갱신해요. 아카이브는 성공하고 내보내기만 실패한 경우에는 기존 `.xcarchive`에서 다시 내보낼 수 있어요. IPA 포장 단계에서 Xcode는 macOS 기본 `rsync`의 `-E` 옵션을 사용해요. Homebrew `rsync`가 PATH에서 우선하면 `Copy failed`가 발생할 수 있어 스크립트는 빌드 실행 중 `/usr/bin`을 PATH 앞에 놓아요.
+
 ## 대화 음성 파일 운영
 
 첫 배포 전에 호스트에서 전용 디스크의 여유 공간을 확인하고 음성 디렉터리를 만들어요. 다른 위치를 쓰면 `CURITALK_AUDIO_HOST_DIR`을 Compose 실행 환경에 지정해요. 컨테이너 내부 경로는 `/var/lib/curitalk/audio`예요.
@@ -187,6 +195,8 @@ uv run python -m scripts.archive_weekly_topic TOPIC_UUID
 
 ## 변경 기록
 
+- 2026-10-31: TestFlight IPA 내보내기의 타깃별 프로파일·인증서 지문 지정과 시스템 `rsync` 우선 사용 절차를 추가했어요.
+- 2026-10-31: iOS 앱·위젯의 App Group 및 TestFlight 수동 서명 갱신 절차를 추가했어요.
 - 2026-10-05: API Uvicorn worker를 2개로 설정하고 전체 Compose 중단 없이 API만 재생성하는 절차를 명시했어요.
 - 2026-10-04: 재발행 후보를 12쌍으로 늘리고 실패 코드·검증 개수를 CLI 결과에 추가했어요.
 - 2026-10-04: 주간 주제 첫 질문 생성과 `--republish` 재발행 절차를 추가했어요.
