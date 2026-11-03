@@ -89,12 +89,14 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                         ref.read(billingControllerProvider.notifier).restore(),
               child: Text(copy.restorePurchases),
             ),
-            TextButton(
-              onPressed: () => launchUrl(
-                Uri.parse('https://apps.apple.com/account/subscriptions'),
-                mode: LaunchMode.externalApplication,
+            Center(
+              child: OutlinedButton(
+                onPressed: () => launchUrl(
+                  Uri.parse('https://apps.apple.com/account/subscriptions'),
+                  mode: LaunchMode.externalApplication,
+                ),
+                child: Text(copy.manageSubscription),
               ),
-              child: Text(copy.manageSubscription),
             ),
             const SizedBox(height: AppSpacing.md),
             Wrap(

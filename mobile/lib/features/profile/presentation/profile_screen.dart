@@ -215,24 +215,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       const Spacer(),
                       Center(
                         child: TextButton(
-                          onPressed:
-                              user == null ||
-                                  isDeletingAccount ||
-                                  isLoggingOut ||
-                                  isSavingLanguage ||
-                                  isSavingAppLocale
-                              ? null
-                              : _deleteAccount,
-                          child: Text(
-                            copy.deleteAccountLabel,
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.error,
-                            ),
-                          ),
-                        ),
-                      ),
-                      Center(
-                        child: TextButton(
                           style: AppComponentThemes.mutedTextButton,
                           onPressed:
                               isLoggingOut ||
@@ -253,6 +235,20 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                   }
                                 },
                           child: Text(copy.logOutLabel),
+                        ),
+                      ),
+                      Center(
+                        child: TextButton(
+                          style: AppComponentThemes.mutedTextButton,
+                          onPressed:
+                              user == null ||
+                                  isDeletingAccount ||
+                                  isLoggingOut ||
+                                  isSavingLanguage ||
+                                  isSavingAppLocale
+                              ? null
+                              : _deleteAccount,
+                          child: Text(copy.deleteAccountLabel),
                         ),
                       ),
                       const SizedBox(height: AppSpacing.xl),
@@ -283,12 +279,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               if (isIos) ...[
                 const SizedBox(height: AppSpacing.md),
                 Text(copy.deleteAccountSubscriptionWarning),
-                TextButton(
-                  onPressed: () => launchUrl(
-                    Uri.parse('https://apps.apple.com/account/subscriptions'),
-                    mode: LaunchMode.externalApplication,
+                Align(
+                  alignment: Alignment.center,
+                  child: OutlinedButton(
+                    onPressed: () => launchUrl(
+                      Uri.parse('https://apps.apple.com/account/subscriptions'),
+                      mode: LaunchMode.externalApplication,
+                    ),
+                    child: Text(copy.manageSubscription),
                   ),
-                  child: Text(copy.manageSubscription),
                 ),
               ],
               if (user.oauthProvider == 'apple') ...[
