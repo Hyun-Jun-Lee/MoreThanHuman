@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:curitalk/app/theme/app_theme.dart';
 import 'package:curitalk/app/theme/tokens/tokens.dart';
 import 'package:curitalk/features/billing/billing_controller.dart';
@@ -118,16 +120,91 @@ void main() {
     expect(find.text('이전에 구매했었나요?'), findsOneWidget);
     expect(find.text('구매 복원'), findsOneWidget);
     expect(find.widgetWithText(FilledButton, '구독하기'), findsOneWidget);
-    await tester.tap(find.widgetWithText(FilledButton, '구독하기'));
-    await tester.pump();
     final ProviderContainer container = ProviderScope.containerOf(
       tester.element(find.byType(PaywallScreen)),
     );
+    final _TestBillingController controller =
+        container.read(billingControllerProvider.notifier)
+            as _TestBillingController;
+    await tester.tap(find.widgetWithText(FilledButton, '구독하기'));
+    await tester.pump();
+    expect(controller.purchasedProductId, 'Plus');
     expect(
-      (container.read(billingControllerProvider.notifier)
-              as _TestBillingController)
-          .purchasedProductId,
-      'Plus',
+      find.byKey(const ValueKey<String>('paywall-purchase-loading')),
+      findsOneWidget,
+    );
+    expect(find.text('구독 정보를 업데이트하는 중이에요.'), findsOneWidget);
+    expect(
+      tester
+          .widget<FilledButton>(find.widgetWithText(FilledButton, '구독하기'))
+          .onPressed,
+      isNull,
+    );
+
+    controller.completePurchase();
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey<String>('paywall-purchase-loading')),
+      findsNothing,
+    );
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('keeps loading visible until the refreshed plan arrives', (
+    WidgetTester tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    final Completer<BillingEntitlement> entitlement =
+        Completer<BillingEntitlement>();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          billingControllerProvider.overrideWith(
+            _VerifiedBillingController.new,
+          ),
+          billingEntitlementProvider.overrideWith(
+            (Ref ref) => entitlement.future,
+          ),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.light,
+          locale: const Locale('ko'),
+          supportedLocales: const <Locale>[Locale('ko'), Locale('en')],
+          localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
+            GlobalMaterialLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+          ],
+          home: const PaywallScreen(),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey<String>('paywall-purchase-loading')),
+      findsOneWidget,
+    );
+
+    entitlement.complete(
+      const BillingEntitlement(plan: 'plus', status: 'active'),
+    );
+    await tester.pump();
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey<String>('paywall-purchase-loading')),
+      findsNothing,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('paywall-plan-Plus')),
+        matching: find.byKey(
+          const ValueKey<String>('paywall-current-plan-indicator'),
+        ),
+      ),
+      findsOneWidget,
     );
     debugDefaultTargetPlatformOverride = null;
   });
@@ -135,28 +212,10 @@ void main() {
 
 class _TestBillingController extends BillingController {
   String? purchasedProductId;
+  final Completer<void> _purchaseCompleter = Completer<void>();
 
   @override
-  BillingUiState build() => BillingUiState(
-    products: <ProductDetails>[
-      ProductDetails(
-        id: 'Advance',
-        title: 'Advance',
-        description: '',
-        price: r'$4.99',
-        rawPrice: 4.99,
-        currencyCode: 'USD',
-      ),
-      ProductDetails(
-        id: 'Plus',
-        title: 'Plus',
-        description: '',
-        price: r'$6.99',
-        rawPrice: 6.99,
-        currencyCode: 'USD',
-      ),
-    ],
-  );
+  BillingUiState build() => BillingUiState(products: _products);
 
   @override
   Future<void> loadProducts() async {}
@@ -164,5 +223,38 @@ class _TestBillingController extends BillingController {
   @override
   Future<void> purchase(ProductDetails product) async {
     purchasedProductId = product.id;
+    state = state.copyWith(isProcessing: true);
+    await _purchaseCompleter.future;
+    state = state.copyWith(isProcessing: false);
   }
+
+  void completePurchase() => _purchaseCompleter.complete();
 }
+
+class _VerifiedBillingController extends BillingController {
+  @override
+  BillingUiState build() =>
+      BillingUiState(products: _products, message: 'verified');
+
+  @override
+  Future<void> loadProducts() async {}
+}
+
+final List<ProductDetails> _products = <ProductDetails>[
+  ProductDetails(
+    id: 'Advance',
+    title: 'Advance',
+    description: '',
+    price: r'$4.99',
+    rawPrice: 4.99,
+    currencyCode: 'USD',
+  ),
+  ProductDetails(
+    id: 'Plus',
+    title: 'Plus',
+    description: '',
+    price: r'$6.99',
+    rawPrice: 6.99,
+    currencyCode: 'USD',
+  ),
+];

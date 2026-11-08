@@ -45,106 +45,185 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
     }
     final state = ref.watch(billingControllerProvider);
     final entitlement = ref.watch(billingEntitlementProvider);
+    final bool isUpdatingSubscription =
+        state.isProcessing ||
+        (state.message == 'verified' && entitlement.isLoading);
     final ProductDetails? selectedProduct = state.products
         .where((ProductDetails product) => product.id == _selectedPlanId)
         .firstOrNull;
-    return Scaffold(
-      appBar: AppBar(title: Text(copy.subscriptionTitle)),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(AppSpacing.screenPadding),
-          children: [
-            if (state.isLoading && state.products.isEmpty)
-              const Center(child: AppLoadingIndicator(width: 180)),
-            for (final id in const ['Free', 'Advance', 'Plus'])
-              _PlanCard(
-                id: id,
-                isCurrentPlan:
-                    id.toLowerCase() ==
-                    entitlement.asData?.value.plan.toLowerCase(),
-                isSelected: id == _selectedPlanId,
-                product: state.products
-                    .where((item) => item.id == id)
-                    .firstOrNull,
-                onSelected: () {
-                  if (id == 'Free' || id == _selectedPlanId) return;
-                  HapticFeedback.selectionClick();
-                  setState(() => _selectedPlanId = id);
-                },
-              ),
-            if (state.message != null) ...[
-              const SizedBox(height: AppSpacing.md),
-              Text(
-                copy.billingMessage(state.message!),
-                style: AppTypography.bodySm,
-              ),
-            ],
-            if (state.products.isEmpty && !state.isLoading)
-              TextButton(
-                onPressed: () =>
-                    ref.read(billingControllerProvider.notifier).loadProducts(),
-                child: Text(copy.retryLabel),
-              ),
-            const SizedBox(height: AppSpacing.sm),
-            FilledButton(
-              key: const ValueKey<String>('paywall-subscribe'),
-              onPressed: state.isProcessing || selectedProduct == null
-                  ? null
-                  : () => ref
-                        .read(billingControllerProvider.notifier)
-                        .purchase(selectedProduct),
-              child: Text(copy.subscribeLabel),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Wrap(
-              alignment: WrapAlignment.center,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: <Widget>[
-                Text(copy.previousPurchasePrompt, style: AppTypography.bodySm),
-                TextButton(
-                  onPressed: state.isProcessing
-                      ? null
-                      : () => ref
-                            .read(billingControllerProvider.notifier)
-                            .restore(),
-                  child: Text(copy.restorePurchases),
-                ),
-              ],
-            ),
-            Center(
-              child: OutlinedButton(
-                onPressed: () => launchUrl(
-                  Uri.parse('https://apps.apple.com/account/subscriptions'),
-                  mode: LaunchMode.externalApplication,
-                ),
-                child: Text(copy.manageSubscription),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            Wrap(
-              alignment: WrapAlignment.center,
-              children: [
-                TextButton(
-                  style: AppComponentThemes.mutedTextButton,
-                  onPressed: () => launchUrl(
-                    Uri.parse(AppConfig.subscriptionTermsUrl),
-                    mode: LaunchMode.externalApplication,
+    return PopScope(
+      canPop: !isUpdatingSubscription,
+      child: Scaffold(
+        appBar: AppBar(title: Text(copy.subscriptionTitle)),
+        body: SafeArea(
+          child: Stack(
+            children: <Widget>[
+              ListView(
+                padding: const EdgeInsets.all(AppSpacing.screenPadding),
+                children: [
+                  if (state.isLoading && state.products.isEmpty)
+                    const Center(child: AppLoadingIndicator(width: 180)),
+                  for (final id in const ['Free', 'Advance', 'Plus'])
+                    _PlanCard(
+                      id: id,
+                      isCurrentPlan:
+                          id.toLowerCase() ==
+                          entitlement.asData?.value.plan.toLowerCase(),
+                      isSelected: id == _selectedPlanId,
+                      product: state.products
+                          .where((item) => item.id == id)
+                          .firstOrNull,
+                      onSelected: () {
+                        if (id == 'Free' || id == _selectedPlanId) return;
+                        HapticFeedback.selectionClick();
+                        setState(() => _selectedPlanId = id);
+                      },
+                    ),
+                  if (state.message != null) ...[
+                    const SizedBox(height: AppSpacing.md),
+                    Text(
+                      copy.billingMessage(state.message!),
+                      style: AppTypography.bodySm,
+                    ),
+                  ],
+                  if (state.products.isEmpty && !state.isLoading)
+                    TextButton(
+                      onPressed: () => ref
+                          .read(billingControllerProvider.notifier)
+                          .loadProducts(),
+                      child: Text(copy.retryLabel),
+                    ),
+                  const SizedBox(height: AppSpacing.sm),
+                  FilledButton(
+                    key: const ValueKey<String>('paywall-subscribe'),
+                    onPressed: state.isProcessing || selectedProduct == null
+                        ? null
+                        : () => ref
+                              .read(billingControllerProvider.notifier)
+                              .purchase(selectedProduct),
+                    child: Text(copy.subscribeLabel),
                   ),
-                  child: Text(copy.termsOfUse),
-                ),
-                TextButton(
-                  style: AppComponentThemes.mutedTextButton,
-                  onPressed: AppConfig.privacyPolicyUrl.isEmpty
-                      ? null
-                      : () => launchUrl(
-                          Uri.parse(AppConfig.privacyPolicyUrl),
+                  const SizedBox(height: AppSpacing.sm),
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: <Widget>[
+                      Text(
+                        copy.previousPurchasePrompt,
+                        style: AppTypography.bodySm,
+                      ),
+                      TextButton(
+                        onPressed: state.isProcessing
+                            ? null
+                            : () => ref
+                                  .read(billingControllerProvider.notifier)
+                                  .restore(),
+                        child: Text(copy.restorePurchases),
+                      ),
+                    ],
+                  ),
+                  Center(
+                    child: OutlinedButton(
+                      onPressed: () => launchUrl(
+                        Uri.parse(
+                          'https://apps.apple.com/account/subscriptions',
+                        ),
+                        mode: LaunchMode.externalApplication,
+                      ),
+                      child: Text(copy.manageSubscription),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    children: [
+                      TextButton(
+                        style: AppComponentThemes.mutedTextButton,
+                        onPressed: () => launchUrl(
+                          Uri.parse(AppConfig.subscriptionTermsUrl),
                           mode: LaunchMode.externalApplication,
                         ),
-                  child: Text(copy.privacyPolicy),
+                        child: Text(copy.termsOfUse),
+                      ),
+                      TextButton(
+                        style: AppComponentThemes.mutedTextButton,
+                        onPressed: AppConfig.privacyPolicyUrl.isEmpty
+                            ? null
+                            : () => launchUrl(
+                                Uri.parse(AppConfig.privacyPolicyUrl),
+                                mode: LaunchMode.externalApplication,
+                              ),
+                        child: Text(copy.privacyPolicy),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              if (isUpdatingSubscription)
+                _SubscriptionUpdatingOverlay(
+                  message: copy.subscriptionUpdating,
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SubscriptionUpdatingOverlay extends StatelessWidget {
+  const _SubscriptionUpdatingOverlay({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme colors = Theme.of(context).colorScheme;
+    return Positioned.fill(
+      key: const ValueKey<String>('paywall-purchase-loading'),
+      child: BlockSemantics(
+        child: Semantics(
+          liveRegion: true,
+          scopesRoute: true,
+          explicitChildNodes: true,
+          label: message,
+          child: ExcludeSemantics(
+            child: Stack(
+              children: <Widget>[
+                ModalBarrier(
+                  dismissible: false,
+                  color: colors.scrim.withValues(alpha: 0.4),
+                ),
+                Center(
+                  child: Material(
+                    color: colors.surface,
+                    borderRadius: BorderRadius.circular(AppRadius.lg),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.xl,
+                        vertical: AppSpacing.lg,
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          AppLoadingIndicator(
+                            width: 140,
+                            semanticLabel: message,
+                          ),
+                          const SizedBox(height: AppSpacing.md),
+                          Text(
+                            message,
+                            style: AppTypography.bodySm,
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ],
             ),
-          ],
+          ),
         ),
       ),
     );

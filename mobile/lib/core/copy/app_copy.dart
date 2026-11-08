@@ -185,6 +185,8 @@ class AppCopy {
   String monthlyPrice(String price) => '$price / $_monthlyUnit';
   String get monthlyPeriodLabel => '/$_monthlyUnit';
   String get subscribeLabel => isKorean ? '구독하기' : 'SUBSCRIBE';
+  String get subscriptionUpdating =>
+      isKorean ? '구독 정보를 업데이트하는 중이에요.' : 'Updating your subscription.';
   String get previousPurchasePrompt =>
       isKorean ? '이전에 구매했었나요?' : 'Purchased before?';
   String get restorePurchases => isKorean ? '구매 복원' : 'Restore purchases';

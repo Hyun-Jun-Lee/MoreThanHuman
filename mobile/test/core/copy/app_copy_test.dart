@@ -23,6 +23,8 @@ void main() {
         english.plusBusinessConversationBenefit,
         'Business Conversation Mode',
       );
+      expect(korean.subscriptionUpdating, '구독 정보를 업데이트하는 중이에요.');
+      expect(english.subscriptionUpdating, 'Updating your subscription.');
     });
 
     test('labels the profile language section', () {
