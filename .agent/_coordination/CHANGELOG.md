@@ -1,5 +1,7 @@
 # CHANGELOG — 완료된 작업 기록
 
+- 2026-11-07: Codex — iOS 구독 구매 버튼에서 개인정보처리방침 URL 필수 조건을 제거했어요. 상품을 불러오면 로컬 테스트에서 구매할 수 있고, URL이 없을 때는 개인정보처리방침 링크만 비활성화해요. 모바일 가이드를 갱신하고 Dart 정적 분석을 통과했어요.
+
 - 2026-10-31: Codex — TestFlight IPA 내보내기에 Runner·SnackWidget의 App Group 배포 프로파일 UUID와 공통 Apple Distribution 인증서를 지정하고, Xcode가 macOS 기본 `rsync`를 사용하도록 빌드 스크립트 PATH를 조정했어요. 기존 아카이브의 IPA 내보내기와 압축 무결성 검사를 통과했어요.
 
 - 2026-10-31: Codex — iOS TestFlight Runner·SnackWidget의 Release·Profile 서명을 App Group이 포함된 새 배포 프로파일과 동일한 설치 인증서로 고정했어요. 동명 구형 프로파일 선택과 위젯 개발용 프로파일 자동 생성 경로를 제거했고 Xcode 설정 조회·프로파일 메타데이터 검증을 통과했어요. 저장공간 문제로 전체 아카이브는 실행하지 않았어요.

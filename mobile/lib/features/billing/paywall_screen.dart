@@ -191,10 +191,7 @@ class _PlanCard extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.md),
               FilledButton(
-                onPressed:
-                    busy ||
-                        product == null ||
-                        AppConfig.privacyPolicyUrl.isEmpty
+                onPressed: busy || product == null
                     ? null
                     : () => onBuy(product!),
                 child: Text(copy.subscribeTo(id)),

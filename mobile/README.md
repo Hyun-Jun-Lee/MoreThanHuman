@@ -293,7 +293,7 @@ flutter run \
   --dart-define=GOOGLE_SERVER_CLIENT_ID=<web-oauth-client-id>
 ```
 
-iOS 구독 화면에는 공개 개인정보처리방침 링크가 필요해요. 구매 버튼을 활성화하려면 실제 HTTPS 주소를 `--dart-define=PRIVACY_POLICY_URL=https://...`로 전달해요. 별도 이용약관을 사용하면 `--dart-define=SUBSCRIPTION_TERMS_URL=https://...`도 전달해요. 기본 이용약관 링크는 Apple 표준 EULA예요. 앱은 제품 가격을 App Store에서 직접 조회하므로 가격용 `dart-define`은 없어요.
+iOS 앱을 배포할 때는 공개 개인정보처리방침 주소를 `--dart-define=PRIVACY_POLICY_URL=https://...`로 전달해요. 로컬 결제 테스트에서는 이 값이 없어도 App Store 상품을 불러오면 구매 버튼을 사용할 수 있고, 개인정보처리방침 링크만 비활성화돼요. 별도 이용약관을 사용하면 `--dart-define=SUBSCRIPTION_TERMS_URL=https://...`도 전달해요. 기본 이용약관 링크는 Apple 표준 EULA예요. 앱은 제품 가격을 App Store에서 직접 조회하므로 가격용 `dart-define`은 없어요.
 
 Android에서 `google-services.json`을 사용하지 않으면 `GOOGLE_SERVER_CLIENT_ID`가 필요해요. iOS는 `GOOGLE_CLIENT_ID`와 별개로 OAuth 설정의 `REVERSED_CLIENT_ID` URL scheme을 `Info.plist`에 등록해야 실제 로그인이 동작해요. `GOOGLE_SERVER_CLIENT_ID`는 Supabase Google Provider에 등록한 Web OAuth client ID와 같아야 해요.
 
