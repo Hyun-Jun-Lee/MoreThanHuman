@@ -421,8 +421,8 @@ void main() {
 
     await tester.tap(find.text('Profile'));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('LOG OUT'));
-    await tester.tap(find.text('LOG OUT'));
+    await tester.ensureVisible(find.text('Log out'));
+    await tester.tap(find.text('Log out'));
     await tester.pumpAndSettle();
 
     expect(supabaseAuth.hasSession, isFalse);

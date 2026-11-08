@@ -162,29 +162,31 @@ class AppCopy {
   String get retryLabel => isKorean ? '다시 시도' : 'Retry';
   String get subscriptionTitle => isKorean ? '구독' : 'Subscription';
   String get subscriptionDialogActionLabel => isKorean ? '구독' : 'SUBSCRIPT';
-  String get subscriptionIntro =>
-      isKorean ? '원하는 만큼 대화를 이어가세요' : 'Keep the conversation going';
-  String currentPlan(String plan) => isKorean
-      ? '현재 플랜: ${plan == 'free' ? '무료' : plan}'
-      : 'Current plan: ${plan == 'free' ? 'Free' : plan}';
-  String get subscriptionStatusUnavailable =>
-      isKorean ? '구독 상태를 확인하지 못했어요.' : 'Could not load subscription status.';
+  String get currentPlanIndicator => isKorean ? '현재 플랜' : 'Current plan';
   String get purchaseIosOnly => isKorean
       ? '현재 iOS에서만 구독할 수 있어요.'
       : 'Subscriptions are currently available on iOS.';
-  String planBenefits(bool plus) => switch ((isKorean, plus)) {
-    (true, true) => '전체 대화 슬롯 해금',
-    (true, false) => '전체 대화 슬롯의 절반 해금',
-    (false, true) => 'Unlock all conversation slots',
-    (false, false) => 'Unlock half of all conversation slots',
+  List<String> planBenefits(bool plus) => switch ((isKorean, plus)) {
+    (true, true) => const <String>['동시 대화 10개', '발화 무제한'],
+    (true, false) => const <String>['동시 대화 5개', '발화 무제한'],
+    (false, true) => const <String>[
+      '10 active conversations',
+      'Unlimited turns',
+    ],
+    (false, false) => const <String>[
+      '5 active conversations',
+      'Unlimited turns',
+    ],
   };
   String get plusBusinessConversationBenefit =>
       isKorean ? '비즈니스 대화 모드' : 'Business Conversation Mode';
   String get priceUnavailable => isKorean ? '가격을 불러오는 중이에요.' : 'Loading price';
-  String monthlyPrice(String price) =>
-      isKorean ? '$price / 월' : '$price / month';
-  String subscribeTo(String plan) =>
-      isKorean ? '$plan 구독하기' : 'Subscribe to $plan';
+  String get _monthlyUnit => isKorean ? '월' : 'month';
+  String monthlyPrice(String price) => '$price / $_monthlyUnit';
+  String get monthlyPeriodLabel => '/$_monthlyUnit';
+  String get subscribeLabel => isKorean ? '구독하기' : 'SUBSCRIBE';
+  String get previousPurchasePrompt =>
+      isKorean ? '이전에 구매했었나요?' : 'Purchased before?';
   String get restorePurchases => isKorean ? '구매 복원' : 'Restore purchases';
   String get manageSubscription => isKorean ? '구독 관리' : 'Manage subscription';
   String get termsOfUse => isKorean ? '이용약관' : 'Terms of Use';
@@ -296,6 +298,24 @@ class AppCopy {
   String get nicknameHint => isKorean ? '닉네임' : 'Nickname';
   String get nicknameSaveLabel => isKorean ? '저장' : 'Save';
   String get nicknameEditLabel => isKorean ? '닉네임 수정' : 'Edit nickname';
+  String planDisplayName(String plan) {
+    final String normalized = plan.trim().toLowerCase();
+    return normalized.isEmpty
+        ? 'Free'
+        : '${normalized[0].toUpperCase()}${normalized.substring(1)}';
+  }
+
+  String profilePlanTitle(String plan) {
+    final String displayPlan = planDisplayName(plan);
+    if (isKorean) {
+      return displayPlan == 'Free' ? '무료 플랜' : '$displayPlan 플랜';
+    }
+    return '$displayPlan plan';
+  }
+
+  String get profileCurrentPlanDescription =>
+      isKorean ? '현재 이용 중인 플랜' : 'Current plan';
+  String get profileViewPlansLabel => isKorean ? '플랜 살펴보기' : 'View plans';
   String get nicknameInvalid => isKorean
       ? '닉네임은 1~20자로 입력해 주세요.'
       : 'Enter a nickname of 1–20 characters.';
@@ -311,6 +331,10 @@ class AppCopy {
   String get moreConversationsFailed =>
       isKorean ? '이전 대화를 불러오지 못했어요.' : 'Could not load more conversations.';
   String get appLanguageSectionLabel => isKorean ? '앱 언어' : 'App language';
+  String get languageSettingsSectionLabel =>
+      isKorean ? '언어 설정' : 'Language settings';
+  String get appLanguageDescription =>
+      isKorean ? '메뉴와 안내에 사용하는 언어' : 'Language used for menus and guidance';
   String get appLanguageKoreanLabel => isKorean ? '한국어' : 'Korean';
   String get appLanguageEnglishLabel => isKorean ? '영어' : 'English';
   String get appLanguageSaveFailed => isKorean
@@ -379,8 +403,10 @@ class AppCopy {
       isKorean ? '대화를 업데이트하는 중' : 'Updating conversations';
   String get accountLabel => isKorean ? '계정' : 'Account';
   String get languagePairSectionLabel =>
-      isKorean ? '학습 언어' : 'Learning Language';
-  String get logOutLabel => isKorean ? '로그 아웃' : 'LOG OUT';
+      isKorean ? '학습 언어' : 'Learning language';
+  String get learningLanguageDescription =>
+      isKorean ? '새로 시작하는 대화에 적용돼요.' : 'Applies to new conversations.';
+  String get logOutLabel => isKorean ? '로그아웃' : 'Log out';
   String get deleteAccountLabel => isKorean ? '계정 삭제' : 'Delete account';
   String get deleteAccountWarning => isKorean
       ? '계정과 대화·학습 기록이 영구적으로 삭제돼요. 재가입해도 이 기록은 복구되지 않아요.'

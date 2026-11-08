@@ -8,13 +8,16 @@ void main() {
       final korean = AppCopy.forLocale(const Locale('ko'));
       final english = AppCopy.forLocale(const Locale('en'));
 
-      expect(korean.planBenefits(false), '전체 대화 슬롯의 절반 해금');
-      expect(korean.planBenefits(true), '전체 대화 슬롯 해금');
-      expect(
-        english.planBenefits(false),
-        'Unlock half of all conversation slots',
-      );
-      expect(english.planBenefits(true), 'Unlock all conversation slots');
+      expect(korean.planBenefits(false), <String>['동시 대화 5개', '발화 무제한']);
+      expect(korean.planBenefits(true), <String>['동시 대화 10개', '발화 무제한']);
+      expect(english.planBenefits(false), <String>[
+        '5 active conversations',
+        'Unlimited turns',
+      ]);
+      expect(english.planBenefits(true), <String>[
+        '10 active conversations',
+        'Unlimited turns',
+      ]);
       expect(korean.plusBusinessConversationBenefit, '비즈니스 대화 모드');
       expect(
         english.plusBusinessConversationBenefit,
@@ -29,7 +32,7 @@ void main() {
       );
       expect(
         AppCopy.forLocale(const Locale('en')).languagePairSectionLabel,
-        'Learning Language',
+        'Learning language',
       );
     });
     test('localizes the debug basket reset tooltip', () {

@@ -1,6 +1,4 @@
 import 'package:curitalk/app/theme/tokens/tokens.dart';
-import 'package:curitalk/app/theme/app_semantic_colors.dart';
-import 'package:curitalk/app/theme/app_component_themes.dart';
 import 'package:curitalk/app/router/app_router.dart';
 import 'package:curitalk/features/billing/billing_repository.dart';
 import 'package:go_router/go_router.dart';
@@ -21,7 +19,10 @@ class ProfileScreen extends ConsumerStatefulWidget {
 }
 
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
-  static const double _sectionContentGap = AppSpacing.md;
+  static final List<LearningLanguageContext> _mobileLanguageContexts =
+      LearningLanguageContext.supportedContexts
+          .where((option) => option.isAvailableInMobileSelector)
+          .toList(growable: false);
 
   bool isLoggingOut = false;
   bool isDeletingAccount = false;
@@ -42,218 +43,319 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         : 'tomatalk user';
     final copy = AppCopy.of(context);
     final entitlement = ref.watch(billingEntitlementProvider).value;
+    final ColorScheme colors = Theme.of(context).colorScheme;
+    final bool actionsDisabled =
+        isLoggingOut ||
+        isDeletingAccount ||
+        isSavingLanguage ||
+        isSavingAppLocale;
     return AppScaffold(
+      backgroundColor: colors.surfaceContainer,
+      padding: EdgeInsets.zero,
       safeAreaBottom: false,
-      appBar: AppBar(title: Text(copy.profileLabel)),
+      appBar: AppBar(
+        title: Text(copy.profileLabel),
+        backgroundColor: colors.surfaceContainer,
+        surfaceTintColor: Colors.transparent,
+      ),
       body: LayoutBuilder(
         builder: (BuildContext context, BoxConstraints constraints) =>
             SingleChildScrollView(
               controller: MainTabScope.maybeOf(context)?.controllers[1],
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.md,
+                AppSpacing.xxs,
+                AppSpacing.md,
+                AppSpacing.xl,
+              ),
               child: ConstrainedBox(
                 constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                child: IntrinsicHeight(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: <Widget>[
-                      const SizedBox(height: AppSpacing.lg),
-                      Row(
-                        children: <Widget>[
-                          CircleAvatar(
-                            radius: AppSize.iconButton / 2,
-                            backgroundColor: AppPalette.blockPink,
-                            child: Text(
-                              _initialFor(name),
-                              style: AppTypography.button,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    _ProfileSurface(
+                      key: const ValueKey('profile-card'),
+                      onTap: user == null
+                          ? null
+                          : () => showNicknameDialog(
+                              context,
+                              requiredSetup: false,
+                              initialNickname: user.nickname ?? user.name,
                             ),
-                          ),
-                          const SizedBox(width: AppSpacing.md),
-                          Expanded(
-                            child: Text(
-                              name,
-                              style: AppTypography.bodyLg.copyWith(
-                                fontWeight: FontWeight.w700,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          IconButton(
-                            tooltip: copy.nicknameEditLabel,
-                            onPressed: user == null
-                                ? null
-                                : () => showNicknameDialog(
-                                    context,
-                                    requiredSetup: false,
-                                    initialNickname: user.nickname ?? user.name,
-                                  ),
-                            icon: const Icon(Icons.chevron_right),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: AppSpacing.xl),
-                      if (Theme.of(context).platform == TargetPlatform.iOS) ...[
-                        AppSectionLabel(copy.subscriptionTitle),
-                        const SizedBox(height: _sectionContentGap),
-                        Wrap(
-                          key: const ValueKey('profile-subscription-options'),
-                          spacing: AppSpacing.xs,
-                          runSpacing: AppSpacing.xs,
+                      semanticLabel: copy.nicknameEditLabel,
+                      child: Padding(
+                        padding: const EdgeInsets.all(AppSpacing.md),
+                        child: Row(
                           children: <Widget>[
-                            Semantics(
-                              selected: true,
-                              child: Chip(
-                                label: Text(
-                                  _planLabel(entitlement?.plan ?? 'free'),
-                                ),
-                                backgroundColor:
-                                    AppSemanticColors.light.selectedSurface,
-                                labelStyle: AppTypography.caption.copyWith(
-                                  color: AppSemanticColors.light.onSelected,
+                            CircleAvatar(
+                              radius: 28,
+                              backgroundColor: AppPalette.blockPink,
+                              child: Text(
+                                _initialFor(name),
+                                style: AppTypography.button.copyWith(
+                                  color: colors.onSurface,
                                 ),
                               ),
                             ),
-                            ActionChip(
-                              label: Text(copy.showMoreLabel),
-                              backgroundColor: AppPalette.canvas,
-                              labelStyle: AppTypography.caption.copyWith(
-                                color: AppPalette.ink,
+                            const SizedBox(width: AppSpacing.sm),
+                            Expanded(
+                              child: Text(
+                                name,
+                                style: AppTypography.body.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
-                              onPressed: () => context.push(AppRoute.paywall),
+                            ),
+                            Icon(
+                              Icons.chevron_right,
+                              color: colors.onSurfaceVariant,
                             ),
                           ],
                         ),
-                        const SizedBox(height: AppSpacing.xl),
-                      ],
-                      AppSectionLabel(copy.appLanguageSectionLabel),
-                      const SizedBox(height: _sectionContentGap),
-                      Wrap(
-                        spacing: AppSpacing.xs,
-                        children: <Widget>[
-                          AppSelectionChip(
-                            label: copy.appLanguageKoreanLabel,
-                            uppercaseLabel: false,
-                            selected: selectedAppLocale == 'ko',
-                            onSelected:
-                                isSavingAppLocale ||
-                                    isSavingLanguage ||
-                                    isLoggingOut
-                                ? null
-                                : (_) async {
-                                    await _changeAppLocale('ko');
-                                  },
-                          ),
-                          AppSelectionChip(
-                            label: copy.appLanguageEnglishLabel,
-                            uppercaseLabel: false,
-                            selected: selectedAppLocale == 'en',
-                            onSelected:
-                                isSavingAppLocale ||
-                                    isSavingLanguage ||
-                                    isLoggingOut
-                                ? null
-                                : (_) async {
-                                    await _changeAppLocale('en');
-                                  },
-                          ),
-                        ],
                       ),
-                      if (appLocaleError != null) ...<Widget>[
-                        const SizedBox(height: AppSpacing.sm),
-                        Text(
-                          appLocaleError!,
-                          style: AppTypography.bodySm.copyWith(
-                            color: Theme.of(context).colorScheme.error,
-                          ),
-                        ),
-                      ],
-                      if (isSavingAppLocale)
-                        const Padding(
-                          padding: EdgeInsets.only(top: AppSpacing.md),
-                          child: Center(child: AppLoadingIndicator(width: 120)),
-                        ),
-                      const SizedBox(height: AppSpacing.xl),
-                      AppSectionLabel(copy.languagePairSectionLabel),
-                      const SizedBox(height: _sectionContentGap),
-                      Wrap(
-                        key: const ValueKey('profile-language-pair-options'),
-                        spacing: AppSpacing.xs,
-                        runSpacing: AppSpacing.xs,
-                        children: <Widget>[
-                          for (final option
-                              in LearningLanguageContext.supportedContexts)
-                            if (option.isAvailableInMobileSelector)
-                              AppSelectionChip(
-                                label: _languagePairChipLabel(copy, option),
-                                selected: option == selectedLanguage,
-                                onSelected:
-                                    isSavingLanguage ||
-                                        isSavingAppLocale ||
-                                        isLoggingOut
-                                    ? null
-                                    : (_) async => _changeLanguagePair(option),
-                              ),
-                        ],
-                      ),
-                      if (languageError != null) ...<Widget>[
-                        const SizedBox(height: AppSpacing.sm),
-                        Semantics(
-                          liveRegion: true,
-                          child: Text(
-                            languageError!,
-                            style: AppTypography.bodySm.copyWith(
-                              color: Theme.of(context).colorScheme.error,
+                    ),
+                    if (Theme.of(context).platform == TargetPlatform.iOS) ...[
+                      const SizedBox(height: AppSpacing.lg),
+                      _ProfileSectionLabel(copy.subscriptionTitle),
+                      const SizedBox(height: AppSpacing.xs),
+                      _ProfileSurface(
+                        key: const ValueKey('profile-subscription-options'),
+                        onTap: () => context.push(AppRoute.paywall),
+                        semanticLabel: copy.profileViewPlansLabel,
+                        child: ConstrainedBox(
+                          key: const ValueKey('profile-plan-action'),
+                          constraints: const BoxConstraints(minHeight: 72),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.md,
+                              vertical: AppSpacing.sm,
+                            ),
+                            child: Row(
+                              children: <Widget>[
+                                Container(
+                                  height: 42,
+                                  constraints: const BoxConstraints(
+                                    minWidth: 42,
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: AppSpacing.xs,
+                                  ),
+                                  alignment: Alignment.center,
+                                  decoration: BoxDecoration(
+                                    color: colors.primary,
+                                    borderRadius: BorderRadius.circular(
+                                      AppRadius.pill,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    copy.planDisplayName(
+                                      entitlement?.plan ?? 'free',
+                                    ),
+                                    style: AppTypography.caption.copyWith(
+                                      color: colors.onPrimary,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: AppSpacing.sm),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: <Widget>[
+                                      Text(
+                                        copy.profilePlanTitle(
+                                          entitlement?.plan ?? 'free',
+                                        ),
+                                        style: AppTypography.button,
+                                      ),
+                                      const SizedBox(height: AppSpacing.xxs),
+                                      Text(
+                                        copy.profileCurrentPlanDescription,
+                                        style: AppTypography.caption.copyWith(
+                                          color: colors.onSurfaceVariant,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Text(
+                                  copy.profileViewPlansLabel,
+                                  style: AppTypography.caption.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                const SizedBox(width: AppSpacing.xxs),
+                                Icon(
+                                  Icons.chevron_right,
+                                  size: 18,
+                                  color: colors.onSurfaceVariant,
+                                ),
+                              ],
                             ),
                           ),
                         ),
-                      ],
-                      if (isSavingLanguage)
-                        const Padding(
-                          padding: EdgeInsets.only(top: AppSpacing.md),
-                          child: Center(child: AppLoadingIndicator(width: 120)),
-                        ),
-                      const SizedBox(height: AppSpacing.xl),
-                      const Spacer(),
-                      Center(
-                        child: TextButton(
-                          style: AppComponentThemes.mutedTextButton,
-                          onPressed:
-                              isLoggingOut ||
-                                  isDeletingAccount ||
-                                  isSavingLanguage ||
-                                  isSavingAppLocale
-                              ? null
-                              : () async {
-                                  setState(() => isLoggingOut = true);
-                                  try {
-                                    await ref
-                                        .read(authControllerProvider.notifier)
-                                        .logout();
-                                  } finally {
-                                    if (mounted) {
-                                      setState(() => isLoggingOut = false);
-                                    }
-                                  }
-                                },
-                          child: Text(copy.logOutLabel),
-                        ),
                       ),
-                      Center(
-                        child: TextButton(
-                          style: AppComponentThemes.mutedTextButton,
-                          onPressed:
-                              user == null ||
-                                  isDeletingAccount ||
-                                  isLoggingOut ||
-                                  isSavingLanguage ||
-                                  isSavingAppLocale
-                              ? null
-                              : _deleteAccount,
-                          child: Text(copy.deleteAccountLabel),
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.xl),
                     ],
-                  ),
+                    const SizedBox(height: AppSpacing.lg),
+                    _ProfileSectionLabel(copy.languageSettingsSectionLabel),
+                    const SizedBox(height: AppSpacing.xs),
+                    _ProfileSurface(
+                      key: const ValueKey('profile-language-settings-card'),
+                      child: Column(
+                        children: <Widget>[
+                          Padding(
+                            padding: const EdgeInsets.all(AppSpacing.md),
+                            child: LayoutBuilder(
+                              builder:
+                                  (
+                                    BuildContext context,
+                                    BoxConstraints rowConstraints,
+                                  ) {
+                                    final selector =
+                                        _ProfileSegmentedControl<String>(
+                                          values: const <String>['ko', 'en'],
+                                          selectedValue: selectedAppLocale,
+                                          labelBuilder: (String value) =>
+                                              value == 'ko'
+                                              ? copy.appLanguageKoreanLabel
+                                              : copy.appLanguageEnglishLabel,
+                                          keyBuilder: (String value) =>
+                                              ValueKey(
+                                                'profile-app-language-$value',
+                                              ),
+                                          onSelected: actionsDisabled
+                                              ? null
+                                              : _changeAppLocale,
+                                        );
+                                    final description = _ProfileSettingCopy(
+                                      title: copy.appLanguageSectionLabel,
+                                      description: copy.appLanguageDescription,
+                                    );
+                                    if (rowConstraints.maxWidth < 320) {
+                                      return Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.stretch,
+                                        children: <Widget>[
+                                          description,
+                                          const SizedBox(height: AppSpacing.sm),
+                                          selector,
+                                        ],
+                                      );
+                                    }
+                                    return Row(
+                                      children: <Widget>[
+                                        Expanded(child: description),
+                                        const SizedBox(width: AppSpacing.md),
+                                        SizedBox(width: 148, child: selector),
+                                      ],
+                                    );
+                                  },
+                            ),
+                          ),
+                          if (appLocaleError != null)
+                            _ProfileInlineMessage(
+                              message: appLocaleError!,
+                              color: colors.error,
+                            ),
+                          if (isSavingAppLocale)
+                            const Padding(
+                              padding: EdgeInsets.only(bottom: AppSpacing.md),
+                              child: AppLoadingIndicator(width: 120),
+                            ),
+                          Divider(
+                            height: AppSpacing.hair,
+                            indent: AppSpacing.md,
+                            color: colors.outlineVariant,
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.all(AppSpacing.md),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: <Widget>[
+                                _ProfileSettingCopy(
+                                  title: copy.languagePairSectionLabel,
+                                  description: copy.learningLanguageDescription,
+                                ),
+                                const SizedBox(height: AppSpacing.sm),
+                                _ProfileSegmentedControl<
+                                  LearningLanguageContext
+                                >(
+                                  key: const ValueKey(
+                                    'profile-language-pair-options',
+                                  ),
+                                  values: _mobileLanguageContexts,
+                                  selectedValue: selectedLanguage,
+                                  labelBuilder: (option) =>
+                                      _languagePairChipLabel(copy, option),
+                                  onSelected: actionsDisabled
+                                      ? null
+                                      : _changeLanguagePair,
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (languageError != null)
+                            _ProfileInlineMessage(
+                              message: languageError!,
+                              color: colors.error,
+                              liveRegion: true,
+                            ),
+                          if (isSavingLanguage)
+                            const Padding(
+                              padding: EdgeInsets.only(bottom: AppSpacing.md),
+                              child: AppLoadingIndicator(width: 120),
+                            ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+                    _ProfileSectionLabel(copy.accountLabel),
+                    const SizedBox(height: AppSpacing.xs),
+                    _ProfileSurface(
+                      key: const ValueKey('profile-account-card'),
+                      child: Column(
+                        children: <Widget>[
+                          _ProfileAccountAction(
+                            key: const ValueKey('profile-logout-action'),
+                            label: copy.logOutLabel,
+                            onTap: actionsDisabled
+                                ? null
+                                : () async {
+                                    setState(() => isLoggingOut = true);
+                                    try {
+                                      await ref
+                                          .read(authControllerProvider.notifier)
+                                          .logout();
+                                    } finally {
+                                      if (mounted) {
+                                        setState(() => isLoggingOut = false);
+                                      }
+                                    }
+                                  },
+                          ),
+                          Divider(
+                            height: AppSpacing.hair,
+                            indent: AppSpacing.md,
+                            color: colors.outlineVariant,
+                          ),
+                          _ProfileAccountAction(
+                            key: const ValueKey(
+                              'profile-delete-account-action',
+                            ),
+                            label: copy.deleteAccountLabel,
+                            color: colors.error,
+                            onTap: user == null || actionsDisabled
+                                ? null
+                                : _deleteAccount,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -416,12 +518,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
   }
 
-  String _planLabel(String plan) {
-    final normalized = plan.trim().toLowerCase();
-    if (normalized.isEmpty) return 'Free';
-    return '${normalized[0].toUpperCase()}${normalized.substring(1)}';
-  }
-
   String _languagePairChipLabel(
     AppCopy copy,
     LearningLanguageContext language,
@@ -436,6 +532,244 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   String _languagePairLabel(AppCopy copy, LearningLanguageContext language) {
     return '${copy.languageName(language.nativeLanguage.code)} → '
         '${copy.languageName(language.targetLanguage.code)}';
+  }
+}
+
+class _ProfileSurface extends StatelessWidget {
+  const _ProfileSurface({
+    required this.child,
+    this.onTap,
+    this.semanticLabel,
+    super.key,
+  });
+
+  final Widget child;
+  final VoidCallback? onTap;
+  final String? semanticLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme colors = Theme.of(context).colorScheme;
+    final BorderRadius borderRadius = BorderRadius.circular(AppRadius.lg);
+    final Widget content = onTap == null
+        ? child
+        : Semantics(
+            button: true,
+            label: semanticLabel,
+            child: Tooltip(
+              message: semanticLabel ?? '',
+              child: InkWell(
+                borderRadius: borderRadius,
+                onTap: onTap,
+                child: child,
+              ),
+            ),
+          );
+    return Material(
+      color: colors.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: borderRadius,
+        side: BorderSide(color: colors.outlineVariant),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: content,
+    );
+  }
+}
+
+class _ProfileSectionLabel extends StatelessWidget {
+  const _ProfileSectionLabel(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(left: AppSpacing.xs),
+    child: Text(
+      label,
+      style: AppTypography.caption.copyWith(
+        color: Theme.of(context).colorScheme.onSurfaceVariant,
+        fontWeight: FontWeight.w700,
+      ),
+    ),
+  );
+}
+
+class _ProfileSettingCopy extends StatelessWidget {
+  const _ProfileSettingCopy({required this.title, required this.description});
+
+  final String title;
+  final String description;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme colors = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Text(title, style: AppTypography.button),
+        const SizedBox(height: AppSpacing.xxs),
+        Text(
+          description,
+          style: AppTypography.caption.copyWith(color: colors.onSurfaceVariant),
+        ),
+      ],
+    );
+  }
+}
+
+class _ProfileSegmentedControl<T> extends StatelessWidget {
+  const _ProfileSegmentedControl({
+    required this.values,
+    required this.selectedValue,
+    required this.labelBuilder,
+    required this.onSelected,
+    this.keyBuilder,
+    super.key,
+  });
+
+  final List<T> values;
+  final T selectedValue;
+  final String Function(T value) labelBuilder;
+  final ValueChanged<T>? onSelected;
+  final Key Function(T value)? keyBuilder;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme colors = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.xxs),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainer,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+      child: Row(
+        children: <Widget>[
+          for (final T value in values)
+            Expanded(
+              child: Semantics(
+                selected: value == selectedValue,
+                button: true,
+                child: Material(
+                  key: keyBuilder?.call(value),
+                  color: value == selectedValue
+                      ? colors.primary
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    onTap: onSelected == null
+                        ? null
+                        : () {
+                            onSelected!(value);
+                          },
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(minHeight: 44),
+                      child: Center(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.xs,
+                          ),
+                          child: Text(
+                            labelBuilder(value),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.caption.copyWith(
+                              color: value == selectedValue
+                                  ? colors.onPrimary
+                                  : colors.onSurface,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfileInlineMessage extends StatelessWidget {
+  const _ProfileInlineMessage({
+    required this.message,
+    required this.color,
+    this.liveRegion = false,
+  });
+
+  final String message;
+  final Color color;
+  final bool liveRegion;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    liveRegion: liveRegion,
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        0,
+        AppSpacing.md,
+        AppSpacing.md,
+      ),
+      child: Text(message, style: AppTypography.bodySm.copyWith(color: color)),
+    ),
+  );
+}
+
+class _ProfileAccountAction extends StatelessWidget {
+  const _ProfileAccountAction({
+    required this.label,
+    required this.onTap,
+    this.color,
+    super.key,
+  });
+
+  final String label;
+  final VoidCallback? onTap;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme colors = Theme.of(context).colorScheme;
+    final Color foreground = color ?? colors.onSurface;
+    return Semantics(
+      button: true,
+      child: InkWell(
+        onTap: onTap,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 64),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+            child: Row(
+              children: <Widget>[
+                Expanded(
+                  child: Text(
+                    label,
+                    style: AppTypography.bodySm.copyWith(
+                      color: onTap == null
+                          ? foreground.withValues(alpha: 0.38)
+                          : foreground,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                Icon(
+                  Icons.chevron_right,
+                  color: onTap == null
+                      ? colors.onSurfaceVariant.withValues(alpha: 0.38)
+                      : colors.onSurfaceVariant,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

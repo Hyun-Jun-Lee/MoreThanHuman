@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:curitalk/features/profile/presentation/profile_screen.dart';
 
 import 'package:curitalk/app/theme/app_theme.dart';
-import 'package:curitalk/app/theme/app_semantic_colors.dart';
 import 'package:curitalk/app/theme/tokens/tokens.dart';
 import 'package:curitalk/core/storage/storage.dart';
 import 'package:curitalk/core/widgets/app_color_block_card.dart';
@@ -40,27 +39,19 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      final subscription = find.byKey(
-        const ValueKey('profile-subscription-options'),
-      );
-      final planChip = tester.widget<Chip>(
-        find.descendant(of: subscription, matching: find.byType(Chip)),
-      );
-      final moreChip = tester.widget<ActionChip>(
-        find.descendant(of: subscription, matching: find.byType(ActionChip)),
-      );
       final displayPlan = '${plan[0].toUpperCase()}${plan.substring(1)}';
       expect(find.text(displayPlan), findsOneWidget);
-      expect(find.text('더 보기'), findsOneWidget);
-      expect(find.textContaining('현재 플랜'), findsNothing);
-      expect(planChip.backgroundColor, AppSemanticColors.light.selectedSurface);
-      expect(planChip.labelStyle?.color, AppSemanticColors.light.onSelected);
-      expect(moreChip.backgroundColor, AppPalette.canvas);
-      expect(moreChip.labelStyle?.color, AppPalette.ink);
-      expect(moreChip.onPressed, isNotNull);
       expect(
-        tester.getTopLeft(find.text(displayPlan)).dy,
-        tester.getTopLeft(find.text('더 보기')).dy,
+        find.text(plan == 'free' ? '무료 플랜' : '$displayPlan 플랜'),
+        findsOneWidget,
+      );
+      expect(find.text('현재 이용 중인 플랜'), findsOneWidget);
+      expect(find.text('플랜 살펴보기'), findsOneWidget);
+      expect(
+        tester
+            .getSize(find.byKey(const ValueKey('profile-plan-action')))
+            .height,
+        greaterThanOrEqualTo(64),
       );
     });
   }
@@ -78,7 +69,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Free'), findsOneWidget);
-    expect(find.text('Show more'), findsOneWidget);
+    expect(find.text('Free plan'), findsOneWidget);
+    expect(find.text('Current plan'), findsOneWidget);
+    expect(find.text('View plans'), findsOneWidget);
     expect(find.text('Korean'), findsOneWidget);
     expect(find.text('English'), findsOneWidget);
     expect(find.text('SHOW MORE'), findsNothing);
@@ -172,43 +165,31 @@ void main() {
 
     expect(find.byIcon(Icons.menu_rounded), findsNothing);
 
-    expect(find.text('ACCOUNT'), findsNothing);
+    expect(find.text('Account'), findsOneWidget);
     expect(find.text('CANCEL'), findsNothing);
     expect(find.text('Learner Kim'), findsOneWidget);
+    expect(find.text('Profile and nickname'), findsNothing);
     expect(find.text('learner@example.com'), findsNothing);
     final accountName = tester.widget<Text>(find.text('Learner Kim'));
-    expect(accountName.style?.fontSize, AppTypography.bodyLg.fontSize);
+    expect(accountName.style?.fontSize, AppTypography.body.fontSize);
     expect(accountName.maxLines, 1);
     expect(accountName.overflow, TextOverflow.ellipsis);
+    expect(find.text('Log out'), findsOneWidget);
+    expect(find.text('Delete account'), findsOneWidget);
+    expect(find.text('Language settings'), findsOneWidget);
+    expect(find.text('Language used for menus and guidance'), findsOneWidget);
+    expect(find.text('Applies to new conversations.'), findsOneWidget);
     expect(
-      tester.getSize(find.text('Learner Kim')).height,
-      lessThanOrEqualTo(tester.getSize(find.byType(CircleAvatar)).height),
+      tester
+          .getSize(find.byKey(const ValueKey('profile-app-language-ko')))
+          .height,
+      greaterThanOrEqualTo(44),
     );
-    expect(find.text('LOG OUT'), findsOneWidget);
-    final logout = find.widgetWithText(TextButton, 'LOG OUT');
-    expect(logout, findsOneWidget);
-    expect(find.widgetWithText(FilledButton, 'LOG OUT'), findsNothing);
     expect(
-      tester.widget<TextButton>(logout).style?.foregroundColor?.resolve({}),
-      AppPalette.inkSecondary.withValues(alpha: 0.8),
+      tester.widget<Text>(find.text('Delete account')).style?.color,
+      Theme.of(tester.element(find.text('Delete account'))).colorScheme.error,
     );
-    final scrollView = find.byType(SingleChildScrollView);
-    expect(
-      tester.getBottomLeft(scrollView).dy - tester.getBottomLeft(logout).dy,
-      AppSpacing.xl,
-    );
-    expect(find.text('LEARNING LANGUAGE'), findsOneWidget);
-    final languageOptions = find.byKey(
-      const ValueKey('profile-language-pair-options'),
-    );
-    final appLanguageGap =
-        tester.getTopLeft(find.byType(Wrap).first).dy -
-        tester.getBottomLeft(find.text('APP LANGUAGE')).dy;
-    final learningLanguageGap =
-        tester.getTopLeft(languageOptions).dy -
-        tester.getBottomLeft(find.text('LEARNING LANGUAGE')).dy;
-    expect(appLanguageGap, AppSpacing.md);
-    expect(learningLanguageGap, AppSpacing.md);
+    expect(find.text('LEARNING LANGUAGE'), findsNothing);
     final appLanguageStyle = DefaultTextStyle.of(
       tester.element(find.text('Korean')),
     ).style;
@@ -218,26 +199,16 @@ void main() {
     expect(pairStyle.fontFamily, appLanguageStyle.fontFamily);
     expect(pairStyle.fontSize, appLanguageStyle.fontSize);
     expect(pairStyle.fontWeight, appLanguageStyle.fontWeight);
-    final pairChips = find.descendant(
-      of: languageOptions,
-      matching: find.byType(ChoiceChip),
-    );
-    expect(pairChips, findsNWidgets(2));
     expect(find.textContaining('CHINESE'), findsNothing);
     expect(
       tester.getTopLeft(find.text('KR → EN')).dy,
       tester.getTopLeft(find.text('EN → KR')).dy,
     );
     expect(
-      tester.getTopLeft(find.text('LOG OUT')).dy,
-      greaterThan(tester.getTopLeft(find.text('LEARNING LANGUAGE')).dy),
+      tester.getTopLeft(find.text('Log out')).dy,
+      greaterThan(tester.getTopLeft(find.text('Learning language')).dy),
     );
-    expect(
-      find.text(
-        'Applies to new conversations. Existing conversations keep the language pair they started with.',
-      ),
-      findsNothing,
-    );
+    expect(find.byKey(const ValueKey('profile-account-card')), findsOneWidget);
   });
 
   testWidgets('profile shows only two Korean language pair chips', (
@@ -253,7 +224,10 @@ void main() {
 
     expect(find.text('한국어 → 영어'), findsOneWidget);
     expect(find.text('영어 → 한국어'), findsOneWidget);
-    expect(find.widgetWithText(TextButton, '로그 아웃'), findsOneWidget);
+    expect(find.text('로그아웃'), findsOneWidget);
+    expect(find.text('언어 설정'), findsOneWidget);
+    expect(find.text('메뉴와 안내에 사용하는 언어'), findsOneWidget);
+    expect(find.text('새로 시작하는 대화에 적용돼요.'), findsOneWidget);
     expect(find.textContaining('중국어'), findsNothing);
     expect(
       tester.getTopLeft(find.text('한국어 → 영어')).dy,
@@ -751,8 +725,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.ensureVisible(find.text('LOG OUT'));
-    await tester.tap(find.text('LOG OUT'));
+    await tester.ensureVisible(find.text('Log out'));
+    await tester.tap(find.text('Log out'));
     await tester.pumpAndSettle();
 
     expect(supabaseAuth.hasSession, isFalse);
@@ -780,8 +754,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.ensureVisible(find.text('LOG OUT'));
-    await tester.tap(find.text('LOG OUT'));
+    await tester.ensureVisible(find.text('Log out'));
+    await tester.tap(find.text('Log out'));
     await tester.pumpAndSettle();
 
     expect(supabaseAuth.hasSession, isFalse);
