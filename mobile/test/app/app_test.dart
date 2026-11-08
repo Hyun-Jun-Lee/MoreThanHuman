@@ -247,7 +247,7 @@ void main() {
     expect(find.text('What topic do you want to talk about?'), findsOneWidget);
   });
 
-  testWidgets('onboarding copy follows Korean system locale', (
+  testWidgets('onboarding and login copy follows Korean system locale', (
     WidgetTester tester,
   ) async {
     tester.binding.platformDispatcher.localesTestValue = const <Locale>[
@@ -296,7 +296,17 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Google로 계속하기'), findsOneWidget);
-    expect(find.text('나의 주제'), findsOneWidget);
+    final Finder loginLogo = find.byKey(
+      const ValueKey<String>('login-brand-logo'),
+    );
+    expect(loginLogo, findsOneWidget);
+    expect(
+      (tester.widget<Image>(loginLogo).image as AssetImage).assetName,
+      'logo_img/KakaoTalk_Photo_2026-10-08-22-20-21 002.png',
+    );
+    expect(find.text('tomatalk'), findsNothing);
+    expect(find.text('나의 주제'), findsNothing);
+    expect(find.text('글로벌 뉴스'), findsNothing);
     expect(find.text('GLOBAL NEWS'), findsNothing);
   });
 

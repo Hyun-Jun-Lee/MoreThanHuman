@@ -143,7 +143,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Text('tomatalk', style: AppTypography.headlineMd),
+            SizedBox(
+              width: 164,
+              height: 40,
+              child: Image.asset(
+                'logo_img/KakaoTalk_Photo_2026-10-08-22-20-21 002.png',
+                key: const ValueKey<String>('login-brand-logo'),
+                fit: BoxFit.cover,
+                alignment: Alignment.center,
+                semanticLabel: 'Toma Talk',
+              ),
+            ),
             const SizedBox(height: AppSpacing.xxl),
             Text(copy.title, style: AppTypography.displayLg),
             const SizedBox(height: AppSpacing.lg),
@@ -200,25 +210,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ),
               ),
             ],
-            const SizedBox(height: AppSpacing.xxl),
-            AppColorBlockCard(
-              color: AppPalette.blockPink,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(copy.topicCardTitle, style: AppTypography.headlineMd),
-                  const SizedBox(height: AppSpacing.lg),
-                  Wrap(
-                    spacing: AppSpacing.xs,
-                    runSpacing: AppSpacing.xs,
-                    children: <Widget>[
-                      for (final String topic in copy.topicChips)
-                        Chip(label: Text(topic)),
-                    ],
-                  ),
-                ],
-              ),
-            ),
           ],
         ),
       ),

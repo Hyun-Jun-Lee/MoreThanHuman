@@ -686,8 +686,6 @@ class AppLoginCopy {
     required this.googleLabel,
     required this.appleLabel,
     required this.tryAgainLabel,
-    required this.topicCardTitle,
-    required this.topicChips,
   });
 
   static const AppLoginCopy korean = AppLoginCopy(
@@ -696,8 +694,6 @@ class AppLoginCopy {
     googleLabel: 'Google로 계속하기',
     appleLabel: 'Apple로 계속하기',
     tryAgainLabel: '다시 시도',
-    topicCardTitle: '나의 주제',
-    topicChips: <String>['글로벌 뉴스', '여행', '야구', '기술'],
   );
 
   static const AppLoginCopy english = AppLoginCopy(
@@ -707,8 +703,6 @@ class AppLoginCopy {
     googleLabel: 'CONTINUE WITH GOOGLE',
     appleLabel: 'CONTINUE WITH APPLE',
     tryAgainLabel: 'TRY AGAIN',
-    topicCardTitle: 'Your topics',
-    topicChips: <String>['GLOBAL NEWS', 'TRAVEL', 'BASEBALL', 'TECHNOLOGY'],
   );
 
   final String title;
@@ -716,6 +710,4 @@ class AppLoginCopy {
   final String googleLabel;
   final String appleLabel;
   final String tryAgainLabel;
-  final String topicCardTitle;
-  final List<String> topicChips;
 }
