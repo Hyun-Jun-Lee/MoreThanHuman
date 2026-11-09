@@ -79,6 +79,42 @@ void main() {
     expect(find.text('ENGLISH'), findsNothing);
   });
 
+  testWidgets('pulling down profile reloads account and subscription', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(400, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final authRepository = _FakeAuthRepository();
+    var plan = 'free';
+    var entitlementReads = 0;
+    await tester.pumpWidget(
+      _homeApp(
+        profile: true,
+        platform: TargetPlatform.iOS,
+        authRepository: authRepository,
+        billingGetter: () {
+          entitlementReads += 1;
+          return BillingEntitlement(plan: plan, status: 'active');
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Learner Kim'), findsOneWidget);
+    expect(find.text('Free plan'), findsOneWidget);
+
+    authRepository.nickname = 'Updated Learner';
+    plan = 'advance';
+    await tester.drag(find.byType(SingleChildScrollView), const Offset(0, 350));
+    await tester.pumpAndSettle();
+
+    expect(authRepository.currentUserReads, 1);
+    expect(authRepository.bootstrapReads, 1);
+    expect(entitlementReads, 2);
+    expect(find.text('Updated Learner'), findsOneWidget);
+    expect(find.text('Advance plan'), findsOneWidget);
+  });
+
   testWidgets('home delegates navigation to the shared shell', (tester) async {
     await tester.pumpWidget(
       _homeApp(conversations: _recentConversations(count: 5)),
@@ -101,10 +137,10 @@ void main() {
       tester.getTopRight(find.text('KR -> EN')).dx,
       greaterThan(tester.getTopRight(logo).dx),
     );
-    expect(find.text('Conversation 3'), findsNothing);
-    await tester.scrollUntilVisible(
-      find.widgetWithText(FilledButton, 'Start a conversation'),
-      300,
+    expect(find.text('Conversation 3'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('home-conversations-expand')),
+      findsNothing,
     );
     expect(
       find.widgetWithText(FilledButton, 'Start a conversation'),
@@ -133,10 +169,6 @@ void main() {
       expect(
         find.byKey(const ValueKey('locked-additional-conversation-home')),
         findsNothing,
-      );
-      await tester.scrollUntilVisible(
-        find.widgetWithText(FilledButton, 'Start a conversation'),
-        300,
       );
       await tester.tap(
         find.widgetWithText(FilledButton, 'Start a conversation'),
@@ -362,7 +394,6 @@ void main() {
       FilledButton,
       'Start a conversation',
     );
-    await tester.ensureVisible(addButton);
     await tester.tap(addButton);
     await tester.pumpAndSettle();
 
@@ -606,17 +637,13 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('snack-tomato-touch')), findsOneWidget);
-    await tester.scrollUntilVisible(
-      find.widgetWithText(FilledButton, 'Start a conversation'),
-      300,
-    );
     expect(
       find.widgetWithText(FilledButton, 'Start a conversation'),
       findsOneWidget,
     );
   });
 
-  testWidgets('recent cards stop at two and new conversation follows them', (
+  testWidgets('home shows five conversations and expands the rest on demand', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -625,17 +652,175 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Conversation 1'), findsOneWidget);
     expect(find.text('Conversation 2'), findsOneWidget);
-    expect(find.text('freechat'), findsNWidgets(2));
-    expect(find.text('Conversation 3'), findsNothing);
+    expect(find.text('freechat'), findsNWidgets(5));
+    expect(find.text('Conversation 3'), findsOneWidget);
+    expect(find.text('Conversation 6'), findsNothing);
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('home-conversations-expand')),
+      300,
+    );
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -300));
+    await tester.pumpAndSettle();
+    expect(find.text('Show 1 more conversation'), findsOneWidget);
+    expect(
+      tester.getCenter(find.text('Show 1 more conversation')).dy,
+      lessThan(
+        tester
+            .getTopLeft(
+              find.widgetWithText(FilledButton, 'Start a conversation'),
+            )
+            .dy,
+      ),
+    );
+    await tester.tap(find.text('Show 1 more conversation'));
+    await tester.pumpAndSettle();
+    expect(find.text('Conversation 6'), findsOneWidget);
+    expect(find.text('freechat'), findsNWidgets(6));
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -300));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('SHOW LESS'));
+    await tester.pumpAndSettle();
+    expect(find.text('Conversation 6'), findsNothing);
     expect(find.textContaining('messages'), findsNothing);
     expect(find.text('Continue speaking'), findsNothing);
     expect(find.byIcon(Icons.close_rounded), findsNothing);
     expect(
-      tester
-          .getTopLeft(find.widgetWithText(FilledButton, 'Start a conversation'))
-          .dy,
-      greaterThan(tester.getBottomLeft(find.text('Conversation 2')).dy),
+      find.widgetWithText(FilledButton, 'Start a conversation'),
+      findsOneWidget,
     );
+  });
+
+  testWidgets('active conversation appears before newer locked conversations', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      _homeApp(
+        conversations: _recentConversations(count: 3),
+        access: const ConversationAccess(
+          enabled: true,
+          canCreate: false,
+          usedSlots: 1,
+          slotLimit: 1,
+          remainingSlots: 0,
+          activeConversations: [
+            ActiveConversation(id: 'conversation-3', title: 'Conversation 3'),
+          ],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final active = find.byKey(const ValueKey('conversation-3'));
+    final firstLocked = find.byKey(const ValueKey('conversation-1'));
+    final secondLocked = find.byKey(const ValueKey('conversation-2'));
+    expect(
+      tester.getTopLeft(active).dy,
+      lessThan(tester.getTopLeft(firstLocked).dy),
+    );
+    expect(
+      tester.getTopLeft(firstLocked).dy,
+      lessThan(tester.getTopLeft(secondLocked).dy),
+    );
+    expect(
+      find.descendant(
+        of: active,
+        matching: find.byKey(const ValueKey('locked-conversation-overlay')),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('locked-conversation-overlay')),
+      findsNWidgets(2),
+    );
+  });
+
+  testWidgets('new conversation button stays fixed while the list scrolls', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _homeApp(conversations: _recentConversations(count: 6)),
+    );
+    await tester.pumpAndSettle();
+
+    final button = find.widgetWithText(FilledButton, 'Start a conversation');
+    expect(button, findsOneWidget);
+    final before = tester.getTopLeft(button);
+    expect(tester.getSize(button).width, lessThan(270));
+
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('home-conversations-expand')),
+      300,
+    );
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -300));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Show 1 more conversation'));
+    await tester.pumpAndSettle();
+
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -400));
+    await tester.pumpAndSettle();
+
+    expect(tester.getTopLeft(button).dy, closeTo(before.dy, 1));
+    expect(tester.getTopLeft(button).dx, closeTo(before.dx, 1));
+
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -2000));
+    await tester.pumpAndSettle();
+    expect(
+      tester.getBottomLeft(find.byKey(const ValueKey('conversation-6'))).dy,
+      lessThan(tester.getTopLeft(button).dy),
+    );
+  });
+
+  testWidgets('pulling down refreshes access before showing locked cards', (
+    WidgetTester tester,
+  ) async {
+    final events = <String>[];
+    final homeRepository = _TrackedHomeRepository(events);
+    var activeIds = <String>{'conversation-1', 'conversation-2'};
+    await tester.pumpWidget(
+      _homeApp(
+        homeRepository: homeRepository,
+        accessGetter: () {
+          events.add('access');
+          return ConversationAccess(
+            enabled: true,
+            canCreate: false,
+            usedSlots: activeIds.length,
+            slotLimit: activeIds.length,
+            remainingSlots: 0,
+            activeConversations: [
+              for (final id in activeIds) ActiveConversation(id: id, title: id),
+            ],
+          );
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('locked-conversation-overlay')),
+      findsNothing,
+    );
+
+    activeIds = {'conversation-1'};
+    events.clear();
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, 350));
+    await tester.pumpAndSettle();
+
+    expect(events, ['access', 'list']);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('conversation-1')),
+        matching: find.byKey(const ValueKey('locked-conversation-overlay')),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('conversation-2')),
+        matching: find.byKey(const ValueKey('locked-conversation-overlay')),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Read-only'), findsNothing);
   });
 
   testWidgets('Recent conversations show updating indicator while refreshing', (
@@ -789,6 +974,7 @@ Widget _homeApp({
   Locale locale = const Locale('en'),
   TargetPlatform? platform,
   String? billingPlan,
+  BillingEntitlement Function()? billingGetter,
   _MemoryTokenStorage? tokenStorage,
   _FakeAuthRepository? authRepository,
   _FakeLanguagePreferencesRepository? languagePreferencesRepository,
@@ -802,6 +988,7 @@ Widget _homeApp({
   LanguageSnackCache? languageSnackCache,
   ConversationRepository? conversationRepository,
   ConversationAccess access = const ConversationAccess.disabled(),
+  ConversationAccess Function()? accessGetter,
   WeeklyTopics weeklyTopics = const WeeklyTopics(weekStart: null, topics: []),
 }) {
   final _MemoryTokenStorage effectiveTokenStorage =
@@ -848,11 +1035,14 @@ Widget _homeApp({
       conversationAccessRepositoryProvider.overrideWithValue(
         _FakeConversationAccessRepository(access),
       ),
-      conversationAccessProvider.overrideWith((ref) async => access),
-      if (billingPlan != null)
+      conversationAccessProvider.overrideWith(
+        (ref) async => accessGetter?.call() ?? access,
+      ),
+      if (billingPlan != null || billingGetter != null)
         billingEntitlementProvider.overrideWith(
           (ref) async =>
-              BillingEntitlement(plan: billingPlan, status: 'active'),
+              billingGetter?.call() ??
+              BillingEntitlement(plan: billingPlan!, status: 'active'),
         ),
       weeklyTopicsControllerProvider.overrideWith(
         () => _FixedWeeklyTopicsController(weeklyTopics),
@@ -940,16 +1130,28 @@ class _FakeAuthRepository implements AuthRepository, AppLocaleRepository {
 
   final LearningLanguageContext Function()? languageProvider;
   String? appLocale;
+  String? nickname;
+  int bootstrapReads = 0;
+  int currentUserReads = 0;
 
   @override
-  Future<UserProfile> bootstrap(LearningLanguageContext? pendingLanguage) =>
-      getCurrentUser();
+  Future<UserProfile> bootstrap(
+    LearningLanguageContext? pendingLanguage,
+  ) async {
+    bootstrapReads += 1;
+    return _profile();
+  }
 
   @override
   Future<UserProfile> getCurrentUser() async {
+    currentUserReads += 1;
+    return _profile();
+  }
+
+  UserProfile _profile() {
     return _userWithLanguage(
       languageProvider?.call() ?? LearningLanguageContext.defaultContext,
-    ).copyWith(appLocale: appLocale);
+    ).copyWith(appLocale: appLocale, nickname: nickname);
   }
 
   @override
@@ -1084,6 +1286,20 @@ class _FakeHomeRepository implements HomeRepository {
     int limit = 5,
   }) async {
     return conversations;
+  }
+}
+
+class _TrackedHomeRepository implements HomeRepository {
+  _TrackedHomeRepository(this.events);
+
+  final List<String> events;
+
+  @override
+  Future<List<ConversationSummary>> listRecentConversations({
+    int limit = 5,
+  }) async {
+    events.add('list');
+    return _recentConversations(count: 2);
   }
 }
 

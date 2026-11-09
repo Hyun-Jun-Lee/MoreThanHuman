@@ -107,6 +107,45 @@ void main() {
   });
 
   testWidgets(
+    'locked card is greyed out with a centered lock and remains tappable',
+    (WidgetTester tester) async {
+      var tapCount = 0;
+      await tester.pumpWidget(
+        _themedApp(
+          RecentConversationCard(
+            category: 'freechat',
+            title: 'Osaka food trip',
+            color: AppPalette.blockLimeSoft,
+            locked: true,
+            onTap: () => tapCount += 1,
+          ),
+        ),
+      );
+
+      final overlay = find.byKey(const ValueKey('locked-conversation-overlay'));
+      final lock = find.byIcon(Icons.lock_rounded);
+      expect(overlay, findsOneWidget);
+      expect(lock, findsOneWidget);
+      expect(find.text('Read-only'), findsNothing);
+      expect(tester.getCenter(lock), tester.getCenter(overlay));
+      expect(tester.widget<ColoredBox>(overlay).color, const Color(0xCCB0B0B0));
+      expect(
+        tester
+            .widgetList<Semantics>(find.byType(Semantics))
+            .any(
+              (item) =>
+                  item.properties.label?.contains('Read-only conversation') ==
+                  true,
+            ),
+        isTrue,
+      );
+
+      await tester.tapAt(tester.getCenter(lock));
+      expect(tapCount, 1);
+    },
+  );
+
+  testWidgets(
     'swiping left reveals Delete and preserves confirmation callback',
     (WidgetTester tester) async {
       int deleteCount = 0;

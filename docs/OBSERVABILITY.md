@@ -84,7 +84,7 @@ API의 `proxy_request_id`로 nginx의 같은 시도를 찾고, `trace_id`로 앱
 
 | 흐름 | CLI 선택 | 요청과 측정 경계 |
 |------|---------|----------------|
-| 홈 | `home` | `/auth/me` 뒤 최근 대화 5개·주간 주제·스낵 12개·바구니 리셋 GET을 병렬 시작해 개별 완료와 묶음 완료를 기록해요. 앱 UI 프레임 시간은 포함하지 않아요. |
+| 홈 | `home` | `/auth/me` 뒤 최근 대화 5개·주간 주제·스낵 12개·바구니 리셋 GET을 병렬 시작해 개별 완료와 묶음 완료를 기록해요. 앱 홈은 전체 대화를 페이지별로 가져오므로 이 측정에는 추가 페이지 조회가 포함되지 않아요. 앱 UI 프레임 시간도 포함하지 않아요. |
 | 자유 대화 준비 | `topic-prep --topic '...'` | `POST /search/topic-prep/`의 전체 HTTP 응답을 측정해요. 검색·LLM 비용이 매 표본에 발생해요. |
 | 자유 대화 준비 스트림 | `topic-prep-stream --topic '...'` | `POST /search/topic-prep/stream/`의 요약 수신, 카드 수신, 두 이벤트 간격과 전체 HTTP 시간을 측정해요. 검색·LLM 비용이 매 표본에 발생해요. |
 | 대화 시작·이어 말하기 | `stream --kind free-chat --text '...'`, `stream --kind roleplay --role-character '...'`, `stream --kind suggested --topic-id UUID`, `stream --kind turn --conversation-id UUID --text '...'` | NDJSON 응답 헤더, 첫 `text_delta`, 첫 `audio_segment`, `turn_completed`까지의 시간을 기록해요. 첫 화면 프레임·실제 재생은 모바일 로그로 확인해요. 모든 표본은 새 요청 ID로 영속 대화 또는 발화를 만들고 LLM/TTS 비용이 발생해요. `--allow-writes`가 필요해요. |

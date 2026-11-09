@@ -63,6 +63,18 @@ class AuthController extends AsyncNotifier<AuthSession> {
     }
   }
 
+  Future<void> reloadProfile() async {
+    final userId = state.value?.user?.id;
+    if (userId == null) return;
+    final refreshed = await _repository.getCurrentUser();
+    if (refreshed.id != userId) {
+      throw StateError('Refreshed profile belongs to another user.');
+    }
+    if (ref.mounted && state.value?.user?.id == userId) {
+      state = AsyncData<AuthSession>(AuthSession.authenticated(refreshed));
+    }
+  }
+
   Future<void> signInWithGoogleTokens(GoogleIdentityTokens tokens) async {
     if (tokens.idToken.trim().isEmpty || tokens.accessToken.trim().isEmpty) {
       throw ArgumentError.value(tokens, 'tokens', 'Must not be empty.');

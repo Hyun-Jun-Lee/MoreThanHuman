@@ -58,19 +58,17 @@ void main() {
       ),
     );
 
-    expect(find.byType(AppLoadingIndicator), findsOneWidget);
+    expect(find.byType(AppLoadingIndicator), findsNothing);
     expect(tester.widget<TextField>(find.byType(TextField)).enabled, isFalse);
     final IconButton sendButton = tester.widget<IconButton>(
-      find.ancestor(
-        of: find.byType(AppLoadingIndicator),
-        matching: find.byType(IconButton),
-      ),
+      find.widgetWithIcon(IconButton, Icons.arrow_upward_rounded),
     );
+    expect(sendButton.onPressed, isNull);
     expect(
       sendButton.style?.backgroundColor?.resolve(<WidgetState>{
         WidgetState.disabled,
       }),
-      AppSemanticColors.light.selectedSurface,
+      AppSemanticColors.light.disabledSurface,
     );
   });
 
@@ -348,7 +346,7 @@ void main() {
     expect(find.text('Add a space after punctuation.'), findsOneWidget);
   });
 
-  testWidgets('TypingIndicator exposes status with motion disabled', (
+  testWidgets('TypingIndicator shows tomato loading with motion disabled', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
@@ -356,12 +354,45 @@ void main() {
     );
 
     expect(find.bySemanticsLabel('AI is typing'), findsOneWidget);
-    for (int index = 0; index < 3; index += 1) {
-      expect(find.byKey(ValueKey<String>('typing-dot-$index')), findsOneWidget);
-    }
+    expect(
+      find.byKey(const ValueKey<String>('conversation-reply-tomato-loading')),
+      findsOneWidget,
+    );
+    expect(find.byType(AppLoadingIndicator), findsOneWidget);
+    expect(find.byKey(const ValueKey<String>('typing-dot-0')), findsNothing);
 
     await tester.pump(const Duration(seconds: 1));
     expect(tester.binding.transientCallbackCount, 0);
+  });
+
+  testWidgets('sending shows one tomato loader below the conversation', (
+    WidgetTester tester,
+  ) async {
+    final controller = TextEditingController(text: 'Hello');
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(
+      _themedApp(
+        Column(
+          children: <Widget>[
+            const TypingIndicator(),
+            ChatComposer(
+              controller: controller,
+              isSending: true,
+              onSend: (_) {},
+            ),
+          ],
+        ),
+      ),
+    );
+
+    expect(find.byType(AppLoadingIndicator), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(ChatComposer),
+        matching: find.byType(AppLoadingIndicator),
+      ),
+      findsNothing,
+    );
   });
 }
 

@@ -401,6 +401,9 @@ class AppCopy {
   String get showAllLabel => isKorean ? '모두 보기' : 'SHOW ALL';
   String get showLessLabel => isKorean ? '접기' : 'SHOW LESS';
   String get showMoreLabel => isKorean ? '더 보기' : 'Show more';
+  String homeMoreConversations(int count) => isKorean
+      ? '남은 대화 $count개 더 보기'
+      : 'Show $count more conversation${count == 1 ? '' : 's'}';
   String get updatingConversationsSemanticLabel =>
       isKorean ? '대화를 업데이트하는 중' : 'Updating conversations';
   String get accountLabel => isKorean ? '계정' : 'Account';

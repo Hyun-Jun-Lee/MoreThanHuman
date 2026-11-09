@@ -21,6 +21,9 @@ class PaywallScreen extends ConsumerStatefulWidget {
 
 class _PaywallScreenState extends ConsumerState<PaywallScreen> {
   String _selectedPlanId = 'Advance';
+  bool _restoring = false;
+  bool _restoreMessageOwned = false;
+  String? _dismissedRestoreStatus;
 
   bool get _supportsPurchases =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
@@ -45,14 +48,23 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
     }
     final state = ref.watch(billingControllerProvider);
     final entitlement = ref.watch(billingEntitlementProvider);
+    final restoreStatus =
+        state.message == null ||
+            state.message == 'restore_requested' ||
+            (state.message == 'verified' && entitlement.isLoading)
+        ? 'checking'
+        : state.message!;
+    final showRestoreDialog =
+        _restoring && _dismissedRestoreStatus != restoreStatus;
     final bool isUpdatingSubscription =
-        state.isProcessing ||
-        (state.message == 'verified' && entitlement.isLoading);
+        !_restoring &&
+        (state.isProcessing ||
+            (state.message == 'verified' && entitlement.isLoading));
     final ProductDetails? selectedProduct = state.products
         .where((ProductDetails product) => product.id == _selectedPlanId)
         .firstOrNull;
     return PopScope(
-      canPop: !isUpdatingSubscription,
+      canPop: !isUpdatingSubscription && !showRestoreDialog,
       child: Scaffold(
         appBar: AppBar(title: Text(copy.subscriptionTitle)),
         body: SafeArea(
@@ -79,7 +91,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                         setState(() => _selectedPlanId = id);
                       },
                     ),
-                  if (state.message != null) ...[
+                  if (state.message != null && !_restoreMessageOwned) ...[
                     const SizedBox(height: AppSpacing.md),
                     Text(
                       copy.billingMessage(state.message!),
@@ -98,9 +110,16 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                     key: const ValueKey<String>('paywall-subscribe'),
                     onPressed: state.isProcessing || selectedProduct == null
                         ? null
-                        : () => ref
-                              .read(billingControllerProvider.notifier)
-                              .purchase(selectedProduct),
+                        : () {
+                            setState(() {
+                              _restoring = false;
+                              _restoreMessageOwned = false;
+                              _dismissedRestoreStatus = null;
+                            });
+                            ref
+                                .read(billingControllerProvider.notifier)
+                                .purchase(selectedProduct);
+                          },
                     child: Text(copy.subscribeLabel),
                   ),
                   const SizedBox(height: AppSpacing.sm),
@@ -115,9 +134,16 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                       TextButton(
                         onPressed: state.isProcessing
                             ? null
-                            : () => ref
-                                  .read(billingControllerProvider.notifier)
-                                  .restore(),
+                            : () {
+                                setState(() {
+                                  _restoring = true;
+                                  _restoreMessageOwned = true;
+                                  _dismissedRestoreStatus = null;
+                                });
+                                ref
+                                    .read(billingControllerProvider.notifier)
+                                    .restore();
+                              },
                         child: Text(copy.restorePurchases),
                       ),
                     ],
@@ -163,6 +189,83 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                 _SubscriptionUpdatingOverlay(
                   message: copy.subscriptionUpdating,
                 ),
+              if (showRestoreDialog)
+                _RestoreStatusDialog(
+                  title: copy.restorePurchases,
+                  message: restoreStatus == 'checking'
+                      ? copy.billingMessage('restore_requested')
+                      : copy.billingMessage(restoreStatus),
+                  isChecking: restoreStatus == 'checking',
+                  confirmLabel: copy.accessDialogConfirm,
+                  onDismissed: () => setState(() {
+                    _dismissedRestoreStatus = restoreStatus;
+                    if (restoreStatus != 'checking') _restoring = false;
+                  }),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RestoreStatusDialog extends StatelessWidget {
+  const _RestoreStatusDialog({
+    required this.title,
+    required this.message,
+    required this.isChecking,
+    required this.confirmLabel,
+    required this.onDismissed,
+  });
+
+  final String title;
+  final String message;
+  final bool isChecking;
+  final String confirmLabel;
+  final VoidCallback onDismissed;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Positioned.fill(
+      key: const ValueKey<String>('paywall-restore-dialog'),
+      child: BlockSemantics(
+        child: Semantics(
+          liveRegion: true,
+          scopesRoute: true,
+          explicitChildNodes: true,
+          child: Stack(
+            children: <Widget>[
+              ModalBarrier(
+                dismissible: false,
+                color: colors.scrim.withValues(alpha: 0.4),
+              ),
+              Center(
+                child: AlertDialog(
+                  title: Text(title),
+                  content: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      if (isChecking) ...[
+                        const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                      ],
+                      Flexible(child: Text(message)),
+                    ],
+                  ),
+                  actions: <Widget>[
+                    TextButton(
+                      onPressed: onDismissed,
+                      child: Text(confirmLabel),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
         ),

@@ -208,6 +208,89 @@ void main() {
     );
     debugDefaultTargetPlatformOverride = null;
   });
+
+  testWidgets('shows restore progress and delayed result in a dialog', (
+    WidgetTester tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          billingControllerProvider.overrideWith(_RestoreBillingController.new),
+          billingEntitlementProvider.overrideWith(
+            (Ref ref) async =>
+                const BillingEntitlement(plan: 'free', status: 'free'),
+          ),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.light,
+          locale: const Locale('ko'),
+          supportedLocales: const <Locale>[Locale('ko'), Locale('en')],
+          localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
+            GlobalMaterialLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+          ],
+          home: const PaywallScreen(),
+        ),
+      ),
+    );
+    await tester.pump();
+    final controller =
+        ProviderScope.containerOf(
+              tester.element(find.byType(PaywallScreen)),
+            ).read(billingControllerProvider.notifier)
+            as _RestoreBillingController;
+
+    await tester.scrollUntilVisible(find.text('구매 복원'), 300);
+    await tester.tap(find.text('구매 복원'));
+    await tester.pump();
+    final dialog = find.byKey(const ValueKey<String>('paywall-restore-dialog'));
+    expect(dialog, findsOneWidget);
+    expect(
+      find.descendant(of: dialog, matching: find.text('복원한 구매를 확인하고 있어요.')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('paywall-purchase-loading')),
+      findsNothing,
+    );
+
+    await tester.tap(find.descendant(of: dialog, matching: find.text('확인')));
+    await tester.pump();
+    expect(dialog, findsNothing);
+    controller.completeRestoreRequest();
+    await tester.pump();
+    expect(dialog, findsNothing);
+
+    controller.markVerified();
+    await tester.pump();
+    expect(dialog, findsOneWidget);
+    expect(
+      find.descendant(of: dialog, matching: find.text('구독이 확인되었어요.')),
+      findsOneWidget,
+    );
+    await tester.tap(find.descendant(of: dialog, matching: find.text('확인')));
+    await tester.pump();
+    expect(dialog, findsNothing);
+    expect(find.text('구독이 확인되었어요.'), findsNothing);
+
+    await tester.tap(find.text('구매 복원'));
+    await tester.pump();
+    controller.markFailed();
+    await tester.pump();
+    expect(dialog, findsOneWidget);
+    expect(
+      find.descendant(
+        of: dialog,
+        matching: find.text('결제를 확인하지 못했어요. 다시 시도하거나 구매를 복원해 주세요.'),
+      ),
+      findsOneWidget,
+    );
+    debugDefaultTargetPlatformOverride = null;
+  });
 }
 
 class _TestBillingController extends BillingController {
@@ -238,6 +321,31 @@ class _VerifiedBillingController extends BillingController {
 
   @override
   Future<void> loadProducts() async {}
+}
+
+class _RestoreBillingController extends BillingController {
+  final Completer<void> _restoreCompleter = Completer<void>();
+
+  @override
+  BillingUiState build() => BillingUiState(products: _products);
+
+  @override
+  Future<void> loadProducts() async {}
+
+  @override
+  Future<void> restore() async {
+    state = state.copyWith(isProcessing: true);
+    await _restoreCompleter.future;
+    state = state.copyWith(isProcessing: false, message: 'restore_requested');
+  }
+
+  void completeRestoreRequest() => _restoreCompleter.complete();
+
+  void markVerified() =>
+      state = state.copyWith(isProcessing: false, message: 'verified');
+
+  void markFailed() =>
+      state = state.copyWith(isProcessing: false, message: 'restore_failed');
 }
 
 final List<ProductDetails> _products = <ProductDetails>[

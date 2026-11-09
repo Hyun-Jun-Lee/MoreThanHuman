@@ -12,6 +12,7 @@ class RecentConversationCard extends StatefulWidget {
     required this.title,
     required this.color,
     required this.onTap,
+    this.locked = false,
     this.subtitle,
     this.onDelete,
     super.key,
@@ -21,6 +22,7 @@ class RecentConversationCard extends StatefulWidget {
   final String title;
   final String? subtitle;
   final Color color;
+  final bool locked;
   final VoidCallback? onTap;
   final VoidCallback? onDelete;
 
@@ -120,73 +122,101 @@ class _RecentConversationCardState extends State<RecentConversationCard> {
   }
 
   Widget _card(BuildContext context, AppCopy copy) {
-    return AppColorBlockCard(
-      color: widget.color,
-      onTap: _dragOffset < 0 ? _close : widget.onTap,
-      semanticLabel: copy.recentConversationSemanticLabel(
-        widget.category,
-        widget.title,
-      ),
-      child: SizedBox(
-        width: double.infinity,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Text(
-                    wrapWordsInPairs(widget.title).textKoKeepAll(),
-                    semanticsLabel: widget.title,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTypography.headlineMd.copyWith(
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 120),
-                  child: DecoratedBox(
-                    decoration: const BoxDecoration(
-                      color: AppPalette.canvas,
-                      borderRadius: BorderRadius.all(
-                        Radius.circular(AppRadius.full),
-                      ),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.sm,
-                        vertical: AppSpacing.xs,
-                      ),
-                      child: Text(
-                        widget.category,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTypography.caption.copyWith(
-                          color: AppPalette.ink,
+    return ClipRRect(
+      borderRadius: const BorderRadius.all(Radius.circular(AppRadius.lg)),
+      child: Stack(
+        children: [
+          AppColorBlockCard(
+            color: widget.color,
+            onTap: _dragOffset < 0 ? _close : widget.onTap,
+            semanticLabel: [
+              copy.recentConversationSemanticLabel(
+                widget.category,
+                widget.title,
+              ),
+              if (widget.locked) copy.additionalConversationLockedSemantic,
+            ].join(', '),
+            child: SizedBox(
+              width: double.infinity,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          wrapWordsInPairs(widget.title).textKoKeepAll(),
+                          semanticsLabel: widget.title,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.headlineMd.copyWith(
+                            color: Theme.of(context).colorScheme.onSurface,
+                          ),
                         ),
                       ),
+                      const SizedBox(width: AppSpacing.sm),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 120),
+                        child: DecoratedBox(
+                          decoration: const BoxDecoration(
+                            color: AppPalette.canvas,
+                            borderRadius: BorderRadius.all(
+                              Radius.circular(AppRadius.full),
+                            ),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.sm,
+                              vertical: AppSpacing.xs,
+                            ),
+                            child: Text(
+                              widget.category,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTypography.caption.copyWith(
+                                color: AppPalette.ink,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (widget.subtitle != null) ...[
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      widget.subtitle!,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.bodySm.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          if (widget.locked)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: ExcludeSemantics(
+                  child: ColoredBox(
+                    key: const ValueKey('locked-conversation-overlay'),
+                    color: const Color(0xCCB0B0B0),
+                    child: const Center(
+                      child: Icon(
+                        Icons.lock_rounded,
+                        size: 36,
+                        color: AppPalette.ink,
+                      ),
                     ),
                   ),
                 ),
-              ],
-            ),
-            if (widget.subtitle != null) ...[
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                widget.subtitle!,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: AppTypography.bodySm.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
               ),
-            ],
-          ],
-        ),
+            ),
+        ],
       ),
     );
   }

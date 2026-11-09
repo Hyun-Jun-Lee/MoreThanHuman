@@ -1,7 +1,6 @@
 import 'package:curitalk/app/theme/app_semantic_colors.dart';
 import 'package:curitalk/app/theme/tokens/tokens.dart';
 import 'package:curitalk/core/copy/copy.dart';
-import 'package:curitalk/core/widgets/app_loading_indicator.dart';
 import 'package:flutter/material.dart';
 
 class ChatComposer extends StatefulWidget {
@@ -208,16 +207,10 @@ class _ChatComposerState extends State<ChatComposer> {
               style: IconButton.styleFrom(
                 backgroundColor: colors.selectedSurface,
                 foregroundColor: colors.onSelected,
-                disabledBackgroundColor: widget.isSending
-                    ? colors.selectedSurface
-                    : colors.disabledSurface,
-                disabledForegroundColor: widget.isSending
-                    ? colors.onSelected
-                    : colors.onDisabled,
+                disabledBackgroundColor: colors.disabledSurface,
+                disabledForegroundColor: colors.onDisabled,
               ),
-              icon: widget.isSending
-                  ? const AppLoadingIndicator(width: 44)
-                  : const Icon(Icons.arrow_upward_rounded),
+              icon: const Icon(Icons.arrow_upward_rounded),
             ),
           ],
         ),

@@ -66,8 +66,10 @@ final billingRepositoryProvider = Provider<BillingRepository>(
 final billingEntitlementProvider = FutureProvider<BillingEntitlement>((
   ref,
 ) async {
-  final session = ref.watch(authControllerProvider).value;
-  if (session == null || !session.isAuthenticated) {
+  final userId = ref.watch(
+    authControllerProvider.select((auth) => auth.value?.user?.id),
+  );
+  if (userId == null) {
     return const BillingEntitlement(plan: 'free', status: 'free');
   }
   return ref.watch(billingRepositoryProvider).getEntitlement();

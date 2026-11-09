@@ -113,7 +113,7 @@ class BillingController extends Notifier<BillingUiState> {
     _restoreRequestedAt = DateTime.now();
     try {
       await _store.restorePurchases();
-      if (ref.mounted) {
+      if (ref.mounted && state.message == null) {
         state = state.copyWith(
           isProcessing: false,
           message: 'restore_requested',
@@ -121,7 +121,7 @@ class BillingController extends Notifier<BillingUiState> {
       }
     } on Object {
       _restoreRequestedAt = null;
-      if (ref.mounted) {
+      if (ref.mounted && state.message == null) {
         state = state.copyWith(isProcessing: false, message: 'restore_failed');
       }
     }
