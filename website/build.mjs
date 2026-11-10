@@ -22,7 +22,7 @@ const copy = {
       intro: 'tomatalk은 관심 있는 주제로 AI와 대화하고, 상황별 역할극과 문법 피드백으로 연습을 이어가는 앱이에요.',
       download: 'App Store에서 다운로드', coming: '출시 준비 중',
       explore: '앱 살펴보기',
-      featureLabel: 'TOMATALK에서 할 수 있는 일',
+      featureLabel: 'tomatalk에서 할 수 있는 일',
       featureHeading: '나의 관심사가\n대화 주제가 되요!',
       features: [
         ['01', '관심 주제로 자유 대화', '내가 이야기하고 싶은 주제를 고르고 AI와 대화를 시작해요.', 'lime'],
@@ -30,15 +30,16 @@ const copy = {
         ['03', '문법 피드백', '내가 보낸 문장에서 교정할 부분을 확인해요.', 'blue'],
         ['04', '오늘의 토마토', '짧은 표현을 하나씩 살펴보고, iOS 홈 화면 위젯에서도 이어가요.', 'cream'],
       ],
-      previewLabel: 'APP PREVIEW',
+      previewLabel: '앱 미리보기',
       previewHeading: 'tomatalk에서는\n이렇게 대화해요.',
       previewIntro: '선택한 주제로 대화를 시작하고, 피드백을 확인하는 앱 화면을 살펴보세요.',
-      previewPending: '실제 앱 화면을 준비하고 있어요.',
+      previewIntroPending: '실제 앱 화면을 확인한 뒤 이곳에 소개할게요.',
+      previewPending: '앱 화면 캡처 준비 중',
       closing: '오늘의 한 문장부터\n시작해 볼까요?',
     },
     support: {
       title: 'tomatalk 고객 지원', description: 'tomatalk 사용과 계정·구독에 관한 도움말과 문의처.',
-      eyebrow: 'HELP & SUPPORT', heading: '도움이 필요하신가요?',
+      eyebrow: '고객 지원', heading: '도움이 필요하신가요?',
       intro: '앱 사용 중 불편한 점이나 의견이 있다면 이메일로 알려주세요.',
       contact: '이메일 문의', emailHint: '문제 상황, 앱 버전, 기기와 iOS 버전을 함께 적어주시면 확인에 도움이 돼요. 비밀번호는 보내지 마세요.',
       faqHeading: '자주 묻는 질문',
@@ -52,7 +53,7 @@ const copy = {
     },
     privacy: {
       title: 'tomatalk 개인정보처리방침', description: 'tomatalk의 개인정보 수집·이용, AI와 음성 처리, 보관 및 삭제 안내.',
-      eyebrow: 'PRIVACY', heading: '개인정보처리방침',
+      eyebrow: '개인정보 안내', heading: '개인정보처리방침',
       lead: '엑셈플러는 tomatalk 서비스 제공에 필요한 정보를 처리해요. 아래에서 어떤 정보를 왜 사용하고 언제 삭제하는지 설명해요.',
       updated: '최종 수정일: 2026년 11월 3일',
       sections: [
@@ -75,20 +76,21 @@ const copy = {
       heading: 'Start with a topic\nyou care about.',
       intro: 'tomatalk lets you talk with AI about your interests, practice situational roleplays, and review grammar feedback.',
       download: 'Download on the App Store', coming: 'Coming soon', explore: 'Explore the app',
-      featureLabel: 'WHAT YOU CAN DO', featureHeading: 'Make today’s interests\ntoday’s practice.',
+      featureLabel: 'What you can do', featureHeading: 'Make today’s interests\ntoday’s practice.',
       features: [
         ['01', 'Talk about your interests', 'Choose a topic and start an open conversation with AI.', 'lime'],
         ['02', 'Practice roleplays', 'Choose a situation and a role to practice a real exchange.', 'lilac'],
         ['03', 'Review grammar feedback', 'See corrections for the sentences you send.', 'blue'],
         ['04', 'Today’s tomato', 'Explore short expressions in the app and on the iOS Home Screen widget.', 'cream'],
       ],
-      previewLabel: 'APP PREVIEW', previewHeading: 'See how conversations\nwork in tomatalk.',
+      previewLabel: 'App preview', previewHeading: 'See how conversations\nwork in tomatalk.',
       previewIntro: 'Explore how the app lets you start a conversation and review feedback.',
-      previewPending: 'Real app screenshots are being prepared.', closing: 'Start with one\nsentence today.',
+      previewIntroPending: 'We’ll share the app screens here once they’re ready.',
+      previewPending: 'App screenshots coming soon', closing: 'Start with one\nsentence today.',
     },
     support: {
       title: 'tomatalk Support', description: 'Get help with tomatalk, your account, and subscriptions.',
-      eyebrow: 'HELP & SUPPORT', heading: 'How can we help?',
+      eyebrow: 'Support', heading: 'How can we help?',
       intro: 'Email us if something is not working or you have feedback.',
       contact: 'Email support', emailHint: 'Please include what happened, your app version, device, and iOS version. Do not send your password.',
       faqHeading: 'Frequently asked questions',
@@ -102,7 +104,7 @@ const copy = {
     },
     privacy: {
       title: 'tomatalk Privacy Policy', description: 'How tomatalk handles account, conversation, audio, and AI data.',
-      eyebrow: 'PRIVACY', heading: 'Privacy Policy',
+      eyebrow: 'Privacy', heading: 'Privacy Policy',
       lead: 'Exemplar processes information needed to provide tomatalk. This page explains what we use, why we use it, and how it is deleted.',
       updated: 'Last updated November 3, 2026',
       sections: [
@@ -185,13 +187,13 @@ async function screenshotNames(locale) {
 function landing(locale, screenshots) {
   const h = copy[locale].home;
   const featureCards = h.features.map(([number, title, description, color]) => `<article class="feature feature-${color}"><span class="feature-number">${number} / 04</span><div><h3>${title}</h3><p>${description}</p></div></article>`).join('');
-  const preview = screenshots.length ? `<div class="preview-gallery">${screenshots.map((name, index) => `<figure class="preview-item"><img src="/assets/screenshots/${locale}/${name}" alt="${escapeHtml(locale === 'ko' ? `tomatalk 실제 앱 화면 ${index + 1}` : `Actual tomatalk app screen ${index + 1}`)}" loading="lazy"><figcaption>${escapeHtml(locale === 'ko' ? ['홈에서 시작하기', '대화 이어가기', '학습 피드백 확인'][index] : ['Start from Home', 'Keep the conversation going', 'Review learning feedback'][index])}</figcaption></figure>`).join('')}</div>` : `<div class="preview-pending"><img src="/assets/tomato-basket.png" alt="" width="190" height="178"><p>${h.previewPending}</p></div>`;
+  const preview = screenshots.length ? `<div class="preview-gallery">${screenshots.map((name, index) => `<figure class="preview-item"><img src="/assets/screenshots/${locale}/${name}" alt="${escapeHtml(locale === 'ko' ? `tomatalk 실제 앱 화면 ${index + 1}` : `Actual tomatalk app screen ${index + 1}`)}" loading="lazy"><figcaption>${escapeHtml(locale === 'ko' ? ['홈에서 시작하기', '대화 이어가기', '학습 피드백 확인'][index] : ['Start from Home', 'Keep the conversation going', 'Review learning feedback'][index])}</figcaption></figure>`).join('')}</div>` : `<div class="preview-pending"><img src="/assets/tomato-basket.png" alt="" width="80" height="75"><p>${h.previewPending}</p></div>`;
   return `<section class="hero section-wrap">
     <div class="hero-copy"><span class="eyebrow">${h.eyebrow}</span><h1>${lineBreaks(h.heading)}</h1><p class="hero-intro">${h.intro}</p><div class="hero-actions"><button type="button" class="download-button" disabled aria-describedby="download-status">${h.download}</button><span id="download-status" class="coming-soon">${h.coming}</span></div><a class="text-link" href="#features">${h.explore}<span aria-hidden="true"> ↘</span></a></div>
-    <div class="hero-art" role="img" aria-label="${screenshots.length ? (locale === 'ko' ? 'tomatalk 실제 앱 화면' : 'Actual tomatalk app screen') : (locale === 'ko' ? 'tomatalk 앱 아이콘' : 'tomatalk app icon')}"><div class="hero-petal hero-petal-one"></div><div class="hero-petal hero-petal-two"></div>${screenshots.length ? `<img class="hero-screen" src="/assets/screenshots/${locale}/${screenshots[0]}" alt="" width="300">` : `<div class="hero-icon-wrap"><img src="/assets/app-icon.png" alt="" width="340" height="340"></div>`}<div class="hero-sticker">TALK<br>ABOUT<br>ANYTHING<span>✳</span></div></div>
+    <div class="hero-art" role="img" aria-label="${screenshots.length ? (locale === 'ko' ? 'tomatalk 실제 앱 화면' : 'Actual tomatalk app screen') : (locale === 'ko' ? 'tomatalk 앱 아이콘' : 'tomatalk app icon')}">${screenshots.length ? `<img class="hero-screen" src="/assets/screenshots/${locale}/${screenshots[0]}" alt="" width="300">` : `<div class="hero-icon-wrap"><img src="/assets/app-icon.png" alt="" width="340" height="340"></div>`}</div>
   </section>
   <section class="feature-section section-wrap" id="features"><div class="section-heading"><span class="eyebrow">${h.featureLabel}</span><h2>${lineBreaks(h.featureHeading)}</h2></div><div class="feature-grid">${featureCards}</div></section>
-  <section class="preview-section" id="preview"><div class="section-wrap"><div class="section-heading preview-heading"><div><span class="eyebrow">${h.previewLabel}</span><h2>${lineBreaks(h.previewHeading)}</h2></div><p>${h.previewIntro}</p></div>${preview}</div></section>
+  <section class="preview-section" id="preview"><div class="section-wrap"><div class="section-heading preview-heading"><div><span class="eyebrow">${h.previewLabel}</span><h2>${lineBreaks(h.previewHeading)}</h2></div><p>${screenshots.length ? h.previewIntro : h.previewIntroPending}</p></div>${preview}</div></section>
   <section class="closing-section section-wrap"><h2>${lineBreaks(h.closing)}</h2><div><button type="button" class="download-button" disabled aria-describedby="closing-download-status">${h.download}</button><span id="closing-download-status" class="coming-soon">${h.coming}</span></div></section>`;
 }
 
@@ -199,7 +201,7 @@ function support(locale) {
   const s = copy[locale].support;
   const faq = s.faqs.map(([question, answer]) => `<details class="faq-item"><summary>${question}<span aria-hidden="true">+</span></summary><div class="faq-answer"><p>${answer}</p></div></details>`).join('');
   return `<section class="document-hero section-wrap"><span class="eyebrow">${s.eyebrow}</span><h1>${s.heading}</h1><p>${s.intro}</p></section>
-  <section class="support-contact section-wrap"><div class="contact-card"><div><span class="eyebrow">CONTACT</span><h2>${email.replace('@', '@<wbr>')}</h2><p>${s.emailHint}</p></div><a class="pill-link" href="mailto:${email}">${s.contact}<span aria-hidden="true">↗</span></a></div></section>
+  <section class="support-contact section-wrap"><div class="contact-card"><div><span class="eyebrow">${locale === 'ko' ? '문의' : 'Contact'}</span><h2>${email.replace('@', '@<wbr>')}</h2><p>${s.emailHint}</p></div><a class="pill-link" href="mailto:${email}">${s.contact}<span aria-hidden="true">↗</span></a></div></section>
   <section class="faq-section section-wrap"><h2>${s.faqHeading}</h2><div class="faq-list">${faq}</div></section>
   <section class="legal-links section-wrap"><h2>${s.legalHeading}</h2><p>${s.legalText}</p><div><a href="${urls[locale].privacy}">${copy[locale].nav.privacy}<span aria-hidden="true">↗</span></a><a href="${appleEula}" target="_blank" rel="noopener noreferrer">${copy[locale].footer.eula}<span aria-hidden="true">↗</span></a></div></section>`;
 }
