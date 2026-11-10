@@ -42,7 +42,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         ? user!.displayName
         : 'tomatalk user';
     final copy = AppCopy.of(context);
-    final entitlement = ref.watch(billingEntitlementProvider).value;
+    final entitlementState = ref.watch(billingEntitlementProvider);
+    final entitlement = entitlementState.isLoading || entitlementState.hasError
+        ? null
+        : entitlementState.asData?.value;
+    final planLabel = entitlement == null
+        ? '—'
+        : copy.planDisplayName(entitlement.plan);
+    final planTitle = entitlement == null
+        ? entitlementState.isLoading
+              ? copy.profilePlanLoading
+              : copy.profilePlanLoadFailed
+        : copy.profilePlanTitle(entitlement.plan);
     final ColorScheme colors = Theme.of(context).colorScheme;
     final bool actionsDisabled =
         isLoggingOut ||
@@ -137,31 +148,43 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                               ),
                               child: Row(
                                 children: <Widget>[
-                                  Container(
-                                    height: 42,
-                                    constraints: const BoxConstraints(
-                                      minWidth: 42,
-                                    ),
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: AppSpacing.xs,
-                                    ),
-                                    alignment: Alignment.center,
-                                    decoration: BoxDecoration(
-                                      color: colors.primary,
-                                      borderRadius: BorderRadius.circular(
-                                        AppRadius.pill,
+                                  if (entitlementState.isLoading)
+                                    Semantics(
+                                      label: copy.profilePlanLoading,
+                                      child: Image.asset(
+                                        'assets/images/loading/profile_subscription_tomato.gif',
+                                        key: const ValueKey(
+                                          'profile-subscription-loading',
+                                        ),
+                                        width: 42,
+                                        height: 42,
+                                        excludeFromSemantics: true,
+                                      ),
+                                    )
+                                  else
+                                    Container(
+                                      height: 42,
+                                      constraints: const BoxConstraints(
+                                        minWidth: 42,
+                                      ),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: AppSpacing.xs,
+                                      ),
+                                      alignment: Alignment.center,
+                                      decoration: BoxDecoration(
+                                        color: colors.primary,
+                                        borderRadius: BorderRadius.circular(
+                                          AppRadius.pill,
+                                        ),
+                                      ),
+                                      child: Text(
+                                        planLabel,
+                                        style: AppTypography.caption.copyWith(
+                                          color: colors.onPrimary,
+                                          fontWeight: FontWeight.w700,
+                                        ),
                                       ),
                                     ),
-                                    child: Text(
-                                      copy.planDisplayName(
-                                        entitlement?.plan ?? 'free',
-                                      ),
-                                      style: AppTypography.caption.copyWith(
-                                        color: colors.onPrimary,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  ),
                                   const SizedBox(width: AppSpacing.sm),
                                   Expanded(
                                     child: Column(
@@ -170,14 +193,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                       mainAxisSize: MainAxisSize.min,
                                       children: <Widget>[
                                         Text(
-                                          copy.profilePlanTitle(
-                                            entitlement?.plan ?? 'free',
-                                          ),
+                                          planTitle,
                                           style: AppTypography.button,
                                         ),
                                         const SizedBox(height: AppSpacing.xxs),
                                         Text(
-                                          copy.profileCurrentPlanDescription,
+                                          entitlementState.isLoading
+                                              ? copy.profilePlanLoadingHint
+                                              : entitlementState.hasError
+                                              ? copy.profilePlanRefreshHint
+                                              : copy.profileCurrentPlanDescription,
                                           style: AppTypography.caption.copyWith(
                                             color: colors.onSurfaceVariant,
                                           ),

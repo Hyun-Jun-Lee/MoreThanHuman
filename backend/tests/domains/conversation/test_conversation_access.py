@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta
 from uuid import uuid4
 import importlib
 
@@ -21,6 +22,7 @@ from domains.conversation.repository import (
 from domains.conversation.service import ConversationService
 from domains.conversation.stream_turns import StreamTurnStore
 from scripts import initialize_conversation_slots
+from shared.subscription import AppleSubscriptionModel
 
 
 def _setup():
@@ -67,6 +69,35 @@ def test_free_slot_reopens_after_deletion_and_completed_conversations_count():
     repository.delete_by_id(first.id, user_id)
     repository.create_with_access(_conversation(user_id), enabled=True)
     assert repository.access_summary(user_id, enabled=True)["used_slots"] == 1
+
+
+def test_expired_subscription_relocks_conversations_on_access_without_notification():
+    repository, user_id = _setup()
+    conversations = [repository.save(_conversation(user_id)) for _ in range(3)]
+    for conversation in conversations:
+        conversation.slot_active = True
+    repository.db.get(ProfileModel, user_id).slot_limit_snapshot = 5
+    subscription = AppleSubscriptionModel(
+        original_transaction_id="sandbox-expiry-test",
+        user_id=user_id,
+        last_transaction_id="sandbox-expiry-test",
+        product_id="Advance",
+        environment="Sandbox",
+        status="active",
+        expires_at=datetime.utcnow() + timedelta(minutes=5),
+    )
+    repository.db.add(subscription)
+    repository.db.commit()
+
+    assert repository.access_summary(user_id, enabled=True)["locked_count"] == 0
+    subscription.expires_at = datetime.utcnow() - timedelta(seconds=1)
+    repository.db.commit()
+
+    access = repository.access_summary(user_id, enabled=True)
+    assert access["plan"] == "free"
+    assert access["slot_limit"] == 1
+    assert access["locked_count"] == 2
+    assert repository.db.get(ProfileModel, user_id).slot_limit_snapshot == 1
 
 
 def test_legacy_allowance_and_permanent_grant_do_not_change_subscription_slots():

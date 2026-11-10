@@ -317,6 +317,14 @@ class AppCopy {
 
   String get profileCurrentPlanDescription =>
       isKorean ? '현재 이용 중인 플랜' : 'Current plan';
+  String get profilePlanLoading =>
+      isKorean ? '구독 정보를 확인하는 중이에요.' : 'Checking your subscription.';
+  String get profilePlanLoadingHint =>
+      isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.';
+  String get profilePlanLoadFailed =>
+      isKorean ? '구독 정보를 확인하지 못했어요.' : 'Could not check your subscription.';
+  String get profilePlanRefreshHint =>
+      isKorean ? '아래로 당겨 다시 확인해 주세요.' : 'Pull down to try again.';
   String get profileViewPlansLabel => isKorean ? '플랜 살펴보기' : 'View plans';
   String get nicknameInvalid => isKorean
       ? '닉네임은 1~20자로 입력해 주세요.'

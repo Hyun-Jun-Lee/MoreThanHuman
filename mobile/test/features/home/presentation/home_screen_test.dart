@@ -79,6 +79,141 @@ void main() {
     expect(find.text('ENGLISH'), findsNothing);
   });
 
+  testWidgets('profile waits for a confirmed plan before showing Free', (
+    WidgetTester tester,
+  ) async {
+    final entitlement = Completer<BillingEntitlement>();
+    await tester.pumpWidget(
+      _homeApp(
+        profile: true,
+        platform: TargetPlatform.iOS,
+        billingGetter: () => entitlement.future,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Checking your subscription.'), findsOneWidget);
+    final loadingImage = tester.widget<Image>(
+      find.byKey(const ValueKey('profile-subscription-loading')),
+    );
+    expect(
+      (loadingImage.image as AssetImage).assetName,
+      'assets/images/loading/profile_subscription_tomato.gif',
+    );
+    expect(find.text('Please wait a moment.'), findsOneWidget);
+    expect(find.text('Free'), findsNothing);
+    expect(find.text('Free plan'), findsNothing);
+
+    entitlement.complete(
+      const BillingEntitlement(plan: 'advance', status: 'active'),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Advance plan'), findsOneWidget);
+    expect(find.text('Checking your subscription.'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('profile-subscription-loading')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('profile reports subscription lookup failure without Free', (
+    WidgetTester tester,
+  ) async {
+    final retry = Completer<BillingEntitlement>();
+    var reads = 0;
+    await tester.pumpWidget(
+      _homeApp(
+        profile: true,
+        platform: TargetPlatform.iOS,
+        billingGetter: () {
+          reads += 1;
+          return reads == 1
+              ? Future<BillingEntitlement>.error(
+                  StateError('Subscription unavailable'),
+                )
+              : retry.future;
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Could not check your subscription.'), findsOneWidget);
+    expect(find.text('Pull down to try again.'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('profile-subscription-loading')),
+      findsNothing,
+    );
+    expect(find.text('Free'), findsNothing);
+    expect(find.text('Free plan'), findsNothing);
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ProfileScreen)),
+      listen: false,
+    );
+    container.invalidate(billingEntitlementProvider);
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('Checking your subscription.'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('profile-subscription-loading')),
+      findsOneWidget,
+    );
+
+    retry.complete(const BillingEntitlement(plan: 'free', status: 'free'));
+    await tester.pumpAndSettle();
+    expect(find.text('Free plan'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('profile-subscription-loading')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('profile hides an old Free plan during a failed recheck', (
+    WidgetTester tester,
+  ) async {
+    final nextEntitlement = Completer<BillingEntitlement>();
+    var reads = 0;
+    await tester.pumpWidget(
+      _homeApp(
+        profile: true,
+        platform: TargetPlatform.iOS,
+        billingGetter: () {
+          reads += 1;
+          return reads == 1
+              ? const BillingEntitlement(plan: 'free', status: 'free')
+              : nextEntitlement.future;
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Free plan'), findsOneWidget);
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ProfileScreen)),
+      listen: false,
+    );
+    container.invalidate(billingEntitlementProvider);
+    await tester.pump();
+    await tester.pump();
+    expect(reads, 2);
+    expect(container.read(billingEntitlementProvider).isLoading, isTrue);
+    expect(find.text('Checking your subscription.'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('profile-subscription-loading')),
+      findsOneWidget,
+    );
+    expect(find.text('Free plan'), findsNothing);
+
+    nextEntitlement.completeError(StateError('Subscription unavailable'));
+    await tester.pumpAndSettle();
+    expect(find.text('Could not check your subscription.'), findsOneWidget);
+    expect(find.text('Free plan'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('profile-subscription-loading')),
+      findsNothing,
+    );
+  });
+
   testWidgets('pulling down profile reloads account and subscription', (
     WidgetTester tester,
   ) async {
@@ -1111,7 +1246,7 @@ Widget _homeApp({
   Locale locale = const Locale('en'),
   TargetPlatform? platform,
   String? billingPlan,
-  BillingEntitlement Function()? billingGetter,
+  FutureOr<BillingEntitlement> Function()? billingGetter,
   _MemoryTokenStorage? tokenStorage,
   _FakeAuthRepository? authRepository,
   _FakeLanguagePreferencesRepository? languagePreferencesRepository,
