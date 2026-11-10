@@ -173,7 +173,7 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
             onPopInvokedWithResult: (didPop, _) {
               if (didPop && ref.mounted) _refreshLists(ref);
             },
-            child: ConversationScreen(conversationId: conversationId),
+            child: ConversationEntryGate(conversationId: conversationId),
           );
         },
       ),

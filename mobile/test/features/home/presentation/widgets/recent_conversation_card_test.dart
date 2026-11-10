@@ -107,7 +107,7 @@ void main() {
   });
 
   testWidgets(
-    'locked card is greyed out with a centered lock and remains tappable',
+    'locked card is greyed out with a centered lock and cannot open',
     (WidgetTester tester) async {
       var tapCount = 0;
       await tester.pumpWidget(
@@ -126,7 +126,7 @@ void main() {
       final lock = find.byIcon(Icons.lock_rounded);
       expect(overlay, findsOneWidget);
       expect(lock, findsOneWidget);
-      expect(find.text('Read-only'), findsNothing);
+      expect(find.text('Locked conversation'), findsNothing);
       expect(tester.getCenter(lock), tester.getCenter(overlay));
       expect(tester.widget<ColoredBox>(overlay).color, const Color(0xCCB0B0B0));
       expect(
@@ -134,14 +134,14 @@ void main() {
             .widgetList<Semantics>(find.byType(Semantics))
             .any(
               (item) =>
-                  item.properties.label?.contains('Read-only conversation') ==
+                  item.properties.label?.contains('Locked conversation') ==
                   true,
             ),
         isTrue,
       );
 
       await tester.tapAt(tester.getCenter(lock));
-      expect(tapCount, 1);
+      expect(tapCount, 0);
     },
   );
 

@@ -56,6 +56,32 @@ void main() {
     expect(selectedConversationId, 'conversation-id');
   });
 
+  testWidgets('locked conversation cannot open from history', (tester) async {
+    String? selectedConversationId;
+    await tester.pumpWidget(
+      _historyApp(
+        conversations: <ConversationSummary>[
+          ConversationSummary(
+            id: _conversation.id,
+            title: _conversation.title,
+            kind: _conversation.kind,
+            messageCount: _conversation.messageCount,
+            isActive: _conversation.isActive,
+            locked: true,
+            updatedAt: _conversation.updatedAt,
+          ),
+        ],
+        onConversationSelected: (id) => selectedConversationId = id,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Locked conversation'), findsOneWidget);
+    await tester.tap(find.text('Osaka food trip'));
+    expect(selectedConversationId, isNull);
+    expect(find.byTooltip('Conversation options'), findsOneWidget);
+  });
+
   testWidgets('shows retry state and reloads failed history', (
     WidgetTester tester,
   ) async {

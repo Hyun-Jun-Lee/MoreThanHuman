@@ -828,9 +828,11 @@ void main() {
   testWidgets('active conversation appears before newer locked conversations', (
     WidgetTester tester,
   ) async {
+    String? selectedConversationId;
     await tester.pumpWidget(
       _homeApp(
         conversations: _recentConversations(count: 3),
+        onConversationSelected: (id) => selectedConversationId = id,
         access: const ConversationAccess(
           enabled: true,
           canCreate: false,
@@ -867,6 +869,10 @@ void main() {
       find.byKey(const ValueKey('locked-conversation-overlay')),
       findsNWidgets(2),
     );
+    await tester.tapAt(tester.getCenter(firstLocked));
+    expect(selectedConversationId, isNull);
+    await tester.tapAt(tester.getCenter(active));
+    expect(selectedConversationId, 'conversation-3');
   });
 
   testWidgets('new conversation button stays fixed while the list scrolls', (

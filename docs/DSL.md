@@ -520,7 +520,7 @@ NDJSON 각 줄에는 `event`, 0부터 증가하는 `seq`, `turn_id`, `attempt_id
 
 `CONVERSATION_ACCESS_ENABLED=false`가 코드 기본값이에요. 개발 환경 미리보기에서는 `true`로 설정해 슬롯·15턴 제한과 모바일 잠금을 함께 확인할 수 있어요. `false`일 때 `GET /access/`는 `enabled=false`, `can_create=true`, `slot_limit=null`, `remaining_slots=null`을 반환하고, 대화별 `GET /{id}/access/`는 `enabled=false`, `can_send=true`, `turn_limit=null`을 반환해요. 기존 생성·발화 API는 한도를 적용하지 않아요.
 
-활성화하면 무료 계정은 활성 대화 1개와 대화당 사용자 발화 15회를 사용할 수 있어요. Advance는 활성 대화 5개, Plus는 10개이고 두 구독 모두 발화 수 제한이 없어요. 저장된 대화 수는 제한하지 않아요. 비활성 대화는 읽기·삭제할 수 있지만 발화할 수 없어요. 구독 만료·환불·철회 또는 하위 플랜 전환 시 최근 사용한 활성 대화만 현재 한도까지 남겨요. 기존 다중 대화 계정은 마지막 사용자 발화가 가장 최근인 대화 1개를 활성화하고 나머지를 잠가요. 앱에서 활성 대화를 해제하거나 다른 대화로 교체할 수 있어요. 기존 `legacy_conversation_slots`와 `conversation_slot_grants`는 보존하지만 구독 권한에 반영하지 않아요.
+활성화하면 무료 계정은 활성 대화 1개와 대화당 사용자 발화 15회를 사용할 수 있어요. Advance는 활성 대화 5개, Plus는 10개이고 두 구독 모두 발화 수 제한이 없어요. 저장된 대화 수는 제한하지 않아요. 비활성 대화는 앱에서 열 수 없고 목록에서 활성화하거나 삭제할 수 있으며 발화할 수 없어요. 서버의 메시지 조회 API는 기존 읽기 권한을 유지해요. 구독 만료·환불·철회 또는 하위 플랜 전환 시 최근 사용한 활성 대화만 현재 한도까지 남겨요. 기존 다중 대화 계정은 마지막 사용자 발화가 가장 최근인 대화 1개를 활성화하고 나머지를 잠가요. 앱에서 활성 대화를 해제하거나 다른 대화로 교체할 수 있어요. 기존 `legacy_conversation_slots`와 `conversation_slot_grants`는 보존하지만 구독 권한에 반영하지 않아요.
 
 자유 대화의 첫 발화는 1회이며 역할극의 AI 첫 인사는 세지 않아요. 기존에 15회를 넘긴 무료 대화는 열람할 수 있으나 새 발화는 막아요. 생성 API는 한도 초과 시 HTTP 409 `CONVERSATION_SLOTS_FULL`, 잠긴 대화의 `/message/`·`/turn/`은 `CONVERSATION_LOCKED`, 무료 발화 초과는 `CONVERSATION_TURNS_FULL`을 반환해요. 음성 요청은 STT 전에 한도를 미리 확인하고 저장 시 다시 검사해요.
 

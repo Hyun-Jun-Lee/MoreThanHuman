@@ -209,13 +209,17 @@ class AppCopy {
     (false, _) => 'Could not verify the purchase. Retry or restore purchases.',
   };
   String get conversationLockedReadOnly => isKorean
-      ? '이 대화는 읽기 전용이에요. 다른 활성 대화를 바꾸거나 구독을 시작할 수 있어요.'
-      : 'This conversation is read-only. Switch your active conversation or subscribe.';
+      ? '이 대화는 잠겨 있어요. 대화 목록에서 활성 대화로 선택한 뒤 열 수 있어요.'
+      : 'This conversation is locked. Select it as an active conversation in Conversations to open it.';
   String get activateConversation =>
       isKorean ? '활성 대화로 선택' : 'Use this conversation';
   String get deactivateConversation =>
       isKorean ? '활성 대화 해제' : 'Release active slot';
-  String get lockedConversationLabel => isKorean ? '읽기 전용' : 'Read-only';
+  String get lockedConversationLabel =>
+      isKorean ? '잠긴 대화' : 'Locked conversation';
+  String get lockedConversationEntryMessage => isKorean
+      ? '대화 목록에서 활성 대화로 선택한 뒤 열 수 있어요.'
+      : 'Select it as an active conversation in Conversations to open it.';
   String get backLabel => isKorean ? '뒤로' : 'Back';
   String get backToHomeLabel => isKorean ? '홈으로 돌아가기' : 'Back to home';
   String get conversationTitle => isKorean ? '대화' : 'Conversation';
@@ -225,12 +229,12 @@ class AppCopy {
       ? '활성 대화 슬롯이 모두 사용 중이에요. 대화 목록에서 슬롯을 해제하거나 구독해 주세요.'
       : 'All active conversation slots are in use. Release a slot in Conversations or subscribe.';
   String get additionalConversationLockedSemantic =>
-      isKorean ? '읽기 전용 대화' : 'Read-only conversation';
+      isKorean ? '잠긴 대화' : 'Locked conversation';
   String get switchConversationTitle =>
       isKorean ? '활성 대화 바꾸기' : 'Switch active conversation';
   String get switchConversationMessage => isKorean
-      ? '대신 읽기 전용으로 전환할 대화를 선택해 주세요.'
-      : 'Choose a conversation to make read-only instead.';
+      ? '대신 잠글 대화를 선택해 주세요.'
+      : 'Choose a conversation to lock instead.';
   String get slotChangeFailed => isKorean
       ? '대화 슬롯을 변경하지 못했어요. 다시 시도해 주세요.'
       : 'Could not change the active conversation. Try again.';

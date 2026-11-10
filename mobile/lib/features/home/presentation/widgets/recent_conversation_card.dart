@@ -128,7 +128,11 @@ class _RecentConversationCardState extends State<RecentConversationCard> {
         children: [
           AppColorBlockCard(
             color: widget.color,
-            onTap: _dragOffset < 0 ? _close : widget.onTap,
+            onTap: _dragOffset < 0
+                ? _close
+                : widget.locked
+                ? null
+                : widget.onTap,
             semanticLabel: [
               copy.recentConversationSemanticLabel(
                 widget.category,

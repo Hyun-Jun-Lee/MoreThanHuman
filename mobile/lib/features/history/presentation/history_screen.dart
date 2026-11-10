@@ -136,7 +136,9 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
-                      onTap: () => widget.onConversationSelected?.call(item.id),
+                      onTap: item.locked
+                          ? null
+                          : () => widget.onConversationSelected?.call(item.id),
                       trailing:
                           _deleting.contains(item.id) ||
                               _changing.contains(item.id)

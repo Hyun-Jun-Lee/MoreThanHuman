@@ -391,7 +391,9 @@ class _RecentConversationsState extends State<_RecentConversations> {
             locked: isLocked(visibleConversations[index]),
             color: _RecentConversations
                 ._colors[index % _RecentConversations._colors.length],
-            onTap: widget.onSelected == null
+            onTap:
+                isLocked(visibleConversations[index]) ||
+                    widget.onSelected == null
                 ? null
                 : () => widget.onSelected!(visibleConversations[index].id),
             onDelete: () => widget.onDelete(visibleConversations[index]),
