@@ -69,12 +69,7 @@ final conversationAccessProvider = FutureProvider<ConversationAccess>((
   if (session == null || !session.isAuthenticated) {
     return const ConversationAccess.disabled();
   }
-  try {
-    return await ref.watch(conversationAccessRepositoryProvider).getAccess();
-  } on Object {
-    // 조회 실패 시 UI는 잠금을 추정하지 않아요. 서버가 생성 한도를 다시 검사해요.
-    return const ConversationAccess.disabled();
-  }
+  return ref.watch(conversationAccessRepositoryProvider).getAccess();
 });
 
 final conversationTurnAccessProvider =

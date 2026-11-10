@@ -391,6 +391,9 @@ class AppCopy {
   String get recentConversationsLoadFailed => isKorean
       ? '최근 대화를 불러오지 못했어요.'
       : 'Recent conversations could not be loaded.';
+  String get homeConversationAccessLoadFailed => isKorean
+      ? '대화 이용 권한을 확인하지 못했어요.'
+      : 'Could not check your conversation access.';
   String get updatingConversations =>
       isKorean ? '대화를 업데이트하는 중...' : 'Updating conversations...';
   String get homeEmptyTitle => isKorean ? '대화를 시작하세요' : 'Start a conversation';

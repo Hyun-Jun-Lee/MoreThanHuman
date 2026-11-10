@@ -36,15 +36,22 @@ class HomeScreen extends ConsumerWidget {
     final AsyncValue<List<ConversationSummary>> recent = ref.watch(
       recentConversationsControllerProvider,
     );
-    final ConversationAccess? access = ref
-        .watch(conversationAccessProvider)
-        .value;
+    final AsyncValue<ConversationAccess> accessState = ref.watch(
+      conversationAccessProvider,
+    );
+    final ConversationAccess? access = accessState.value;
     final Set<String>? activeConversationIds = access?.enabled == true
         ? access!.activeConversations.map((item) => item.id).toSet()
         : null;
     final bool isRecentRefreshing = ref.watch(
       recentConversationsRefreshingProvider,
     );
+    final bool conversationsReady =
+        !recent.isLoading &&
+        !recent.hasError &&
+        !accessState.isLoading &&
+        !accessState.hasError &&
+        !isRecentRefreshing;
     return AppScaffold(
       padding: EdgeInsets.zero,
       safeAreaBottom: false,
@@ -54,7 +61,9 @@ class HomeScreen extends ConsumerWidget {
         child: AppPrimaryButton(
           label: copy.homeEmptyTitle,
           leading: const Icon(Icons.add_rounded),
-          onPressed: () => _showStartSheet(context, ref),
+          onPressed: conversationsReady
+              ? () => _showStartSheet(context, ref)
+              : null,
         ),
       ),
       body: RefreshIndicator(
@@ -92,40 +101,45 @@ class HomeScreen extends ConsumerWidget {
                     onSelected: (topic) =>
                         _startSuggestedTopic(context, ref, topic),
                   ),
-                  recent.when(
-                    loading: () => AppAsyncStateView.loading(
+                  if (!conversationsReady &&
+                      (recent.isLoading ||
+                          accessState.isLoading ||
+                          isRecentRefreshing))
+                    AppAsyncStateView.loading(
                       message: copy.loadingRecentConversations,
-                    ),
-                    error: (_, _) => AppAsyncStateView.error(
-                      message: copy.recentConversationsLoadFailed,
-                      onRetry: () => ref
-                          .read(recentConversationsControllerProvider.notifier)
-                          .reload(),
-                    ),
-                    data: (List<ConversationSummary> conversations) {
-                      final bool isRefreshing =
-                          recent.isRefreshing ||
-                          recent.isReloading ||
-                          isRecentRefreshing;
-                      if (conversations.isEmpty) {
-                        if (isRefreshing) {
-                          return AppAsyncStateView.loading(
-                            message: copy.updatingConversations,
-                          );
+                    )
+                  else if (accessState.hasError)
+                    AppAsyncStateView.error(
+                      message: copy.homeConversationAccessLoadFailed,
+                      onRetry: () => ref.invalidate(conversationAccessProvider),
+                    )
+                  else
+                    recent.when(
+                      loading: () => AppAsyncStateView.loading(
+                        message: copy.loadingRecentConversations,
+                      ),
+                      error: (_, _) => AppAsyncStateView.error(
+                        message: copy.recentConversationsLoadFailed,
+                        onRetry: () => ref
+                            .read(
+                              recentConversationsControllerProvider.notifier,
+                            )
+                            .reload(),
+                      ),
+                      data: (List<ConversationSummary> conversations) {
+                        if (conversations.isEmpty) {
+                          return const SizedBox.shrink();
                         }
-                        return const SizedBox.shrink();
-                      }
-                      return _RecentConversations(
-                        key: ValueKey('home-recent-${user?.id}'),
-                        conversations: conversations,
-                        activeConversationIds: activeConversationIds,
-                        isRefreshing: isRefreshing,
-                        onSelected: onConversationSelected,
-                        onDelete: (ConversationSummary conversation) =>
-                            _deleteConversation(context, ref, conversation),
-                      );
-                    },
-                  ),
+                        return _RecentConversations(
+                          key: ValueKey('home-recent-${user?.id}'),
+                          conversations: conversations,
+                          activeConversationIds: activeConversationIds,
+                          onSelected: onConversationSelected,
+                          onDelete: (ConversationSummary conversation) =>
+                              _deleteConversation(context, ref, conversation),
+                        );
+                      },
+                    ),
                 ]),
               ),
             ),
@@ -137,7 +151,11 @@ class HomeScreen extends ConsumerWidget {
 
   Future<void> _refreshHome(WidgetRef ref) async {
     ref.invalidate(conversationAccessProvider);
-    await ref.read(conversationAccessProvider.future);
+    try {
+      await ref.read(conversationAccessProvider.future);
+    } on Object {
+      // 권한 오류는 홈 카드 영역에서 재시도를 안내해요.
+    }
     await ref.read(recentConversationsControllerProvider.notifier).reload();
     await Future.wait([
       ref.refresh(weeklyTopicsControllerProvider.future).then((_) {}),
@@ -324,13 +342,11 @@ class _RecentConversations extends StatefulWidget {
     super.key,
     required this.conversations,
     required this.activeConversationIds,
-    required this.isRefreshing,
     required this.onSelected,
     required this.onDelete,
   });
   final List<ConversationSummary> conversations;
   final Set<String>? activeConversationIds;
-  final bool isRefreshing;
   final ValueChanged<String>? onSelected;
   final ValueChanged<ConversationSummary> onDelete;
   static const _colors = [AppPalette.blockLimeSoft, AppPalette.blockBlue];
@@ -365,13 +381,6 @@ class _RecentConversationsState extends State<_RecentConversations> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (widget.isRefreshing)
-          const Center(
-            child: AppLoadingIndicator(
-              key: ValueKey('recent-conversations-refresh-indicator'),
-              width: 120,
-            ),
-          ),
         for (int index = 0; index < visibleConversations.length; index++) ...[
           RecentConversationCard(
             key: ValueKey(visibleConversations[index].id),

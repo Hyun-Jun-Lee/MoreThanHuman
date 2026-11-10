@@ -823,7 +823,150 @@ void main() {
     expect(find.text('Read-only'), findsNothing);
   });
 
-  testWidgets('Recent conversations show updating indicator while refreshing', (
+  testWidgets('waits for both initial access and conversation responses', (
+    WidgetTester tester,
+  ) async {
+    final homeRepository = _DelayedHomeRepository();
+    final accessResponse = Completer<ConversationAccess>();
+    var accessReads = 0;
+    await tester.pumpWidget(
+      _homeApp(
+        homeRepository: homeRepository,
+        accessGetter: () {
+          accessReads += 1;
+          return accessResponse.future;
+        },
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(homeRepository.reads, 1);
+    expect(accessReads, 1);
+    homeRepository.complete(_recentConversations(count: 2));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('conversation-1')), findsNothing);
+    expect(find.text('Loading recent conversations...'), findsOneWidget);
+
+    accessResponse.complete(
+      const ConversationAccess(
+        enabled: true,
+        canCreate: false,
+        usedSlots: 1,
+        slotLimit: 1,
+        remainingSlots: 0,
+        activeConversations: [
+          ActiveConversation(id: 'conversation-1', title: 'Conversation 1'),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('conversation-1')), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('conversation-2')),
+        matching: find.byKey(const ValueKey('locked-conversation-overlay')),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('shows retry when conversation access fails', (
+    WidgetTester tester,
+  ) async {
+    var accessReads = 0;
+    await tester.pumpWidget(
+      _homeApp(
+        conversations: _recentConversations(count: 1),
+        accessGetter: () {
+          accessReads += 1;
+          if (accessReads == 1) throw StateError('Access unavailable');
+          return const ConversationAccess.disabled();
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('conversation-1')), findsNothing);
+    expect(
+      find.text('Could not check your conversation access.'),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.widgetWithText(FilledButton, 'Start a conversation'),
+          )
+          .onPressed,
+      isNull,
+    );
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Retry'));
+    await tester.pumpAndSettle();
+    expect(accessReads, 2);
+    expect(find.byKey(const ValueKey('conversation-1')), findsOneWidget);
+  });
+
+  testWidgets('hides cached cards while access is refreshing', (
+    WidgetTester tester,
+  ) async {
+    final refreshedAccess = Completer<ConversationAccess>();
+    var accessReads = 0;
+    await tester.pumpWidget(
+      _homeApp(
+        conversations: _recentConversations(count: 2),
+        accessGetter: () {
+          accessReads += 1;
+          if (accessReads > 1) return refreshedAccess.future;
+          return const ConversationAccess(
+            enabled: true,
+            canCreate: false,
+            usedSlots: 2,
+            slotLimit: 2,
+            remainingSlots: 0,
+            activeConversations: [
+              ActiveConversation(id: 'conversation-1', title: 'Conversation 1'),
+              ActiveConversation(id: 'conversation-2', title: 'Conversation 2'),
+            ],
+          );
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('conversation-2')), findsOneWidget);
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(HomeScreen)),
+      listen: false,
+    );
+    container.invalidate(conversationAccessProvider);
+    await tester.pump();
+    await tester.pump();
+    expect(find.byKey(const ValueKey('conversation-1')), findsNothing);
+    expect(find.byKey(const ValueKey('conversation-2')), findsNothing);
+
+    refreshedAccess.complete(
+      const ConversationAccess(
+        enabled: true,
+        canCreate: false,
+        usedSlots: 1,
+        slotLimit: 1,
+        remainingSlots: 0,
+        activeConversations: [
+          ActiveConversation(id: 'conversation-1', title: 'Conversation 1'),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('conversation-2')),
+        matching: find.byKey(const ValueKey('locked-conversation-overlay')),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('Recent conversations hide stale cards while refreshing', (
     WidgetTester tester,
   ) async {
     final _RefreshableHomeRepository homeRepository =
@@ -833,7 +976,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Conversation 1'), findsOneWidget);
-    expect(_refreshIndicator, findsNothing);
 
     final ProviderContainer container = ProviderScope.containerOf(
       tester.element(find.byType(HomeScreen)),
@@ -846,14 +988,13 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    expect(find.text('Conversation 1'), findsOneWidget);
-    expect(_refreshIndicator, findsOneWidget);
+    expect(find.text('Conversation 1'), findsNothing);
+    expect(find.text('Loading recent conversations...'), findsOneWidget);
 
     homeRepository.completeRefresh();
     await tester.pumpAndSettle();
 
     expect(find.text('Updated conversation'), findsOneWidget);
-    expect(_refreshIndicator, findsNothing);
   });
 
   testWidgets(
@@ -965,10 +1106,6 @@ const WeeklyTopics _publishedTopics = WeeklyTopics(
   weekStart: '2026-09-28',
   topics: [WeeklyTopic(id: 'topic-1', text: '오늘의 취미 이야기')],
 );
-final Finder _refreshIndicator = find.byKey(
-  const ValueKey<String>('recent-conversations-refresh-indicator'),
-);
-
 Widget _homeApp({
   bool profile = false,
   Locale locale = const Locale('en'),
@@ -988,7 +1125,7 @@ Widget _homeApp({
   LanguageSnackCache? languageSnackCache,
   ConversationRepository? conversationRepository,
   ConversationAccess access = const ConversationAccess.disabled(),
-  ConversationAccess Function()? accessGetter,
+  FutureOr<ConversationAccess> Function()? accessGetter,
   WeeklyTopics weeklyTopics = const WeeklyTopics(weekStart: null, topics: []),
 }) {
   final _MemoryTokenStorage effectiveTokenStorage =
@@ -1036,7 +1173,7 @@ Widget _homeApp({
         _FakeConversationAccessRepository(access),
       ),
       conversationAccessProvider.overrideWith(
-        (ref) async => accessGetter?.call() ?? access,
+        (ref) async => await (accessGetter?.call() ?? access),
       ),
       if (billingPlan != null || billingGetter != null)
         billingEntitlementProvider.overrideWith(
@@ -1300,6 +1437,21 @@ class _TrackedHomeRepository implements HomeRepository {
   }) async {
     events.add('list');
     return _recentConversations(count: 2);
+  }
+}
+
+class _DelayedHomeRepository implements HomeRepository {
+  final _response = Completer<List<ConversationSummary>>();
+  int reads = 0;
+
+  @override
+  Future<List<ConversationSummary>> listRecentConversations({int limit = 5}) {
+    reads += 1;
+    return _response.future;
+  }
+
+  void complete(List<ConversationSummary> conversations) {
+    _response.complete(conversations);
   }
 }
 
