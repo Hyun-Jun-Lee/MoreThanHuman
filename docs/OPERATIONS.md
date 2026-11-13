@@ -1,6 +1,6 @@
 # 운영 가이드
 
-> 최종 갱신: 2026-11-01 · 배포·주간 생성·복구 절차
+> 최종 갱신: 2026-11-13 · 배포·주간 생성·복구 절차
 
 ## 계정 삭제 처리
 
@@ -167,6 +167,21 @@ docker compose up -d --build --force-recreate --no-deps api
 
 GET은 일반 Bearer로 조회하며 운영 키를 앱에 넣지 않아요. 다른 기기는 각자 다음 조회 성공 때 반영돼요. 오프라인·구 앱에서는 즉시 반영되지 않으며, POST 성공 자체가 앱 리셋 완료를 뜻하지는 않아요. 테스트를 다시 시작하려면 POST를 다시 호출해요. 리셋 ID는 자정 이후에도 로컬에 유지되므로 같은 요청이 다음 날 소비를 초기화하지 않아요. DB 리셋 기록만 롤백할 때는 API 중지 후 `alembic downgrade 20260912_0001`로 새 테이블만 제거할 수 있어요.
 
+### 계정별 무제한 스낵 반복
+
+`20261113_0001` 마이그레이션은 `profiles.snack_unlimited_replay_enabled`를 `false` 기본값으로 추가해요. 운영 DB에 동일한 컬럼을 먼저 수동 추가한 경우에는 컬럼을 다시 만들지 않고 revision만 적용해요. 변경된 API와 Flutter 앱을 배포한 뒤, 백엔드 `DATABASE_URL`이 연결된 DB에서 대상 `profiles.id`만 활성화해요.
+
+```sql
+UPDATE public.profiles
+SET snack_unlimited_replay_enabled = true
+WHERE id = '대상 사용자 UUID'
+RETURNING id, snack_unlimited_replay_enabled;
+```
+
+결과가 0행이면 대상 ID 또는 DB 연결을 확인해요. 권한을 회수할 때는 `false`로 변경해요. 앱 Home 진입·복귀의 다음 성공 조회부터 권한이 반영되며, 12번째 팝업을 닫으면 같은 당일 카드 묶음이 다시 시작돼요. iOS 홈 화면 위젯은 이 단계에서 무제한 반복을 지원하지 않아요.
+
+`20261113_0001`을 되돌리면 수동으로 먼저 추가한 경우를 포함해 해당 컬럼과 권한 값이 삭제되므로, 롤백 전 권한 설정을 별도로 보관해요.
+
 ## 주간 대화 추천 운영
 
 `20261003_0001` migration 적용 뒤 `backend/`에서 수동 CLI를 실행해요. 이 버전은 cron·상시 worker·자동 알림을 설치하지 않아요. 새 묶음은 운영자가 실행한 경우에만 발행돼요.
@@ -195,6 +210,7 @@ uv run python -m scripts.archive_weekly_topic TOPIC_UUID
 
 ## 변경 기록
 
+- 2026-11-13: 계정별 무제한 스낵 반복 권한의 마이그레이션·부여·회수 절차를 추가했어요.
 - 2026-10-31: TestFlight IPA 내보내기의 타깃별 프로파일·인증서 지문 지정과 시스템 `rsync` 우선 사용 절차를 추가했어요.
 - 2026-10-31: iOS 앱·위젯의 App Group 및 TestFlight 수동 서명 갱신 절차를 추가했어요.
 - 2026-10-05: API Uvicorn worker를 2개로 설정하고 전체 Compose 중단 없이 API만 재생성하는 절차를 명시했어요.

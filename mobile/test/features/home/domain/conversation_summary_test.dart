@@ -16,7 +16,7 @@ void main() {
         });
 
     expect(conversation.title, 'Osaka food trip');
-    expect(conversation.category, 'Free chat');
+    expect(conversation.category, 'FreeChat');
     expect(conversation.preview, '8 messages · Continue speaking');
   });
 
@@ -33,7 +33,7 @@ void main() {
         });
 
     expect(conversation.title, 'Cafe barista');
-    expect(conversation.category, 'Roleplay');
+    expect(conversation.category, 'Role Playing');
     expect(conversation.preview, '1 message · Completed');
   });
 

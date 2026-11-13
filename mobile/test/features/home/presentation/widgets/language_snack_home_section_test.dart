@@ -77,6 +77,38 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('entitled account restarts after the final popup closes', (
+    tester,
+  ) async {
+    final storage = MemorySnackStorage();
+    final resets = MemoryBasketResetRepository()
+      ..value = const SnackBasketReset(
+        language: 'en',
+        unlimitedReplayEnabled: true,
+      );
+    storage.values['curitalk.snack_basket.v1.user.en'] = jsonEncode(
+      DailySnackBasket(
+        day: '2026-09-19',
+        snacks: List.generate(12, testSnack),
+        consumed: 11,
+      ).toJson(),
+    );
+    await tester.pumpWidget(
+      _app(storage, () => DateTime(2026, 9, 19), resets: resets),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('11 / 12'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('snack-tomato-touch')));
+    await tester.pumpAndSettle();
+    expect(find.byType(Dialog), findsOneWidget);
+    expect(find.text('12 / 12'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('close-snack')));
+    await tester.pumpAndSettle();
+    expect(find.byType(Dialog), findsNothing);
+    expect(find.text('0 / 12'), findsOneWidget);
+    expect(find.byKey(const ValueKey('tomato-stage-basket')), findsOneWidget);
+  });
+
   testWidgets(
     'debug reset refills locally and closes a partially eaten tomato',
     (tester) async {

@@ -241,10 +241,13 @@ void main() {
     );
     await tester.tap(find.widgetWithText(FilledButton, 'Start a conversation'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Free Chat'));
+    await tester.tap(find.text('FreeChat'));
     await tester.pumpAndSettle();
 
-    expect(find.text('What topic do you want to talk about?'), findsOneWidget);
+    expect(
+      find.text('What would you like to talk about today?'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('onboarding and login copy follows Korean system locale', (
@@ -358,7 +361,7 @@ void main() {
     );
     await tester.tap(find.widgetWithText(FilledButton, 'Start a conversation'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Roleplay'));
+    await tester.tap(find.text('Role Playing'));
     await tester.pumpAndSettle();
 
     expect(find.text('Choose a situation'), findsOneWidget);

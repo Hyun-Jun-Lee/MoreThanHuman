@@ -72,7 +72,7 @@ class ConversationSummary {
   final DateTime updatedAt;
 
   String get category =>
-      kind == ConversationKind.roleplay ? 'Roleplay' : 'Free chat';
+      kind == ConversationKind.roleplay ? 'Role Playing' : 'FreeChat';
 
   String get preview {
     final String messageLabel = messageCount == 1 ? 'message' : 'messages';

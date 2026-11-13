@@ -17,13 +17,18 @@ void main() {
         baseUrl: 'https://example.com/api/',
       );
       final adapter = _LanguageSnackHttpClientAdapter(
-        data: {'content_language': 'en', 'reset_id': 'server-reset-id'},
+        data: {
+          'content_language': 'en',
+          'reset_id': 'server-reset-id',
+          'unlimited_replay_enabled': true,
+        },
       );
       client.dio.httpClientAdapter = adapter;
       addTearDown(client.close);
       final marker = await ApiSnackBasketResetRepository(client).read();
       expect(marker.resetId, 'server-reset-id');
       expect(marker.language, 'en');
+      expect(marker.unlimitedReplayEnabled, isTrue);
       expect(
         adapter.lastRequest?.uri.path,
         '/api/v2/language-snacks/basket-reset/',
@@ -40,12 +45,19 @@ void main() {
   );
 
   test('reset state accepts no record and rejects malformed records', () {
+    final legacy = SnackBasketReset.fromJson({
+      'content_language': 'en',
+      'reset_id': null,
+    });
+    expect(legacy.resetId, isNull);
+    expect(legacy.unlimitedReplayEnabled, isFalse);
     expect(
       SnackBasketReset.fromJson({
         'content_language': 'en',
         'reset_id': null,
-      }).resetId,
-      isNull,
+        'unlimited_replay_enabled': true,
+      }).unlimitedReplayEnabled,
+      isTrue,
     );
     for (final data in [
       null,
@@ -53,6 +65,11 @@ void main() {
       {'content_language': 'ko'},
       {'content_language': 'zh', 'reset_id': null},
       {'content_language': 'en', 'reset_id': 1},
+      {
+        'content_language': 'en',
+        'reset_id': null,
+        'unlimited_replay_enabled': 'true',
+      },
     ]) {
       expect(() => SnackBasketReset.fromJson(data), throwsFormatException);
     }

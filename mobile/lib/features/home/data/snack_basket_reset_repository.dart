@@ -2,15 +2,22 @@ import 'package:curitalk/core/network/network.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class SnackBasketReset {
-  const SnackBasketReset({required this.language, this.resetId});
+  const SnackBasketReset({
+    required this.language,
+    this.resetId,
+    this.unlimitedReplayEnabled = false,
+  });
 
   final String language;
   final String? resetId;
+  final bool unlimitedReplayEnabled;
 
   factory SnackBasketReset.fromJson(Object? json) {
     if (json is! Map<String, dynamic> ||
         !json.containsKey('reset_id') ||
         !['en', 'ko'].contains(json['content_language']) ||
+        (json.containsKey('unlimited_replay_enabled') &&
+            json['unlimited_replay_enabled'] is! bool) ||
         (json['reset_id'] != null &&
             (json['reset_id'] is! String ||
                 (json['reset_id'] as String).trim().isEmpty))) {
@@ -19,6 +26,8 @@ class SnackBasketReset {
     return SnackBasketReset(
       language: json['content_language'] as String,
       resetId: json['reset_id'] as String?,
+      unlimitedReplayEnabled:
+          json['unlimited_replay_enabled'] as bool? ?? false,
     );
   }
 }

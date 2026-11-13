@@ -8,6 +8,8 @@ struct SnackWidgetSnapshot: Codable {
   var page: Int
   var showingContent: Bool?
   var showingTomato: Bool? = nil
+  var pickupStartedAt: Double? = nil
+  var bitePreviewStartedAt: Double? = nil
 
   var isValid: Bool {
     !userId.isEmpty &&
@@ -25,6 +27,30 @@ struct SnackWidgetSnapshot: Codable {
   var isTomatoOut: Bool {
     basket.consumed < 12 &&
       (showingTomato == true || (basket.consumed > 0 && basket.consumed % 4 != 0))
+  }
+
+  var visibleTomatoStage: Int {
+    if showingContent == true && basket.consumed > 0 && basket.consumed % 4 == 0 {
+      return 4
+    }
+    return basket.consumed % 4
+  }
+
+  func interaction(at date: Date) -> SnackWidgetMotion? {
+    let motion: SnackWidgetMotion
+    let startedAt: Double?
+    if showingContent == true {
+      motion = .bite
+      startedAt = bitePreviewStartedAt
+    } else if isTomatoOut && basket.consumed % 4 == 0 {
+      motion = .pickup
+      startedAt = pickupStartedAt
+    } else {
+      return nil
+    }
+    guard let startedAt,
+          (0..<5).contains(date.timeIntervalSince1970 - startedAt) else { return nil }
+    return motion
   }
 
   var pages: [SnackWidgetPage] {
@@ -101,6 +127,25 @@ struct SnackWidgetSnapshot: Codable {
   }
 }
 
+enum SnackWidgetMotion {
+  case pickup, bite
+
+  // 서로 다른 타임라인 항목으로 게시해 위젯 호스트가 중간 자세를 그릴 수 있게 해요.
+  var keyframes: [Double] {
+    switch self {
+    case .pickup: return [0, 0.09, 0.18, 0.35, 0.5, 0.7, 0.85]
+    case .bite: return [0, 0.125, 0.25, 0.35, 0.5, 0.625, 0.75, 0.875, 0.97]
+    }
+  }
+
+  var duration: TimeInterval {
+    switch self {
+    case .pickup: return 0.4
+    case .bite: return 0.36
+    }
+  }
+}
+
 struct SnackWidgetBasket: Codable {
   var day: String
   var consumed: Int
@@ -166,24 +211,24 @@ enum SnackWidgetStore {
     return snapshot
   }
 
-  static func saveRaw(_ raw: String) -> Bool {
+  static func saveRaw(_ raw: String, reload: Bool = true) -> Bool {
     guard let data = raw.data(using: .utf8) else { return false }
     let decoder = JSONDecoder()
     decoder.keyDecodingStrategy = .convertFromSnakeCase
     guard let snapshot = try? decoder.decode(SnackWidgetSnapshot.self, from: data),
           snapshot.isValid, let defaults else { return false }
     defaults.set(raw, forKey: key)
-    WidgetCenter.shared.reloadTimelines(ofKind: kind)
+    if reload { WidgetCenter.shared.reloadTimelines(ofKind: kind) }
     return true
   }
 
-  static func save(_ snapshot: SnackWidgetSnapshot) {
+  static func save(_ snapshot: SnackWidgetSnapshot, reload: Bool = true) {
     guard snapshot.isValid else { return }
     let encoder = JSONEncoder()
     encoder.keyEncodingStrategy = .convertToSnakeCase
     guard let data = try? encoder.encode(snapshot),
           let raw = String(data: data, encoding: .utf8) else { return }
-    _ = saveRaw(raw)
+    _ = saveRaw(raw, reload: reload)
   }
 
   static func clear() {
@@ -200,6 +245,8 @@ enum SnackWidgetStore {
       snapshot.page = 0
       snapshot.showingContent = false
       snapshot.showingTomato = false
+      snapshot.pickupStartedAt = nil
+      snapshot.bitePreviewStartedAt = nil
       save(snapshot)
     }
     return snapshot

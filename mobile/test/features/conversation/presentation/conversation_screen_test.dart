@@ -679,38 +679,66 @@ void main() {
     ]);
   });
 
-  testWidgets('typed send still works without voice state', (
-    WidgetTester tester,
-  ) async {
-    final _FakeConversationRepository repository =
-        _FakeConversationRepository();
-    final _FakeConversationAudioPlayer audioPlayer =
-        _FakeConversationAudioPlayer();
+  testWidgets(
+    'typed composer stays above the keyboard and sends multiline text',
+    (WidgetTester tester) async {
+      const screenSize = Size(390, 844);
+      const keyboardHeight = 300.0;
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = screenSize;
+      addTearDown(tester.view.reset);
+      final _FakeConversationRepository repository =
+          _FakeConversationRepository();
+      final _FakeConversationAudioPlayer audioPlayer =
+          _FakeConversationAudioPlayer();
 
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          conversationRepositoryProvider.overrideWithValue(repository),
-          conversationAudioPlayerProvider.overrideWithValue(audioPlayer),
-        ],
-        child: MaterialApp.router(
-          theme: AppTheme.light,
-          routerConfig: _router(),
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            conversationRepositoryProvider.overrideWithValue(repository),
+            conversationAudioPlayerProvider.overrideWithValue(audioPlayer),
+          ],
+          child: MaterialApp.router(
+            theme: AppTheme.light,
+            routerConfig: _router(),
+          ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
+      );
+      await tester.pumpAndSettle();
 
-    await tester.enterText(find.byType(TextField), 'I need coffee.');
-    await tester.pump();
-    await tester.tap(find.byTooltip('Send message'));
-    await tester.pumpAndSettle();
+      final field = find.byType(TextField);
+      final sendButton = find.byTooltip('Send message');
+      final restingBottom = tester.getBottomLeft(field).dy;
+      await tester.tap(field);
+      tester.view.viewInsets = const FakeViewPadding(bottom: keyboardHeight);
+      await tester.pumpAndSettle();
 
-    expect(repository.sentTextTurns, <String>['I need coffee.']);
-    expect(repository.sentTextIncludeAudio, <bool>[true]);
-    expect(audioPlayer.playCount, 1);
-    expect(find.byTooltip('Replay response'), findsOneWidget);
-  });
+      const message = 'Hello!\nI need coffee.\nWith milk.\nThank you.';
+      await tester.enterText(field, message);
+      await tester.pump();
+      final keyboardTop = screenSize.height - keyboardHeight;
+      expect(tester.getBottomLeft(field).dy, lessThanOrEqualTo(keyboardTop));
+      expect(
+        tester.getBottomLeft(sendButton).dy,
+        lessThanOrEqualTo(keyboardTop),
+      );
+      expect(
+        tester.getBottomLeft(find.byType(ListView)).dy,
+        lessThanOrEqualTo(tester.getTopLeft(field).dy),
+      );
+      await tester.tap(sendButton);
+      await tester.pumpAndSettle();
+
+      expect(repository.sentTextTurns, <String>[message]);
+      expect(repository.sentTextIncludeAudio, <bool>[true]);
+      expect(audioPlayer.playCount, 1);
+      expect(find.byTooltip('Replay response'), findsOneWidget);
+
+      tester.view.resetViewInsets();
+      await tester.pumpAndSettle();
+      expect(tester.getBottomLeft(field).dy, restingBottom);
+    },
+  );
 }
 
 GoRouter _router() {

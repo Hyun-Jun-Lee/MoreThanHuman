@@ -95,6 +95,43 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
         .value;
     final bool turnLimitReached = access?.canSend == false;
 
+    final messageArea = conversation.when(
+      loading: () => startPreview == null
+          ? AppAsyncStateView.loading(message: copy.loadingMessages)
+          : _ConversationMessageList(
+              key: ValueKey(widget.conversationId),
+              conversationId: widget.conversationId,
+              state: _withStartPreview(
+                const ConversationState.empty(),
+                startPreview,
+              ),
+              voiceFailureReason: null,
+              canLoadOlder: false,
+              turnLimitReached: false,
+              locked: false,
+              suggestedAudioFailed: false,
+            ),
+      error: (_, _) => AppAsyncStateView.error(
+        title: copy.loadConversationFailedTitle,
+        message: copy.connectionRetryMessage,
+        onRetry: () => ref
+            .read(
+              conversationControllerProvider(widget.conversationId).notifier,
+            )
+            .reload(),
+      ),
+      data: (ConversationState state) => _ConversationMessageList(
+        key: ValueKey(widget.conversationId),
+        conversationId: widget.conversationId,
+        state: _withStartPreview(state, startPreview),
+        voiceFailureReason: _voiceInput.failureReason,
+        canLoadOlder: !_voiceInput.isRecordingActive && !_voiceInput.isBusy,
+        turnLimitReached: turnLimitReached,
+        locked: access?.locked == true,
+        suggestedAudioFailed: suggestedAudioFailed,
+      ),
+    );
+
     return AppScaffold(
       appBar: AppBar(
         leading: IconButton(
@@ -104,66 +141,45 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
         ),
         title: Text(copy.conversationTitle),
       ),
-      bottomNavigationBar: AppBottomActionBar(
-        child: ChatComposer(
-          controller: _composerController,
-          enabled:
-              conversation.hasValue &&
-              conversation.value?.isLoadingOlder != true &&
-              conversation.value?.failedTurnId == null &&
-              conversation.value?.pendingTurnId == null &&
-              conversation.value?.pendingRequestId == null &&
-              startPreview?.isActive != true &&
-              !turnLimitReached,
-          isSending: isSending,
-          isRecording: _voiceInput.phase == _VoiceInputPhase.recording,
-          isVoiceBusy: _voiceInput.isBusy,
-          recordingElapsedText: _voiceInput.phase == _VoiceInputPhase.recording
-              ? _formatElapsed(_voiceInput.elapsed)
-              : null,
-          voiceStatusLabel: _voiceInput.statusLabel(copy),
-          onSend: _sendMessage,
-          onVoiceInput: _toggleVoiceInput,
-          onCancelVoiceInput: _voiceInput.isRecordingActive
-              ? _cancelVoiceInput
-              : null,
-        ),
-      ),
-      body: conversation.when(
-        loading: () => startPreview == null
-            ? AppAsyncStateView.loading(message: copy.loadingMessages)
-            : _ConversationMessageList(
-                key: ValueKey(widget.conversationId),
-                conversationId: widget.conversationId,
-                state: _withStartPreview(
-                  const ConversationState.empty(),
-                  startPreview,
-                ),
-                voiceFailureReason: null,
-                canLoadOlder: false,
-                turnLimitReached: false,
-                locked: false,
-                suggestedAudioFailed: false,
+      padding: EdgeInsets.zero,
+      safeAreaBottom: false,
+      body: Column(
+        children: [
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.screenPadding,
               ),
-        error: (_, _) => AppAsyncStateView.error(
-          title: copy.loadConversationFailedTitle,
-          message: copy.connectionRetryMessage,
-          onRetry: () => ref
-              .read(
-                conversationControllerProvider(widget.conversationId).notifier,
-              )
-              .reload(),
-        ),
-        data: (ConversationState state) => _ConversationMessageList(
-          key: ValueKey(widget.conversationId),
-          conversationId: widget.conversationId,
-          state: _withStartPreview(state, startPreview),
-          voiceFailureReason: _voiceInput.failureReason,
-          canLoadOlder: !_voiceInput.isRecordingActive && !_voiceInput.isBusy,
-          turnLimitReached: turnLimitReached,
-          locked: access?.locked == true,
-          suggestedAudioFailed: suggestedAudioFailed,
-        ),
+              child: messageArea,
+            ),
+          ),
+          AppBottomActionBar(
+            child: ChatComposer(
+              controller: _composerController,
+              enabled:
+                  conversation.hasValue &&
+                  conversation.value?.isLoadingOlder != true &&
+                  conversation.value?.failedTurnId == null &&
+                  conversation.value?.pendingTurnId == null &&
+                  conversation.value?.pendingRequestId == null &&
+                  startPreview?.isActive != true &&
+                  !turnLimitReached,
+              isSending: isSending,
+              isRecording: _voiceInput.phase == _VoiceInputPhase.recording,
+              isVoiceBusy: _voiceInput.isBusy,
+              recordingElapsedText:
+                  _voiceInput.phase == _VoiceInputPhase.recording
+                  ? _formatElapsed(_voiceInput.elapsed)
+                  : null,
+              voiceStatusLabel: _voiceInput.statusLabel(copy),
+              onSend: _sendMessage,
+              onVoiceInput: _toggleVoiceInput,
+              onCancelVoiceInput: _voiceInput.isRecordingActive
+                  ? _cancelVoiceInput
+                  : null,
+            ),
+          ),
+        ],
       ),
     );
   }

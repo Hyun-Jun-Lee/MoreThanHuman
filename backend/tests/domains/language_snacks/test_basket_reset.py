@@ -41,13 +41,16 @@ def test_reset_is_persistent_scoped_and_replaces_only_latest_marker(
 ):
     http, users, current = reset_client
     assert http.get(PATH).headers["Cache-Control"] == "no-store"
-    assert http.get(PATH).json()["data"]["reset_id"] is None
+    empty = http.get(PATH).json()["data"]
+    assert empty["reset_id"] is None
+    assert empty["unlimited_replay_enabled"] is False
     payload = {"user_id": users[0].id, "content_language": "en"}
     first = http.post(PATH, json=payload, headers=AUTH)
     assert first.status_code == 200, first.text
     marker = first.json()["data"]
     assert UUID(marker["reset_id"])
     assert marker["reset_at"]
+    assert marker["unlimited_replay_enabled"] is False
     assert http.get(PATH).json()["data"] == marker
     assert (
         BasketResetRepository(repository.db).read(users[0].id, "en").reset_id
@@ -71,6 +74,29 @@ def test_reset_is_persistent_scoped_and_replaces_only_latest_marker(
     users[0].target_language = "ko"
     assert http.get(PATH).json()["data"] == korean
     assert repository.db.query(LanguageSnackBasketResetModel).count() == 2
+
+
+def test_reset_response_reads_account_replay_permission_without_marker(
+    reset_client, repository
+):
+    http, users, _ = reset_client
+    users[0].snack_unlimited_replay_enabled = True
+    repository.db.commit()
+    state = http.get(PATH).json()["data"]
+    assert state["reset_id"] is None
+    assert state["unlimited_replay_enabled"] is True
+
+    posted = http.post(
+        PATH,
+        json={"user_id": users[0].id, "content_language": "en"},
+        headers=AUTH,
+    ).json()["data"]
+    assert posted["unlimited_replay_enabled"] is True
+    assert http.get(PATH).json()["data"]["unlimited_replay_enabled"] is True
+
+    users[0].snack_unlimited_replay_enabled = False
+    repository.db.commit()
+    assert http.get(PATH).json()["data"]["unlimited_replay_enabled"] is False
 
 
 def test_reset_requires_operations_key_and_valid_existing_user(reset_client):

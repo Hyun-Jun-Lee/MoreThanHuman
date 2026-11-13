@@ -28,6 +28,8 @@ class DailySnackBasketController extends AsyncNotifier<DailySnackBasket?> {
   int? _checkingGeneration;
   bool _interacting = false;
   String? _pendingResetId;
+  String? _permissionScope;
+  bool _unlimitedReplayEnabled = false;
 
   @override
   Future<DailySnackBasket?> build() async {
@@ -37,6 +39,11 @@ class DailySnackBasketController extends AsyncNotifier<DailySnackBasket?> {
     ref.onDispose(() => _generation++);
     final userId = ref.watch(snackUserIdProvider);
     final language = ref.watch(languageSnackLanguageProvider);
+    final permissionScope = '$userId.$language';
+    if (_permissionScope != permissionScope) {
+      _permissionScope = permissionScope;
+      _unlimitedReplayEnabled = false;
+    }
     _storage = ref.watch(secureStorageBackendProvider);
     _widgetBridge = ref.watch(snackWidgetBridgeProvider);
     final storage = _storage;
@@ -167,10 +174,12 @@ class DailySnackBasketController extends AsyncNotifier<DailySnackBasket?> {
       final language = ref.read(languageSnackLanguageProvider);
       final marker = await ref.read(snackBasketResetRepositoryProvider).read();
       if (generation != _generation || marker.language != language) return;
+      _unlimitedReplayEnabled = marker.unlimitedReplayEnabled;
       if (marker.resetId != null && marker.resetId != state.value?.resetId) {
         _pendingResetId = marker.resetId;
         _applyPendingReset();
       }
+      _restartCompletedBasket();
     } on Object {
       // 오프라인·구 서버·인증 오류에는 저장된 진행을 그대로 유지해요.
     } finally {
@@ -180,7 +189,23 @@ class DailySnackBasketController extends AsyncNotifier<DailySnackBasket?> {
 
   void setInteractionActive(bool active) {
     _interacting = active;
-    if (!active) _applyPendingReset();
+    if (!active) {
+      _applyPendingReset();
+      _restartCompletedBasket();
+    }
+  }
+
+  void _restartCompletedBasket() {
+    if (!_unlimitedReplayEnabled || _interacting || state.isLoading) return;
+    final basket = state.value;
+    if (basket == null ||
+        !basket.isFinished ||
+        basket.day != DailySnackBasket.dayOf(ref.read(snackClockProvider)())) {
+      return;
+    }
+    final next = basket.withConsumed(0);
+    state = AsyncData(next);
+    _persist(next);
   }
 
   bool resetForTesting() {
