@@ -3,6 +3,7 @@ import 'package:curitalk/core/copy/copy.dart';
 import 'package:curitalk/core/widgets/widgets.dart';
 import 'package:curitalk/features/auth/auth.dart';
 import 'package:curitalk/features/conversation/conversation.dart';
+import 'package:curitalk/features/home/application/daily_snack_basket_controller.dart';
 import 'package:curitalk/features/home/application/language_snacks_controller.dart';
 import 'package:curitalk/features/home/application/recent_conversations_controller.dart';
 import 'package:curitalk/features/home/application/weekly_topics_controller.dart';
@@ -160,6 +161,7 @@ class HomeScreen extends ConsumerWidget {
     await Future.wait([
       ref.refresh(weeklyTopicsControllerProvider.future).then((_) {}),
       ref.refresh(languageSnacksControllerProvider.future).then((_) {}),
+      ref.read(dailySnackBasketProvider.notifier).refreshReset(),
     ]);
   }
 

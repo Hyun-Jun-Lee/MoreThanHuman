@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:curitalk/features/profile/presentation/profile_screen.dart';
 
 import 'package:curitalk/app/theme/app_theme.dart';
@@ -9,7 +10,9 @@ import 'package:curitalk/features/auth/auth.dart';
 import 'package:curitalk/features/billing/billing_repository.dart';
 import 'package:curitalk/features/conversation/conversation.dart';
 import 'package:curitalk/features/home/home.dart';
+import 'package:curitalk/features/home/application/daily_snack_basket_controller.dart';
 import 'package:curitalk/features/home/application/weekly_topics_controller.dart';
+import 'package:curitalk/features/home/domain/daily_snack_basket.dart';
 import 'package:curitalk/features/home/domain/weekly_topic.dart';
 import 'package:curitalk/features/home/presentation/widgets/weekly_topic_loop.dart';
 import 'package:curitalk/features/language/language.dart';
@@ -1107,6 +1110,41 @@ void main() {
     );
   });
 
+  testWidgets('pull refresh applies newly granted snack replay permission', (
+    WidgetTester tester,
+  ) async {
+    final resets = MemoryBasketResetRepository();
+    final storage = MemorySnackStorage();
+    final now = DateTime(2026, 9, 19);
+    storage.values['curitalk.snack_basket.v1.user-id.en'] = jsonEncode(
+      DailySnackBasket(
+        day: DailySnackBasket.dayOf(now),
+        snacks: List.generate(12, testSnack),
+        consumed: 12,
+      ).toJson(),
+    );
+    await tester.pumpWidget(
+      _homeApp(
+        snackStorage: storage,
+        basketResetRepository: resets,
+        snackClock: () => now,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('12 / 12'), findsOneWidget);
+
+    final initialReads = resets.calls;
+    resets.value = const SnackBasketReset(
+      language: 'en',
+      unlimitedReplayEnabled: true,
+    );
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, 350));
+    await tester.pumpAndSettle();
+
+    expect(resets.calls, greaterThan(initialReads));
+    expect(find.text('0 / 12'), findsOneWidget);
+  });
+
   testWidgets('Recent conversations hide stale cards while refreshing', (
     WidgetTester tester,
   ) async {
@@ -1264,6 +1302,9 @@ Widget _homeApp({
   HomeRepository? homeRepository,
   LanguageSnackRepository? languageSnackRepository,
   LanguageSnackCache? languageSnackCache,
+  MemorySnackStorage? snackStorage,
+  MemoryBasketResetRepository? basketResetRepository,
+  DateTime Function()? snackClock,
   ConversationRepository? conversationRepository,
   ConversationAccess access = const ConversationAccess.disabled(),
   FutureOr<ConversationAccess> Function()? accessGetter,
@@ -1273,10 +1314,13 @@ Widget _homeApp({
       tokenStorage ?? _MemoryTokenStorage(tokens: _tokens, deviceId: _deviceId);
   return ProviderScope(
     overrides: [
+      if (snackClock != null) snackClockProvider.overrideWithValue(snackClock),
       snackBasketResetRepositoryProvider.overrideWithValue(
-        MemoryBasketResetRepository(),
+        basketResetRepository ?? MemoryBasketResetRepository(),
       ),
-      secureStorageBackendProvider.overrideWithValue(MemorySnackStorage()),
+      secureStorageBackendProvider.overrideWithValue(
+        snackStorage ?? MemorySnackStorage(),
+      ),
       tokenStorageProvider.overrideWithValue(effectiveTokenStorage),
       installationIdServiceProvider.overrideWithValue(
         InstallationIdService(
