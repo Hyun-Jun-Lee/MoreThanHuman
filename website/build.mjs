@@ -32,7 +32,8 @@ const copy = {
       ],
       previewLabel: '앱 미리보기',
       previewHeading: 'tomatalk에서는\n이렇게 대화해요.',
-      previewIntro: '선택한 주제로 대화를 시작하고, 피드백을 확인하는 앱 화면을 살펴보세요.',
+      previewIntro: '자유 대화와 역할극을 고르고, 주제를 준비해 대화와 피드백으로 이어가는 실제 화면이에요.',
+      previewCaptions: ['FreeChat에서 주제 고르기', 'Role Playing 상황 고르기', '주제와 첫 질문 준비하기', '대화 속 문법 피드백 확인하기'],
       previewIntroPending: '실제 앱 화면을 확인한 뒤 이곳에 소개할게요.',
       previewPending: '앱 화면 캡처 준비 중',
       closing: '오늘의 한 문장부터\n시작해 볼까요?',
@@ -84,7 +85,8 @@ const copy = {
         ['04', 'Today’s tomato', 'Explore short expressions in the app and on the iOS Home Screen widget.', 'cream'],
       ],
       previewLabel: 'App preview', previewHeading: 'See how conversations\nwork in tomatalk.',
-      previewIntro: 'Explore how the app lets you start a conversation and review feedback.',
+      previewIntro: 'See how free chat and roleplay lead from a chosen topic to a conversation and feedback.',
+      previewCaptions: ['Choose a free chat topic', 'Pick a roleplay situation', 'Prepare a topic and first question', 'Review grammar feedback in conversation'],
       previewIntroPending: 'We’ll share the app screens here once they’re ready.',
       previewPending: 'App screenshots coming soon', closing: 'Start with one\nsentence today.',
     },
@@ -179,18 +181,20 @@ function pageShell(locale, page, body) {
 
 async function screenshotNames(locale) {
   try {
-    const names = (await readdir(join(root, 'assets', 'screenshots', locale))).filter((name) => /^screen-[1-3]\.png$/.test(name)).sort();
-    return names.length === 3 ? names : [];
+    const names = (await readdir(join(root, 'assets', 'screenshots', locale))).filter((name) => /^screen-[1-4]\.png$/.test(name)).sort();
+    return names.length === 4 ? names : [];
   } catch { return []; }
 }
 
 function landing(locale, screenshots) {
   const h = copy[locale].home;
   const featureCards = h.features.map(([number, title, description, color]) => `<article class="feature feature-${color}"><span class="feature-number">${number} / 04</span><div><h3>${title}</h3><p>${description}</p></div></article>`).join('');
-  const preview = screenshots.length ? `<div class="preview-gallery">${screenshots.map((name, index) => `<figure class="preview-item"><img src="/assets/screenshots/${locale}/${name}" alt="${escapeHtml(locale === 'ko' ? `tomatalk 실제 앱 화면 ${index + 1}` : `Actual tomatalk app screen ${index + 1}`)}" loading="lazy"><figcaption>${escapeHtml(locale === 'ko' ? ['홈에서 시작하기', '대화 이어가기', '학습 피드백 확인'][index] : ['Start from Home', 'Keep the conversation going', 'Review learning feedback'][index])}</figcaption></figure>`).join('')}</div>` : `<div class="preview-pending"><img src="/assets/tomato-basket.png" alt="" width="80" height="75"><p>${h.previewPending}</p></div>`;
+  const preview = screenshots.length
+    ? `<div class="preview-gallery">${screenshots.map((name, index) => `<figure class="preview-item"><figcaption>${escapeHtml(h.previewCaptions[index])}</figcaption><img src="/assets/screenshots/${locale}/${name}" alt="${escapeHtml(h.previewCaptions[index])}" width="1206" height="2622" loading="lazy"></figure>`).join('')}</div>`
+    : `<div class="preview-pending"><img src="/assets/tomato-basket.png" alt="" width="80" height="75"><p>${h.previewPending}</p></div>`;
   return `<section class="hero section-wrap">
     <div class="hero-copy"><span class="eyebrow">${h.eyebrow}</span><h1>${lineBreaks(h.heading)}</h1><p class="hero-intro">${h.intro}</p><div class="hero-actions"><button type="button" class="download-button" disabled aria-describedby="download-status">${h.download}</button><span id="download-status" class="coming-soon">${h.coming}</span></div><a class="text-link" href="#features">${h.explore}<span aria-hidden="true"> ↘</span></a></div>
-    <div class="hero-art" role="img" aria-label="${screenshots.length ? (locale === 'ko' ? 'tomatalk 실제 앱 화면' : 'Actual tomatalk app screen') : (locale === 'ko' ? 'tomatalk 앱 아이콘' : 'tomatalk app icon')}">${screenshots.length ? `<img class="hero-screen" src="/assets/screenshots/${locale}/${screenshots[0]}" alt="" width="300">` : `<div class="hero-icon-wrap"><img src="/assets/app-icon.png" alt="" width="340" height="340"></div>`}</div>
+    <div class="hero-art" role="img" aria-label="${locale === 'ko' ? 'tomatalk 앱 아이콘' : 'tomatalk app icon'}"><div class="hero-icon-wrap"><img src="/assets/app-icon.png" alt="" width="1024" height="1024"></div></div>
   </section>
   <section class="feature-section section-wrap" id="features"><div class="section-heading"><span class="eyebrow">${h.featureLabel}</span><h2>${lineBreaks(h.featureHeading)}</h2></div><div class="feature-grid">${featureCards}</div></section>
   <section class="preview-section" id="preview"><div class="section-wrap"><div class="section-heading preview-heading"><div><span class="eyebrow">${h.previewLabel}</span><h2>${lineBreaks(h.previewHeading)}</h2></div><p>${screenshots.length ? h.previewIntro : h.previewIntroPending}</p></div>${preview}</div></section>
