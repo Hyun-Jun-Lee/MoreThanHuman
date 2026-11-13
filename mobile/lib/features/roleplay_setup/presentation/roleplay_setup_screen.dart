@@ -21,6 +21,18 @@ final roleplayTargetLanguageProvider = Provider<LearningLanguageCode>((
   );
 });
 
+final roleplayNativeLanguageProvider = Provider<LearningLanguageCode>((
+  Ref ref,
+) {
+  return ref.watch(
+    authControllerProvider.select(
+      (AsyncValue<AuthSession> auth) =>
+          auth.value?.user?.language.nativeLanguage ??
+          LearningLanguageContext.defaultContext.nativeLanguage,
+    ),
+  );
+});
+
 class RoleplaySetupScreen extends ConsumerStatefulWidget {
   const RoleplaySetupScreen({super.key});
 
@@ -50,6 +62,9 @@ class _RoleplaySetupScreenState extends ConsumerState<RoleplaySetupScreen> {
     final RoleplaySetupState state = ref.watch(roleplaySetupControllerProvider);
     final LearningLanguageCode targetLanguage = ref.watch(
       roleplayTargetLanguageProvider,
+    );
+    final LearningLanguageCode nativeLanguage = ref.watch(
+      roleplayNativeLanguageProvider,
     );
     final List<RoleplayScenario> scenarios = roleplayPresetScenariosFor(
       targetLanguage,
@@ -98,6 +113,7 @@ class _RoleplaySetupScreenState extends ConsumerState<RoleplaySetupScreen> {
           const SizedBox(height: AppSpacing.lg),
           Text(
             copy.chooseSituationTitle,
+            textAlign: TextAlign.center,
             style: AppTypography.headlineLg.copyWith(
               color: Theme.of(context).colorScheme.onSurface,
             ),
@@ -105,6 +121,7 @@ class _RoleplaySetupScreenState extends ConsumerState<RoleplaySetupScreen> {
           const SizedBox(height: AppSpacing.md),
           Text(
             copy.chooseSituationDescription,
+            textAlign: TextAlign.center,
             style: AppTypography.body.copyWith(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
@@ -119,20 +136,6 @@ class _RoleplaySetupScreenState extends ConsumerState<RoleplaySetupScreen> {
             ),
           ],
           const SizedBox(height: AppSpacing.xl),
-          for (final RoleplayScenario scenario in scenarios) ...[
-            RoleplayScenarioCard(
-              scenario: scenario,
-              selected: state.selectedScenario?.id == scenario.id,
-              onTap: () {
-                controller.selectScenario(scenario);
-                FocusScope.of(context).unfocus();
-              },
-            ),
-            const SizedBox(height: AppSpacing.md),
-          ],
-          const SizedBox(height: AppSpacing.sm),
-          AppSectionLabel(copy.differentSituationLabel),
-          const SizedBox(height: AppSpacing.md),
           OutlinedButton.icon(
             onPressed: () {
               controller.enableCustomMode();
@@ -154,6 +157,19 @@ class _RoleplaySetupScreenState extends ConsumerState<RoleplaySetupScreen> {
               semanticLabel: copy.customRoleplaySemanticLabel,
               onChanged: controller.updateCustomInput,
             ),
+          ],
+          const SizedBox(height: AppSpacing.md),
+          for (final RoleplayScenario scenario in scenarios) ...[
+            RoleplayScenarioCard(
+              scenario: scenario,
+              nativeLanguage: nativeLanguage,
+              selected: state.selectedScenario?.id == scenario.id,
+              onTap: () {
+                controller.selectScenario(scenario);
+                FocusScope.of(context).unfocus();
+              },
+            ),
+            const SizedBox(height: AppSpacing.md),
           ],
           const SizedBox(height: AppSpacing.sectionGap),
         ],

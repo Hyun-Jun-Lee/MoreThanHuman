@@ -317,7 +317,7 @@ void main() {
       );
       expect(find.widgetWithText(FilledButton, 'SUBSCRIPT'), findsOneWidget);
       expect(find.text('Subscription'), findsNothing);
-      expect(find.text('Free Chat'), findsNothing);
+      expect(find.text('FreeChat'), findsNothing);
     },
   );
 
@@ -532,9 +532,9 @@ void main() {
     await tester.tap(addButton);
     await tester.pumpAndSettle();
 
-    expect(find.text('Free Chat'), findsOneWidget);
+    expect(find.text('FreeChat'), findsOneWidget);
 
-    await tester.tap(find.text('Free Chat'));
+    await tester.tap(find.text('FreeChat'));
     await tester.pumpAndSettle();
 
     expect(selectedType, ConversationStartType.freeChat);

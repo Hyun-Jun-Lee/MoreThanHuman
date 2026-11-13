@@ -7,6 +7,7 @@ import 'package:curitalk/features/language/language.dart';
 import 'package:curitalk/features/onboarding/data/onboarding_storage.dart';
 import 'package:curitalk/features/roleplay_setup/roleplay_setup.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -17,9 +18,59 @@ void main() {
     await tester.pumpWidget(_app());
 
     expect(find.text('Choose a situation'), findsOneWidget);
+    expect(
+      find.text('Choose a situation to practice, or create your own.'),
+      findsOneWidget,
+    );
+    expect(
+      tester.widget<Text>(find.text('Choose a situation')).textAlign,
+      TextAlign.center,
+    );
     expect(find.text('Cafe order'), findsOneWidget);
     expect(find.text('Hotel check-in'), findsOneWidget);
+    expect(find.text('CUSTOM ROLEPLAY'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('CUSTOM ROLEPLAY')).dy,
+      lessThan(tester.getTopLeft(find.text('Cafe order')).dy),
+    );
     expect(_startButton(tester).enabled, isFalse);
+  });
+
+  testWidgets('centers Korean heading and instruction', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(_app(locale: const Locale('ko')));
+
+    expect(find.text('Role Playing'), findsOneWidget);
+    expect(
+      tester.widget<Text>(find.text('상황을 골라 보세요')).textAlign,
+      TextAlign.center,
+    );
+    expect(
+      tester.widget<Text>(find.text('연습하려는 상황을 선택하거나 직접 만들어요')).textAlign,
+      TextAlign.center,
+    );
+  });
+
+  testWidgets('shows Korean scenario descriptions to English learners', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      _authApp(
+        language: const LearningLanguageContext(
+          nativeLanguage: LearningLanguageCode.ko,
+          targetLanguage: LearningLanguageCode.en,
+          feedbackLanguage: LearningLanguageCode.ko,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('음료를 주문하고, 메뉴를 물어보고, 자연스럽게 결제해요.'), findsOneWidget);
+    expect(
+      find.text('Order drinks, ask for options, and pay naturally.'),
+      findsNothing,
+    );
   });
 
   testWidgets('shows Korean-practice scenarios for Korean target', (
@@ -51,6 +102,10 @@ void main() {
 
     expect(find.text('Polite cafe order'), findsOneWidget);
     expect(find.text('Cafe order'), findsNothing);
+    expect(
+      find.text('Order, ask for options, and close politely in Korean.'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('selecting a preset enables start', (WidgetTester tester) async {
@@ -122,13 +177,28 @@ FilledButton _startButton(WidgetTester tester) {
   return tester.widget<FilledButton>(find.byType(FilledButton));
 }
 
-Widget _app({LearningLanguageCode targetLanguage = LearningLanguageCode.en}) {
+Widget _app({
+  LearningLanguageCode targetLanguage = LearningLanguageCode.en,
+  Locale? locale,
+}) {
   return ProviderScope(
     overrides: [
       roleplayTargetLanguageProvider.overrideWithValue(targetLanguage),
+      roleplayNativeLanguageProvider.overrideWithValue(
+        targetLanguage == LearningLanguageCode.ko
+            ? LearningLanguageCode.en
+            : LearningLanguageCode.ko,
+      ),
     ],
     child: MaterialApp(
       theme: AppTheme.light,
+      locale: locale,
+      supportedLocales: const <Locale>[Locale('en'), Locale('ko')],
+      localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
+        GlobalMaterialLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+      ],
       home: const RoleplaySetupScreen(),
     ),
   );

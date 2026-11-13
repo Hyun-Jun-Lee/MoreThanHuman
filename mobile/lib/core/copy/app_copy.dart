@@ -284,15 +284,18 @@ class AppCopy {
   String get audioPlayLabel => isKorean ? '응답 음성 듣기' : 'Play response';
   String get customRoleplayInputTooShort =>
       isKorean ? '두 글자 이상 입력해 주세요.' : 'Enter at least 2 characters.';
-  String get freeChatTitle => isKorean ? '자유 대화' : 'Free Chat';
-  String get topicInputTitle =>
-      isKorean ? '어떤 주제로 이야기하고 싶나요?' : 'What topic do you want to talk about?';
-  String get topicInputDescription => isKorean
-      ? '뉴스, 취미, 여행, 스포츠처럼 지금 마음이 가는 주제를 골라 보세요.'
-      : 'Bring a news story, hobby, trip idea, sports result, or anything you actually care about.';
+  String get freeChatTitle => 'FreeChat';
+  String get topicInputTitle => isKorean
+      ? '오늘은 어떤 이야기를 나눠볼까요?'
+      : 'What would you like to talk about today?';
+  String get topicInputDescription =>
+      isKorean ? '하고 싶은 이야기로 대화해봐요' : 'Talk about anything you like';
+  String get topicInputHint =>
+      isKorean ? '나누고 싶은 주제는 무엇인가요?' : 'What would you like to talk about?';
   String get conversationTopicLabel =>
       isKorean ? '대화 주제' : 'Conversation topic';
-  String get examplesLabel => isKorean ? '예시' : 'Examples';
+  String get examplesLabel => isKorean ? '빠르게 골라주세요' : 'Pick a topic';
+  String get topicInputStartLabel => isKorean ? '대화하기' : 'TALK';
   String get prepareLabel => isKorean ? '준비하기' : 'PREPARE';
   String get homeLabel => isKorean ? '홈' : 'Home';
   String get chatLabel => isKorean ? '대화' : 'Chat';
@@ -462,7 +465,7 @@ class AppCopy {
       isKorean ? '대화 시작하기' : 'Start a conversation';
   String get freeChatDescription =>
       isKorean ? '내가 고른 주제로 대화하기' : 'Bring your own topic';
-  String get roleplayTitle => isKorean ? '역할극' : 'Roleplay';
+  String get roleplayTitle => 'Role Playing';
   String get roleplayDescription =>
       isKorean ? '현실 상황을 연습하기' : 'Practice a real-world situation';
   String get cancelLabel => isKorean ? '취소' : 'CANCEL';
@@ -531,10 +534,8 @@ class AppCopy {
   String get chooseSituationTitle =>
       isKorean ? '상황을 골라 보세요' : 'Choose a situation';
   String get chooseSituationDescription => isKorean
-      ? '연습할 현실 상황을 고르거나 직접 상황을 적어 보세요.'
-      : 'Pick a real-world moment to practice, or write your own custom roleplay.';
-  String get differentSituationLabel =>
-      isKorean ? '다른 상황을 원하나요?' : 'Want a different situation?';
+      ? '연습하려는 상황을 선택하거나 직접 만들어요'
+      : 'Choose a situation to practice, or create your own.';
   String get customRoleplayLabel => isKorean ? '직접 역할극 만들기' : 'CUSTOM ROLEPLAY';
   String get customRoleplaySemanticLabel => isKorean
       ? '직접 입력하는 역할극 상황 또는 내 역할'

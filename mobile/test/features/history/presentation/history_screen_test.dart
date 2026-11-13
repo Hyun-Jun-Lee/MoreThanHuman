@@ -114,8 +114,8 @@ void main() {
     expect(find.byType(NavigationBar), findsNothing);
     await tester.tap(find.byTooltip('New conversation'));
     await tester.pumpAndSettle();
-    expect(find.text('Free Chat'), findsOneWidget);
-    await tester.tap(find.text('Roleplay'));
+    expect(find.text('FreeChat'), findsOneWidget);
+    await tester.tap(find.text('Role Playing'));
     await tester.pumpAndSettle();
     expect(selectedType, ConversationStartType.roleplay);
   });
@@ -147,7 +147,7 @@ void main() {
       ),
       findsWidgets,
     );
-    expect(find.text('Free Chat'), findsNothing);
+    expect(find.text('FreeChat'), findsNothing);
   });
 
   testWidgets('pagination does not add a phantom locked conversation', (

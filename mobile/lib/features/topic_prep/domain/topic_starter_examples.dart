@@ -4,22 +4,28 @@ abstract final class TopicStarterExamples {
   static List<String> forNativeLanguage(LearningLanguageCode language) {
     return switch (language) {
       LearningLanguageCode.ko => const <String>[
-        '이번 주 AI 뉴스',
+        '이번 주말 계획',
+        '좋아하는 음식',
+        '최근 본 영화',
+        '가보고 싶은 곳',
         '오사카 맛집 여행',
-        '월드컵 예선 경기',
-        'Apple WWDC 업데이트',
+        '요즘 즐기는 취미',
       ],
       LearningLanguageCode.en => const <String>[
-        'AI news this week',
+        'Weekend plans',
+        'Favorite food',
+        'Recent movie',
+        'Dream destination',
         'Osaka food trip',
-        'World Cup qualifier',
-        'Apple WWDC update',
+        'Favorite hobby',
       ],
       LearningLanguageCode.zh => const <String>[
-        '本周 AI 新闻',
+        '这个周末的计划',
+        '喜欢的食物',
+        '最近看过的电影',
+        '想去的地方',
         '大阪美食之旅',
-        '世界杯预选赛',
-        'Apple WWDC 更新',
+        '最近喜欢的爱好',
       ],
     };
   }

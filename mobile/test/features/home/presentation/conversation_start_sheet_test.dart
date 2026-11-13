@@ -25,12 +25,12 @@ void main() {
     await tester.tap(find.text('대화 시작'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Free Chat'), findsOneWidget);
-    expect(find.text('Roleplay'), findsOneWidget);
+    expect(find.text('FreeChat'), findsOneWidget);
+    expect(find.text('Role Playing'), findsOneWidget);
     expect(find.text('자유 대화'), findsNothing);
     expect(find.text('역할극'), findsNothing);
 
-    await tester.tap(find.text('Roleplay'));
+    await tester.tap(find.text('Role Playing'));
     await tester.pumpAndSettle();
     expect(selectedType, ConversationStartType.roleplay);
   });
