@@ -23,6 +23,7 @@ class BasketResetState(BaseModel):
     content_language: Literal["en", "ko"]
     reset_id: UUID | None = None
     reset_at: datetime | None = None
+    unlimited_replay_enabled: bool = False
 
 
 class BasketResetRepository:

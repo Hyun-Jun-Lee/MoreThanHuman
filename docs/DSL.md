@@ -199,7 +199,7 @@ module Auth {
 
 ## 5. Language Snack 모듈
 
-> v2.2 · 2026-09-19: 학습 언어별 무작위 feed와 사용자별 운영 바구니 리셋 기록을 제공해요.
+> v2.3 · 2026-11-13: 학습 언어별 무작위 feed, 사용자별 운영 바구니 리셋과 무제한 반복 권한을 제공해요.
 
 ```dsl
 module LanguageSnack {
@@ -283,9 +283,11 @@ content_type과 relation은 위 나열 순서대로 대응해요. 모든 entry.l
 
 ### 바구니 리셋
 
-`BasketResetState`는 `{content_language: "en"|"ko", reset_id: UUID|null, reset_at: DateTime|null}`예요. GET은 Bearer 사용자의 현재 학습 언어만 조회하며 기록이 없으면 ID·시간이 null이에요. 응답은 `Cache-Control: no-store`예요. POST는 `X-Operations-Key`로 지정 사용자의 지정 언어에 새 UUID를 저장하고 200을 반환해요. 키 미설정·불일치 403, 없는 사용자 404, 잘못된 UUID·언어·추가 필드 422예요. UUID는 호출마다 바뀌며 사용자·언어별 최신 기록 하나만 보관해요.
+`BasketResetState`는 `{content_language: "en"|"ko", reset_id: UUID|null, reset_at: DateTime|null, unlimited_replay_enabled: bool}`예요. GET은 Bearer 사용자의 현재 학습 언어와 `profiles.snack_unlimited_replay_enabled`를 조회하며 리셋 기록이 없으면 ID·시간이 null이에요. 응답은 `Cache-Control: no-store`예요. POST는 `X-Operations-Key`로 지정 사용자의 지정 언어에 새 UUID를 저장하고 대상 계정의 권한을 함께 반환해요. 키 미설정·불일치 403, 없는 사용자 404, 잘못된 UUID·언어·추가 필드 422예요. UUID는 호출마다 바뀌며 사용자·언어별 최신 기록 하나만 보관해요.
 
 리셋 API는 LLM 호출·콘텐츠 삭제·일일 카드 재추첨을 하지 않아요. 앱은 시작·Home 진입·복귀 시 GET하고 새 ID를 발견하면 기존 당일 묶음의 소비 횟수를 0으로 초기화해요. 팝업·애니메이션 중에는 종료 후 적용하며 적용한 ID를 로컬에 함께 저장해 재시작·다음 날짜에도 같은 리셋을 중복 적용하지 않아요. 오프라인이면 기존 진행을 유지하고 다음 복귀에 재시도해요. 각 기기의 소비 횟수 자체를 동기화하는 API는 아니에요. 운영 방법은 [테스트용 바구니 리셋](OPERATIONS.md#테스트용-바구니-리셋)을 참고해요.
+
+`unlimited_replay_enabled`가 true인 계정의 Flutter 홈은 12번째 스낵 팝업을 닫은 뒤 그날의 같은 카드 12개·순서·리셋 ID를 유지한 채 소비 횟수를 0으로 되돌려 계속 반복해요. 권한은 서버 DB에서만 변경하며 다음 성공 GET에 반영해요. 이전 서버가 필드를 생략하면 앱은 false로 처리해요. iOS 홈 화면 위젯의 무제한 반복은 후속 작업 범위예요.
 
 ### 운영 생성 예시
 

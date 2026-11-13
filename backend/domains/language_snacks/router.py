@@ -79,11 +79,15 @@ def list_language_snacks(
 def reset_snack_basket(
     request: BasketResetRequest, db: Annotated[Session, Depends(get_db)]
 ):
-    if db.get(ProfileModel, str(request.user_id)) is None:
+    profile = db.get(ProfileModel, str(request.user_id))
+    if profile is None:
         raise HTTPException(404, "User not found.")
+    marker = BasketResetRepository(db).reset(
+        str(request.user_id), request.content_language
+    )
     return SuccessResponse(
-        data=BasketResetRepository(db).reset(
-            str(request.user_id), request.content_language
+        data=BasketResetState.model_validate(marker).model_copy(
+            update={"unlimited_replay_enabled": profile.snack_unlimited_replay_enabled}
         )
     )
 
@@ -100,7 +104,12 @@ def read_snack_basket_reset(
     response.headers["Cache-Control"] = "no-store"
     marker = BasketResetRepository(db).read(str(user.id), user.target_language)
     return SuccessResponse(
-        data=marker or BasketResetState(content_language=user.target_language)
+        data=BasketResetState(
+            content_language=user.target_language,
+            reset_id=marker.reset_id if marker else None,
+            reset_at=marker.reset_at if marker else None,
+            unlimited_replay_enabled=user.snack_unlimited_replay_enabled,
+        )
     )
 
 

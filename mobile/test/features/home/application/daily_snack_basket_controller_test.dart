@@ -175,6 +175,114 @@ void main() {
     },
   );
 
+  test('entitled basket restarts after each twelfth content closes', () async {
+    resets.value = const SnackBasketReset(
+      language: 'en',
+      resetId: 'server-1',
+      unlimitedReplayEnabled: true,
+    );
+    final c = create();
+    addTearDown(c.dispose);
+    final first = (await c.read(dailySnackBasketProvider.future))!;
+    final controller = c.read(dailySnackBasketProvider.notifier);
+    await controller.refreshReset();
+    for (var cycle = 0; cycle < 2; cycle++) {
+      controller.setInteractionActive(true);
+      for (var i = 0; i < 12; i++) {
+        expect(controller.takeBite()!.id, first.snacks[i].id);
+      }
+      expect(c.read(dailySnackBasketProvider).value!.consumed, 12);
+      expect(controller.takeBite(), isNull);
+      controller.setInteractionActive(false);
+      final replayed = c.read(dailySnackBasketProvider).value!;
+      expect(replayed.consumed, 0);
+      expect(replayed.resetId, 'server-1');
+      expect(replayed.snacks.map((s) => s.id), first.snacks.map((s) => s.id));
+    }
+  });
+
+  test('permission revocation stops the next completed basket', () async {
+    resets.value = const SnackBasketReset(
+      language: 'en',
+      unlimitedReplayEnabled: true,
+    );
+    final c = create();
+    addTearDown(c.dispose);
+    await c.read(dailySnackBasketProvider.future);
+    final controller = c.read(dailySnackBasketProvider.notifier);
+    await controller.refreshReset();
+    resets.value = const SnackBasketReset(language: 'en');
+    await controller.refreshReset();
+    controller.setInteractionActive(true);
+    for (var i = 0; i < 12; i++) {
+      controller.takeBite();
+    }
+    controller.setInteractionActive(false);
+    expect(c.read(dailySnackBasketProvider).value!.consumed, 12);
+  });
+
+  test('new permission restarts an already completed basket', () async {
+    final c = create();
+    addTearDown(c.dispose);
+    await c.read(dailySnackBasketProvider.future);
+    final controller = c.read(dailySnackBasketProvider.notifier);
+    for (var i = 0; i < 12; i++) {
+      controller.takeBite();
+    }
+    expect(c.read(dailySnackBasketProvider).value!.consumed, 12);
+    resets.value = const SnackBasketReset(
+      language: 'en',
+      unlimitedReplayEnabled: true,
+    );
+    await controller.refreshReset();
+    expect(c.read(dailySnackBasketProvider).value!.consumed, 0);
+  });
+
+  test('replay permission does not carry into another account', () async {
+    resets.value = const SnackBasketReset(
+      language: 'en',
+      unlimitedReplayEnabled: true,
+    );
+    final c = create();
+    addTearDown(c.dispose);
+    await c.read(dailySnackBasketProvider.future);
+    await c.read(dailySnackBasketProvider.notifier).refreshReset();
+    user = 'user-2';
+    c.invalidate(snackUserIdProvider);
+    await c.read(dailySnackBasketProvider.future);
+    final controller = c.read(dailySnackBasketProvider.notifier);
+    controller.setInteractionActive(true);
+    for (var i = 0; i < 12; i++) {
+      controller.takeBite();
+    }
+    controller.setInteractionActive(false);
+    expect(c.read(dailySnackBasketProvider).value!.consumed, 12);
+  });
+
+  test(
+    'replay permission survives a new local day in the same session',
+    () async {
+      resets.value = const SnackBasketReset(
+        language: 'en',
+        unlimitedReplayEnabled: true,
+      );
+      final c = create();
+      addTearDown(c.dispose);
+      await c.read(dailySnackBasketProvider.future);
+      await c.read(dailySnackBasketProvider.notifier).refreshReset();
+      now = DateTime(2026, 9, 19);
+      c.read(dailySnackBasketProvider.notifier).ensureToday();
+      await c.read(dailySnackBasketProvider.future);
+      final controller = c.read(dailySnackBasketProvider.notifier);
+      controller.setInteractionActive(true);
+      for (var i = 0; i < 12; i++) {
+        controller.takeBite();
+      }
+      controller.setInteractionActive(false);
+      expect(c.read(dailySnackBasketProvider).value!.consumed, 0);
+    },
+  );
+
   test(
     'reset waits for interaction; network failure and wrong language retain progress',
     () async {

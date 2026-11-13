@@ -35,13 +35,34 @@ class RunnerTests: XCTestCase {
     XCTAssertFalse(snapshot.isTomatoOut)
     snapshot.showingTomato = true
     XCTAssertTrue(snapshot.isTomatoOut)
+    let tap = Date(timeIntervalSince1970: 1_000)
+    XCTAssertNil(snapshot.interaction(at: tap))
+    snapshot.pickupStartedAt = tap.timeIntervalSince1970
+    XCTAssertEqual(snapshot.interaction(at: tap), .pickup)
+    XCTAssertNil(snapshot.interaction(at: tap.addingTimeInterval(5)))
     snapshot.basket.consumed = 4
     snapshot.showingTomato = false
     XCTAssertFalse(snapshot.isTomatoOut)
+    XCTAssertNil(snapshot.interaction(at: tap))
+    snapshot.showingContent = true
+    XCTAssertEqual(snapshot.visibleTomatoStage, 4)
+    snapshot.showingContent = false
+    XCTAssertEqual(snapshot.visibleTomatoStage, 0)
     snapshot.showingTomato = true
     XCTAssertTrue(snapshot.isTomatoOut)
     snapshot.basket.consumed = 12
     XCTAssertFalse(snapshot.isTomatoOut)
+    snapshot.showingContent = true
+    XCTAssertEqual(snapshot.visibleTomatoStage, 4)
+    snapshot.bitePreviewStartedAt = 1_000
+    for consumed in 1...12 {
+      snapshot.basket.consumed = consumed
+      XCTAssertEqual(snapshot.visibleTomatoStage, (consumed - 1) % 4 + 1)
+      XCTAssertEqual(snapshot.interaction(at: tap.addingTimeInterval(1)), .bite)
+    }
+    XCTAssertNil(snapshot.interaction(at: tap.addingTimeInterval(5)))
+    snapshot.showingContent = false
+    XCTAssertNil(snapshot.interaction(at: tap.addingTimeInterval(1)))
   }
 
   func testUsageContrastStartsWithActualContent() throws {

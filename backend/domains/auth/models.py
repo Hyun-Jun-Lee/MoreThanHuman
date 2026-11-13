@@ -3,7 +3,7 @@ Auth 도메인 SQLAlchemy 모델 정의
 """
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, DateTime, Integer, String
+from sqlalchemy import Boolean, Column, DateTime, Integer, String, false
 from sqlalchemy.orm import relationship
 
 from database import Base
@@ -20,6 +20,9 @@ class ProfileModel(Base):
     name = Column(String(100), nullable=False)
     nickname = Column(String(100), nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
+    snack_unlimited_replay_enabled = Column(
+        Boolean, default=False, server_default=false(), nullable=False
+    )
     oauth_provider = Column(String(50), nullable=True)
     avatar_url = Column(String(500), nullable=True)
     native_language = Column(String(8), default=DEFAULT_LANGUAGE_CONTEXT.native_language.value, nullable=False)

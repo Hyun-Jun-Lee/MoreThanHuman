@@ -1,20 +1,24 @@
 import AppIntents
 import SwiftUI
+import UIKit
 import WidgetKit
 
 struct OpenSnackBasketIntent: AppIntent {
   static var title: LocalizedStringResource = "바구니에서 토마토 꺼내기"
   static var openAppWhenRun = false
 
-  func perform() async throws -> some IntentResult {
+  @MainActor func perform() async throws -> some IntentResult {
     guard var snapshot = SnackWidgetStore.current(),
           snapshot.basket.consumed < 12,
           snapshot.basket.consumed % 4 == 0,
+          !snapshot.isTomatoOut,
           snapshot.showingContent != true else {
       return .result()
     }
     snapshot.showingTomato = true
-    SnackWidgetStore.save(snapshot)
+    snapshot.pickupStartedAt = UIAccessibility.isReduceMotionEnabled ? nil : Date().timeIntervalSince1970
+    snapshot.bitePreviewStartedAt = nil
+    SnackWidgetStore.save(snapshot, reload: false)
     return .result()
   }
 }
@@ -23,17 +27,23 @@ struct TakeSnackBiteIntent: AppIntent {
   static var title: LocalizedStringResource = "토마토 한입"
   static var openAppWhenRun = false
 
-  func perform() async throws -> some IntentResult {
+  @MainActor func perform() async throws -> some IntentResult {
     guard var snapshot = SnackWidgetStore.current(),
           snapshot.isTomatoOut,
           snapshot.showingContent != true else {
+      return .result()
+    }
+    if let start = snapshot.pickupStartedAt,
+       (0..<SnackWidgetMotion.pickup.duration).contains(Date().timeIntervalSince1970 - start) {
       return .result()
     }
     snapshot.basket.consumed += 1
     snapshot.page = 0
     snapshot.showingContent = true
     snapshot.showingTomato = snapshot.basket.consumed % 4 != 0
-    SnackWidgetStore.save(snapshot)
+    snapshot.pickupStartedAt = nil
+    snapshot.bitePreviewStartedAt = UIAccessibility.isReduceMotionEnabled ? nil : Date().timeIntervalSince1970
+    SnackWidgetStore.save(snapshot, reload: false)
     return .result()
   }
 }
@@ -46,7 +56,8 @@ struct CloseSnackContentIntent: AppIntent {
     guard var snapshot = SnackWidgetStore.current() else { return .result() }
     snapshot.showingContent = false
     snapshot.page = 0
-    SnackWidgetStore.save(snapshot)
+    snapshot.bitePreviewStartedAt = nil
+    SnackWidgetStore.save(snapshot, reload: false)
     return .result()
   }
 }
@@ -70,7 +81,8 @@ struct ShowSnackPageIntent: AppIntent {
     let last = max(snapshot.pairedPages.count - 1, 0)
     let current = min(max(snapshot.page, 0), last)
     snapshot.page = min(max(current + direction, 0), last)
-    SnackWidgetStore.save(snapshot)
+    snapshot.bitePreviewStartedAt = nil
+    SnackWidgetStore.save(snapshot, reload: false)
     return .result()
   }
 }
@@ -78,40 +90,71 @@ struct ShowSnackPageIntent: AppIntent {
 struct SnackWidgetEntry: TimelineEntry {
   let date: Date
   let snapshot: SnackWidgetSnapshot?
+  let motion: SnackWidgetMotion?
+  var progress: Double = 1
 }
 
 struct SnackWidgetProvider: TimelineProvider {
   func placeholder(in context: Context) -> SnackWidgetEntry {
-    SnackWidgetEntry(date: .now, snapshot: nil)
+    SnackWidgetEntry(date: .now, snapshot: nil, motion: nil)
   }
 
   func getSnapshot(in context: Context, completion: @escaping (SnackWidgetEntry) -> Void) {
-    completion(SnackWidgetEntry(date: .now, snapshot: SnackWidgetStore.current()))
+    completion(SnackWidgetEntry(date: .now, snapshot: SnackWidgetStore.current(), motion: nil))
   }
 
   func getTimeline(in context: Context, completion: @escaping (Timeline<SnackWidgetEntry>) -> Void) {
-    let entry = SnackWidgetEntry(date: .now, snapshot: SnackWidgetStore.current())
-    completion(Timeline(entries: [entry], policy: .after(SnackWidgetStore.nextMidnight())))
+    let now = Date()
+    let snapshot = SnackWidgetStore.current()
+    var entries: [SnackWidgetEntry] = []
+    var settledDate = now
+    if let motion = snapshot?.interaction(at: now) {
+      for progress in motion.keyframes {
+        let date = now.addingTimeInterval(progress * motion.duration)
+        entries.append(SnackWidgetEntry(date: date, snapshot: snapshot, motion: motion, progress: progress))
+      }
+      settledDate = now.addingTimeInterval(motion.duration)
+    }
+    entries.append(SnackWidgetEntry(date: settledDate, snapshot: snapshot, motion: nil))
+    completion(Timeline(entries: entries, policy: .after(SnackWidgetStore.nextMidnight())))
   }
 }
 
 struct SnackWidgetView: View {
   let entry: SnackWidgetEntry
   @Environment(\.widgetFamily) private var family
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   private var isLarge: Bool { family == .systemLarge }
+  private var tomatoBackground: Color { Color(red: 1, green: 0.97, blue: 0.94) }
+  private var biting: Bool { !reduceMotion && entry.motion == .bite }
+
+  private var widgetBackground: Color {
+    if !biting,
+       let snapshot = entry.snapshot,
+       snapshot.showingContent == true,
+       let snack = snapshot.currentSnack,
+       !snapshot.pairedPages.isEmpty {
+      return backgroundColor(snack.contentType)
+    }
+    return tomatoBackground
+  }
 
   var body: some View {
     Group {
-      if let snapshot = entry.snapshot,
+      if !biting,
+         let snapshot = entry.snapshot,
          snapshot.showingContent == true,
          let snack = snapshot.currentSnack,
          !snapshot.pairedPages.isEmpty {
         contentCard(snapshot: snapshot, snack: snack)
+          .transition(.identity)
       } else {
         tomatoCard
+          .transition(.identity)
       }
     }
+    .containerBackground(widgetBackground, for: .widget)
   }
 
   private var tomatoCard: some View {
@@ -131,7 +174,7 @@ struct SnackWidgetView: View {
         .padding(12)
       }
     }
-    .containerBackground(Color(red: 1, green: 0.97, blue: 0.94), for: .widget)
+    .background(tomatoBackground)
   }
 
   private var tomatoTitle: some View {
@@ -141,26 +184,50 @@ struct SnackWidgetView: View {
       .minimumScaleFactor(0.8)
   }
 
+  private static let travelCurve = UnitCurve.bezier(
+    startControlPoint: UnitPoint(x: 0.215, y: 0.61), endControlPoint: UnitPoint(x: 0.355, y: 1))
+  private static let reboundCurve = UnitCurve.bezier(
+    startControlPoint: UnitPoint(x: 0.175, y: 0.885), endControlPoint: UnitPoint(x: 0.32, y: 1.275))
+
   private func tomatoControl(size: CGFloat) -> some View {
-    Group {
-      if let snapshot = entry.snapshot, snapshot.basket.consumed < 12 {
-        if snapshot.isTomatoOut {
-          Button(intent: TakeSnackBiteIntent()) {
-            tomatoImage(snapshot.basket.consumed, size: size)
-          }
-          .buttonStyle(.plain)
-          .accessibilityLabel("토마토 한입 먹기")
+    let snapshot = entry.snapshot
+    let consumed = snapshot?.basket.consumed ?? 0
+    let tomatoOut = snapshot?.isTomatoOut == true || biting
+    let pickup = entry.motion == .pickup && !reduceMotion
+    let stage = snapshot?.visibleTomatoStage ?? 0
+    let progress = entry.progress
+    let pickupProgress = pickup ? progress : (tomatoOut ? 1.0 : 0.0)
+    let travel = Self.travelCurve.value(at: pickupProgress)
+    let biteProgress = biting ? progress : 0
+    let biteScale = biteProgress < 0.35
+      ? 1 - 0.08 * biteProgress / 0.35
+      : 0.92 + 0.08 * Self.reboundCurve.value(at: (biteProgress - 0.35) / 0.65)
+    let displayedStage = biting && progress < 0.35 ? max(0, stage - 1) : stage
+    return ZStack {
+      basketImage(consumed, size: size)
+        .offset(y: 12 * travel)
+        .opacity(1 - UnitCurve.easeOut.value(at: min(pickupProgress / 0.7, 1)))
+      tomatoImage(stage: displayedStage, size: size)
+        .rotationEffect(.radians(sin(biteProgress * 2 * .pi) * 0.035))
+        .scaleEffect((0.42 + 0.58 * Self.reboundCurve.value(at: pickupProgress)) * biteScale)
+        .offset(x: 24 * (1 - travel), y: 30 * (1 - travel))
+        .opacity(UnitCurve.easeOut.value(at: min(pickupProgress / 0.18, 1)))
+    }
+    // WidgetKit이 항목 사이에 기본 페이드나 스프링을 덧붙이지 않게 해요.
+    .animation(nil, value: entry.date)
+    .overlay {
+      if let snapshot, snapshot.basket.consumed < 12, snapshot.showingContent != true,
+         !pickup {
+        if tomatoOut {
+          Button(intent: TakeSnackBiteIntent()) { Color.clear.contentShape(Rectangle()) }
+            .accessibilityLabel("토마토 한입 먹기")
         } else {
-          Button(intent: OpenSnackBasketIntent()) {
-            basketImage(snapshot.basket.consumed, size: size)
-          }
-          .buttonStyle(.plain)
-          .accessibilityLabel("바구니에서 토마토 꺼내기")
+          Button(intent: OpenSnackBasketIntent()) { Color.clear.contentShape(Rectangle()) }
+            .accessibilityLabel("바구니에서 토마토 꺼내기")
         }
-      } else {
-        basketImage(entry.snapshot?.basket.consumed ?? 0, size: size)
       }
     }
+    .buttonStyle(.plain)
   }
 
   private func contentCard(snapshot: SnackWidgetSnapshot, snack: SnackWidgetContent) -> some View {
@@ -232,7 +299,8 @@ struct SnackWidgetView: View {
       }
     }
     .padding(isLarge ? 16 : 9)
-    .containerBackground(backgroundColor(snack.contentType), for: .widget)
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .background(backgroundColor(snack.contentType))
   }
 
   private func pairedExplanation(title: String, body: String) -> some View {
@@ -275,13 +343,13 @@ struct SnackWidgetView: View {
     .background(Color.white.opacity(0.65), in: RoundedRectangle(cornerRadius: isLarge ? 12 : 8))
   }
 
-  private func tomatoImage(_ consumed: Int, size: CGFloat) -> some View {
-    let stage = consumed % 4
+  private func tomatoImage(stage: Int, size: CGFloat) -> some View {
     let name = ["TomatoWhole", "TomatoBite1", "TomatoBite2", "TomatoBite3", "TomatoBite4"][stage]
     return Image(name)
       .resizable()
       .scaledToFit()
       .frame(width: size, height: size)
+      .contentTransition(.identity)
       .accessibilityHidden(true)
   }
 
