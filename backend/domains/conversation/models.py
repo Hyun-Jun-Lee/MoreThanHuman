@@ -21,7 +21,7 @@ class ConversationModel(Base):
 
     id = Column(String(36), primary_key=True)  # UUID를 문자열로 저장
     user_id = Column(String(36), ForeignKey("profiles.id"), nullable=False, index=True)
-    title = Column(String(200), nullable=True)  # 대화 제목 (첫 질문)
+    title = Column(String(200), nullable=True)  # 대화 제목
     conversation_type = Column(SQLEnum(ConversationType), default=ConversationType.FREE_CHAT, nullable=False)  # 대화 타입
     role_character = Column(String(500), nullable=True)  # 롤플레이 캐릭터/상황 설명
     native_language = Column(String(8), default=DEFAULT_LANGUAGE_CONTEXT.native_language.value, nullable=False)

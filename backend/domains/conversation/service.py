@@ -45,6 +45,14 @@ settings = get_settings()
 ROLEPLAY_TITLE_MAX_LENGTH = 200
 
 
+def free_chat_title(topic: str | None, first_message: str) -> str:
+    """주제가 있으면 대화 제목으로 사용하고, 없으면 기존 첫 발화 규칙을 유지해요."""
+    normalized_topic = topic.strip() if topic else ""
+    if normalized_topic:
+        return normalized_topic[:200]
+    return first_message[:47] + "..." if len(first_message) > 50 else first_message
+
+
 class ConversationService:
     """대화 서비스"""
 
@@ -178,7 +186,7 @@ class ConversationService:
         try:
             # 1. Conversation 생성
             language_context = ensure_language_context(language_context)
-            title = first_message[:50] if len(first_message) <= 50 else first_message[:47] + "..."
+            title = free_chat_title(topic, first_message)
 
             conversation = ConversationModel(
                 id=str(uuid4()),

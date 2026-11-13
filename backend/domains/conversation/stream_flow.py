@@ -13,7 +13,7 @@ from database import SessionLocal
 from domains.conversation.enums import ConversationStatus, ConversationType, MessageRole
 from domains.conversation.models import ConversationModel, MessageModel, StreamAttemptModel, StreamTurnModel
 from domains.conversation.repository import ConversationRepository, ConversationSlotsFull
-from domains.conversation.service import ConversationService
+from domains.conversation.service import ConversationService, free_chat_title
 from domains.conversation.stream_turns import StreamTurnConflict, StreamTurnStore
 from shared.background_tasks import BackgroundTaskRegistry
 from shared.language import LearningLanguageContext, language_context_from_values, language_context_to_dict, language_name
@@ -128,7 +128,7 @@ def prepare_generation(
                     conversation = repository.find_by_id(turn.conversation_id, user_id)
                     user_message = db.query(MessageModel).filter_by(id=turn.user_message_id).one()
                 else:
-                    title = user_text[:47] + "..." if len(user_text) > 50 else user_text
+                    title = free_chat_title(input_data.get("topic"), user_text)
                     conversation = ConversationModel(
                         id=str(uuid4()), user_id=user_id, title=title,
                         conversation_type=ConversationType.FREE_CHAT,

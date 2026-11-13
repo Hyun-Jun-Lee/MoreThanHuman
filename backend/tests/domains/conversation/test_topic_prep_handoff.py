@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from domains.auth.dependencies import get_current_profile
 from domains.conversation.enums import ConversationType
 from domains.conversation.router import get_conversation_service, router
-from domains.conversation.service import ConversationService
+from domains.conversation.service import ConversationService, free_chat_title
 from shared.language import LearningLanguageContext
 from shared.http_clients import get_ai_http_client
 
@@ -43,6 +43,33 @@ def test_free_chat_prompt_includes_topic_prep_handoff_context():
     assert "DEBATE" in prompt
     assert "Was the manager's late-game decision right?" in prompt
     assert "counterarguments" in prompt
+
+
+@pytest.mark.parametrize(
+    ("topic", "expected"),
+    [
+        ("  cafe conversation  ", "cafe conversation"),
+        ("취미 이야기", "취미 이야기"),
+        (" ", "first user message"),
+        (None, "first user message"),
+        ("x" * 205, "x" * 200),
+    ],
+)
+def test_free_chat_title_uses_topic_with_legacy_fallback(topic, expected):
+    assert free_chat_title(topic, "first user message") == expected
+    assert free_chat_title(None, "m" * 51) == "m" * 47 + "..."
+
+
+@pytest.mark.asyncio
+async def test_start_free_chat_stores_topic_instead_of_first_message():
+    repository = _FakeConversationRepository()
+    service = _FakeConversationService(repository)
+
+    await service.start_free_chat_conversation(
+        "I want to talk about my hobby.", topic="  취미 이야기  ", user_id="user-1",
+    )
+
+    assert repository.conversation.title == "취미 이야기"
 
 
 def test_free_chat_prompt_prioritizes_natural_conversation_over_unsolicited_teaching():
@@ -197,7 +224,7 @@ class _FakeConversationRepository:
 
 class _FakeConversationService(ConversationService):
     def __init__(self, repository):
-        super().__init__(repository=repository)
+        super().__init__(repository=repository, background_tasks=_FakeBackgroundTasks())
         self.generated_prompts = []
 
     async def generate_response(self, system_prompt, messages, user_message):
@@ -209,3 +236,8 @@ class _FakeConversationService(ConversationService):
             }
         )
         return "Welcome in. What would you like to practice?"
+
+
+class _FakeBackgroundTasks:
+    def start(self, coroutine):
+        coroutine.close()
