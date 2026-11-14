@@ -8,8 +8,6 @@ struct SnackWidgetSnapshot: Codable {
   var page: Int
   var showingContent: Bool?
   var showingTomato: Bool? = nil
-  var pickupStartedAt: Double? = nil
-  var bitePreviewStartedAt: Double? = nil
 
   var isValid: Bool {
     !userId.isEmpty &&
@@ -34,23 +32,6 @@ struct SnackWidgetSnapshot: Codable {
       return 4
     }
     return basket.consumed % 4
-  }
-
-  func interaction(at date: Date) -> SnackWidgetMotion? {
-    let motion: SnackWidgetMotion
-    let startedAt: Double?
-    if showingContent == true {
-      motion = .bite
-      startedAt = bitePreviewStartedAt
-    } else if isTomatoOut && basket.consumed % 4 == 0 {
-      motion = .pickup
-      startedAt = pickupStartedAt
-    } else {
-      return nil
-    }
-    guard let startedAt,
-          (0..<5).contains(date.timeIntervalSince1970 - startedAt) else { return nil }
-    return motion
   }
 
   var pages: [SnackWidgetPage] {
@@ -123,25 +104,6 @@ struct SnackWidgetSnapshot: Codable {
       let breakPoint = remaining[..<limit].lastIndex(of: " ") ?? limit
       pages.append(SnackWidgetPage(title: title, body: String(remaining[..<breakPoint])))
       remaining = remaining[breakPoint...].drop(while: { $0 == " " })
-    }
-  }
-}
-
-enum SnackWidgetMotion {
-  case pickup, bite
-
-  // 서로 다른 타임라인 항목으로 게시해 위젯 호스트가 중간 자세를 그릴 수 있게 해요.
-  var keyframes: [Double] {
-    switch self {
-    case .pickup: return [0, 0.09, 0.18, 0.35, 0.5, 0.7, 0.85]
-    case .bite: return [0, 0.125, 0.25, 0.35, 0.5, 0.625, 0.75, 0.875, 0.97]
-    }
-  }
-
-  var duration: TimeInterval {
-    switch self {
-    case .pickup: return 0.4
-    case .bite: return 0.36
     }
   }
 }
@@ -245,8 +207,6 @@ enum SnackWidgetStore {
       snapshot.page = 0
       snapshot.showingContent = false
       snapshot.showingTomato = false
-      snapshot.pickupStartedAt = nil
-      snapshot.bitePreviewStartedAt = nil
       save(snapshot)
     }
     return snapshot
