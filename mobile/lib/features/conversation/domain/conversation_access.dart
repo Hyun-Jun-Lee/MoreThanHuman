@@ -7,7 +7,6 @@ class ConversationAccess {
     this.remainingSlots,
     this.lockedCount = 0,
     this.plan = 'free',
-    this.activeConversations = const [],
   });
 
   const ConversationAccess.disabled()
@@ -17,8 +16,7 @@ class ConversationAccess {
       slotLimit = null,
       remainingSlots = null,
       lockedCount = 0,
-      plan = 'free',
-      activeConversations = const [];
+      plan = 'free';
 
   factory ConversationAccess.fromJson(Object? value) {
     if (value is! Map<String, dynamic> ||
@@ -35,16 +33,6 @@ class ConversationAccess {
       remainingSlots: value['remaining_slots'] as int?,
       lockedCount: value['locked_count'] as int? ?? 0,
       plan: value['plan'] as String? ?? 'free',
-      activeConversations:
-          (value['active_conversations'] as List<dynamic>? ?? const [])
-              .whereType<Map<String, dynamic>>()
-              .map(
-                (item) => ActiveConversation(
-                  id: item['id'] as String,
-                  title: item['title'] as String,
-                ),
-              )
-              .toList(),
     );
   }
 
@@ -55,15 +43,8 @@ class ConversationAccess {
   final int? remainingSlots;
   final int lockedCount;
   final String plan;
-  final List<ActiveConversation> activeConversations;
 
   bool get isLocked => enabled && !canCreate;
-}
-
-class ActiveConversation {
-  const ActiveConversation({required this.id, required this.title});
-  final String id;
-  final String title;
 }
 
 class ConversationTurnAccess {

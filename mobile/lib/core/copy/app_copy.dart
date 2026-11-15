@@ -209,35 +209,23 @@ class AppCopy {
     (false, _) => 'Could not verify the purchase. Retry or restore purchases.',
   };
   String get conversationLockedReadOnly => isKorean
-      ? '이 대화는 잠겨 있어요. 대화 목록에서 활성 대화로 선택한 뒤 열 수 있어요.'
-      : 'This conversation is locked. Select it as an active conversation in Conversations to open it.';
-  String get activateConversation =>
-      isKorean ? '활성 대화로 선택' : 'Use this conversation';
-  String get deactivateConversation =>
-      isKorean ? '활성 대화 해제' : 'Release active slot';
+      ? '이 대화는 잠겨 있어요. 요금제의 슬롯 한도가 늘어나면 잠긴 대화가 최근 사용 순서대로 열려요.'
+      : 'This conversation is locked. Locked conversations reopen in recent-use order when your plan gains more slots.';
   String get lockedConversationLabel =>
       isKorean ? '잠긴 대화' : 'Locked conversation';
   String get lockedConversationEntryMessage => isKorean
-      ? '대화 목록에서 활성 대화로 선택한 뒤 열 수 있어요.'
-      : 'Select it as an active conversation in Conversations to open it.';
+      ? '요금제의 슬롯 한도가 늘어나면 잠긴 대화가 최근 사용 순서대로 열려요.'
+      : 'Locked conversations reopen in recent-use order when your plan gains more slots.';
   String get backLabel => isKorean ? '뒤로' : 'Back';
   String get backToHomeLabel => isKorean ? '홈으로 돌아가기' : 'Back to home';
   String get conversationTitle => isKorean ? '대화' : 'Conversation';
   String get additionalConversationLabel =>
       isKorean ? '추가 대화' : 'Additional conversation';
   String get additionalConversationLocked => isKorean
-      ? '활성 대화 슬롯이 모두 사용 중이에요. 대화 목록에서 슬롯을 해제하거나 구독해 주세요.'
-      : 'All active conversation slots are in use. Release a slot in Conversations or subscribe.';
+      ? '활성 대화 슬롯이 모두 사용 중이에요. 활성 대화를 삭제하거나 상위 요금제를 구독해 주세요.'
+      : 'All active conversation slots are in use. Delete an active conversation or upgrade your plan.';
   String get additionalConversationLockedSemantic =>
       isKorean ? '잠긴 대화' : 'Locked conversation';
-  String get switchConversationTitle =>
-      isKorean ? '활성 대화 바꾸기' : 'Switch active conversation';
-  String get switchConversationMessage => isKorean
-      ? '대신 잠글 대화를 선택해 주세요.'
-      : 'Choose a conversation to lock instead.';
-  String get slotChangeFailed => isKorean
-      ? '대화 슬롯을 변경하지 못했어요. 다시 시도해 주세요.'
-      : 'Could not change the active conversation. Try again.';
   String get accessDialogConfirm => isKorean ? '확인' : 'OK';
   String get conversationTurnLimitReached => isKorean
       ? '이 대화의 무료 15턴을 모두 사용했어요. 이전 대화는 계속 볼 수 있어요.'
@@ -339,8 +327,6 @@ class AppCopy {
   String get nicknameSaveFailed => isKorean
       ? '닉네임을 저장하지 못했어요. 다시 시도해 주세요.'
       : 'Could not save your nickname. Please try again.';
-  String get conversationOptionsLabel =>
-      isKorean ? '대화 옵션' : 'Conversation options';
   String get conversationsLabel => isKorean ? '대화' : 'Conversations';
   String get newConversationLabel => isKorean ? '새 대화' : 'New conversation';
   String get loadMoreConversationsLabel =>

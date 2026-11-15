@@ -1,6 +1,6 @@
 # tomatalk Backend DSL
 
-> 최종 갱신: 2026-11-01 · 범위: FastAPI 백엔드 API + Flutter 모바일 연동
+> 최종 갱신: 2026-11-16 · 범위: FastAPI 백엔드 API + Flutter 모바일 연동
 
 사용자 클라이언트는 `mobile/`의 Flutter 기반 모바일 앱으로 개발해요. 이 문서는 모바일 앱이 연동할 백엔드 도메인, 데이터 모델, API 계약을 정의해요.
 
@@ -524,13 +524,13 @@ NDJSON 각 줄에는 `event`, 0부터 증가하는 `seq`, `turn_id`, `attempt_id
 
 `CONVERSATION_ACCESS_ENABLED=false`가 코드 기본값이에요. 개발 환경 미리보기에서는 `true`로 설정해 슬롯·15턴 제한과 모바일 잠금을 함께 확인할 수 있어요. `false`일 때 `GET /access/`는 `enabled=false`, `can_create=true`, `slot_limit=null`, `remaining_slots=null`을 반환하고, 대화별 `GET /{id}/access/`는 `enabled=false`, `can_send=true`, `turn_limit=null`을 반환해요. 기존 생성·발화 API는 한도를 적용하지 않아요.
 
-활성화하면 무료 계정은 활성 대화 1개와 대화당 사용자 발화 15회를 사용할 수 있어요. Advance는 활성 대화 5개, Plus는 10개이고 두 구독 모두 발화 수 제한이 없어요. 저장된 대화 수는 제한하지 않아요. 비활성 대화는 앱에서 열 수 없고 목록에서 활성화하거나 삭제할 수 있으며 발화할 수 없어요. 서버의 메시지 조회 API는 기존 읽기 권한을 유지해요. 구독 만료·환불·철회 또는 하위 플랜 전환 시 최근 사용한 활성 대화만 현재 한도까지 남겨요. 기존 다중 대화 계정은 마지막 사용자 발화가 가장 최근인 대화 1개를 활성화하고 나머지를 잠가요. 앱에서 활성 대화를 해제하거나 다른 대화로 교체할 수 있어요. 기존 `legacy_conversation_slots`와 `conversation_slot_grants`는 보존하지만 구독 권한에 반영하지 않아요.
+활성화하면 무료 계정은 활성 대화 1개와 대화당 사용자 발화 15회를 사용할 수 있어요. Advance는 활성 대화 5개, Plus는 10개이고 두 구독 모두 발화 수 제한이 없어요. 저장된 대화 수는 제한하지 않아요. 비활성 대화는 앱에서 열 수 없고 삭제할 수 있으며 발화할 수 없어요. 서버의 메시지 조회 API는 기존 읽기 권한을 유지해요. 구독 만료·환불·철회 또는 하위 플랜 전환 시 최근 사용한 활성 대화만 현재 한도까지 남겨요. 기존 다중 대화 계정은 마지막 사용자 발화가 가장 최근인 대화 1개를 활성화하고 나머지를 잠가요. 활성 대화를 삭제해 빈 슬롯이 생겨도 잠긴 대화는 그대로예요. 플랜의 슬롯 한도가 늘어나면 잠긴 대화를 최근 사용 순서대로 남은 슬롯 수만큼 활성화해요. 사용자가 대화를 직접 활성화하거나 해제할 수는 없어요. 기존 `legacy_conversation_slots`와 `conversation_slot_grants`는 보존하지만 구독 권한에 반영하지 않아요.
 
 자유 대화의 첫 발화는 1회이며 역할극의 AI 첫 인사는 세지 않아요. 기존에 15회를 넘긴 무료 대화는 열람할 수 있으나 새 발화는 막아요. 생성 API는 한도 초과 시 HTTP 409 `CONVERSATION_SLOTS_FULL`, 잠긴 대화의 `/message/`·`/turn/`은 `CONVERSATION_LOCKED`, 무료 발화 초과는 `CONVERSATION_TURNS_FULL`을 반환해요. 음성 요청은 STT 전에 한도를 미리 확인하고 저장 시 다시 검사해요.
 
-`GET /api/conversations/access/`는 `used_slots`(활성 수), `slot_limit`, `remaining_slots`, `locked_count`, `plan`, `active_conversations`(`id`·`title`)을 반환해요. 목록 항목에는 `locked`가 포함되고 `GET /api/conversations/{id}/access/`에는 `can_send`, `locked`, `user_turns`, `turn_limit`이 포함돼요. `POST /api/conversations/{id}/activate/`는 선택적으로 `{ "replace_conversation_id": "UUID" }`를 받아 가득 찬 슬롯을 원자적으로 교체해요. `POST /api/conversations/{id}/deactivate/`는 슬롯을 해제해요.
+`GET /api/conversations/access/`는 `used_slots`(활성 대화와 진행 중인 역할극 시작 예약의 합계), `slot_limit`, `remaining_slots`, `locked_count`, `plan`을 반환해요. 활성 대화 ID 목록은 반환하지 않아요. 목록 항목에는 `locked`가 포함되고 `GET /api/conversations/{id}/access/`에는 `can_send`, `locked`, `user_turns`, `turn_limit`이 포함돼요. 대화 활성화·해제 API는 제공하지 않아요.
 
-대화 목록의 `locked`는 저장된 `slot_active`를 반영해요. 목록 조회는 구독 상태를 갱신하거나 슬롯을 재조정하지 않아요. 구독 갱신 작업이 지연되면 표시가 잠시 이전 상태일 수 있으나 생성·발화·활성화 요청은 현재 권한을 다시 검사해요.
+대화 목록의 `locked`는 저장된 `slot_active`를 반영해요. 목록 조회는 구독 상태를 갱신하거나 슬롯을 재조정하지 않아요. 구독 갱신 작업이 지연되면 표시가 잠시 이전 상태일 수 있으나 생성·발화 요청은 현재 권한을 다시 검사해요.
 
 `GET /api/billing/entitlement/`는 인증 계정의 검증된 `plan`, `status`, `expires_at`, `slot_limit`, `turn_limit`을 반환해요. iOS 앱은 App Store 제품 ID `Advance`·`Plus`의 표시 가격을 직접 불러와요. `POST /api/billing/apple/verify/`는 인증 계정의 `{ "signed_transaction": "Apple StoreKit 2 JWS" }`를 받아 Apple 서명 및 App Store Server API의 현재 상태를 검증하고 권한을 반환해요. 다른 계정에 묶인 구매는 HTTP 409 `PURCHASE_ACCOUNT_CONFLICT`, 잘못된 거래는 HTTP 400 `INVALID_APPLE_PURCHASE`예요. `POST /api/billing/apple/notifications/`는 Apple Server Notifications V2의 `{ "signedPayload": "..." }`를 받아 서명을 검증하고 Apple의 현재 상태를 다시 조회해요. 알림 ID로 중복 처리를 막아요.
 

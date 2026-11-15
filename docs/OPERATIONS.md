@@ -1,6 +1,6 @@
 # 운영 가이드
 
-> 최종 갱신: 2026-11-13 · 배포·주간 생성·복구 절차
+> 최종 갱신: 2026-11-16 · 배포·주간 생성·복구 절차
 
 ## 계정 삭제 처리
 
@@ -112,10 +112,10 @@ Flutter App
 
 1. API에 migration을 적용하고 새 iOS 앱을 배포해요. App Store Connect에서 월간 `Advance`·`Plus`를 같은 구독 그룹에 두고, 앱 내 구입 계약·세금·은행 정보와 상품 심사를 준비해요. 앱 빌드에는 공개 개인정보처리방침 URL을 `--dart-define=PRIVACY_POLICY_URL=...`로 제공해요.
 2. 서버 비밀 저장소에 `APPLE_IAP_*` 설정을 주입해요. App Store Connect에서 Server Notifications V2 URL을 `https://<API 호스트>/api/billing/apple/notifications/`로 지정해요. Sandbox는 `APPLE_IAP_ENVIRONMENT=sandbox`, 운영은 `production`으로 분리해요. `backend/certs/apple/`의 Apple 공식 루트 인증서 3개를 배포물에 포함해요.
-3. 기존 API의 대화 생성·삭제 쓰기를 잠시 중지하고, `backend/`에서 `uv run python -m scripts.initialize_conversation_slots`를 실행해요. 무료 계정은 가장 최근 사용자 발화가 있는 대화 1개만 활성화해요. 재실행 시 사용자가 직접 바꾼 활성 대화는 보존해요.
-4. 무료 0/1/기존 다중 대화 계정과 Advance·Plus 계정에서 `GET /api/conversations/access/`, 생성·발화, 15회 경계, 대화 전환·해제, 만료·환불 잠금을 확인해요. 쓰기 중지가 유지되는 동안 `CONVERSATION_ACCESS_ENABLED=true`로 API를 재시작해요. 문제가 있으면 스위치를 `false`로 되돌리고 원인을 분석해요.
+3. 기존 API의 대화 생성·삭제 쓰기를 잠시 중지하고, `backend/`에서 `uv run python -m scripts.initialize_conversation_slots`를 실행해요. 무료 계정은 가장 최근 사용자 발화가 있는 대화 1개만 활성화해요.
+4. 무료 0/1/기존 다중 대화 계정과 Advance·Plus 계정에서 `GET /api/conversations/access/`, 생성·발화, 15회 경계, 슬롯 한도 증가 시 잠긴 대화 활성화, 만료·환불 잠금을 확인해요. 쓰기 중지가 유지되는 동안 `CONVERSATION_ACCESS_ENABLED=true`로 API를 재시작해요. 문제가 있으면 스위치를 `false`로 되돌리고 원인을 분석해요.
 
-초기화와 스위치 변경 사이에 대화 생성·삭제가 발생하면 활성 슬롯 선택이 달라질 수 있으므로 쓰기를 중지해요. 이 CLI는 스위치가 이미 켜져 있으면 실행을 거부해요. 테스트용 `.env`에서 스위치를 켜면 무료 계정에 활성 슬롯 1개와 대화당 15회가 적용돼요. 읽기 전용 대화는 앱에서 열람·삭제하고, 슬롯이 가득 차면 기록 화면에서 현재 활성 대화를 해제하거나 교체해요.
+초기화와 스위치 변경 사이에 대화 생성·삭제가 발생하면 활성 슬롯 선택이 달라질 수 있으므로 쓰기를 중지해요. 이 CLI는 스위치가 이미 켜져 있으면 실행을 거부해요. 테스트용 `.env`에서 스위치를 켜면 무료 계정에 활성 슬롯 1개와 대화당 15회가 적용돼요. 잠긴 대화는 앱에서 열 수 없고 삭제할 수 있어요. 슬롯이 가득 차면 기존 대화를 삭제하거나 상위 플랜을 구독해요. 삭제만으로 잠긴 대화가 활성화되지는 않아요.
 
 동시 생성·발화 제한은 프로덕션 PostgreSQL의 행 잠금에 의존해요. 개발용 SQLite에서는 동시 요청 경계 검증을 대신할 수 없으므로 활성화 전 PostgreSQL에서 병렬 요청을 확인해요. Apple 알림 누락에 대비해 `backend/`에서 `uv run python -m scripts.reconcile_apple_subscriptions`를 주기적으로 실행하고 종료 코드·실패 건수를 모니터링해요. 이 작업은 Apple 현재 상태를 다시 조회하고 기존 tomatalk 계정 연결을 유지해요.
 

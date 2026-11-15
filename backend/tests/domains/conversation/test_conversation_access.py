@@ -118,11 +118,12 @@ def test_legacy_allowance_and_permanent_grant_do_not_change_subscription_slots()
     assert repository.access_summary(user_id, enabled=True)["slot_limit"] == 1
     assert repository.access_summary(user_id, enabled=True)["locked_count"] == 2
     selected = repository.db.query(ConversationModel).filter_by(user_id=user_id, slot_active=True).one()
-    replacement = next(item for item in conversations if item.id != selected.id)
-    repository.activate_conversation(replacement.id, user_id, selected.id)
-    assert repository.turn_access(selected.id, user_id, enabled=True)["locked"] is True
-    repository.deactivate_conversation(replacement.id, user_id)
+    locked = next(item for item in conversations if item.id != selected.id)
+    repository.delete_by_id(selected.id, user_id)
+    assert repository.access_summary(user_id, enabled=True)["can_create"] is True
+    assert repository.turn_access(locked.id, user_id, enabled=True)["locked"] is True
     repository.create_with_access(_conversation(user_id), enabled=True)
+    assert repository.turn_access(locked.id, user_id, enabled=True)["locked"] is True
 
 
 def test_each_conversation_stops_at_fifteen_user_turns():
@@ -368,6 +369,10 @@ def test_api_returns_machine_readable_limit_conflicts(monkeypatch):
     assert access.status_code == 200
     assert access.json()["data"]["can_create"] is False
     assert access.json()["data"]["slot_limit"] == 1
+    assert "active_conversations" not in access.json()["data"]
+
+    assert client.post(f"/api/conversations/{conversation.id}/activate/", json={}).status_code == 404
+    assert client.post(f"/api/conversations/{conversation.id}/deactivate/", json={}).status_code == 404
 
     start = client.post(
         "/api/conversations/start/roleplay/", json={"role_character": "A barista"}

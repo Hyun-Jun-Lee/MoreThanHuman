@@ -20,7 +20,7 @@ import 'package:curitalk/features/language/language.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class HomeScreen extends ConsumerWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({
     this.onConversationSelected,
     this.onStartTypeSelected,
@@ -31,28 +31,24 @@ class HomeScreen extends ConsumerWidget {
   final ValueChanged<ConversationStartType>? onStartTypeSelected;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  bool _checkingAccess = false;
+
+  @override
+  Widget build(BuildContext context) {
     final AppCopy copy = AppCopy.of(context);
     final UserProfile? user = ref.watch(authControllerProvider).value?.user;
     final AsyncValue<List<ConversationSummary>> recent = ref.watch(
       recentConversationsControllerProvider,
     );
-    final AsyncValue<ConversationAccess> accessState = ref.watch(
-      conversationAccessProvider,
-    );
-    final ConversationAccess? access = accessState.value;
-    final Set<String>? activeConversationIds = access?.enabled == true
-        ? access!.activeConversations.map((item) => item.id).toSet()
-        : null;
     final bool isRecentRefreshing = ref.watch(
       recentConversationsRefreshingProvider,
     );
     final bool conversationsReady =
-        !recent.isLoading &&
-        !recent.hasError &&
-        !accessState.isLoading &&
-        !accessState.hasError &&
-        !isRecentRefreshing;
+        !recent.isLoading && !recent.hasError && !isRecentRefreshing;
     return AppScaffold(
       padding: EdgeInsets.zero,
       safeAreaBottom: false,
@@ -61,14 +57,20 @@ class HomeScreen extends ConsumerWidget {
         constraints: const BoxConstraints(maxWidth: 240),
         child: AppPrimaryButton(
           label: copy.homeEmptyTitle,
-          leading: const Icon(Icons.add_rounded),
-          onPressed: conversationsReady
-              ? () => _showStartSheet(context, ref)
+          leading: _checkingAccess
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.add_rounded),
+          onPressed: conversationsReady && !_checkingAccess
+              ? _showStartSheet
               : null,
         ),
       ),
       body: RefreshIndicator(
-        onRefresh: () => _refreshHome(ref),
+        onRefresh: _refreshHome,
         child: CustomScrollView(
           key: const PageStorageKey('home-scroll'),
           physics: const AlwaysScrollableScrollPhysics(),
@@ -99,20 +101,12 @@ class HomeScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: AppSpacing.md),
                   _WeeklyTopicSection(
-                    onSelected: (topic) =>
-                        _startSuggestedTopic(context, ref, topic),
+                    isCheckingAccess: _checkingAccess,
+                    onSelected: _startSuggestedTopic,
                   ),
-                  if (!conversationsReady &&
-                      (recent.isLoading ||
-                          accessState.isLoading ||
-                          isRecentRefreshing))
+                  if (recent.isLoading || isRecentRefreshing)
                     AppAsyncStateView.loading(
                       message: copy.loadingRecentConversations,
-                    )
-                  else if (accessState.hasError)
-                    AppAsyncStateView.error(
-                      message: copy.homeConversationAccessLoadFailed,
-                      onRetry: () => ref.invalidate(conversationAccessProvider),
                     )
                   else
                     recent.when(
@@ -134,10 +128,9 @@ class HomeScreen extends ConsumerWidget {
                         return _RecentConversations(
                           key: ValueKey('home-recent-${user?.id}'),
                           conversations: conversations,
-                          activeConversationIds: activeConversationIds,
-                          onSelected: onConversationSelected,
+                          onSelected: widget.onConversationSelected,
                           onDelete: (ConversationSummary conversation) =>
-                              _deleteConversation(context, ref, conversation),
+                              _deleteConversation(conversation),
                         );
                       },
                     ),
@@ -150,13 +143,7 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _refreshHome(WidgetRef ref) async {
-    ref.invalidate(conversationAccessProvider);
-    try {
-      await ref.read(conversationAccessProvider.future);
-    } on Object {
-      // 권한 오류는 홈 카드 영역에서 재시도를 안내해요.
-    }
+  Future<void> _refreshHome() async {
     await ref.read(recentConversationsControllerProvider.notifier).reload();
     await Future.wait([
       ref.refresh(weeklyTopicsControllerProvider.future).then((_) {}),
@@ -165,29 +152,49 @@ class HomeScreen extends ConsumerWidget {
     ]);
   }
 
-  Future<void> _showStartSheet(BuildContext context, WidgetRef ref) async {
-    if (ref.read(conversationAccessProvider).value?.isLocked == true) {
-      await showConversationAccessDialog(context);
-      return;
+  Future<bool> _canStartConversation() async {
+    if (_checkingAccess) return false;
+    setState(() => _checkingAccess = true);
+    bool isLocked;
+    try {
+      final access = await ref.refresh(conversationAccessProvider.future);
+      if (!mounted) return false;
+      isLocked = access.isLocked;
+    } on Object {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppCopy.of(context).homeConversationAccessLoadFailed),
+          ),
+        );
+      }
+      return false;
+    } finally {
+      if (mounted) setState(() => _checkingAccess = false);
     }
+    if (isLocked) {
+      await showConversationAccessDialog(context);
+      return false;
+    }
+    return true;
+  }
+
+  Future<void> _showStartSheet() async {
+    if (!await _canStartConversation() || !mounted) return;
     final ConversationStartType? selected = await showConversationStartSheet(
       context,
     );
-    if (selected != null && context.mounted) {
-      onStartTypeSelected?.call(selected);
+    if (selected != null && mounted) {
+      widget.onStartTypeSelected?.call(selected);
     }
   }
 
-  Future<void> _startSuggestedTopic(
-    BuildContext context,
-    WidgetRef ref,
-    WeeklyTopic topic,
-  ) async {
-    if (ref.read(startConversationControllerProvider).isStarting) return;
-    if (ref.read(conversationAccessProvider).value?.isLocked == true) {
-      await showConversationAccessDialog(context);
+  Future<void> _startSuggestedTopic(WeeklyTopic topic) async {
+    if (ref.read(startConversationControllerProvider).isStarting ||
+        _checkingAccess) {
       return;
     }
+    if (!await _canStartConversation() || !mounted) return;
     final copy = AppCopy.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
@@ -207,14 +214,14 @@ class HomeScreen extends ConsumerWidget {
         ],
       ),
     );
-    if (confirmed != true || !context.mounted) return;
+    if (confirmed != true || !mounted) return;
     if (ref.read(startConversationControllerProvider).isStarting) return;
     final conversationId = await ref
         .read(startConversationControllerProvider.notifier)
         .startSuggestedFreeChat(topic.id);
-    if (!context.mounted) return;
+    if (!mounted) return;
     if (conversationId != null) {
-      onConversationSelected?.call(conversationId);
+      widget.onConversationSelected?.call(conversationId);
       return;
     }
     final failure = ref.read(startConversationControllerProvider).failureReason;
@@ -231,16 +238,12 @@ class HomeScreen extends ConsumerWidget {
     }
   }
 
-  Future<void> _deleteConversation(
-    BuildContext context,
-    WidgetRef ref,
-    ConversationSummary conversation,
-  ) async {
+  Future<void> _deleteConversation(ConversationSummary conversation) async {
     final bool confirmed = await showConversationDeleteDialog(
       context: context,
       title: conversation.title,
     );
-    if (!confirmed || !context.mounted) return;
+    if (!confirmed || !mounted) return;
     try {
       final ConversationRepository repository = ref.read(
         conversationRepositoryProvider,
@@ -257,9 +260,8 @@ class HomeScreen extends ConsumerWidget {
                 .deleteConversation(conversation.id),
           );
       ref.invalidate(conversationHistoryControllerProvider);
-      ref.invalidate(conversationAccessProvider);
     } on Object {
-      if (context.mounted) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(AppCopy.of(context).deleteConversationFailed)),
         );
@@ -343,12 +345,10 @@ class _RecentConversations extends StatefulWidget {
   const _RecentConversations({
     super.key,
     required this.conversations,
-    required this.activeConversationIds,
     required this.onSelected,
     required this.onDelete,
   });
   final List<ConversationSummary> conversations;
-  final Set<String>? activeConversationIds;
   final ValueChanged<String>? onSelected;
   final ValueChanged<ConversationSummary> onDelete;
   static const _colors = [AppPalette.blockLimeSoft, AppPalette.blockBlue];
@@ -369,13 +369,9 @@ class _RecentConversationsState extends State<_RecentConversations> {
   @override
   Widget build(BuildContext context) {
     final copy = AppCopy.of(context);
-    bool isLocked(ConversationSummary item) =>
-        widget.activeConversationIds == null
-        ? item.locked
-        : !widget.activeConversationIds!.contains(item.id);
     final orderedConversations = [
-      ...widget.conversations.where((item) => !isLocked(item)),
-      ...widget.conversations.where(isLocked),
+      ...widget.conversations.where((item) => !item.locked),
+      ...widget.conversations.where((item) => item.locked),
     ];
     final visibleConversations = _expanded
         ? orderedConversations
@@ -390,12 +386,11 @@ class _RecentConversationsState extends State<_RecentConversations> {
               visibleConversations[index].kind.name,
             ),
             title: visibleConversations[index].title,
-            locked: isLocked(visibleConversations[index]),
+            locked: visibleConversations[index].locked,
             color: _RecentConversations
                 ._colors[index % _RecentConversations._colors.length],
             onTap:
-                isLocked(visibleConversations[index]) ||
-                    widget.onSelected == null
+                visibleConversations[index].locked || widget.onSelected == null
                 ? null
                 : () => widget.onSelected!(visibleConversations[index].id),
             onDelete: () => widget.onDelete(visibleConversations[index]),
@@ -426,9 +421,13 @@ class _RecentConversationsState extends State<_RecentConversations> {
 }
 
 class _WeeklyTopicSection extends ConsumerStatefulWidget {
-  const _WeeklyTopicSection({required this.onSelected});
+  const _WeeklyTopicSection({
+    required this.onSelected,
+    required this.isCheckingAccess,
+  });
 
   final Future<void> Function(WeeklyTopic) onSelected;
+  final bool isCheckingAccess;
 
   @override
   ConsumerState<_WeeklyTopicSection> createState() =>
@@ -496,10 +495,12 @@ class _WeeklyTopicSectionState extends ConsumerState<_WeeklyTopicSection>
     final isStarting = ref
         .watch(startConversationControllerProvider)
         .isStarting;
-    if (topics.isEmpty && !isStarting) return const SizedBox.shrink();
+    final isPreparing =
+        isStarting || (widget.isCheckingAccess && _selectedTopicId != null);
+    if (topics.isEmpty && !isPreparing) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.md),
-      child: isStarting
+      child: isPreparing
           ? AppAsyncStateView.loading(
               key: const ValueKey('suggested-conversation-loading'),
               message: AppCopy.of(context).preparingSuggestedConversation,

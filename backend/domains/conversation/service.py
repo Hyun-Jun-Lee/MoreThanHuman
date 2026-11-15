@@ -500,12 +500,6 @@ class ConversationService:
         if settings.conversation_access_enabled:
             self.repository.assert_can_send(conversation_id, user_id, enabled=True)
 
-    def activate_conversation(self, conversation_id: str, user_id: str, replace_id: str | None) -> None:
-        self.repository.activate_conversation(conversation_id, user_id, replace_id)
-
-    def deactivate_conversation(self, conversation_id: str, user_id: str) -> None:
-        self.repository.deactivate_conversation(conversation_id, user_id)
-
     @staticmethod
     def _build_pagination(*, limit: int, offset: int, total_count: int, current_count: int) -> Pagination:
         has_more = (offset + current_count) < total_count

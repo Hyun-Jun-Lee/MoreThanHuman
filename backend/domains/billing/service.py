@@ -5,8 +5,10 @@ from uuid import UUID
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from config import get_settings
 from domains.auth.models import AccountDeletionModel, ProfileModel
 from domains.billing.apple import AppleGateway, AppleVerificationError, VerifiedSubscription
+from domains.conversation.repository import ConversationRepository
 from shared.subscription import AppleNotificationModel, AppleSubscriptionModel, entitlement_for_user
 
 
@@ -28,6 +30,12 @@ class BillingService:
 
     def entitlement(self, user_id: str) -> dict:
         return entitlement_for_user(self.db, user_id)
+
+    def _reconcile_slots(self, profile: ProfileModel) -> None:
+        """검증된 구독 변경과 슬롯 상태를 같은 트랜잭션에 반영해요."""
+        if get_settings().conversation_access_enabled:
+            self.db.flush()
+            ConversationRepository(self.db)._reconcile_slots_locked(profile)
 
     def verify_purchase(self, user_id: str, signed_transaction: str) -> dict:
         supplied = self.gateway.decode_transaction(signed_transaction)
@@ -56,7 +64,7 @@ class BillingService:
             ).filter_by(user_id=str(token), status="completed").first():
                 raise PurchaseOwnedByAnotherAccount("이 Apple 구독은 다른 활성 계정에 연결되어 있어요")
         try:
-            self.db.query(ProfileModel).filter_by(id=user_id).with_for_update().one()
+            profile = self.db.query(ProfileModel).filter_by(id=user_id).with_for_update().one()
             supplied_record = self.db.query(AppleSubscriptionModel).filter_by(
                 original_transaction_id=supplied.originalTransactionId
             ).with_for_update().one_or_none()
@@ -89,6 +97,7 @@ class BillingService:
             record.grace_expires_at = current.grace_expires_at
             record.verified_at = now
             self.db.flush()  # 원거래 ID의 단독 소유권을 먼저 확보해요.
+            self._reconcile_slots(profile)
             if not current.app_account_token or not _same_uuid(current.app_account_token, user_id):
                 self.gateway.set_app_account_token(current.original_transaction_id, user_id)
             self.db.commit()
@@ -112,7 +121,7 @@ class BillingService:
                 raise PurchaseOwnedByAnotherAccount("이 Apple 구독은 다른 tomatalk 계정에 연결되어 있어요")
         try:
             # 대화 권한 갱신과 발화/생성은 같은 프로필 행에서 직렬화해요.
-            self.db.query(ProfileModel).filter_by(id=user_id).with_for_update().one()
+            profile = self.db.query(ProfileModel).filter_by(id=user_id).with_for_update().one()
             record = self.db.query(AppleSubscriptionModel).filter_by(
                 original_transaction_id=current.original_transaction_id
             ).with_for_update().one_or_none()
@@ -136,6 +145,7 @@ class BillingService:
             record.expires_at = current.expires_at
             record.grace_expires_at = current.grace_expires_at
             record.verified_at = datetime.utcnow()
+            self._reconcile_slots(profile)
             self.db.commit()
         except IntegrityError as exc:
             self.db.rollback()

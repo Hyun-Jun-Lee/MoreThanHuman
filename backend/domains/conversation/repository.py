@@ -210,9 +210,9 @@ class ConversationRepository:
         ).count()
 
     def access_summary(self, user_id: str, *, enabled: bool) -> dict:
-        """홈과 대화 탭에서 동일하게 사용하는 생성 권한."""
-        used = self.count_conversations(user_id)
+        """새 대화 생성 권한과 슬롯 사용량을 반환해요."""
         if not enabled:
+            used = self.count_conversations(user_id)
             return {
                 "enabled": False,
                 "can_create": True,
@@ -226,17 +226,16 @@ class ConversationRepository:
             limit = entitlement["slot_limit"]
             active_count = self.count_active_conversations(user_id)
             used = active_count + self.count_pending_roleplay_starts(user_id)
-            active = self.db.query(ConversationModel).filter_by(user_id=user_id, slot_active=True).order_by(desc(ConversationModel.updated_at)).all()
             self.db.commit()
+        total_count = self.count_conversations(user_id)
         return {
             "enabled": True,
-            "can_create": used < limit,
+            "can_create": limit is None or used < limit,
             "used_slots": used,
             "slot_limit": limit,
-            "remaining_slots": max(0, limit - used),
-            "locked_count": max(0, self.count_conversations(user_id) - active_count),
+            "remaining_slots": None if limit is None else max(0, limit - used),
+            "locked_count": max(0, total_count - active_count),
             "plan": entitlement["plan"],
-            "active_conversations": [{"id": conversation.id, "title": conversation.title or "Untitled conversation"} for conversation in active],
         }
 
     def assert_can_create(self, user_id: str, *, enabled: bool) -> None:
@@ -403,36 +402,6 @@ class ConversationRepository:
             self.db.commit()
             self.db.refresh(message)
             return message
-        except Exception:
-            self.db.rollback()
-            raise
-
-    def activate_conversation(self, conversation_id: str, user_id: str, replace_id: str | None) -> None:
-        try:
-            _, entitlement = self._locked_entitlement(user_id)
-            conversation = self.find_by_id(conversation_id, user_id)
-            if conversation.slot_active:
-                self.db.commit()
-                return
-            if (self.count_active_conversations(user_id)
-                    + self.count_pending_roleplay_starts(user_id)) >= entitlement["slot_limit"]:
-                if replace_id is None or replace_id == conversation_id:
-                    raise ConversationSlotsFull("교체할 활성 대화를 선택해 주세요")
-                replacing = self.find_by_id(replace_id, user_id)
-                if not replacing.slot_active:
-                    raise ConversationSlotsFull("교체할 대화가 활성 상태가 아니에요")
-                replacing.slot_active = False
-            conversation.slot_active = True
-            self.db.commit()
-        except Exception:
-            self.db.rollback()
-            raise
-
-    def deactivate_conversation(self, conversation_id: str, user_id: str) -> None:
-        try:
-            self._locked_entitlement(user_id)
-            self.find_by_id(conversation_id, user_id).slot_active = False
-            self.db.commit()
         except Exception:
             self.db.rollback()
             raise

@@ -97,13 +97,4 @@ class _FakeAccessRepository implements ConversationAccessRepository {
   @override
   Future<ConversationAccess> getAccess() async =>
       const ConversationAccess.disabled();
-
-  @override
-  Future<void> activate(
-    String conversationId, {
-    String? replaceConversationId,
-  }) async {}
-
-  @override
-  Future<void> deactivate(String conversationId) async {}
 }

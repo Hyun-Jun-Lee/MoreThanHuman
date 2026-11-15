@@ -23,7 +23,6 @@ class HistoryScreen extends ConsumerStatefulWidget {
 
 class _HistoryScreenState extends ConsumerState<HistoryScreen> {
   final Set<String> _deleting = {};
-  final Set<String> _changing = {};
 
   @override
   Widget build(BuildContext context) {
@@ -139,32 +138,12 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                       onTap: item.locked
                           ? null
                           : () => widget.onConversationSelected?.call(item.id),
-                      trailing:
-                          _deleting.contains(item.id) ||
-                              _changing.contains(item.id)
+                      trailing: _deleting.contains(item.id)
                           ? const AppLoadingIndicator(width: 44)
-                          : PopupMenuButton<String>(
-                              tooltip: copy.conversationOptionsLabel,
-                              icon: const Icon(Icons.more_horiz_rounded),
-                              onSelected: (action) => action == 'delete'
-                                  ? _deleteConversation(item)
-                                  : _changeSlot(item),
-                              itemBuilder: (_) => [
-                                PopupMenuItem(
-                                  value: item.locked
-                                      ? 'activate'
-                                      : 'deactivate',
-                                  child: Text(
-                                    item.locked
-                                        ? copy.activateConversation
-                                        : copy.deactivateConversation,
-                                  ),
-                                ),
-                                PopupMenuItem(
-                                  value: 'delete',
-                                  child: Text(copy.deleteConversationTooltip),
-                                ),
-                              ],
+                          : IconButton(
+                              tooltip: copy.deleteConversationTooltip,
+                              icon: const Icon(Icons.delete_outline_rounded),
+                              onPressed: () => _deleteConversation(item),
                             ),
                     );
                   },
@@ -175,64 +154,6 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
         ),
       ),
     );
-  }
-
-  Future<void> _changeSlot(ConversationSummary item) async {
-    if (_changing.contains(item.id)) return;
-    String? replaceId;
-    if (item.locked) {
-      final access = ref.read(conversationAccessProvider).value;
-      if (access?.isLocked == true) {
-        replaceId = await showDialog<String>(
-          context: context,
-          builder: (dialogContext) => AlertDialog(
-            title: Text(AppCopy.of(context).switchConversationTitle),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(AppCopy.of(context).switchConversationMessage),
-                for (final active in access!.activeConversations)
-                  ListTile(
-                    title: Text(active.title),
-                    onTap: () => Navigator.of(dialogContext).pop(active.id),
-                  ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                child: Text(AppCopy.of(context).cancelLabel),
-              ),
-            ],
-          ),
-        );
-        if (replaceId == null || !mounted) return;
-      }
-    }
-    setState(() => _changing.add(item.id));
-    try {
-      final repository = ref.read(conversationAccessRepositoryProvider);
-      if (item.locked) {
-        await repository.activate(item.id, replaceConversationId: replaceId);
-      } else {
-        await repository.deactivate(item.id);
-      }
-      ref.invalidate(conversationAccessProvider);
-      ref.invalidate(conversationHistoryControllerProvider);
-      ref.invalidate(recentConversationsControllerProvider);
-      ref.invalidate(conversationTurnAccessProvider(item.id));
-      if (replaceId != null) {
-        ref.invalidate(conversationTurnAccessProvider(replaceId));
-      }
-    } on Object {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppCopy.of(context).slotChangeFailed)),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _changing.remove(item.id));
-    }
   }
 
   Future<void> _showStartSheet() async {

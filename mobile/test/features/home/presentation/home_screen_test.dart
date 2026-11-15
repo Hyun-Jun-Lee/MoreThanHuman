@@ -314,7 +314,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(
         find.text(
-          'All active conversation slots are in use. Release a slot in Conversations or subscribe.',
+          'All active conversation slots are in use. Delete an active conversation or upgrade your plan.',
         ),
         findsWidgets,
       );
@@ -659,6 +659,45 @@ void main() {
     );
   });
 
+  testWidgets('suggested topic checks access only after selection', (
+    WidgetTester tester,
+  ) async {
+    final repository = _DeferredSuggestedConversationRepository();
+    var accessReads = 0;
+    await tester.pumpWidget(
+      _homeApp(
+        weeklyTopics: _publishedTopics,
+        conversationRepository: repository,
+        accessGetter: () {
+          accessReads += 1;
+          return const ConversationAccess(
+            enabled: true,
+            canCreate: false,
+            usedSlots: 1,
+            slotLimit: 1,
+            remainingSlots: 0,
+          );
+        },
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 20));
+    expect(accessReads, 0);
+
+    await tester.tap(find.byKey(const ValueKey('weekly-topic-topic-1-1')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(accessReads, 1);
+    expect(repository.startCalls, 0);
+    expect(find.text('Start a conversation?'), findsNothing);
+    expect(
+      find.text(
+        'All active conversation slots are in use. Delete an active conversation or upgrade your plan.',
+      ),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('confirmed topic shows loading until the chat is ready', (
     WidgetTester tester,
   ) async {
@@ -834,18 +873,11 @@ void main() {
     String? selectedConversationId;
     await tester.pumpWidget(
       _homeApp(
-        conversations: _recentConversations(count: 3),
-        onConversationSelected: (id) => selectedConversationId = id,
-        access: const ConversationAccess(
-          enabled: true,
-          canCreate: false,
-          usedSlots: 1,
-          slotLimit: 1,
-          remainingSlots: 0,
-          activeConversations: [
-            ActiveConversation(id: 'conversation-3', title: 'Conversation 3'),
-          ],
+        conversations: _recentConversations(
+          count: 3,
+          lockedIds: {'conversation-1', 'conversation-2'},
         ),
+        onConversationSelected: (id) => selectedConversationId = id,
       ),
     );
     await tester.pumpAndSettle();
@@ -914,27 +946,17 @@ void main() {
     );
   });
 
-  testWidgets('pulling down refreshes access before showing locked cards', (
+  testWidgets('pulling down refreshes cards without checking access', (
     WidgetTester tester,
   ) async {
     final events = <String>[];
     final homeRepository = _TrackedHomeRepository(events);
-    var activeIds = <String>{'conversation-1', 'conversation-2'};
     await tester.pumpWidget(
       _homeApp(
         homeRepository: homeRepository,
         accessGetter: () {
           events.add('access');
-          return ConversationAccess(
-            enabled: true,
-            canCreate: false,
-            usedSlots: activeIds.length,
-            slotLimit: activeIds.length,
-            remainingSlots: 0,
-            activeConversations: [
-              for (final id in activeIds) ActiveConversation(id: id, title: id),
-            ],
-          );
+          return const ConversationAccess.disabled();
         },
       ),
     );
@@ -944,12 +966,12 @@ void main() {
       findsNothing,
     );
 
-    activeIds = {'conversation-1'};
+    homeRepository.lockedIds = {'conversation-2'};
     events.clear();
     await tester.drag(find.byType(CustomScrollView), const Offset(0, 350));
     await tester.pumpAndSettle();
 
-    expect(events, ['access', 'list']);
+    expect(events, ['list']);
     expect(
       find.descendant(
         of: find.byKey(const ValueKey('conversation-1')),
@@ -967,18 +989,17 @@ void main() {
     expect(find.text('Read-only'), findsNothing);
   });
 
-  testWidgets('waits for both initial access and conversation responses', (
+  testWidgets('shows conversations after list response without access lookup', (
     WidgetTester tester,
   ) async {
     final homeRepository = _DelayedHomeRepository();
-    final accessResponse = Completer<ConversationAccess>();
     var accessReads = 0;
     await tester.pumpWidget(
       _homeApp(
         homeRepository: homeRepository,
         accessGetter: () {
           accessReads += 1;
-          return accessResponse.future;
+          return const ConversationAccess.disabled();
         },
       ),
     );
@@ -986,36 +1007,22 @@ void main() {
     await tester.pump();
 
     expect(homeRepository.reads, 1);
-    expect(accessReads, 1);
+    expect(accessReads, 0);
     homeRepository.complete(_recentConversations(count: 2));
-    await tester.pump();
-    expect(find.byKey(const ValueKey('conversation-1')), findsNothing);
-    expect(find.text('Loading recent conversations...'), findsOneWidget);
-
-    accessResponse.complete(
-      const ConversationAccess(
-        enabled: true,
-        canCreate: false,
-        usedSlots: 1,
-        slotLimit: 1,
-        remainingSlots: 0,
-        activeConversations: [
-          ActiveConversation(id: 'conversation-1', title: 'Conversation 1'),
-        ],
-      ),
-    );
     await tester.pumpAndSettle();
+    expect(accessReads, 0);
     expect(find.byKey(const ValueKey('conversation-1')), findsOneWidget);
     expect(
-      find.descendant(
-        of: find.byKey(const ValueKey('conversation-2')),
-        matching: find.byKey(const ValueKey('locked-conversation-overlay')),
-      ),
-      findsOneWidget,
+      tester
+          .widget<FilledButton>(
+            find.widgetWithText(FilledButton, 'Start a conversation'),
+          )
+          .onPressed,
+      isNotNull,
     );
   });
 
-  testWidgets('shows retry when conversation access fails', (
+  testWidgets('shows access error on button tap and allows retry', (
     WidgetTester tester,
   ) async {
     var accessReads = 0;
@@ -1031,7 +1038,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('conversation-1')), findsNothing);
+    expect(accessReads, 0);
+    expect(find.byKey(const ValueKey('conversation-1')), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, 'Start a conversation'));
+    await tester.pumpAndSettle();
+    expect(accessReads, 1);
     expect(
       find.text('Could not check your conversation access.'),
       findsOneWidget,
@@ -1042,72 +1053,50 @@ void main() {
             find.widgetWithText(FilledButton, 'Start a conversation'),
           )
           .onPressed,
-      isNull,
+      isNotNull,
     );
-    await tester.tap(find.widgetWithText(OutlinedButton, 'Retry'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Start a conversation'));
     await tester.pumpAndSettle();
     expect(accessReads, 2);
     expect(find.byKey(const ValueKey('conversation-1')), findsOneWidget);
+    expect(find.text('FreeChat'), findsOneWidget);
   });
 
-  testWidgets('hides cached cards while access is refreshing', (
+  testWidgets('keeps cards visible while button checks access', (
     WidgetTester tester,
   ) async {
-    final refreshedAccess = Completer<ConversationAccess>();
+    final accessResponse = Completer<ConversationAccess>();
     var accessReads = 0;
     await tester.pumpWidget(
       _homeApp(
         conversations: _recentConversations(count: 2),
         accessGetter: () {
           accessReads += 1;
-          if (accessReads > 1) return refreshedAccess.future;
-          return const ConversationAccess(
-            enabled: true,
-            canCreate: false,
-            usedSlots: 2,
-            slotLimit: 2,
-            remainingSlots: 0,
-            activeConversations: [
-              ActiveConversation(id: 'conversation-1', title: 'Conversation 1'),
-              ActiveConversation(id: 'conversation-2', title: 'Conversation 2'),
-            ],
-          );
+          return accessResponse.future;
         },
       ),
     );
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('conversation-2')), findsOneWidget);
+    expect(accessReads, 0);
 
-    final container = ProviderScope.containerOf(
-      tester.element(find.byType(HomeScreen)),
-      listen: false,
-    );
-    container.invalidate(conversationAccessProvider);
+    await tester.tap(find.widgetWithText(FilledButton, 'Start a conversation'));
     await tester.pump();
-    await tester.pump();
-    expect(find.byKey(const ValueKey('conversation-1')), findsNothing);
-    expect(find.byKey(const ValueKey('conversation-2')), findsNothing);
-
-    refreshedAccess.complete(
-      const ConversationAccess(
-        enabled: true,
-        canCreate: false,
-        usedSlots: 1,
-        slotLimit: 1,
-        remainingSlots: 0,
-        activeConversations: [
-          ActiveConversation(id: 'conversation-1', title: 'Conversation 1'),
-        ],
-      ),
-    );
-    await tester.pumpAndSettle();
+    expect(accessReads, 1);
+    expect(find.byKey(const ValueKey('conversation-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('conversation-2')), findsOneWidget);
     expect(
-      find.descendant(
-        of: find.byKey(const ValueKey('conversation-2')),
-        matching: find.byKey(const ValueKey('locked-conversation-overlay')),
-      ),
-      findsOneWidget,
+      tester
+          .widget<FilledButton>(
+            find.widgetWithText(FilledButton, 'Start a conversation'),
+          )
+          .onPressed,
+      isNull,
     );
+
+    accessResponse.complete(const ConversationAccess.disabled());
+    await tester.pumpAndSettle();
+    expect(find.text('FreeChat'), findsOneWidget);
   });
 
   testWidgets('pull refresh applies newly granted snack replay permission', (
@@ -1413,15 +1402,6 @@ class _FakeConversationAccessRepository
   @override
   Future<ConversationTurnAccess> getTurnAccess(String conversationId) async =>
       const ConversationTurnAccess.disabled();
-
-  @override
-  Future<void> activate(
-    String conversationId, {
-    String? replaceConversationId,
-  }) async {}
-
-  @override
-  Future<void> deactivate(String conversationId) async {}
 }
 
 class _FakeGoogleIdentityService implements GoogleIdentityService {
@@ -1615,13 +1595,14 @@ class _TrackedHomeRepository implements HomeRepository {
   _TrackedHomeRepository(this.events);
 
   final List<String> events;
+  Set<String> lockedIds = {};
 
   @override
   Future<List<ConversationSummary>> listRecentConversations({
     int limit = 5,
   }) async {
     events.add('list');
-    return _recentConversations(count: 2);
+    return _recentConversations(count: 2, lockedIds: lockedIds);
   }
 }
 
@@ -1806,7 +1787,10 @@ class _DeferredSuggestedConversationRepository
   }
 }
 
-List<ConversationSummary> _recentConversations({required int count}) {
+List<ConversationSummary> _recentConversations({
+  required int count,
+  Set<String> lockedIds = const {},
+}) {
   return List<ConversationSummary>.generate(count, (int index) {
     final int number = index + 1;
     return ConversationSummary(
@@ -1815,6 +1799,7 @@ List<ConversationSummary> _recentConversations({required int count}) {
       kind: ConversationKind.freeChat,
       messageCount: number,
       isActive: true,
+      locked: lockedIds.contains('conversation-$number'),
       updatedAt: DateTime.utc(2026, 8, number),
     );
   });

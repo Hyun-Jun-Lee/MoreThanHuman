@@ -79,7 +79,8 @@ void main() {
     expect(find.text('Locked conversation'), findsOneWidget);
     await tester.tap(find.text('Osaka food trip'));
     expect(selectedConversationId, isNull);
-    expect(find.byTooltip('Conversation options'), findsOneWidget);
+    expect(find.byTooltip('Delete conversation'), findsOneWidget);
+    expect(find.byTooltip('Conversation options'), findsNothing);
   });
 
   testWidgets('shows retry state and reloads failed history', (
@@ -143,7 +144,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(
       find.text(
-        'All active conversation slots are in use. Release a slot in Conversations or subscribe.',
+        'All active conversation slots are in use. Delete an active conversation or upgrade your plan.',
       ),
       findsWidgets,
     );
@@ -262,15 +263,6 @@ class _FakeConversationAccessRepository
   @override
   Future<ConversationTurnAccess> getTurnAccess(String conversationId) async =>
       const ConversationTurnAccess.disabled();
-
-  @override
-  Future<void> activate(
-    String conversationId, {
-    String? replaceConversationId,
-  }) async {}
-
-  @override
-  Future<void> deactivate(String conversationId) async {}
 }
 
 class _FakeGoogleIdentityService implements GoogleIdentityService {
