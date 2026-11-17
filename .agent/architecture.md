@@ -180,6 +180,9 @@ domains/{name}/
 
 인증이 필요한 API는 `Authorization: Bearer <supabase_access_token>` 헤더를 사용해요. 모바일은 Google native sign-in과 iOS Apple native sign-in을 제공해요.
 `auto` 모드는 워커마다 JWKS를 5분 캐시하고 키 ID가 없으면 갱신을 시도해요. 서명·발급자·대상·역할·만료 검증이 실패하면 요청을 거절해요. 로컬 검증은 토큰 유효 기간 중 Supabase 사용자 상태 변경을 즉시 확인하지 못하므로 즉시 폐기 확인이 필요한 운영에서는 `remote` 모드를 사용해요.
+일반 Bearer 인증과 SSE 쿼리 토큰 인증은 토큰 검증 후 계정 삭제 상태를 확인해요. 이 동기 DB 조회는 스레드 풀에서 실행해 비동기 인증 경로의 이벤트 루프를 막지 않아요.
+
+관리자 웹은 기존 API 호스트의 `/admin`에서 FastAPI 템플릿과 정적 JS로 제공해요. `ADMIN_ACCESS_CODE` 환경변수의 공유 입장 코드를 확인해 서버 세션을 만들고 관리자 API를 열어요. 관리자 데이터 API는 매 요청 코드 기반 HMAC으로 세션을 조회하며 쓰기 요청은 CSRF 토큰을 검사해요. 세션은 DB에 무작위 토큰의 HMAC과 만료 시각을 저장하고 브라우저에는 HttpOnly 쿠키만 보내요. 코드 변경 후 API를 재시작하면 기존 세션은 조회되지 않아요. 공유 코드를 쓰므로 변경 이력을 개인별 관리자로 구별하지 않아요. 공개 `website/` 정적 사이트와 분리해요.
 언어 선호는 profile 기본값(`native_language`, `target_language`, `feedback_language`)으로 저장하고, 기존 값이 없으면 `ko -> en`과 feedback `ko`로 보정해요.
 일반 인증 요청은 기존 profile의 필드와 `updated_at`을 변경하지 않아요. 초기화 요청에 pending 언어가 있거나 언어 선호·앱 표시 언어 변경 API를 호출할 때만 해당 설정을 저장해요. `is_active`는 인증 차단 정책에서 제외하고 기존 저장·응답 필드로 유지해요. Supabase의 이름·사진 등 metadata 변경은 현재 자동 동기화하지 않아요.
 

@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>{% block title %}tomatalk 관리자{% endblock %}</title>
+  <link rel="stylesheet" href="/admin/assets/admin.css">
+</head>
+<body data-page="{% block page %}{% endblock %}">
+  <header class="topbar">
+    <a class="brand" href="/admin" aria-label="tomatalk 관리자 홈"><span class="brand-mark">●</span> tomatalk <span class="brand-admin">ADMIN</span></a>
+    {% block header_actions %}{% endblock %}
+  </header>
+  <p id="global-error" class="global-error error" role="alert" hidden></p>
+  <main>{% block content %}{% endblock %}</main>
+  <script src="/admin/assets/admin.js" defer></script>
+</body>
+</html>

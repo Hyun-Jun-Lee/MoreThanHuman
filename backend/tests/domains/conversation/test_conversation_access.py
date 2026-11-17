@@ -294,7 +294,7 @@ def test_create_precheck_only_queries_slot_capacity_and_releases_lock():
     finally:
         event.remove(engine, "before_cursor_execute", capture)
 
-    assert len(statements) == 4  # 프로필 잠금·구독·활성 대화 수·진행 중 시작 수
+    assert len(statements) == 5  # 프로필 잠금·Apple·수동 부여·활성 대화 수·진행 중 시작 수
     assert sum("count" in statement.lower() for statement in statements) == 2
     assert not repository.db.in_transaction()
 

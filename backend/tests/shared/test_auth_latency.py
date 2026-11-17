@@ -1,13 +1,17 @@
+import asyncio
 import json
+import threading
 from types import SimpleNamespace
 
 import httpx
 import pytest
 from fastapi import Depends, FastAPI, HTTPException
+from fastapi.security import HTTPAuthorizationCredentials
 from database import get_db
 
 from domains.auth.dependencies import (
     get_auth_service, get_current_user, get_current_user_from_token_param,
+    get_verified_claims,
     get_supabase_auth_verifier,
 )
 from domains.billing.apple import AppleVerificationError
@@ -108,3 +112,47 @@ async def test_all_protected_auth_paths_share_request_context_without_tokens(cap
                    row["request_id"] == forbidden["request_id"] for row in rows)
     assert all(secret not in json.dumps(rows) for secret in
                ("private-token", "operations-secret", "signed-secret"))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("token_source", ["bearer", "query"])
+async def test_deletion_check_runs_outside_event_loop(token_source):
+    started = threading.Event()
+    release = threading.Event()
+    query_thread = None
+
+    class BlockingQuery:
+        def filter_by(self, **_kwargs):
+            return self
+
+        def first(self):
+            nonlocal query_thread
+            query_thread = threading.get_ident()
+            started.set()
+            assert release.wait(timeout=2)
+            return None
+
+    class BlockingDb:
+        def query(self, _model):
+            return BlockingQuery()
+
+    async def release_from_event_loop():
+        assert await asyncio.to_thread(started.wait, 2)
+        release.set()
+
+    event_loop_thread = threading.get_ident()
+    release_task = asyncio.create_task(release_from_event_loop())
+    try:
+        if token_source == "bearer":
+            claims = await get_verified_claims(
+                HTTPAuthorizationCredentials(scheme="Bearer", credentials="private-token"),
+                Verifier(), BlockingDb(),
+            )
+            assert claims.sub == "user"
+        else:
+            user = await get_current_user_from_token_param("private-token", Verifier(), BlockingDb())
+            assert user.id == "user"
+        await release_task
+    finally:
+        release.set()
+    assert query_thread != event_loop_thread

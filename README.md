@@ -88,6 +88,8 @@ docker compose up -d --build --force-recreate --no-deps api
 | `uv run alembic heads` | 코드의 최신 revision 확인 |
 | `uv run alembic upgrade head` | 미적용 마이그레이션 반영 |
 
+관리자 웹 `/admin`은 공유 입장 코드만으로 열어요. 처음 사용하기 전 [관리자 운영 절차](docs/OPERATIONS.md#관리자-계정과-수동-구독-권한)에 따라 `alembic upgrade head`를 실행하고 서버의 `ADMIN_ACCESS_CODE` 환경변수를 설정해요.
+
 구독·대화 권한을 활성화하려면 [운영 가이드의 기존 대화 슬롯 초기화](docs/OPERATIONS.md#대화-이용-권한-활성화)와 Apple Sandbox 검증을 먼저 마쳐요. 운영 환경의 `CONVERSATION_ACCESS_ENABLED`는 검증 전 `false`로 유지해요.
 
 계정 삭제 중 외부 장애로 남은 작업은 `backend/`에서 `uv run python -m scripts.retry_account_deletions`로 재시도해요. 서버 키와 정기 실행 절차는 [계정 삭제 운영 가이드](docs/OPERATIONS.md#계정-삭제-처리)를 참고해요.

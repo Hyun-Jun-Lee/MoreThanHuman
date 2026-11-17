@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block page %}login{% endblock %}
+{% block title %}로그인 · tomatalk 관리자{% endblock %}
+{% block content %}
+<section class="entry-card" aria-labelledby="entry-title">
+  <div class="eyebrow">ADMIN ACCESS</div>
+  <h1 id="entry-title">관리자 입장 코드</h1>
+  <p>공유 입장 코드를 입력해 관리자 페이지를 열어요.</p>
+  <form id="code-form" class="entry-form">
+    <label for="access-code">입장 코드</label>
+    <input id="access-code" name="code" type="password" autocomplete="off" required autofocus>
+    <button class="button button-primary" type="submit">관리자 페이지 열기</button>
+  </form>
+  <p id="entry-error" class="error" role="alert" hidden></p>
+</section>
+{% endblock %}

@@ -87,7 +87,7 @@ def reset_snack_basket(
     )
     return SuccessResponse(
         data=BasketResetState.model_validate(marker).model_copy(
-            update={"unlimited_replay_enabled": profile.snack_unlimited_replay_enabled}
+            update={"unlimited_replay_enabled": profile.is_admin or profile.snack_unlimited_replay_enabled}
         )
     )
 
@@ -108,7 +108,7 @@ def read_snack_basket_reset(
             content_language=user.target_language,
             reset_id=marker.reset_id if marker else None,
             reset_at=marker.reset_at if marker else None,
-            unlimited_replay_enabled=user.snack_unlimited_replay_enabled,
+            unlimited_replay_enabled=user.is_admin or user.snack_unlimited_replay_enabled,
         )
     )
 

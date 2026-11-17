@@ -97,6 +97,9 @@ def test_reset_response_reads_account_replay_permission_without_marker(
     users[0].snack_unlimited_replay_enabled = False
     repository.db.commit()
     assert http.get(PATH).json()["data"]["unlimited_replay_enabled"] is False
+    users[0].is_admin = True
+    repository.db.commit()
+    assert http.get(PATH).json()["data"]["unlimited_replay_enabled"] is True
 
 
 def test_reset_requires_operations_key_and_valid_existing_user(reset_client):

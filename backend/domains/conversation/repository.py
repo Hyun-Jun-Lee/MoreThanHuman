@@ -101,7 +101,7 @@ class ConversationRepository:
                 raise NotFoundException("추천 주제를 찾을 수 없어요")
             if enabled:
                 entitlement = self._reconcile_slots_locked(profile)
-            if enabled and (
+            if enabled and entitlement["slot_limit"] is not None and (
                 self.count_active_conversations(conversation.user_id)
                 + self.count_pending_roleplay_starts(conversation.user_id)
             ) >= entitlement["slot_limit"]:
@@ -152,9 +152,10 @@ class ConversationRepository:
 
     def _reconcile_slots_locked(self, profile: ProfileModel) -> dict:
         """프로필 행 잠금 아래에서 플랜 변경을 활성 슬롯에 반영해요."""
-        entitlement = entitlement_for_user(self.db, profile.id)
+        entitlement = entitlement_for_user(self.db, profile.id, profile=profile)
         limit = entitlement["slot_limit"]
-        if profile.slot_limit_snapshot == limit:
+        snapshot = -1 if limit is None else limit
+        if profile.slot_limit_snapshot == snapshot:
             return entitlement
         last_user_turn = (
             select(func.max(MessageModel.created_at))
@@ -169,7 +170,9 @@ class ConversationRepository:
             .all()
         )
         active = [conversation for conversation in conversations if conversation.slot_active]
-        if profile.slot_limit_snapshot is None:
+        if limit is None:
+            selected = {conversation.id for conversation in conversations}
+        elif profile.slot_limit_snapshot is None:
             selected = {conversation.id for conversation in conversations[:limit]}
         elif len(active) > limit:
             selected = {conversation.id for conversation in active[:limit]}
@@ -180,7 +183,7 @@ class ConversationRepository:
             selected = {conversation.id for conversation in active}
         for conversation in conversations:
             conversation.slot_active = conversation.id in selected
-        profile.slot_limit_snapshot = limit
+        profile.slot_limit_snapshot = snapshot
         self.db.flush()
         return entitlement
 
@@ -249,7 +252,8 @@ class ConversationRepository:
             _, entitlement = self._locked_entitlement(user_id)
             with latency_span("entitlement_held_after_reconcile"):
                 used = self.count_active_conversations(user_id) + self.count_pending_roleplay_starts(user_id)
-                can_create = used < entitlement["slot_limit"]
+                limit = entitlement["slot_limit"]
+                can_create = limit is None or used < limit
                 # 한도 변경에 따른 슬롯 재조정은 생성 불가일 때도 저장해요.
                 self.db.commit()
         except Exception:
@@ -265,7 +269,7 @@ class ConversationRepository:
         try:
             _, entitlement = self._locked_entitlement(conversation.user_id)
             used = self.count_active_conversations(conversation.user_id) + self.count_pending_roleplay_starts(conversation.user_id)
-            if used >= entitlement["slot_limit"]:
+            if entitlement["slot_limit"] is not None and used >= entitlement["slot_limit"]:
                 raise ConversationSlotsFull("추가 대화 이용권이 필요해요")
             conversation.slot_active = True
             self.db.add(conversation)
@@ -286,7 +290,7 @@ class ConversationRepository:
                 _, entitlement = self._locked_entitlement(conversation.user_id)
                 used = (self.count_active_conversations(conversation.user_id)
                         + self.count_pending_roleplay_starts(conversation.user_id))
-                if used >= entitlement["slot_limit"]:
+                if entitlement["slot_limit"] is not None and used >= entitlement["slot_limit"]:
                     raise ConversationSlotsFull("추가 대화 이용권이 필요해요")
             turn = self.db.query(StreamTurnModel).filter_by(
                 id=turn_id, user_id=conversation.user_id, status="pending",

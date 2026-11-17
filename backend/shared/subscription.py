@@ -1,10 +1,11 @@
 """Apple 구독의 저장 상태와 서버 대화 권한."""
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, ForeignKey, Index, String
+from sqlalchemy import CheckConstraint, Column, DateTime, ForeignKey, Index, String
 from sqlalchemy.orm import Session
 
 from database import Base
+from domains.auth.models import ProfileModel
 
 
 class AppleSubscriptionModel(Base):
@@ -30,10 +31,26 @@ class AppleNotificationModel(Base):
     received_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
 
-def entitlement_for_user(db: Session, user_id: str, *, now: datetime | None = None) -> dict:
-    """검증된 유효 시각만으로 현재 플랜을 판정해요."""
-    now = now or datetime.utcnow()
+class ManualEntitlementGrantModel(Base):
+    __tablename__ = "manual_entitlement_grants"
+
+    id = Column(String(36), primary_key=True)
+    user_id = Column(String(36), ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False, index=True)
+    plan = Column(String(16), nullable=False)
+    revoke_at = Column(DateTime, nullable=True)
+    revoked_at = Column(DateTime, nullable=True)
+    granted_by = Column(String(36), ForeignKey("profiles.id", ondelete="SET NULL"), nullable=True)
+    revoked_by = Column(String(36), ForeignKey("profiles.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    __table_args__ = (CheckConstraint("plan IN ('advance', 'plus')", name="ck_manual_entitlement_plan"),)
+
+
+def apple_entitlement_for_user(db: Session, user_id: str, *, now: datetime) -> dict:
     records = db.query(AppleSubscriptionModel).filter_by(user_id=user_id).all()
+    return apple_entitlement_from_records(records, now=now)
+
+
+def apple_entitlement_from_records(records: list[AppleSubscriptionModel], *, now: datetime) -> dict:
     eligible = []
     for record in records:
         if record.status == "active" and record.expires_at and record.expires_at > now:
@@ -50,3 +67,41 @@ def entitlement_for_user(db: Session, user_id: str, *, now: datetime | None = No
         "slot_limit": 10 if record.product_id == "Plus" else 5,
         "turn_limit": None,
     }
+
+
+def active_manual_grant(db: Session, user_id: str, *, now: datetime) -> ManualEntitlementGrantModel | None:
+    return (db.query(ManualEntitlementGrantModel)
+            .filter(ManualEntitlementGrantModel.user_id == user_id,
+                    ManualEntitlementGrantModel.revoked_at.is_(None),
+                    (ManualEntitlementGrantModel.revoke_at.is_(None) | (ManualEntitlementGrantModel.revoke_at > now)))
+            .order_by(ManualEntitlementGrantModel.created_at.desc(), ManualEntitlementGrantModel.id.desc())
+            .first())
+
+
+def entitlement_for_user(
+    db: Session, user_id: str, *, now: datetime | None = None, profile: ProfileModel | None = None
+) -> dict:
+    now = now or datetime.utcnow()
+    profile = profile or db.get(ProfileModel, user_id)
+    if profile is not None and profile.is_admin:
+        return effective_entitlement(profile, None, None)
+    apple = apple_entitlement_for_user(db, user_id, now=now)
+    grant = active_manual_grant(db, user_id, now=now)
+    return effective_entitlement(profile, apple, grant)
+
+
+def effective_entitlement(
+    profile: ProfileModel | None, apple: dict | None, grant: ManualEntitlementGrantModel | None
+) -> dict:
+    if profile is not None and profile.is_admin:
+        return {"plan": "plus", "status": "admin", "expires_at": None,
+                "slot_limit": None, "turn_limit": None, "source": "admin",
+                "is_admin": True, "unlimited": True}
+    assert apple is not None
+    rank = {"free": 0, "advance": 1, "plus": 2}
+    if grant is not None and rank[grant.plan] > rank[apple["plan"]]:
+        return {"plan": grant.plan, "status": "manual", "expires_at": grant.revoke_at,
+                "slot_limit": 10 if grant.plan == "plus" else 5, "turn_limit": None,
+                "source": "manual", "is_admin": False, "unlimited": False}
+    return {**apple, "source": "apple" if apple["plan"] != "free" else "free",
+            "is_admin": False, "unlimited": False}

@@ -104,6 +104,36 @@ Flutter App
 → FastAPI API 호출 시 Authorization 헤더 사용
 ```
 
+## 관리자 계정과 수동 구독 권한
+
+`20261115_0001` 마이그레이션은 기본 false인 `profiles.is_admin`과 수동 구독 부여 이력 테이블을 추가해요. 첫 관리자는 운영자가 대상 사용자 UUID를 확인한 뒤 DB에서 직접 `is_admin=true`로 설정해요. 앱이나 API에는 관리자 임명 경로가 없어요. 운영 DB에서 변경 전후의 대상 계정을 확인하고, 필요하면 같은 컬럼을 false로 되돌려요.
+
+이 마이그레이션을 downgrade하면 관리자 플래그와 수동 부여 이력 전체가 삭제돼요. 이전 코드로 되돌리기 전에 해당 값을 별도로 백업하고, 복구 시 다시 반영해요.
+
+관리자는 관리자 웹 또는 코드 확인을 마친 API 세션에서 `/api/admin/users/`를 검색해 대상 UUID를 확인하고, `/api/admin/users/{user_id}/manual-entitlement/`의 `PUT`으로 Advance·Plus와 선택적 `revoke_at`을 부여해요. 시각은 시간대를 포함한 ISO 8601 형식이에요. `DELETE`는 즉시 철회하며 이력은 `/history/`에서 확인해요. 예약 철회는 별도 cron 없이 다음 권한 검사에서 반영해요. Apple 구매 기록은 그대로 유지돼요. 전체 계약은 [관리자 권한](../.agent/_contracts/ADMIN_ENTITLEMENTS.md)과 [API 명세](DSL.md#관리자와-수동-구독-권한)를 참고해요.
+
+관리자 웹 활성화 전 서버의 비밀 환경변수 `ADMIN_ACCESS_CODE`에 공통 입장 코드를 설정하고 API를 재시작해요. `backend/`에서 `alembic upgrade head`를 실행해요. 코드는 DB에 저장하지 않으며 Git 파일에도 넣지 않아요. 코드를 교체하고 API를 재시작하면 기존 관리자 세션은 무효화돼요. `ADMIN_PUBLIC_ORIGIN=https://api.curitalk.app`은 쓰기 요청의 Origin 검사 기준이에요. `/admin`에서 공유 코드만 입력해요. API를 직접 사용할 때도 `POST /api/admin/access/verify/`에서 코드를 확인하고, 세션 쿠키와 `GET /api/admin/access/status/`의 CSRF 토큰을 PUT·DELETE 요청에 함께 전달해요. 개인별 계정 인증이 없으므로 누가 수동 권한을 변경했는지 이력으로 구별할 수 없어요.
+
+`20261115_0002`는 관리자 코드·기존 접근 세션·입력 실패 기록·OAuth 임시 상태 테이블을 추가해요. `20261115_0003`은 접근 세션을 코드 전용으로 전환하고 로그인 시도 기록을 요청 IP별로 바꾸며 OAuth 임시 표를 제거해요. `20261115_0004`는 DB 코드 표를 삭제하고 세션 구조를 환경변수 방식으로 전환해요. 기존 세션은 종료돼요. 이전 환경에서 DB 코드를 이미 사용 중이라면 마이그레이션 전에 해당 코드를 운영 비밀 환경변수로 옮겨요. 로컬에서는 `ADMIN_PUBLIC_ORIGIN=http://localhost:8010`으로 설정해요. `0004`를 downgrade해도 이전 DB 코드 값은 복구되지 않아요.
+
+PostgreSQL에서는 관리자 마이그레이션이 `profiles`와 관리자 관련 표의 RLS를 활성화하고 `anon`·`authenticated`의 직접 표 권한을 회수해요. 관리자 세션·시도 표에서는 `service_role` 직접 표 권한도 회수해요. 운영 전 FastAPI의 `DATABASE_URL` 역할이 표 소유자 또는 RLS 우회 권한을 가진 역할이고, 정상적으로 읽고 쓸 수 있는지 확인해요. 기존 클라이언트가 Supabase Data API에서 `profiles`를 직접 조회·수정한다면 FastAPI 경로로 옮겨야 해요.
+
+배포 DB에서 아래 조회의 `rls_enabled`가 모두 true이고 `anon_data_api`, `authenticated_data_api`가 모두 false인지 확인해요. 관리자 접근 표 두 개는 `service_role_data_api`도 false여야 해요. 같은 연결에서 관리자 API가 실제로 표를 읽고 쓰는지도 확인해요.
+
+```sql
+SELECT c.relname, c.relrowsecurity AS rls_enabled,
+       has_table_privilege('anon', c.oid, 'SELECT,INSERT,UPDATE,DELETE') AS anon_data_api,
+       has_table_privilege('authenticated', c.oid, 'SELECT,INSERT,UPDATE,DELETE') AS authenticated_data_api,
+       has_table_privilege('service_role', c.oid, 'SELECT,INSERT,UPDATE,DELETE') AS service_role_data_api
+FROM pg_class AS c
+JOIN pg_namespace AS n ON n.oid = c.relnamespace
+WHERE n.nspname = 'public' AND c.relname IN (
+  'profiles', 'manual_entitlement_grants',
+  'admin_access_sessions', 'admin_access_attempts'
+)
+ORDER BY c.relname;
+```
+
 ## 대화 이용 권한 활성화
 
 `20261004_0002` migration은 Apple 구독·알림 표와 활성 대화 슬롯을 추가해요. `CONVERSATION_ACCESS_ENABLED=false`에서는 기존 대화 제한을 적용하지 않아요. 운영 활성화 전에는 Apple Sandbox의 구매·복원·갱신·만료·환불, PostgreSQL 동시 요청, 앱의 읽기 전용 대화 흐름을 확인해요.
@@ -210,6 +240,8 @@ uv run python -m scripts.archive_weekly_topic TOPIC_UUID
 
 ## 변경 기록
 
+- 2026-11-15: 관리자 웹을 공유 코드 단독 로그인으로 바꾸고 세션·마이그레이션 절차를 갱신했어요.
+- 2026-11-15: 관리자 계정 지정과 수동 구독 권한의 부여·예약 철회·즉시 철회 절차를 추가했어요.
 - 2026-11-13: 홈 당겨서 새로고침도 계정별 무제한 스낵 반복 권한을 재조회하도록 안내를 갱신했어요.
 - 2026-11-13: 계정별 무제한 스낵 반복 권한의 마이그레이션·부여·회수 절차를 추가했어요.
 - 2026-10-31: TestFlight IPA 내보내기의 타깃별 프로파일·인증서 지문 지정과 시스템 `rsync` 우선 사용 절차를 추가했어요.

@@ -48,11 +48,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         : entitlementState.asData?.value;
     final planLabel = entitlement == null
         ? '—'
+        : entitlement.isAdmin
+        ? 'Admin'
         : copy.planDisplayName(entitlement.plan);
     final planTitle = entitlement == null
         ? entitlementState.isLoading
               ? copy.profilePlanLoading
               : copy.profilePlanLoadFailed
+        : entitlement.isAdmin
+        ? copy.adminUnlimitedAccess
         : copy.profilePlanTitle(entitlement.plan);
     final ColorScheme colors = Theme.of(context).colorScheme;
     final bool actionsDisabled =
@@ -202,6 +206,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                               ? copy.profilePlanLoadingHint
                                               : entitlementState.hasError
                                               ? copy.profilePlanRefreshHint
+                                              : entitlement?.isAdmin == true
+                                              ? copy.adminUnlimitedDescription
+                                              : entitlement?.source == 'manual'
+                                              ? copy.manuallyGrantedPlan
                                               : copy.profileCurrentPlanDescription,
                                           style: AppTypography.caption.copyWith(
                                             color: colors.onSurfaceVariant,

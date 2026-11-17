@@ -13,6 +13,68 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 
 void main() {
+  test('decodes the source and unlimited access flags', () {
+    final entitlement = BillingEntitlement.fromJson({
+      'plan': 'plus',
+      'status': 'admin',
+      'source': 'admin',
+      'is_admin': true,
+      'unlimited': true,
+    });
+    expect(entitlement.isAdmin, isTrue);
+    expect(entitlement.isUnlimited, isTrue);
+    expect(entitlement.source, 'admin');
+  });
+
+  testWidgets('shows admin access without offering another purchase', (
+    WidgetTester tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          billingControllerProvider.overrideWith(_TestBillingController.new),
+          billingEntitlementProvider.overrideWith(
+            (Ref ref) async => const BillingEntitlement(
+              plan: 'plus',
+              status: 'admin',
+              source: 'admin',
+              isAdmin: true,
+              isUnlimited: true,
+            ),
+          ),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.light,
+          locale: const Locale('ko'),
+          supportedLocales: const <Locale>[Locale('ko'), Locale('en')],
+          localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
+            GlobalMaterialLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+          ],
+          home: const PaywallScreen(),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(find.text('관리자 무제한 이용'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey<String>('paywall-subscribe')),
+      300,
+    );
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.byKey(const ValueKey<String>('paywall-subscribe')),
+          )
+          .onPressed,
+      isNull,
+    );
+    debugDefaultTargetPlatformOverride = null;
+  });
+
   testWidgets('selects one paid plan and purchases it from one bottom CTA', (
     WidgetTester tester,
   ) async {

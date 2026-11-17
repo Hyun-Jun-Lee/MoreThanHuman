@@ -48,6 +48,8 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
     }
     final state = ref.watch(billingControllerProvider);
     final entitlement = ref.watch(billingEntitlementProvider);
+    final currentEntitlement = entitlement.asData?.value;
+    final isAdmin = currentEntitlement?.isAdmin == true;
     final restoreStatus =
         state.message == null ||
             state.message == 'restore_requested' ||
@@ -73,14 +75,25 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
               ListView(
                 padding: const EdgeInsets.all(AppSpacing.screenPadding),
                 children: [
+                  if (isAdmin)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                      child: Text(copy.adminUnlimitedAccess),
+                    )
+                  else if (currentEntitlement?.source == 'manual')
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                      child: Text(copy.manuallyGrantedPlan),
+                    ),
                   if (state.isLoading && state.products.isEmpty)
                     const Center(child: AppLoadingIndicator(width: 180)),
                   for (final id in const ['Free', 'Advance', 'Plus'])
                     _PlanCard(
                       id: id,
                       isCurrentPlan:
+                          !isAdmin &&
                           id.toLowerCase() ==
-                          entitlement.asData?.value.plan.toLowerCase(),
+                              currentEntitlement?.plan.toLowerCase(),
                       isSelected: id == _selectedPlanId,
                       product: state.products
                           .where((item) => item.id == id)
@@ -108,7 +121,8 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                   const SizedBox(height: AppSpacing.sm),
                   FilledButton(
                     key: const ValueKey<String>('paywall-subscribe'),
-                    onPressed: state.isProcessing || selectedProduct == null
+                    onPressed:
+                        isAdmin || state.isProcessing || selectedProduct == null
                         ? null
                         : () {
                             setState(() {

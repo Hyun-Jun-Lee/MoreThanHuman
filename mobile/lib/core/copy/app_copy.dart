@@ -163,6 +163,13 @@ class AppCopy {
   String get subscriptionTitle => isKorean ? '구독' : 'Subscription';
   String get subscriptionDialogActionLabel => isKorean ? '구독' : 'SUBSCRIPT';
   String get currentPlanIndicator => isKorean ? '현재 플랜' : 'Current plan';
+  String get adminUnlimitedAccess =>
+      isKorean ? '관리자 무제한 이용' : 'Unlimited admin access';
+  String get adminUnlimitedDescription => isKorean
+      ? '구독 없이 모든 기능을 이용할 수 있어요.'
+      : 'All features are available without a subscription.';
+  String get manuallyGrantedPlan =>
+      isKorean ? '관리자가 부여한 이용 권한이에요.' : 'This access was granted by an admin.';
   String get purchaseIosOnly => isKorean
       ? '현재 iOS에서만 구독할 수 있어요.'
       : 'Subscriptions are currently available on iOS.';

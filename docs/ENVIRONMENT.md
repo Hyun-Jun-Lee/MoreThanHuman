@@ -32,6 +32,8 @@
 | `SUPABASE_PUBLISHABLE_KEY` | 예 | 없음 | 원격 Supabase Auth `/user` 검증에 사용하는 publishable key |
 | `SUPABASE_AUTH_VERIFY_MODE` | 아니오 | `auto` | ES256 token을 JWKS 공개 키로 검증하고 그 외 token은 `/user`로 검증해요. `remote`는 모든 token을 `/user`로 검증해요 |
 | `SUPABASE_AUTH_TIMEOUT_SECONDS` | 아니오 | `5` | Supabase Auth `/user`와 JWKS 조회 timeout |
+| `ADMIN_PUBLIC_ORIGIN` | 아니오 | `https://api.curitalk.app` | 관리자 웹 쓰기 요청의 Origin 검사 기준. 로컬에서는 `http://localhost:8010`으로 설정해요 |
+| `ADMIN_ACCESS_CODE` | 관리자 웹 사용 시 | 없음 | 관리자 웹·API 공유 입장 코드. 길이 제한은 없고 앞뒤 공백은 허용하지 않아요. 빈 값은 미설정으로 처리해요. 서버 환경변수에만 저장하며 변경 후 API를 재시작하면 기존 관리자 세션이 무효화돼요 |
 | `SWAGGER_TOKEN_ISSUER_ENABLED` | 아니오 | `false` | `ENV`가 dev가 아닐 때 Swagger token helper를 명시적으로 활성화 |
 | `SWAGGER_TOKEN_ISSUER_SECRET` | 운영 helper 활성화 시 | 없음 | dev 외 환경에서 `/api/auth/swagger/token` 요청 body의 `secret`과 비교할 shared secret |
 | `LANGUAGE_SNACKS_OPERATIONS_KEY` | 운영 API 사용 시 | 없음 | v2 POST/PATCH의 X-Operations-Key와 비교. Flutter에 포함 금지. CLI는 DB 직접 접근 |
@@ -124,4 +126,7 @@ Compose의 `environment`는 API와 생성 컨테이너에서 ENV=prod, DEBUG=fal
 
 ## 변경 기록
 
+- 2026-11-15: 관리자 입장 코드를 DB에서 서버 환경변수로 옮겼어요.
+- 2026-11-15: 관리자 입장 코드의 길이 제한을 제거했어요.
+- 2026-11-15: 관리자 웹 쓰기 요청의 Origin 검사 기준을 명확히 했어요.
 - 2026-09-13: README에서 환경변수 설명을 이관하고 실제 Settings의 필수 항목·기본값과 Compose 설정을 구분했어요.

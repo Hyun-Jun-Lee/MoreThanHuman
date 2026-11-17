@@ -8,6 +8,7 @@ import httpx
 from fastapi import Depends, HTTPException, Query, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from database import get_db
 from domains.auth.models import AccountDeletionModel, ProfileModel
@@ -20,6 +21,11 @@ from shared.logging_config import log_exception
 from shared.http_clients import get_auth_http_client
 
 security = HTTPBearer()
+
+
+def _account_deletion_started(db: Session, user_id: str) -> bool:
+    """동기 DB 조회는 이벤트 루프 밖에서 실행해요."""
+    return db.query(AccountDeletionModel.user_id).filter_by(user_id=user_id).first() is not None
 
 
 @dataclass(frozen=True)
@@ -55,7 +61,7 @@ async def get_verified_claims(
         with latency_span("auth"):
             with latency_span("auth.verify_token"):
                 claims = await verifier.verify_access_token(credentials.credentials)
-                if db.query(AccountDeletionModel.user_id).filter_by(user_id=claims.sub).first():
+                if await run_in_threadpool(_account_deletion_started, db, claims.sub):
                     raise AuthenticationException("Account deletion is in progress or completed")
                 return claims
     except AuthenticationException as e:
@@ -105,7 +111,7 @@ async def get_current_user_from_token_param(
         with latency_span("auth"):
             with latency_span("auth.verify_token"):
                 claims = await verifier.verify_access_token(token)
-                if db.query(AccountDeletionModel.user_id).filter_by(user_id=claims.sub).first():
+                if await run_in_threadpool(_account_deletion_started, db, claims.sub):
                     raise AuthenticationException("Account deletion is in progress or completed")
         return AuthenticatedUser(id=claims.sub)
     except AuthenticationException as e:

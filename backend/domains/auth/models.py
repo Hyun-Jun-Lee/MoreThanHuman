@@ -20,6 +20,7 @@ class ProfileModel(Base):
     name = Column(String(100), nullable=False)
     nickname = Column(String(100), nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
+    is_admin = Column(Boolean, default=False, server_default=false(), nullable=False)
     snack_unlimited_replay_enabled = Column(
         Boolean, default=False, server_default=false(), nullable=False
     )

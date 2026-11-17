@@ -91,6 +91,7 @@ class UserProfile(BaseModel):
     name: str
     nickname: str | None = None
     is_active: bool
+    is_admin: bool
     oauth_provider: str | None = None
     avatar_url: str | None = None
     app_locale: AppLocaleCode | None = None

@@ -58,7 +58,7 @@ def prepare_generation(
                 _, entitlement = repository._locked_entitlement(user_id)
                 reserved = (repository.count_active_conversations(user_id)
                             + repository.count_pending_roleplay_starts(user_id))
-                if reserved >= entitlement["slot_limit"]:
+                if entitlement["slot_limit"] is not None and reserved >= entitlement["slot_limit"]:
                     raise ConversationSlotsFull("추가 대화 이용권이 필요해요")
             turn = store.retry(user_id=user_id, turn_id=retry_turn_id, request_id=request_id)
             kind = turn.kind
@@ -83,7 +83,7 @@ def prepare_generation(
                 _, entitlement = repository._locked_entitlement(user_id)
                 reserved = (repository.count_active_conversations(user_id)
                             + repository.count_pending_roleplay_starts(user_id))
-                if reserved >= entitlement["slot_limit"]:
+                if entitlement["slot_limit"] is not None and reserved >= entitlement["slot_limit"]:
                     raise ConversationSlotsFull("추가 대화 이용권이 필요해요")
             turn = store.reserve(user_id=user_id, request_id=request_id, kind=kind, input_data=input_data)
 
@@ -197,7 +197,8 @@ def complete_generated_text(user_id: str, prepared: PreparedGeneration, answer: 
             repository = ConversationRepository(db)
             if settings.conversation_access_enabled:
                 _, entitlement = repository._locked_entitlement(user_id)
-                if (repository.count_active_conversations(user_id)
+                if (entitlement["slot_limit"] is not None
+                        and repository.count_active_conversations(user_id)
                         + repository.count_pending_roleplay_starts(user_id) > entitlement["slot_limit"]):
                     raise ConversationSlotsFull("추가 대화 이용권이 필요해요")
             conversation = ConversationModel(

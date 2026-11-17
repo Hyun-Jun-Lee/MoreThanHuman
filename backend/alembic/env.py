@@ -7,6 +7,7 @@ from alembic import context
 from config import get_settings
 from database import Base
 from domains.auth import models as auth_models  # noqa: F401
+from domains.admin import models as admin_models  # noqa: F401
 from domains.conversation import models as conversation_models  # noqa: F401
 from domains.grammar import models as grammar_models  # noqa: F401
 from domains.language_snacks import models as snack_models  # noqa: F401

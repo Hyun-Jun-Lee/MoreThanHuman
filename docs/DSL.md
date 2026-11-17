@@ -39,6 +39,7 @@ database Schema {
     email: STRING UNIQUE NOT NULL
     name: STRING NOT NULL
     is_active: BOOLEAN
+    is_admin: BOOLEAN = false
     oauth_provider: STRING?
     avatar_url: STRING?
     native_language: "ko" | "en" | "zh" = "ko"
@@ -46,6 +47,25 @@ database Schema {
     feedback_language: "ko" | "en" | "zh" = "ko"
     created_at: DATETIME
     updated_at: DATETIME
+  }
+
+  table manual_entitlement_grants {
+    id: UUID PRIMARY KEY
+    user_id: UUID FOREIGN KEY -> profiles(id)
+    plan: "advance" | "plus"
+    revoke_at: DATETIME?
+    revoked_at: DATETIME?
+    granted_by: UUID?
+    revoked_by: UUID?
+    created_at: DATETIME
+  }
+
+  table admin_access_sessions {
+    token_hash: STRING PRIMARY KEY
+    csrf_token: STRING NOT NULL
+    created_at: DATETIME NOT NULL
+    last_seen_at: DATETIME NOT NULL
+    expires_at: DATETIME NOT NULL
   }
 
   table conversations {
@@ -170,6 +190,7 @@ module Auth {
     name: String
     nickname?: String
     is_active: Boolean
+    is_admin: Boolean
     oauth_provider?: String
     avatar_url?: String
     app_locale?: "ko" | "en"
@@ -283,7 +304,7 @@ content_type과 relation은 위 나열 순서대로 대응해요. 모든 entry.l
 
 ### 바구니 리셋
 
-`BasketResetState`는 `{content_language: "en"|"ko", reset_id: UUID|null, reset_at: DateTime|null, unlimited_replay_enabled: bool}`예요. GET은 Bearer 사용자의 현재 학습 언어와 `profiles.snack_unlimited_replay_enabled`를 조회하며 리셋 기록이 없으면 ID·시간이 null이에요. 응답은 `Cache-Control: no-store`예요. POST는 `X-Operations-Key`로 지정 사용자의 지정 언어에 새 UUID를 저장하고 대상 계정의 권한을 함께 반환해요. 키 미설정·불일치 403, 없는 사용자 404, 잘못된 UUID·언어·추가 필드 422예요. UUID는 호출마다 바뀌며 사용자·언어별 최신 기록 하나만 보관해요.
+`BasketResetState`는 `{content_language: "en"|"ko", reset_id: UUID|null, reset_at: DateTime|null, unlimited_replay_enabled: bool}`예요. GET은 Bearer 사용자의 현재 학습 언어와 `profiles.snack_unlimited_replay_enabled` 또는 관리자 여부를 조회하며 리셋 기록이 없으면 ID·시간이 null이에요. 응답은 `Cache-Control: no-store`예요. POST는 `X-Operations-Key`로 지정 사용자의 지정 언어에 새 UUID를 저장하고 대상 계정의 권한을 함께 반환해요. 키 미설정·불일치 403, 없는 사용자 404, 잘못된 UUID·언어·추가 필드 422예요. UUID는 호출마다 바뀌며 사용자·언어별 최신 기록 하나만 보관해요.
 
 리셋 API는 LLM 호출·콘텐츠 삭제·일일 카드 재추첨을 하지 않아요. 앱은 시작·Home 진입·복귀·홈 당겨서 새로고침 시 GET하고 새 ID를 발견하면 기존 당일 묶음의 소비 횟수를 0으로 초기화해요. 팝업·애니메이션 중에는 종료 후 적용하며 적용한 ID를 로컬에 함께 저장해 재시작·다음 날짜에도 같은 리셋을 중복 적용하지 않아요. 오프라인이면 기존 진행을 유지하고 다음 복귀에 재시도해요. 각 기기의 소비 횟수 자체를 동기화하는 API는 아니에요. 운영 방법은 [테스트용 바구니 리셋](OPERATIONS.md#테스트용-바구니-리셋)을 참고해요.
 
@@ -530,6 +551,8 @@ NDJSON 각 줄에는 `event`, 0부터 증가하는 `seq`, `turn_id`, `attempt_id
 
 `GET /api/conversations/access/`는 `used_slots`(활성 대화와 진행 중인 역할극 시작 예약의 합계), `slot_limit`, `remaining_slots`, `locked_count`, `plan`을 반환해요. 활성 대화 ID 목록은 반환하지 않아요. 목록 항목에는 `locked`가 포함되고 `GET /api/conversations/{id}/access/`에는 `can_send`, `locked`, `user_turns`, `turn_limit`이 포함돼요. 대화 활성화·해제 API는 제공하지 않아요.
 
+접근 제어가 활성화된 상태에서도 관리자의 `slot_limit`과 `remaining_slots`는 모두 null이고, 저장된 모든 대화를 활성화해요.
+
 대화 목록의 `locked`는 저장된 `slot_active`를 반영해요. 목록 조회는 구독 상태를 갱신하거나 슬롯을 재조정하지 않아요. 구독 갱신 작업이 지연되면 표시가 잠시 이전 상태일 수 있으나 생성·발화 요청은 현재 권한을 다시 검사해요.
 
 `GET /api/billing/entitlement/`는 인증 계정의 검증된 `plan`, `status`, `expires_at`, `slot_limit`, `turn_limit`을 반환해요. iOS 앱은 App Store 제품 ID `Advance`·`Plus`의 표시 가격을 직접 불러와요. `POST /api/billing/apple/verify/`는 인증 계정의 `{ "signed_transaction": "Apple StoreKit 2 JWS" }`를 받아 Apple 서명 및 App Store Server API의 현재 상태를 검증하고 권한을 반환해요. 다른 계정에 묶인 구매는 HTTP 409 `PURCHASE_ACCOUNT_CONFLICT`, 잘못된 거래는 HTTP 400 `INVALID_APPLE_PURCHASE`예요. `POST /api/billing/apple/notifications/`는 Apple Server Notifications V2의 `{ "signedPayload": "..." }`를 받아 서명을 검증하고 Apple의 현재 상태를 다시 조회해요. 알림 ID로 중복 처리를 막아요.
@@ -559,6 +582,18 @@ AudioContinue  = POST /api/conversations/{id}/turn/        multipart { audio_fil
 `PUT /api/conversations/{id}/title/`은 `{"title":"Coffee Shop Roleplay"}`로 제목을 변경해요. `DELETE /api/conversations/{id}/`는 현재 사용자 소유 대화·메시지·문법 피드백을 복구 없이 삭제하고, 다른 사용자의 ID는 404로 처리해요.
 
 SSE는 `/api/conversations/messages/{id}/grammar-feedback/stream?token=<access_token>`으로 인증해요. URL에 토큰이 포함되므로 로그·공유에 주의하고 모바일에서는 기존 polling 경로를 우선 사용해요.
+
+### 관리자와 수동 구독 권한
+
+관리자·수동 권한의 상세 계약은 [관리자 권한 계약](../.agent/_contracts/ADMIN_ENTITLEMENTS.md)에 있어요. `profiles.is_admin`은 기본 false이며 첫 관리자는 운영자가 DB에서 직접 지정해요. 관리자 API로 관리자 여부를 바꾸지 않아요. 관리자는 구독 기능을 모두 이용하고 대화 슬롯·발화 및 스낵 반복 한도가 없어요. 일반 사용자는 유효한 Apple 구독과 수동 부여 중 높은 플랜을 적용해요. 예약 철회 시각에 도달하거나 즉시 철회하면 Apple 구독 또는 Free로 돌아가요.
+
+`GET /api/admin/users/`는 `q`(이메일·닉네임 부분 일치 또는 정확한 사용자 UUID), `plan=free|advance|plus`, `source=free|apple|manual|admin`, `is_admin`, `limit=50`(1..100), `offset=0`으로 계정을 조회해요. 응답은 `{results, total_count, limit, offset}`이며 결과마다 ID·이메일·이름·닉네임·활성·관리자 여부·가입일·최종 권한을 담아요. `GET /api/admin/users/{user_id}/`는 같은 계정 정보와 권한을, `GET /api/admin/users/{user_id}/entitlement/`는 `{user_id, is_admin, apple, manual, effective}`를 반환해요. `GET /api/admin/users/{user_id}/manual-entitlement/history/`는 부여 기록을 최신순으로 `{results, total_count, limit, offset}`에 담아요. 공유 코드로 수행한 부여·철회의 `granted_by`·`revoked_by`는 null이며 개인별 실행자를 식별하지 못해요.
+
+`PUT /api/admin/users/{user_id}/manual-entitlement/`는 `{ "plan": "advance"|"plus", "revoke_at": ISO8601|null }`로 수동 권한을 설정해요. `revoke_at`은 시간대가 명시된 미래 시각만 허용하며 null·생략은 예약 철회가 없다는 뜻이에요. 같은 값의 반복 요청은 이력을 늘리지 않아요. 같은 경로의 `DELETE`는 수동 권한을 즉시 철회하고, 이미 없으면 현재 상태를 반환해요. 두 변경 응답은 위 권한 상세 형식이에요. 없는 대상은 404, 잘못된 값은 422예요.
+
+관리자 웹 `/admin`은 공유 코드만으로 로그인해요. 코드는 서버의 `ADMIN_ACCESS_CODE` 환경변수에만 두고 DB에 저장하지 않아요. 코드 변경 후 API를 재시작하면 기존 확인 세션은 조회되지 않아요. 입장 코드에는 길이 제한이 없으며 빈 환경변수 값은 미설정으로 처리하고 앞뒤 공백은 허용하지 않아요. `POST /api/admin/access/verify/`는 인증 없이 `{ "code": "..." }`를 받고 확인 세션 쿠키와 `csrf_token`을 발급해요. 코드 미설정은 503, 오류는 403, 요청 IP의 5회 오류 잠금은 429예요. `GET /api/admin/access/status/`는 `{verified, csrf_token, expires_at}`을, `POST /api/admin/access/logout/`은 세션 종료를 처리해요. 기존 관리자 사용자 API 6개는 모두 유효한 관리자 세션 쿠키가 필요하고, PUT·DELETE는 `X-CSRF-Token`을 요구해요. 세션은 30분 비활동 또는 8시간 후 만료해요. `profiles.is_admin`은 사용자 앱의 무제한 구독 기능에만 적용해요.
+
+기존 `/api/auth/me`와 `/api/auth/bootstrap`의 프로필에는 `is_admin`을 추가해요. `GET /api/billing/entitlement/`는 기존 필드와 함께 `is_admin`, `source`, `unlimited`를 반환해요. 관리자에게는 `plan=plus`, `source=admin`, `slot_limit=null`, `turn_limit=null`을 반환해요.
 
 ## 7. Grammar 모듈
 
@@ -795,6 +830,7 @@ module LLM {
 - conversation/message 조회와 삭제는 `user_id` ownership을 검증해요.
 - API key와 서버 전용 secret은 서버 환경변수로만 관리해요.
 - Flutter 앱은 OpenRouter/OpenAI secret이나 Supabase service role key를 직접 보유하지 않아요.
+- 관리자 코드는 DB에 저장하지 않아요. 관리자 세션과 `profiles.is_admin`은 Supabase Data API에서 직접 읽거나 변경하지 않아요. PostgreSQL 마이그레이션은 관련 표의 RLS와 클라이언트 역할 권한 회수로 FastAPI 경로를 강제해요.
 - Flutter 앱은 Google Sign-In SDK의 `id_token`과 Google `access_token`, 또는 iOS Apple의 `identityToken`과 요청별 원본 nonce로 Supabase 세션을 생성하고, FastAPI에는 Supabase `access_token`만 전달해요. Apple에는 원본 nonce의 SHA-256 해시를 전달해요.
 - 외부 LLM/검색 실패는 `ExternalAPIException` 계열로 감싸 응답해요.
 
@@ -808,6 +844,9 @@ module LLM {
 
 ## 문서 변경 기록
 
+- 2026-11-15: 관리자 입장 코드를 DB에서 서버 환경변수로 옮기고 세션 검증 방식을 갱신했어요.
+- 2026-11-15: 관리자 입장 코드의 길이 제한을 제거했어요.
+- 2026-11-15: 관리자 웹을 공유 코드 단독 로그인으로 바꾸고 세션 쿠키·CSRF API 계약을 갱신했어요.
 - 2026-10-24: Topic Prep 첫 질문의 영어·한국어 반대 언어 번역 필드를 추가했어요. 카드·방향 재생성·직접 입력 질문 응답에 적용해요.
 - 2026-10-04: 주간 추천의 첫 질문 선생성과 동일 주차 재발행 계약을 추가했어요.
 - 2026-09-13: README의 상세 API 안내를 통합하고 환경변수 상세는 ENVIRONMENT.md로 분리했어요. API 동작 자체는 변경하지 않았어요.

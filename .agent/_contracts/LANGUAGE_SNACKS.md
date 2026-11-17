@@ -1,6 +1,6 @@
 # Language Snacks API Contract
 
-> Status: ACTIVE · Version: 2.10 · Updated: 2026-11-13
+> Status: ACTIVE · Version: 2.11 · Updated: 2026-11-15
 
 외부 계약의 단일 기준은 [DSL Language Snack 모듈](../../docs/DSL.md#5-language-snack-모듈)이에요. CLI는 [README](../../README.md#스낵-콘텐츠-생성), 배포는 [운영 가이드](../../docs/OPERATIONS.md#언어-스낵-운영), 설정은 [환경변수](../../docs/ENVIRONMENT.md), 내부 상태·중복 검사는 [아키텍처](../architecture.md)를 참고해요.
 
@@ -11,7 +11,7 @@
 - GET v2는 Bearer profile.target_language 기준 published 12개(최대 30개)를 반환해요. `order=latest`가 기본이고 `order=random`은 전체 발행 목록에서 중복 없이 무작위 추출해요.
 - POST/PATCH v2는 서버 운영 키로 보호하며 일반 학습자 앱에는 생성 기능·키를 넣지 않아요.
 - GET `/api/v2/language-snacks/basket-reset/`은 Bearer 사용자의 현재 학습 언어별 최신 `reset_id`를 반환해요. 기록이 없으면 null이에요. 같은 경로 POST는 운영 키로 보호하며 `{user_id, content_language}` 대상의 새 리셋 ID를 저장해요. 사용자·언어별 마지막 기록만 유지하며 일반 앱에는 운영 키를 넣지 않아요.
-- 백엔드 `profiles.snack_unlimited_replay_enabled`는 기본 false인 계정별 권한이에요. 바구니 리셋 GET·POST 응답의 `unlimited_replay_enabled`에 대상 계정의 값을 담고, 일반 사용자가 이를 수정하는 API는 제공하지 않아요. 이전 서버의 응답에 필드가 없으면 앱은 false로 처리해요.
+- 백엔드 `profiles.snack_unlimited_replay_enabled`는 기본 false인 계정별 권한이에요. 관리자는 이 값과 관계없이 무제한 반복해요. 바구니 리셋 GET·POST 응답의 `unlimited_replay_enabled`에 대상 계정의 적용 권한을 담고, 일반 사용자가 이를 수정하는 API는 제공하지 않아요. 이전 서버의 응답에 필드가 없으면 앱은 false로 처리해요.
 - 정규화 identity UNIQUE와 전체 이력 기반 LLM 중복 검사, 자동 품질 검증을 통과해야 발행해요. 의미 중복 방지에 통계적 오차가 남아요.
 - 구 API는 GET 빈 목록 / POST 410을 반환해요. 마이그레이션 시 기존 스낵 데이터는 모두 삭제해요.
 

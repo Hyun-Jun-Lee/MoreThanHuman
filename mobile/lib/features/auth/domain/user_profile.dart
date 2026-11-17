@@ -7,6 +7,7 @@ class UserProfile {
     required this.name,
     this.nickname,
     required this.isActive,
+    this.isAdmin = false,
     required this.createdAt,
     required this.updatedAt,
     this.language = LearningLanguageContext.defaultContext,
@@ -24,6 +25,7 @@ class UserProfile {
     final Object? name = json['name'];
     final Object? nickname = json['nickname'];
     final Object? isActive = json['is_active'];
+    final Object? isAdmin = json['is_admin'];
     final Object? oauthProvider = json['oauth_provider'];
     final Object? appLocale = json['app_locale'];
     final DateTime? createdAt = DateTime.tryParse('${json['created_at']}');
@@ -42,6 +44,9 @@ class UserProfile {
     }
     if (isActive is! bool) {
       throw const FormatException('User profile active state is invalid.');
+    }
+    if (isAdmin != null && isAdmin is! bool) {
+      throw const FormatException('User profile admin state is invalid.');
     }
     if (oauthProvider != null && oauthProvider is! String) {
       throw const FormatException('User profile OAuth provider is invalid.');
@@ -62,6 +67,7 @@ class UserProfile {
       name: name,
       nickname: nickname as String?,
       isActive: isActive,
+      isAdmin: isAdmin as bool? ?? false,
       oauthProvider: oauthProvider as String?,
       appLocale: appLocale as String?,
       language: LearningLanguageContext.fromJson(json['language']),
@@ -77,6 +83,7 @@ class UserProfile {
   String get displayName =>
       nickname?.trim().isNotEmpty == true ? nickname!.trim() : name.trim();
   final bool isActive;
+  final bool isAdmin;
   final String? oauthProvider;
   final String? appLocale;
   final LearningLanguageContext language;
@@ -90,6 +97,7 @@ class UserProfile {
       name: name,
       nickname: nickname ?? this.nickname,
       isActive: isActive,
+      isAdmin: isAdmin,
       oauthProvider: oauthProvider,
       language: language,
       appLocale: appLocale ?? this.appLocale,

@@ -18,7 +18,10 @@ from config import get_settings
 from database import Base, engine
 from domains.auth.models import ProfileModel  # noqa: F401 - 테이블 생성용 import
 from domains.auth.supabase import SupabaseAuthVerifier
-from shared.subscription import AppleSubscriptionModel, AppleNotificationModel  # noqa: F401 - 테이블 생성용 import
+from shared.subscription import AppleSubscriptionModel, AppleNotificationModel, ManualEntitlementGrantModel  # noqa: F401 - 테이블 생성용 import
+from domains.admin.router import router as admin_router
+from domains.admin.router import access_router as admin_access_router
+from domains.admin.web import router as admin_web_router
 from domains.auth.router import router as auth_router
 from domains.conversation.router import router as conversation_router
 from domains.billing.router import router as billing_router
@@ -89,6 +92,15 @@ app.add_middleware(
 app.add_middleware(LatencyMiddleware)
 
 
+@app.middleware("http")
+async def admin_no_store(request, call_next):
+    response = await call_next(request)
+    if request.url.path == "/admin" or request.url.path.startswith(("/admin/", "/api/admin/")):
+        if not request.url.path.startswith("/admin/assets/"):
+            response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 # Exception Handlers
 @app.exception_handler(AuthenticationException)
 async def authentication_exception_handler(_request, exc: AuthenticationException):
@@ -142,11 +154,14 @@ async def validation_error_handler(request, exc: RequestValidationError):
 # 프로젝트 루트의 static 디렉토리 (backend/main.py 기준 상위 디렉토리)
 STATIC_DIR = Path(__file__).parent.parent / "static"
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+app.mount("/admin/assets", StaticFiles(directory=str(Path(__file__).parent / "domains/admin/static")), name="admin-assets")
 
 # API 라우터 등록
 app.include_router(auth_router)
 app.include_router(conversation_router)
 app.include_router(billing_router)
+app.include_router(admin_router)
+app.include_router(admin_access_router)
 app.include_router(conversation_topic_router)
 app.include_router(grammar_router)
 app.include_router(language_snacks_router)
@@ -154,6 +169,7 @@ app.include_router(search_router)
 
 # Web 라우터 등록 (마지막에 등록하여 API 우선순위 보장)
 app.include_router(web_router)
+app.include_router(admin_web_router)
 
 
 # Health Check (API only)

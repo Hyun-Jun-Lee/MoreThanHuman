@@ -7,6 +7,9 @@ class BillingEntitlement {
     required this.plan,
     required this.status,
     this.expiresAt,
+    this.source = 'free',
+    this.isAdmin = false,
+    this.isUnlimited = false,
   });
 
   factory BillingEntitlement.fromJson(Object? value) {
@@ -26,12 +29,20 @@ class BillingEntitlement {
       plan: value['plan'] as String,
       status: value['status'] as String,
       expiresAt: normalized is String ? DateTime.tryParse(normalized) : null,
+      source:
+          value['source'] as String? ??
+          (value['plan'] == 'free' ? 'free' : 'apple'),
+      isAdmin: value['is_admin'] as bool? ?? false,
+      isUnlimited: value['unlimited'] as bool? ?? false,
     );
   }
 
   final String plan;
   final String status;
   final DateTime? expiresAt;
+  final String source;
+  final bool isAdmin;
+  final bool isUnlimited;
 }
 
 class BillingRepository {

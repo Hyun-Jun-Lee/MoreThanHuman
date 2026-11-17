@@ -22,7 +22,7 @@ from domains.conversation.models import (
     SuggestedStartModel,
 )
 from domains.language_snacks.models import LanguageSnackBasketResetModel
-from shared.subscription import AppleSubscriptionModel
+from shared.subscription import AppleSubscriptionModel, ManualEntitlementGrantModel
 
 
 def _receipt_hash(receipt: str) -> str:
@@ -100,6 +100,13 @@ class AccountDeletionService:
         self.db.query(ConversationSlotGrantModel).filter_by(user_id=user_id).delete(synchronize_session=False)
         self.db.query(LanguageSnackBasketResetModel).filter_by(user_id=user_id).delete(synchronize_session=False)
         self.db.query(AppleSubscriptionModel).filter_by(user_id=user_id).delete(synchronize_session=False)
+        self.db.query(ManualEntitlementGrantModel).filter_by(user_id=user_id).delete(synchronize_session=False)
+        self.db.query(ManualEntitlementGrantModel).filter_by(granted_by=user_id).update(
+            {ManualEntitlementGrantModel.granted_by: None}, synchronize_session=False
+        )
+        self.db.query(ManualEntitlementGrantModel).filter_by(revoked_by=user_id).update(
+            {ManualEntitlementGrantModel.revoked_by: None}, synchronize_session=False
+        )
         self.db.delete(profile)  # 대화 → 메시지 → 문법 피드백은 ORM 관계로 삭제해요.
         self.db.commit()
 

@@ -68,9 +68,17 @@ class Settings(BaseSettings):
     apple_signin_private_key: str | None = None
     supabase_auth_verify_mode: Literal["remote", "auto"] = "auto"
     supabase_auth_timeout_seconds: float = 5.0
+    admin_access_code: str | None = Field(default=None, repr=False)
+    admin_public_origin: str = "https://api.curitalk.app"
     swagger_token_issuer_enabled: bool = False
     swagger_token_issuer_secret: str | None = None
     auto_create_tables: bool = False
+
+    @model_validator(mode="after")
+    def validate_admin_access_code(self) -> "Settings":
+        if self.admin_access_code is not None and self.admin_access_code != self.admin_access_code.strip():
+            raise ValueError("ADMIN_ACCESS_CODE must not have surrounding whitespace")
+        return self
 
     # Operations-only API Settings
     language_snacks_operations_key: str | None = None
@@ -167,6 +175,7 @@ class Settings(BaseSettings):
         # 프로젝트 루트의 .env 파일 경로 (backend/config.py 기준 상위 디렉토리)
         env_file = str(Path(__file__).parent.parent / ".env")
         case_sensitive = False
+        hide_input_in_errors = True
 
 
 @lru_cache

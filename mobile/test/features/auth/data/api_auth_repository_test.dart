@@ -53,6 +53,7 @@ void main() {
       final UserProfile user = await repository.getCurrentUser();
 
       expect(user.email, 'learner@example.com');
+      expect(user.isAdmin, isTrue);
       expect(adapter.requests.single.uri.path, '/api/auth/me');
       expect(
         adapter.requests.single.headers['Authorization'],
@@ -106,6 +107,7 @@ class _AuthHttpClientAdapter implements HttpClientAdapter {
           'name': 'Learner',
           'nickname': options.method == 'PUT' ? 'Tomato' : null,
           'is_active': true,
+          'is_admin': true,
           'oauth_provider': 'google',
           'created_at': '2026-06-23T00:00:00Z',
           'updated_at': '2026-06-23T00:00:00Z',

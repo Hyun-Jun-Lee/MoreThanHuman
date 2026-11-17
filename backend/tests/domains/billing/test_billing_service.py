@@ -13,7 +13,7 @@ from domains.conversation.enums import ConversationType
 from domains.conversation.models import ConversationModel
 from domains.billing.apple import VerifiedSubscription
 from domains.billing.service import BillingService, PurchaseOwnedByAnotherAccount
-from shared.subscription import AppleSubscriptionModel, entitlement_for_user
+from shared.subscription import AppleSubscriptionModel, ManualEntitlementGrantModel, entitlement_for_user
 
 
 class FakeGateway:
@@ -113,6 +113,23 @@ def test_purchase_reconciles_slots_on_upgrade_and_revocation(enabled_access):
     service.verify_purchase(owner, "signed")
     assert _active_count(db, owner) == 1
     assert db.get(ProfileModel, owner).slot_limit_snapshot == 1
+
+
+def test_notification_reconciles_slots_using_effective_manual_plan(enabled_access):
+    db, (owner, _) = _db()
+    _add_conversations(db, owner, 6)
+    gateway = FakeGateway(_purchase(owner, product="Plus"))
+    service = BillingService(db, gateway)
+    service.verify_purchase(owner, "signed")
+    assert _active_count(db, owner) == 6
+
+    db.add(ManualEntitlementGrantModel(id=str(uuid4()), user_id=owner, plan="advance"))
+    db.commit()
+    gateway.purchase = replace(gateway.purchase, status="revoked")
+    service.process_notification("signed-notification")
+    assert _active_count(db, owner) == 5
+    assert db.get(ProfileModel, owner).slot_limit_snapshot == 5
+    assert db.query(AppleSubscriptionModel).one().status == "revoked"
 
 
 def test_purchase_and_slot_changes_roll_back_together(enabled_access, monkeypatch):

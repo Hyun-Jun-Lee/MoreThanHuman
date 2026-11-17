@@ -105,9 +105,16 @@ def test_bootstrap_creates_profile_with_pending_language_and_preserves_it_on_res
     restored = client.post("/api/auth/bootstrap", headers=headers, json={})
 
     assert created.status_code == 200
+    assert created.json()["data"]["is_admin"] is False
     assert created.json()["data"]["language"] == language
     assert restored.status_code == 200
     assert restored.json()["data"]["language"] == language
+
+    with client.app.state.session_factory() as db:
+        profile = db.get(ProfileModel, verifier.claims.sub)
+        profile.is_admin = True
+        db.commit()
+    assert client.get("/api/auth/me", headers=headers).json()["data"]["is_admin"] is True
 
 
 def test_inactive_profile_does_not_block_authenticated_requests():
