@@ -17,6 +17,7 @@ from domains.conversation.service import ConversationService, free_chat_title
 from domains.conversation.stream_turns import StreamTurnConflict, StreamTurnStore
 from shared.background_tasks import BackgroundTaskRegistry
 from shared.language import LearningLanguageContext, language_context_from_values, language_context_to_dict, language_name
+from shared.latency import latency_span
 from shared.logging_config import log_event
 
 settings = get_settings()
@@ -50,108 +51,129 @@ def prepare_generation(
         store = StreamTurnStore(db)
         repository = ConversationRepository(db)
         service = ConversationService(repository, http_client=http_client, background_tasks=background_tasks)
+        operation = kind or "retry"
         if retry_turn_id:
-            previous_turn = store.get(user_id, retry_turn_id)
-            if previous_turn is None:
-                raise LookupError(retry_turn_id)
-            if previous_turn.kind == "roleplay_start" and settings.conversation_access_enabled:
-                _, entitlement = repository._locked_entitlement(user_id)
-                reserved = (repository.count_active_conversations(user_id)
-                            + repository.count_pending_roleplay_starts(user_id))
-                if entitlement["slot_limit"] is not None and reserved >= entitlement["slot_limit"]:
-                    raise ConversationSlotsFull("추가 대화 이용권이 필요해요")
-            turn = store.retry(user_id=user_id, turn_id=retry_turn_id, request_id=request_id)
+            with latency_span("stream_precheck", operation=operation):
+                previous_turn = store.get(user_id, retry_turn_id)
+                if previous_turn is None:
+                    raise LookupError(retry_turn_id)
+                if previous_turn.kind == "roleplay_start" and settings.conversation_access_enabled:
+                    _, entitlement = repository._locked_entitlement(user_id)
+                    reserved = (repository.count_active_conversations(user_id)
+                                + repository.count_pending_roleplay_starts(user_id))
+                    if entitlement["slot_limit"] is not None and reserved >= entitlement["slot_limit"]:
+                        raise ConversationSlotsFull("추가 대화 이용권이 필요해요")
+            with latency_span("stream_reserve", operation=operation):
+                turn = store.retry(user_id=user_id, turn_id=retry_turn_id, request_id=request_id)
             kind = turn.kind
             input_data = json.loads(turn.input_json)
         else:
             assert kind is not None and input_data is not None
-            conversation_id = input_data.get("conversation_id")
-            if conversation_id:
-                conversation = repository.find_by_id(conversation_id, user_id)
-                repository.assert_can_send(conversation_id, user_id, enabled=settings.conversation_access_enabled)
-                unresolved = store.unresolved(user_id, conversation_id)
-                if any(item.status != "completed" for item in unresolved):
-                    log_event(
-                        "conversation.stream.conflict", source="precheck",
-                        pending_count=sum(item.status == "pending" for item in unresolved),
-                        failed_count=sum(item.status == "failed" for item in unresolved),
-                    )
-                    raise StreamTurnConflict("PREVIOUS_TURN_UNRESOLVED")
-            elif kind == "free_chat_start":
-                repository.assert_can_create(user_id, enabled=settings.conversation_access_enabled)
-            elif kind == "roleplay_start" and settings.conversation_access_enabled:
-                _, entitlement = repository._locked_entitlement(user_id)
-                reserved = (repository.count_active_conversations(user_id)
-                            + repository.count_pending_roleplay_starts(user_id))
-                if entitlement["slot_limit"] is not None and reserved >= entitlement["slot_limit"]:
-                    raise ConversationSlotsFull("추가 대화 이용권이 필요해요")
-            turn = store.reserve(user_id=user_id, request_id=request_id, kind=kind, input_data=input_data)
+            with latency_span("stream_precheck", operation=operation):
+                conversation_id = input_data.get("conversation_id")
+                if conversation_id:
+                    with latency_span("stream_precheck.ownership", operation=operation):
+                        conversation = repository.find_by_id(conversation_id, user_id)
+                    with latency_span("stream_precheck.access", operation=operation):
+                        repository.assert_can_send(conversation_id, user_id, enabled=settings.conversation_access_enabled)
+                    with latency_span("stream_precheck.unresolved", operation=operation):
+                        unresolved = store.unresolved(user_id, conversation_id)
+                    if any(item.status != "completed" for item in unresolved):
+                        log_event(
+                            "conversation.stream.conflict", source="precheck",
+                            pending_count=sum(item.status == "pending" for item in unresolved),
+                            failed_count=sum(item.status == "failed" for item in unresolved),
+                        )
+                        raise StreamTurnConflict("PREVIOUS_TURN_UNRESOLVED")
+                elif kind == "free_chat_start":
+                    repository.assert_can_create(user_id, enabled=settings.conversation_access_enabled)
+                elif kind == "roleplay_start" and settings.conversation_access_enabled:
+                    _, entitlement = repository._locked_entitlement(user_id)
+                    reserved = (repository.count_active_conversations(user_id)
+                                + repository.count_pending_roleplay_starts(user_id))
+                    if entitlement["slot_limit"] is not None and reserved >= entitlement["slot_limit"]:
+                        raise ConversationSlotsFull("추가 대화 이용권이 필요해요")
+            with latency_span("stream_reserve", operation=operation):
+                turn = store.reserve(user_id=user_id, request_id=request_id, kind=kind, input_data=input_data)
 
         try:
             user_text = input_data.get("text")
             input_mode = input_data.get("input_mode")
             if kind in {"turn", "message"}:
-                conversation = repository.find_by_id(input_data["conversation_id"], user_id)
-                language = conversation.language
+                with latency_span("stream_context.conversation", operation=operation):
+                    conversation = repository.find_by_id(input_data["conversation_id"], user_id)
+                    language = conversation.language
                 if turn.user_message_id:
-                    user_message = db.query(MessageModel).filter_by(
-                        id=turn.user_message_id, conversation_id=conversation.id,
-                        role=MessageRole.USER,
-                    ).one()
+                    with latency_span("stream_context.user_message", operation=operation):
+                        user_message = db.query(MessageModel).filter_by(
+                            id=turn.user_message_id, conversation_id=conversation.id,
+                            role=MessageRole.USER,
+                        ).one()
                 else:
-                    previous = repository.get_recent_messages(conversation.id, settings.max_history_turns)
-                    user_message = MessageModel(id=str(uuid4()), conversation_id=conversation.id,
-                                                role=MessageRole.USER, content=user_text)
-                    repository.save_user_turn(
-                        user_message, user_id, enabled=settings.conversation_access_enabled,
-                        stream_turn_id=turn.id,
-                    )
+                    with latency_span("stream_context.history_before", operation=operation):
+                        previous = repository.get_recent_messages(conversation.id, settings.max_history_turns)
+                    with latency_span("stream_context.user_message", operation=operation):
+                        user_message = MessageModel(id=str(uuid4()), conversation_id=conversation.id,
+                                                    role=MessageRole.USER, content=user_text)
+                        repository.save_user_turn(
+                            user_message, user_id, enabled=settings.conversation_access_enabled,
+                            stream_turn_id=turn.id,
+                        )
                     prior_assistant = next((item.content for item in reversed(previous)
                                             if item.role == MessageRole.ASSISTANT), None)
                     background_tasks.start(service.process_grammar_feedback_background(
                         user_message.id, user_text, prior_assistant, language_context=language,
                     ))
-                previous = [item for item in repository.get_recent_messages(
-                    conversation.id, settings.max_history_turns + 1
-                ) if item.id != user_message.id]
-                system_prompt = service.build_system_prompt(
-                    None, conversation.conversation_type, conversation.role_character,
-                    language_context=language,
-                )
-                history = service.prepare_message_history(previous)
+                with latency_span("stream_context.history_after", operation=operation):
+                    previous = [item for item in repository.get_recent_messages(
+                        conversation.id, settings.max_history_turns + 1
+                    ) if item.id != user_message.id]
+                with latency_span("stream_context.prompt", operation=operation):
+                    system_prompt = service.build_system_prompt(
+                        None, conversation.conversation_type, conversation.role_character,
+                        language_context=language,
+                    )
+                    history = service.prepare_message_history(previous)
                 conversation_id = conversation.id
                 user_message_id = user_message.id
                 prompt = user_text
             elif kind == "free_chat_start":
                 language = _language(input_data)
-                if turn.conversation_id:
-                    conversation = repository.find_by_id(turn.conversation_id, user_id)
-                    user_message = db.query(MessageModel).filter_by(id=turn.user_message_id).one()
-                else:
-                    title = free_chat_title(input_data.get("topic"), user_text)
-                    conversation = ConversationModel(
-                        id=str(uuid4()), user_id=user_id, title=title,
-                        conversation_type=ConversationType.FREE_CHAT,
-                        role_character=None, message_count=0, status=ConversationStatus.ACTIVE,
-                        **language_context_to_dict(language),
+                with latency_span("stream_context.user_message", operation=operation):
+                    if turn.conversation_id:
+                        conversation = repository.find_by_id(turn.conversation_id, user_id)
+                        user_message = db.query(MessageModel).filter_by(id=turn.user_message_id).one()
+                    else:
+                        title = free_chat_title(input_data.get("topic"), user_text)
+                        conversation = ConversationModel(
+                            id=str(uuid4()), user_id=user_id, title=title,
+                            conversation_type=ConversationType.FREE_CHAT,
+                            role_character=None,
+                            topic=input_data.get("topic"),
+                            topic_summary=input_data.get("search_context"),
+                            conversation_direction=input_data.get("conversation_direction"),
+                            custom_focus=input_data.get("custom_focus"),
+                            message_count=0, status=ConversationStatus.ACTIVE,
+                            **language_context_to_dict(language),
+                        )
+                        user_message = MessageModel(id=str(uuid4()), conversation_id=conversation.id,
+                                                    role=MessageRole.USER, content=user_text)
+                        repository.create_stream_free_chat(
+                            conversation, user_message, turn_id=turn.id,
+                            enabled=settings.conversation_access_enabled,
+                        )
+                        background_tasks.start(service.process_grammar_feedback_background(
+                            user_message.id, user_text, language_context=language,
+                        ))
+                with latency_span("stream_context.prompt", operation=operation):
+                    system_prompt = service.build_system_prompt(
+                        input_data.get("search_context"), ConversationType.FREE_CHAT, None,
+                        topic=input_data.get("topic"),
+                        conversation_direction=input_data.get("conversation_direction"),
+                        selected_question=input_data.get("selected_question"),
+                        custom_focus=input_data.get("custom_focus"),
+                        language_context=language,
                     )
-                    user_message = MessageModel(id=str(uuid4()), conversation_id=conversation.id,
-                                                role=MessageRole.USER, content=user_text)
-                    repository.create_stream_free_chat(
-                        conversation, user_message, turn_id=turn.id,
-                        enabled=settings.conversation_access_enabled,
-                    )
-                    background_tasks.start(service.process_grammar_feedback_background(
-                        user_message.id, user_text, language_context=language,
-                    ))
-                system_prompt = service.build_system_prompt(
-                    input_data.get("search_context"), ConversationType.FREE_CHAT, None,
-                    topic=input_data.get("topic"),
-                    conversation_direction=input_data.get("conversation_direction"),
-                    selected_question=input_data.get("selected_question"),
-                    custom_focus=input_data.get("custom_focus"),
-                    language_context=language,
-                )
                 conversation_id = conversation.id
                 user_message_id = user_message.id
                 history = []
@@ -159,15 +181,16 @@ def prepare_generation(
             elif kind == "roleplay_start":
                 language = _language(input_data)
                 role = input_data["role_character"]
-                system_prompt = service.build_system_prompt(
-                    input_data.get("search_context"), ConversationType.ROLE_PLAYING,
-                    role, language_context=language,
-                )
-                prompt = (
-                    f"You are starting a role-play as '{role}'. "
-                    f"Greet the user naturally in {language_name(language.target_language)} "
-                    "and start the conversation as this character would. Keep it short (1-2 sentences)."
-                )
+                with latency_span("stream_context.prompt", operation=operation):
+                    system_prompt = service.build_system_prompt(
+                        input_data.get("search_context"), ConversationType.ROLE_PLAYING,
+                        role, language_context=language,
+                    )
+                    prompt = (
+                        f"You are starting a role-play as '{role}'. "
+                        f"Greet the user naturally in {language_name(language.target_language)} "
+                        "and start the conversation as this character would. Keep it short (1-2 sentences)."
+                    )
                 history = []
                 conversation_id = None
                 user_message_id = None

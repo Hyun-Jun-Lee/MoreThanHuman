@@ -149,6 +149,10 @@ def test_conversation_model_has_default_language_snapshot():
     assert saved.native_language == "ko"
     assert saved.target_language == "en"
     assert saved.feedback_language == "ko"
+    assert saved.topic is None
+    assert saved.topic_summary is None
+    assert saved.conversation_direction is None
+    assert saved.custom_focus is None
 
 
 def test_roleplay_conversation_persists_long_role_without_manual_difficulty():

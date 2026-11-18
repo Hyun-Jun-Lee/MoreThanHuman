@@ -66,10 +66,16 @@ async def test_start_free_chat_stores_topic_instead_of_first_message():
     service = _FakeConversationService(repository)
 
     await service.start_free_chat_conversation(
-        "I want to talk about my hobby.", topic="  취미 이야기  ", user_id="user-1",
+        "I want to talk about my hobby.", topic="  취미 이야기  ",
+        search_context="취미에 대한 짧은 요약", conversation_direction="DEBATE",
+        custom_focus="사진 취미의 장점", user_id="user-1",
     )
 
     assert repository.conversation.title == "취미 이야기"
+    assert repository.conversation.topic == "  취미 이야기  "
+    assert repository.conversation.topic_summary == "취미에 대한 짧은 요약"
+    assert repository.conversation.conversation_direction == "DEBATE"
+    assert repository.conversation.custom_focus == "사진 취미의 장점"
 
 
 def test_free_chat_prompt_prioritizes_natural_conversation_over_unsolicited_teaching():

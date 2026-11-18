@@ -213,7 +213,8 @@ def _prepared_stream_response(
 
 def _prepare_stream_or_http_error(**kwargs) -> PreparedGeneration:
     try:
-        return prepare_generation(**kwargs)
+        with latency_span("stream_prepare", operation=kwargs.get("kind") or "retry"):
+            return prepare_generation(**kwargs)
     except LookupError as error:
         raise HTTPException(status_code=404, detail="turn을 찾을 수 없어요") from error
     except StreamTurnConflict as error:
@@ -655,10 +656,11 @@ async def start_free_chat_stream(
     voice_service: VoiceService = Depends(get_voice_service),
 ):
     try:
-        body, _, audio_file = await _parse_free_chat_input(http_request)
-        input_mode, first_message = await voice_service.resolve_input_text(
-            text=body.first_message, audio_file=audio_file,
-        )
+        with latency_span("stream_input", operation="free_chat_start"):
+            body, _, audio_file = await _parse_free_chat_input(http_request)
+            input_mode, first_message = await voice_service.resolve_input_text(
+                text=body.first_message, audio_file=audio_file,
+            )
     except ValidationError as error:
         raise _validation_error_response(error) from error
     except AppException as error:
@@ -709,8 +711,9 @@ async def send_turn_stream(
     voice_service: VoiceService = Depends(get_voice_service),
 ):
     try:
-        text, _, audio_file = await _parse_turn_input(http_request)
-        input_mode, user_text = await voice_service.resolve_input_text(text=text, audio_file=audio_file)
+        with latency_span("stream_input", operation="turn"):
+            text, _, audio_file = await _parse_turn_input(http_request)
+            input_mode, user_text = await voice_service.resolve_input_text(text=text, audio_file=audio_file)
     except AppException as error:
         raise HTTPException(status_code=400, detail=error.message) from error
     prepared = _prepare_stream_or_http_error(

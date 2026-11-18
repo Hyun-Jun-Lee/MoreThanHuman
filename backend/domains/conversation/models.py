@@ -24,6 +24,10 @@ class ConversationModel(Base):
     title = Column(String(200), nullable=True)  # 대화 제목
     conversation_type = Column(SQLEnum(ConversationType), default=ConversationType.FREE_CHAT, nullable=False)  # 대화 타입
     role_character = Column(String(500), nullable=True)  # 롤플레이 캐릭터/상황 설명
+    topic = Column(Text, nullable=True)  # 주제 준비에서 입력한 원래 주제
+    topic_summary = Column(Text, nullable=True)  # 주제 준비 카드의 요약
+    conversation_direction = Column(String(32), nullable=True)  # 선택한 대화 방향
+    custom_focus = Column(String(200), nullable=True)  # 직접 입력한 대화 방향
     native_language = Column(String(8), default=DEFAULT_LANGUAGE_CONTEXT.native_language.value, nullable=False)
     target_language = Column(String(8), default=DEFAULT_LANGUAGE_CONTEXT.target_language.value, nullable=False)
     feedback_language = Column(String(8), default=DEFAULT_LANGUAGE_CONTEXT.feedback_language.value, nullable=False)

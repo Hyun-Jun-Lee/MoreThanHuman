@@ -372,6 +372,8 @@ module Conversation {
 
   자유 대화 생성 시 `topic`이 공백을 제외하고 비어 있지 않으면 이를 제목으로 저장해요. 제목은 앞뒤 공백을 제거하고 최대 200자로 제한해요. `topic`이 없거나 공백뿐인 기존 API 요청은 첫 사용자 발화를 제목으로 사용하며, 50자를 넘으면 앞 47자와 `...`를 저장해요. 텍스트·음성 및 일반·스트림 시작에 같은 규칙을 적용해요.
 
+  자유 대화 시작 시 주제 준비 문맥을 `conversations.topic`, `topic_summary`, `conversation_direction`, `custom_focus`에 보존해요. `topic_summary`에는 시작 요청의 `search_context`(주제 준비 카드의 summary)를 저장해요. 네 필드는 모두 NULL을 허용하므로 DB 마이그레이션 후 주제 준비 없이 시작한 대화와 기존 대화는 값이 없어도 유효해요. 선택한 첫 질문은 이 네 필드에 포함하지 않아요. 모델 변경에 맞는 DB 마이그레이션은 별도로 적용해야 해요.
+
   type StartRoleplayRequest {
     role_character: String
     search_context?: String
