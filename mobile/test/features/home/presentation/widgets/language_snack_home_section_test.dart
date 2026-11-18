@@ -39,11 +39,11 @@ void main() {
     activeTab.value = -1;
     await tester.pumpAndSettle();
     expect(find.byType(Dialog), findsNothing);
-    expect(find.text('0 / 12'), findsOneWidget);
+    _expectConsumed(tester, 0);
     activeTab.value = 0;
     await tester.pumpAndSettle();
     expect(find.byType(Dialog), findsNothing);
-    expect(find.text('0 / 12'), findsOneWidget);
+    _expectConsumed(tester, 0);
   });
 
   testWidgets('debug reset is available after all twelve snacks are consumed', (
@@ -59,10 +59,10 @@ void main() {
     );
     await tester.pumpWidget(_app(storage, () => DateTime(2026, 9, 19)));
     await tester.pumpAndSettle();
-    expect(find.text('12 / 12'), findsOneWidget);
+    _expectConsumed(tester, 12);
     await tester.tap(find.byKey(const ValueKey('reset-snack-basket')));
     await tester.pumpAndSettle();
-    expect(find.text('0 / 12'), findsOneWidget);
+    _expectConsumed(tester, 0);
     expect(find.text('Refills at midnight'), findsNothing);
     final touch = find.byKey(const ValueKey('snack-tomato-touch'));
     await tester.tap(touch);
@@ -70,7 +70,7 @@ void main() {
     await tester.tap(touch);
     await tester.pumpAndSettle();
     expect(find.byType(Dialog), findsOneWidget);
-    expect(find.text('1 / 12'), findsOneWidget);
+    _expectConsumed(tester, 1);
     await tester.tap(find.byKey(const ValueKey('close-snack')));
     await tester.pumpAndSettle();
     await tester.pumpWidget(const SizedBox());
@@ -97,15 +97,15 @@ void main() {
       _app(storage, () => DateTime(2026, 9, 19), resets: resets),
     );
     await tester.pumpAndSettle();
-    expect(find.text('11 / 12'), findsOneWidget);
+    _expectConsumed(tester, 11);
     await tester.tap(find.byKey(const ValueKey('snack-tomato-touch')));
     await tester.pumpAndSettle();
     expect(find.byType(Dialog), findsOneWidget);
-    expect(find.text('12 / 12'), findsOneWidget);
+    _expectConsumed(tester, 12);
     await tester.tap(find.byKey(const ValueKey('close-snack')));
     await tester.pumpAndSettle();
     expect(find.byType(Dialog), findsNothing);
-    expect(find.text('0 / 12'), findsOneWidget);
+    _expectConsumed(tester, 0);
     expect(find.byKey(const ValueKey('tomato-stage-basket')), findsOneWidget);
   });
 
@@ -131,7 +131,7 @@ void main() {
       expect(find.byTooltip('Reset basket (test)'), findsOneWidget);
       await tester.tap(reset);
       await tester.pumpAndSettle();
-      expect(find.text('0 / 12'), findsOneWidget);
+      _expectConsumed(tester, 0);
       expect(find.byKey(const ValueKey('tomato-stage-basket')), findsOneWidget);
       expect(resets.calls, calls);
       final stored = DailySnackBasket.fromJson(
@@ -158,13 +158,13 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(reset);
       await tester.pumpAndSettle();
-      expect(find.text('0 / 12'), findsOneWidget);
+      _expectConsumed(tester, 0);
       await tester.pumpWidget(const SizedBox());
       await tester.pumpWidget(
         _app(storage, () => DateTime(2026, 9, 19), resets: resets),
       );
       await tester.pumpAndSettle();
-      expect(find.text('0 / 12'), findsOneWidget);
+      _expectConsumed(tester, 0);
       await tester.pumpWidget(const SizedBox());
       expect(tester.takeException(), isNull);
     },
@@ -191,7 +191,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('tomato-stage-basket')), findsOneWidget);
-    expect(find.text('0 / 12'), findsOneWidget);
+    _expectConsumed(tester, 0);
     expect(find.text('Refills at midnight'), findsNothing);
     final container = ProviderScope.containerOf(
       tester.element(find.byType(LanguageSnackHomeSection)),
@@ -227,11 +227,11 @@ void main() {
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       await tester.pumpAndSettle();
       expect(find.byType(Dialog), findsOneWidget);
-      expect(find.text('1 / 12'), findsOneWidget);
+      _expectConsumed(tester, 1);
       await tester.tap(find.byKey(const ValueKey('close-snack')));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('tomato-stage-basket')), findsOneWidget);
-      expect(find.text('0 / 12'), findsOneWidget);
+      _expectConsumed(tester, 0);
       await tester.tap(touch);
       await tester.pumpAndSettle();
       await tester.tap(touch);
@@ -241,7 +241,7 @@ void main() {
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       await tester.pumpAndSettle();
-      expect(find.text('1 / 12'), findsOneWidget);
+      _expectConsumed(tester, 1);
       await tester.pumpWidget(const SizedBox());
       expect(tester.takeException(), isNull);
     },
@@ -278,7 +278,7 @@ void main() {
       }
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('tomato-stage-basket')), findsOneWidget);
-      expect(find.text('0 / 12'), findsOneWidget);
+      _expectConsumed(tester, 0);
       final c = ProviderScope.containerOf(
         tester.element(find.byType(LanguageSnackHomeSection)),
       );
@@ -305,7 +305,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(container.read(dailySnackBasketProvider).value!.day, '2026-09-19');
       expect(find.byKey(const ValueKey('tomato-stage-basket')), findsOneWidget);
-      expect(find.text('0 / 12'), findsOneWidget);
+      _expectConsumed(tester, 0);
       expect(find.byType(Dialog), findsNothing);
       await tester.pumpWidget(const SizedBox());
       expect(tester.takeException(), isNull);
@@ -331,10 +331,19 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('close-snack')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('tomato-stage-basket')), findsOneWidget);
-    expect(find.text('0 / 12'), findsOneWidget);
+    _expectConsumed(tester, 0);
     await tester.pumpWidget(const SizedBox());
     expect(tester.takeException(), isNull);
   });
+}
+
+void _expectConsumed(WidgetTester tester, int consumed) {
+  final container = ProviderScope.containerOf(
+    tester.element(find.byType(LanguageSnackHomeSection)),
+  );
+  expect(container.read(dailySnackBasketProvider).value!.consumed, consumed);
+  expect(find.text('$consumed / 12'), findsNothing);
+  expect(find.textContaining(RegExp(r'^\d+ / 3$')), findsNothing);
 }
 
 Widget _app(

@@ -199,26 +199,18 @@ class _SnackTomatoBasketState extends State<SnackTomatoBasket>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Align(
-          alignment: Alignment.centerRight,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (kDebugMode && widget.onResetForTesting != null)
-                IconButton(
-                  key: const ValueKey('reset-snack-basket'),
-                  tooltip: copy.resetSnackBasketTooltip,
-                  onPressed: _busy ? null : widget.onResetForTesting,
-                  icon: const Icon(Icons.restart_alt, size: 20),
-                ),
-              Text(
-                '$consumed / 12',
-                style: AppTypography.caption.copyWith(letterSpacing: 0),
-              ),
-            ],
+        if (kDebugMode && widget.onResetForTesting != null) ...[
+          Align(
+            alignment: Alignment.centerRight,
+            child: IconButton(
+              key: const ValueKey('reset-snack-basket'),
+              tooltip: copy.resetSnackBasketTooltip,
+              onPressed: _busy ? null : widget.onResetForTesting,
+              icon: const Icon(Icons.restart_alt, size: 20),
+            ),
           ),
-        ),
-        const SizedBox(height: AppSpacing.md),
+          const SizedBox(height: AppSpacing.md),
+        ],
         Material(
           color: Colors.transparent,
           borderRadius: BorderRadius.circular(AppRadius.sm),
@@ -248,19 +240,6 @@ class _SnackTomatoBasketState extends State<SnackTomatoBasket>
                                 size: 20,
                               ),
                             ),
-                          const Spacer(),
-                          Padding(
-                            padding: const EdgeInsets.only(
-                              right: AppSpacing.md,
-                            ),
-                            child: Text(
-                              '${tomato + 1} / 3',
-                              style: AppTypography.caption.copyWith(
-                                color: ink,
-                                letterSpacing: 0,
-                              ),
-                            ),
-                          ),
                         ],
                       )
                     : const SizedBox.shrink(),

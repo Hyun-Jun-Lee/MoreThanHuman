@@ -1120,7 +1120,11 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('12 / 12'), findsOneWidget);
+    final basketContainer = ProviderScope.containerOf(
+      tester.element(find.byKey(const ValueKey('snack-tomato-touch'))),
+    );
+    expect(basketContainer.read(dailySnackBasketProvider).value!.consumed, 12);
+    expect(find.text('12 / 12'), findsNothing);
 
     final initialReads = resets.calls;
     resets.value = const SnackBasketReset(
@@ -1131,7 +1135,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(resets.calls, greaterThan(initialReads));
-    expect(find.text('0 / 12'), findsOneWidget);
+    expect(basketContainer.read(dailySnackBasketProvider).value!.consumed, 0);
+    expect(find.text('0 / 12'), findsNothing);
   });
 
   testWidgets('Recent conversations hide stale cards while refreshing', (

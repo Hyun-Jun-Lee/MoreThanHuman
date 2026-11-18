@@ -36,10 +36,8 @@ void main() {
       await tester.pumpAndSettle();
       final reset = find.byKey(const ValueKey('reset-snack-basket'));
       expect(reset, findsOneWidget);
-      expect(
-        tester.getRect(reset).right,
-        lessThanOrEqualTo(tester.getRect(find.text('0 / 12')).left),
-      );
+      expect(tester.getRect(reset).right, lessThanOrEqualTo(width));
+      expect(find.text('0 / 12'), findsNothing);
       expect(tester.takeException(), isNull);
       await _capture(tester, 'debug-reset-${width.toInt()}');
     });
@@ -171,6 +169,7 @@ void main() {
       await tester.tap(_touch);
       await tester.pumpAndSettle();
       expect(harness.basket.consumed, 0);
+      expect(find.text('1 / 3'), findsNothing);
       for (var i = 0; i < 12; i++) {
         await tester.tap(_touch);
         await tester.pumpAndSettle();
@@ -183,7 +182,7 @@ void main() {
           ),
           findsNothing,
         );
-        expect(find.text('${i + 1} / 12'), findsOneWidget);
+        expect(find.text('${i + 1} / 12'), findsNothing);
         expect(
           find.byKey(ValueKey('tomato-stage-${i % 4 + 1}')),
           findsOneWidget,
