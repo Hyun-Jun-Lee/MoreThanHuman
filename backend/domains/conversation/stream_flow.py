@@ -12,7 +12,7 @@ from config import get_settings
 from database import SessionLocal
 from domains.conversation.enums import ConversationStatus, ConversationType, MessageRole
 from domains.conversation.models import ConversationModel, MessageModel, StreamAttemptModel, StreamTurnModel
-from domains.conversation.repository import ConversationRepository, ConversationSlotsFull
+from domains.conversation.repository import ConversationRepository, ConversationSlotsFull, PreviousTurnUnresolved
 from domains.conversation.service import ConversationService, free_chat_title
 from domains.conversation.stream_turns import StreamTurnConflict, StreamTurnStore
 from shared.background_tasks import BackgroundTaskRegistry
@@ -41,6 +41,82 @@ def _language(data: dict) -> LearningLanguageContext:
     return language_context_from_values(**values)
 
 
+def _prepare_existing_turn(
+    *, db: Session, store: StreamTurnStore, repository: ConversationRepository,
+    service: ConversationService, user_id: str, request_id: str, kind: str,
+    input_data: dict, background_tasks: BackgroundTaskRegistry,
+) -> PreparedGeneration:
+    """기존 대화의 검사·이력 조회·예약·발화를 한 커밋으로 확정해요."""
+    conversation_id = input_data["conversation_id"]
+    user_text = input_data["text"]
+    prepared: PreparedGeneration | None = None
+    committed = False
+    try:
+        with latency_span("stream_precheck", operation=kind):
+            with latency_span("stream_precheck.access", operation=kind):
+                conversation = repository.lock_sendable_conversation(
+                    conversation_id, user_id,
+                    enabled=settings.conversation_access_enabled, operation=kind,
+                )
+            with latency_span("stream_precheck.unresolved", operation=kind):
+                try:
+                    repository.assert_no_unresolved_turn(conversation_id, user_id)
+                except PreviousTurnUnresolved:
+                    if db.in_transaction():
+                        db.commit()  # 검사 중 발생한 슬롯 재조정은 보존해요.
+                    raise
+
+        language = conversation.language
+        with latency_span("stream_context.history_before", operation=kind):
+            previous = repository.get_recent_messages(conversation_id, settings.max_history_turns)
+            prior_assistant = next((item.content for item in reversed(previous)
+                                    if item.role == MessageRole.ASSISTANT), None)
+        with latency_span("stream_context.prompt", operation=kind):
+            system_prompt = service.build_system_prompt(
+                None, conversation.conversation_type, conversation.role_character,
+                language_context=language,
+            )
+            history = service.prepare_message_history(previous)
+
+        with latency_span("stream_reserve", operation=kind):
+            try:
+                turn = store.reserve(
+                    user_id=user_id, request_id=request_id, kind=kind,
+                    input_data=input_data, commit=False,
+                )
+            except StreamTurnConflict:
+                if db.in_transaction():
+                    db.commit()  # 이미 확정된 요청에도 슬롯 재조정 결과는 유지해요.
+                raise
+        with latency_span("stream_context.user_message", operation=kind):
+            user_message = MessageModel(
+                id=str(uuid4()), conversation_id=conversation_id,
+                role=MessageRole.USER, content=user_text,
+            )
+            db.add(user_message)
+            db.flush()
+            turn.user_message_id = user_message.id
+            prepared = PreparedGeneration(
+                turn_id=turn.id, attempt_id=turn.attempt_id,
+                conversation_id=conversation_id, user_message_id=user_message.id,
+                user_text=user_text, input_mode=input_data.get("input_mode"),
+                system_prompt=system_prompt, history=history, prompt=user_text,
+            )
+            db.commit()
+            committed = True
+
+        background_tasks.start(service.process_grammar_feedback_background(
+            prepared.user_message_id, user_text, prior_assistant, language_context=language,
+        ))
+        return prepared
+    except Exception:
+        if not committed:
+            db.rollback()
+        elif prepared is not None:
+            store.fail(prepared.turn_id, "PREPARATION_FAILED", attempt_id=prepared.attempt_id)
+        raise
+
+
 def prepare_generation(
     *, user_id: str, request_id: str, kind: str | None, input_data: dict | None,
     http_client: httpx.AsyncClient, background_tasks: BackgroundTaskRegistry,
@@ -52,6 +128,13 @@ def prepare_generation(
         repository = ConversationRepository(db)
         service = ConversationService(repository, http_client=http_client, background_tasks=background_tasks)
         operation = kind or "retry"
+        if retry_turn_id is None and kind in {"turn", "message"}:
+            assert input_data is not None
+            return _prepare_existing_turn(
+                db=db, store=store, repository=repository, service=service,
+                user_id=user_id, request_id=request_id, kind=kind,
+                input_data=input_data, background_tasks=background_tasks,
+            )
         if retry_turn_id:
             with latency_span("stream_precheck", operation=operation):
                 previous_turn = store.get(user_id, retry_turn_id)

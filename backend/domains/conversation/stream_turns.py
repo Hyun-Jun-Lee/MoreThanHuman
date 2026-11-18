@@ -39,7 +39,10 @@ class StreamTurnStore:
             self._expire(turn)
         return [turn for turn in turns if turn.status != "completed" or turn.audio_status == "failed"]
 
-    def reserve(self, *, user_id: str, request_id: str, kind: str, input_data: dict) -> StreamTurnModel:
+    def reserve(
+        self, *, user_id: str, request_id: str, kind: str, input_data: dict,
+        commit: bool = True,
+    ) -> StreamTurnModel:
         existing = self.db.query(StreamTurnModel).filter_by(user_id=user_id, request_id=request_id).one_or_none()
         if existing is not None:
             self._expire(existing)
@@ -65,7 +68,10 @@ class StreamTurnStore:
             self.db.add(turn)
             self.db.flush()
             self.db.add(attempt)
-            self.db.commit()
+            if commit:
+                self.db.commit()
+            else:
+                self.db.flush()
         except IntegrityError as error:
             self.db.rollback()
             existing = self.db.query(StreamTurnModel).filter_by(user_id=user_id, request_id=request_id).one_or_none()

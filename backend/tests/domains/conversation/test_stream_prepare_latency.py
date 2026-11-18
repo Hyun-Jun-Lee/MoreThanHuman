@@ -63,14 +63,16 @@ async def test_turn_preparation_logs_each_stage_without_message_content(monkeypa
         "stream_prepare", "stream_precheck", "stream_reserve",
         "stream_precheck.ownership", "stream_precheck.access", "stream_precheck.unresolved",
         "stream_context.conversation", "stream_context.history_before",
-        "stream_context.user_message", "stream_context.history_after",
-        "stream_context.prompt",
+        "stream_context.user_message", "stream_context.prompt",
     }
     assert expected <= stages.keys()
+    assert "stream_context.history_after" not in stages
     assert all(stages[stage]["status"] == "ok" for stage in expected)
     assert all(stages[stage]["operation"] == "turn" for stage in expected)
     assert all(stages[stage]["start_offset_ms"] >= 0 for stage in expected)
     assert stages["stream_prepare"]["start_offset_ms"] <= stages["stream_precheck"]["start_offset_ms"]
-    assert stages["stream_precheck"]["start_offset_ms"] <= stages["stream_reserve"]["start_offset_ms"]
+    assert stages["stream_precheck"]["start_offset_ms"] <= stages["stream_context.history_before"]["start_offset_ms"]
+    assert stages["stream_context.history_before"]["start_offset_ms"] <= stages["stream_reserve"]["start_offset_ms"]
+    assert stages["stream_reserve"]["start_offset_ms"] <= stages["stream_context.user_message"]["start_offset_ms"]
     assert "private learner message" not in json.dumps(rows)
     engine.dispose()

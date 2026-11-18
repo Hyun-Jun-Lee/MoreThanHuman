@@ -9,6 +9,7 @@ from uuid import uuid4
 from sqlalchemy import desc, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.exc import NoResultFound
 
 from domains.conversation.enums import ConversationStatus
 from domains.auth.models import ProfileModel
@@ -342,6 +343,35 @@ class ConversationRepository:
                 raise ConversationLocked("읽기 전용 대화예요")
             if not access["can_send"]:
                 raise ConversationTurnsFull("이 대화의 무료 15턴을 모두 사용했어요")
+
+    def lock_sendable_conversation(
+        self, conversation_id: str, user_id: str, *, enabled: bool, operation: str,
+    ) -> ConversationModel:
+        """스트림 발화의 최종 권한을 검사하고 호출자의 커밋까지 잠금을 유지해요."""
+        if enabled:
+            try:
+                _, entitlement = self._locked_entitlement(user_id)
+            except NoResultFound as error:
+                raise NotFoundException(f"Conversation {conversation_id} not found") from error
+        with latency_span("stream_precheck.ownership", operation=operation):
+            with latency_span("stream_context.conversation", operation=operation):
+                conversation = (
+                    self.db.query(ConversationModel)
+                    .filter(ConversationModel.id == conversation_id, ConversationModel.user_id == user_id)
+                    .with_for_update()
+                    .one_or_none()
+                )
+        if conversation is None:
+            raise NotFoundException(f"Conversation {conversation_id} not found")
+        if enabled:
+            if not conversation.slot_active:
+                self.db.commit()  # 슬롯 재조정 결과는 거절된 요청에도 반영해요.
+                raise ConversationLocked("읽기 전용 대화예요")
+            limit = entitlement["turn_limit"]
+            if limit is not None and self.count_user_turns(conversation.id) >= limit:
+                self.db.commit()
+                raise ConversationTurnsFull("이 대화의 무료 15턴을 모두 사용했어요")
+        return conversation
 
     def assert_no_unresolved_turn(
         self, conversation_id: str, user_id: str, *, exclude_turn_id: str | None = None
