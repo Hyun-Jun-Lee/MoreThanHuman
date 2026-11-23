@@ -17,7 +17,7 @@ EstreGenesis v1.6.0 기반 Migration A 실행:
 1. 기존 AI 관련 파일 감사 (README.md, .claude/)
 2. 서비스 중립 규칙 추출 → `.agent/rules.md`
 3. `AGENTS.md` SSoT 생성
-4. 브릿지: Claude Code (`.claude/rules/bridge.md`) + Codex (`codex.md`)
+4. 브릿지: Claude Code (`.claude/rules/bridge.md`) + Codex의 `AGENTS.md` 직접 참조
 5. 멀티에이전트 코디네이션: `_coordination/`, `_contracts/`, `_questions/`
 6. 아키텍처 문서: `.agent/architecture.md` (버전 고정)
 

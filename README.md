@@ -44,15 +44,10 @@ uv run uvicorn main:app --reload --host 0.0.0.0 --port 8010
 ```bash
 cd mobile
 flutter pub get
-flutter run \
-  --dart-define=API_BASE_URL=http://localhost:8010/api/ \
-  --dart-define=SUPABASE_URL=YOUR_SUPABASE_URL \
-  --dart-define=SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY \
-  --dart-define=GOOGLE_CLIENT_ID=YOUR_IOS_CLIENT_ID \
-  --dart-define=GOOGLE_SERVER_CLIENT_ID=YOUR_WEB_CLIENT_ID
+flutter run --dart-define-from-file=.env.local.json
 ```
 
-Flutter는 서버 .env를 자동으로 읽지 않아요. 위 공개 설정을 실제 값으로 바꾸고, Google 로그인 플랫폼 설정은 [모바일 문서](mobile/README.md#실행-설정)를 따라주세요. Android 에뮬레이터는 API 주소의 호스트를 `10.0.2.2`, 실제 기기는 접근 가능한 개발 PC 주소로 바꿔요.
+Flutter는 서버 `.env`를 자동으로 읽지 않아요. `mobile/.env.local.json`에 로컬 API 주소와 Supabase·Google 공개 설정을 넣고 커밋하지 않아요. 필드와 Google 로그인 플랫폼 설정은 [모바일 문서](mobile/README.md#실행-설정)를 따라주세요. Android 에뮬레이터는 API 주소의 호스트를 `10.0.2.2`, 실제 기기는 접근 가능한 개발 PC 주소로 바꿔요.
 
 iOS TestFlight IPA의 앱·위젯 서명 설정은 [운영 가이드](docs/OPERATIONS.md#ios-testflight-배포-서명)를 따라주세요.
 
@@ -167,9 +162,8 @@ Topic Prep의 요약·카드 도착 시간은 [API 로그와 지연 진단](docs
 | [운영 가이드](docs/OPERATIONS.md) | Docker 배포·인증·cron·복구 |
 | [API 명세](docs/DSL.md) | 요청·응답·인증·도메인 계약 |
 | [API 로그와 지연 진단](docs/OBSERVABILITY.md) | 요청·예외 JSON 로그, nginx 시간, Docker 보관·Loki 검색 계약 |
-| [음성 지연 진단](docs/VOICE_LATENCY.md) | 음성 단계·앱 첫 재생 계측, 10회 실험·연결 풀 v1 |
-| [음성 스트리밍](docs/VOICE_STREAMING.md) | 대화 흐름의 문장별 TTS·앱 재생·수동 복구(1~6단계), 실환경 검증 순서 |
 | [모바일 가이드](mobile/README.md) | 플랫폼·로그인 설정과 앱 개발 |
+| [모바일 UX 흐름](docs/mobile-flow-spec.md) | 온보딩·게스트·대화·내 정보 화면 흐름 |
 | [아키텍처](.agent/architecture.md) | 내부 구조와 데이터 흐름 |
 | [디자인 시스템](docs/design/DESIGN_SYSTEM.md) | UI 토큰과 컴포넌트 기준 |
 | [기여 규칙](AGENTS.md) | 코드·문서·Git 협업 규칙 |

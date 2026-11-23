@@ -1,8 +1,7 @@
 # tomatalk 초기 60일 마케팅 실행안
 
 > 작성: 2026-10-23 · 버전: 1.0 · 상태: 공개 출시 전후 실행안 · 방법: `growth-plan` 스킬의 단계별 채널·목표·담당자·중단 기준을 60일에 맞게 적용
-> 기준: [제품 전략](../../STRATEGY.md) · [고객 조사](CUSTOMER_RESEARCH.md) · [포지셔닝](POSITIONING.md) · [마케팅 전략](MARKETING_STRATEGY.md)
-> 회의용 요약: [초기 60일 실행안 HTML](GROWTH_PLAN_60D.html)
+> 기준: [고객 조사](CUSTOMER_RESEARCH.md) · [포지셔닝](POSITIONING.md) · [마케팅 전략](MARKETING_STRATEGY.md)
 
 ## 0. 출발 조건과 60일의 목적
 

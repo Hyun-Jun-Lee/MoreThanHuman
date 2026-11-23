@@ -180,7 +180,7 @@ Splash → Onboarding(최초 1회) → 익명 게스트 Home
 - 설명은 영어 학습자에게 한국어, 한국어 학습자에게 영어로 제공하며 앱 chrome locale과 분리해요. 미지원 유형·버전은 건너뛰고 알려진 유형의 손상된 응답은 캐시로 복원해요. 운영 키나 생성 기능은 앱에 포함하지 않아요.
 - Home Navigation v2 (2026-09-22, 2026-11-10 갱신): 홈은 언어 스낵 → `오늘의 토마토` 제목과 대화 카드(기본 5개, 더 보기·접기)를 스크롤해요. `＋ 새 대화` 버튼은 하단 탭 위 중앙에 너비 240px로 고정하고 마지막 대화가 버튼에 가리지 않도록 아래 여백을 둬요. 제목은 16px 글자 크기·좌우 8px 여백을 사용하고 가운데 정렬해요.
 - 대화 권한 v2 (2026-10-04, 2026-11-08 UI 갱신): 서버 정책이 켜지면 무료 계정은 활성 대화 1개·대화별 15회, Advance·Plus는 각각 5개·10개와 무제한 발화를 사용해요. 초과 대화는 실제 기록에 읽기 전용으로 표시하고 전체 대화 화면에서 활성 대화를 교체·해제해요. iOS paywall은 Free·Advance·Plus 카드를 순서대로 표시하고, Advance는 `동시 대화 5개`·`발화 무제한`, Plus는 `동시 대화 10개`·`발화 무제한`·`비즈니스 대화 모드`로 혜택을 구체적으로 안내해요. 유료 플랜 카드를 누르면 선택 상태가 바뀌며 선택 카드만 브랜드색, 나머지는 중립 배경을 사용해요. 현재 플랜은 카드 제목 옆의 점멸 화살표로 표시하며 Reduce Motion에서는 화살표를 정적으로 보여줘요. App Store 가격은 금액을 크게, 월 단위를 보조 텍스트로 분리해요. 카드별 구매 버튼 대신 카드 아래 단일 `구독하기` 버튼으로 선택한 상품을 구매하고, 그 아래에 `이전에 구매했었나요?` 안내와 구매 복원·구독 관리·약관 링크를 제공해요. 비즈니스 대화 모드는 향후 Plus 전용으로 구현할 계획이며 현재 동작은 제공하지 않아요. Android에서는 구매 버튼을 숨겨요.
-- Account (2026-11-23 UI 갱신): 하단 `내 정보` 탭은 중립 배경 위에 프로필·구독·학습 언어·계정 그룹을 카드로 구분해요. 프로필 행에서 닉네임을 관리하고, iOS 구독 행은 현재 플랜과 `플랜 살펴보기`를 함께 표시해요. 앱 언어 설정은 온보딩으로 이동해 내 정보에 표시하지 않아요. 학습 언어는 최소 44pt 버튼에 한국어 UI 기준 `한국어로 영어 공부하기`, `영어로 한국어 공부하기`를 표시하고 언어 이름만 굵게 강조해요. 언어쌍 변경은 새 대화부터 적용되고 기존 대화는 시작 시점 언어쌍을 유지해요. 저장 후 현재 탭을 유지하며 profile과 Home의 활성 언어쌍을 갱신해요. 로그아웃 시 앱 token 삭제·서버 revoke·Google sign out을 best-effort로 처리해요.
+- Account (2026-11-23 UI 갱신): 하단 `내 정보` 탭은 중립 배경 위에 프로필·구독·학습 언어·계정 그룹을 카드로 구분해요. 프로필 행에서 닉네임을 관리하고, iOS 구독 행은 현재 플랜과 `플랜 살펴보기`를 함께 표시해요. 앱 언어 설정은 온보딩으로 이동해 내 정보에 표시하지 않아요. 학습 언어는 최소 44pt 버튼에 한국어 UI 기준 `한국어로 영어 공부하기`, `영어로 한국어 공부하기`를 표시하고 언어 이름만 굵게 강조해요. 언어쌍 변경은 새 대화부터 적용되고 기존 대화는 시작 시점 언어쌍을 유지해요. 저장 후 현재 탭을 유지하며 profile과 Home의 활성 언어쌍을 갱신해요. 회원 로그아웃은 Supabase·Google sign-out과 계정별 로컬 상태 정리를 best-effort로 처리한 뒤 새 익명 게스트를 준비해요.
 - Free Chat: 홈·전체 대화 화면의 공통 시작 sheet에서 Topic Input → Topic Prep으로 이동한 뒤 첫 답변으로 대화를 시작
 - Roleplay: 홈·전체 대화 화면의 공통 시작 sheet에서 Roleplay Setup으로 이동한 뒤 상황을 골라 롤플레이 대화를 시작
 - Conversations: 홈에서는 활성 대화 우선·그룹별 최신 순으로 첫 5개를 표시하고 `더 보기`로 나머지를 펼쳐 기존 대화 카드에서 다시 진입
@@ -275,8 +275,7 @@ SSE 기반 실시간 피드백과 waveform 표시는 후속 작업으로 남겨�
 
 ### iOS 홈 화면 스낵 위젯
 
-바구니를 누르면 앱 홈처럼 토마토가 오른쪽 아래에서 중앙으로 올라오며 커져요(0.4초). 한입을 누르면 좌우로 흔들리며 눌렸다가 먹은 이미지로 바뀌고 원래 크기로 돌아와요(0.36초). 동작 줄이기가 켜져 있으면 두 모션을 생략해요. 실제 전환 시각은 iOS가 조정할 수 있어요.
-한입 이미지는 카드가 열리기 전까지 흐려지지 않으며, 두 화면을 바꿀 때도 페이드를 사용하지 않아요.
+바구니를 누르면 한 번의 상태 갱신으로 바구니가 사라지고 토마토 한 개가 나타나요. 토마토를 누르면 소비 횟수를 저장한 뒤 스낵 카드를 즉시 표시해요. 이동·확대·흔들림·한입 이미지 미리보기·카드 지연·페이드는 사용하지 않아요.
 
 iOS 17 이상에서는 `systemMedium`과 `systemLarge` 두 크기의 **오늘의 토마토** 위젯을 제공해요. 앱에 로그인하고 Home에서 오늘의 스낵을 한 번 준비한 뒤 홈 화면의 위젯 갤러리에서 원하는 크기를 추가해요. 기본 화면은 상단 중앙의 제목과 그 아래 토마토 3개가 담긴 바구니를 보여주며, 큰 크기에서는 바구니를 위젯 중앙에 놓아요. 바구니를 누르면 토마토 한 개가 나오고 토마토를 누르면 앱을 열지 않고 한입을 소비해요. 한입 동작이 끝나면 위젯 전체가 앱 팝업과 닮은 불투명한 색상별 스낵 카드로 바뀌어요. 카드가 열린 뒤에는 아래 토마토와 시작 화면 제목이 비치지 않아요. 4입마다 남은 2·1·0개 바구니로 돌아가요. 카드에는 중앙 정렬된 두 표현을 보여주고, 좌우 화살표로 설명·예문·번역을 넘기며 닫기 버튼으로 토마토 화면에 돌아가요. 두 크기 모두 같은 종류의 두 표현 설명을 한 페이지에 나란히 보여주고 긴 설명은 말줄임표로 처리해요. 두 크기는 같은 진행을 공유하고 앱 Home 진입·복귀에도 반영돼요. 앱을 열지 않은 채 날짜가 바뀌면 마지막 12개를 새 날짜에 재사용해요.
 
@@ -288,26 +287,34 @@ TestFlight 아카이브에서는 Runner와 SnackWidget의 Release·Profile 구�
 
 ### 앱 실행
 
-Google Sign-In 실행 시 다음 `dart-define`을 사용할 수 있어요.
+로컬 개발은 공개 설정을 `mobile/.env.local.json`에 저장하고 다음처럼 실행해요. 이 파일은 커밋하지 않아요.
 
 ```bash
-flutter run \
-  --dart-define=SUPABASE_URL=<supabase-project-url> \
-  --dart-define=SUPABASE_PUBLISHABLE_KEY=<supabase-publishable-key> \
-  --dart-define=GOOGLE_CLIENT_ID=<ios-oauth-client-id> \
-  --dart-define=GOOGLE_SERVER_CLIENT_ID=<web-oauth-client-id>
+flutter run --dart-define-from-file=.env.local.json
+```
+
+로컬 파일은 다음 공개 설정을 담아요.
+
+```json
+{
+  "API_BASE_URL": "http://localhost:8010/api/",
+  "SUPABASE_URL": "<supabase-project-url>",
+  "SUPABASE_PUBLISHABLE_KEY": "<supabase-publishable-key>",
+  "GOOGLE_CLIENT_ID": "<ios-oauth-client-id>",
+  "GOOGLE_SERVER_CLIENT_ID": "<web-oauth-client-id>"
+}
 ```
 
 iOS 앱의 개인정보처리방침은 한국어 `https://www.curitalk.app/privacy`, 영어 `https://www.curitalk.app/en/privacy`를 기본값으로 사용해요. 배포별로 바꿀 때는 `--dart-define=PRIVACY_POLICY_URL=...`와 `--dart-define=PRIVACY_POLICY_URL_EN=...`을 함께 전달해요. 별도 이용약관을 사용하면 `--dart-define=SUBSCRIPTION_TERMS_URL=https://...`도 전달해요. 기본 이용약관 링크는 Apple 표준 EULA예요. 앱은 제품 가격을 App Store에서 직접 조회하므로 가격용 `dart-define`은 없어요.
 
 Android에서 `google-services.json`을 사용하지 않으면 `GOOGLE_SERVER_CLIENT_ID`가 필요해요. iOS는 `GOOGLE_CLIENT_ID`와 별개로 OAuth 설정의 `REVERSED_CLIENT_ID` URL scheme을 `Info.plist`에 등록해야 실제 로그인이 동작해요. `GOOGLE_SERVER_CLIENT_ID`는 Supabase Google Provider에 등록한 Web OAuth client ID와 같아야 해요.
 
-기본 API 주소는 `http://localhost:8010/api/`예요. 실행 환경에 따라 `--dart-define`으로 변경해요.
+기본 API 주소는 `http://localhost:8010/api/`예요. `.env.local.json`의 `API_BASE_URL`을 실행 환경에 맞게 변경해요.
 
 ```bash
 # iOS simulator / macOS
-flutter run --dart-define=API_BASE_URL=http://localhost:8010/api/
+flutter run --dart-define-from-file=.env.local.json
 
 # Android emulator
-flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8010/api/
+flutter run --dart-define-from-file=.env.local.json
 ```

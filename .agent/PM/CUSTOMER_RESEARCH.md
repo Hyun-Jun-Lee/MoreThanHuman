@@ -1,7 +1,7 @@
 # tomatalk 초기 고객 조사: 두 언어쌍 비교
 
 > 작성: 2026-10-23 · 방법: `customer-research` 스킬의 JTBD·4 Forces 틀에 따른 공개 발언 조사 · 상태: 고객 인터뷰 전 탐색 자료
-> 제품 기준: [제품 전략](../../STRATEGY.md) · [마케팅 전략](MARKETING_STRATEGY.md)
+> 제품 기준: [마케팅 전략](MARKETING_STRATEGY.md) · [현재 제품 설명](../../README.md)
 
 ## 읽는 법과 근거 수준
 

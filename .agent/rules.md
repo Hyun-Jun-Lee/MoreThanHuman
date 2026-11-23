@@ -1,6 +1,6 @@
 # 프로젝트 정책
 
-> SSoT: `AGENTS.md` · 최종 갱신: 2026-09-13
+> SSoT: `AGENTS.md` · 최종 갱신: 2026-11-24
 
 ---
 
@@ -50,6 +50,7 @@
   - 기술 문서 → `docs/`
   - AI 에이전트 운영 → `.agent/`
   - 프로젝트 관리 → `.agent/PM/`
+- 기능별 계획·브레인스토밍 문서는 상시 보관하지 않아요. 구현 후 결정은 `docs/DSL.md`, `.agent/architecture.md`, 관련 계약과 테스트에 반영해요.
 
 ---
 
@@ -57,14 +58,15 @@
 
 - 브랜치: `feature/*`, `fix/*`, `refactor/*`, `docs/*`
 - 커밋 형식: `AGENTS.md §7` 참조
-- 공유 파일 편집 전: `HANDOFF.md` claim 필수
-- PR 필수: main 직접 커밋 금지 (멀티에이전트 환경)
+- 멀티에이전트가 동시에 작업할 때 공유 파일 편집 전 `HANDOFF.md` claim 필수
+- 기본 통합 방식은 PR이에요. 사용자가 현재 작업에서 `main` 직접 반영을 명시한 경우에만 fast-forward 또는 검증된 커밋 반영을 허용해요.
 
 ---
 
 ## 협업 정책
 
 - 태스크 시작/종료 시 `STATE.md` 갱신
+- 완료 기록은 `CHANGELOG.md`에 추가하고 최근 2개만 유지
 - 블로커 >30분: `.agent/_lessons/NNN_title.md` 기록
 - 인터페이스 변경: `_contracts/` DRAFT → REVIEW → ACTIVE
 - 질문: `_questions/open/`에 파일 생성 (우선순위 🔴🟡🟢)

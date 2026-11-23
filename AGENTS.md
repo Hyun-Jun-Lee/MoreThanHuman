@@ -1,7 +1,7 @@
 # AGENTS.md — Single Source of Truth
 
 > **프로젝트**: MoreThanHuman (서비스명: tomatalk)
-> **서비스**: AI 기반 영어 회화 학습 플랫폼
+> **서비스**: AI 기반 영어·한국어 회화 학습 플랫폼
 > **시드 버전**: EstreGenesis v1.6.0
 > **마이그레이션일**: 2026-05-20
 
@@ -15,7 +15,7 @@
 2. `.agent/rules.md` (코딩·문서·git·협업 정책)
 3. `.agent/architecture.md` (시스템 아키텍처·스택·데이터 플로우)
 4. `.agent/_coordination/STATE.md` (현재 진행 중인 작업)
-5. `.agent/_contracts/` (인터페이스 계약)
+5. `.agent/_contracts/` (현재 작업 영역과 관련된 인터페이스 계약)
 6. `README.md` (서비스 소개·실행 방법·CLI, 상세 문서 진입점)
 7. `docs/DSL.md` (도메인 DSL 명세)
 
@@ -38,9 +38,9 @@
 | 서비스 | 브릿지 파일 | 비고 |
 |--------|-----------|------|
 | Claude Code | `.claude/rules/bridge.md` | PreToolUse 훅 지원 |
-| Codex | `codex.md` | AGENTS.md 직접 참조 |
+| Codex | `AGENTS.md` | 저장소 진입 시 직접 참조 |
 
-모든 브릿지는 이 `AGENTS.md`를 SSoT로 import해요.
+각 AI 서비스는 이 `AGENTS.md`를 공통 SSoT로 사용해요.
 
 ---
 
@@ -53,7 +53,7 @@
 3. **질문**: `.agent/_questions/open/YYYY-MM-DD_FROM-to-TO_NNN.md`
    - 🔴 24h blocker · 🟡 72h soon · 🟢 다음 주기
 4. **인터페이스 변경**: `.agent/_contracts/NAME.md` (DRAFT → REVIEW → ACTIVE)
-5. **완료**: `.agent/_coordination/CHANGELOG.md`에 1줄 기록, STATE.md에서 제거
+5. **완료**: `.agent/_coordination/CHANGELOG.md`에 1줄 기록하고 최근 2개만 유지, STATE.md에서 제거
 
 **공유 파일 목록** (편집 전 반드시 HANDOFF claim):
 - `backend/database.py`, `backend/config.py`, `backend/main.py`
@@ -67,7 +67,7 @@
 
 **5.1** 작업 언어: 한국어 · 말투: \~에요/예요 체 · 페이스 모드: Proactive 5\~6×
 
-**5.2** 코드 전에 문서. 모든 결정은 파일로 기록.
+**5.2** 공유 계약·운영 방식이 바뀌면 구현과 같은 작업 단위에서 기준 문서를 갱신해요. 일상적인 구현마다 별도 계획 문서를 만들지는 않아요.
 
 **5.3** `.agent/_lessons/`가 예상 밖 블로커를 기록. 새 태스크 전 관련 태그로 grep.
 
@@ -91,7 +91,7 @@
 
 **5.10** 문서 구조 원칙: `README.md`는 서비스 소개·실행 방법·CLI와 상세 문서 링크만 간결하게 유지해요. API 계약은 `docs/DSL.md`, 환경변수 설명은 `docs/ENVIRONMENT.md`, 배포·cron·복구는 `docs/OPERATIONS.md`, 내부 구조는 `.agent/architecture.md`를 단일 기준으로 삼아요. README에 상세 계약·설정 전체 표를 중복하지 않으며 실행에 영향을 주는 변경만 요약 반영해요.
 
-**5.11** 임시 문서 정리: `PLAN_*.md`, 피드백 메모 같은 임시 문서는 구현 전 의사결정용으로만 쓰고, 반영이 끝나면 핵심 문서에 흡수한 뒤 삭제 또는 아카이브해요.
+**5.11** 임시 문서 정리: 계획·브레인스토밍·피드백 메모는 필요한 동안만 사용하고, 구현이 끝나면 결정 사항을 기준 문서와 테스트에 흡수한 뒤 삭제해요.
 
 ---
 
@@ -126,8 +126,7 @@
 | 환경변수 | `docs/ENVIRONMENT.md` | 전체 설정·필수 여부·기본값 |
 | 운영 가이드 | `docs/OPERATIONS.md` | 배포·주간 작업·장애 대응·복구 |
 | DSL 명세 | `docs/DSL.md` | 도메인별 상세 스펙 |
-| 모바일 UX 메모 | `docs/UX_FEEDBACK.md` | Flutter 앱 UX 방향 |
+| 모바일 UX 흐름 | `docs/mobile-flow-spec.md` | Flutter 화면과 사용자 흐름 |
 | 아키텍처 | `.agent/architecture.md` | 시스템 아키텍처 상세 |
 | 정책 | `.agent/rules.md` | 코딩·문서·git·협업 정책 |
 | 문서화된 해결책 | `docs/solutions/` | 과거 문제 해결·패턴·워크플로우 learning |
-| 공유 용어집 | `CONCEPTS.md` | 프로젝트 도메인 용어와 상태 개념 |

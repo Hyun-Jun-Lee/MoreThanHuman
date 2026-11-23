@@ -126,6 +126,5 @@ assert card.quality.retry_suggestion is not None
 - `backend/domains/search/service.py` — topic prep 카드 생성과 invariant 검증
 - `backend/tests/domains/search/test_topic_prep_service.py` — 불완전한 sufficient payload 회귀 테스트
 - `backend/domains/conversation/enums.py`, `backend/domains/conversation/schemas.py` — topic prep handoff의 API enum 강제
-- `docs/brainstorms/2026-05-27-topic-prep-card-requirements.md` — topic prep 카드의 제품 의도
-- `docs/plans/2026-05-27-001-feat-topic-prep-card-plan.md` — 원래 topic prep 구현 계획
-- `docs/plans/2026-06-03-001-feat-search-quality-pipeline-plan.md` — 관련 deterministic quality gate 계획
+- `docs/DSL.md` — 현재 Topic Prep 외부 계약
+- `.agent/_contracts/SEARCH_QUALITY.md` — 검색 품질 판정 계약

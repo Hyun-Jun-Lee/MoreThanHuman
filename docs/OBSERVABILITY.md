@@ -1,6 +1,6 @@
 # API 로그와 지연 진단
 
-> 갱신: 2026-11-18 · API JSON stdout 계약
+> 갱신: 2026-11-24 · API JSON stdout 계약
 
 API는 요청 완료, 처리 단계, 예외를 한 줄짜리 JSON으로 stdout에 기록해요. nginx 접근 로그도 JSON으로 stdout에 기록해요. Docker가 각 컨테이너 로그를 보관하고 회전하며, 향후 Grafana Alloy가 이 출력을 Loki로 보낼 수 있어요. 현재 구성에는 Alloy·Loki 서버가 포함되지 않아요.
 
@@ -21,7 +21,7 @@ API는 요청 완료, 처리 단계, 예외를 한 줄짜리 JSON으로 stdout�
 
 음성 스트림 충돌 진단에는 `source`(`precheck` 또는 `reserve_integrity`)와 `pending_count`·`failed_count`를 사용해요. DB 무결성 오류가 원인이면 `db_sqlstate`·`db_constraint`·`db_table`·`db_column`에 DB가 제공한 식별자만 안전한 형식으로 남겨요. 대화별 미해결 turn 조회는 `source` 없이 같은 상태별 개수를 남겨요. 이 로그에는 사용자·대화 ID와 답변 내용을 넣지 않아요.
 
-대화 스트림의 첫 32개 델타에는 `llm_delta`(LLM에서 수신)와 `text_delta_sent`(NDJSON 송출)의 `stage`, `duration_ms`, `delta_index`, `delta_chars`, `turn_id`, `attempt_id`를 기록해요. `delta_index`는 0부터 시작하고 `delta_chars`는 원문 대신 글자 수예요. 앱의 같은 `trace_id`에 있는 `[latency]` `text_delta`·`first_text_frame`과 비교하는 절차는 [음성 지연 실험](VOICE_LATENCY.md)에 있어요.
+대화 스트림의 첫 32개 델타에는 `llm_delta`(LLM에서 수신)와 `text_delta_sent`(NDJSON 송출)의 `stage`, `duration_ms`, `delta_index`, `delta_chars`, `turn_id`, `attempt_id`를 기록해요. `delta_index`는 0부터 시작하고 `delta_chars`는 원문 대신 글자 수예요. 같은 `trace_id`의 앱 `[latency]` `text_delta`·`first_text_frame`과 비교해 서버 수신·송출·첫 화면 프레임 구간을 확인해요.
 
 대화 스트림 응답 헤더 이전에는 `stream_input`(입력 파싱·전사)과 `stream_prepare`(DB 발화 준비 전체)를 기록해요. 준비 안에서는 `stream_precheck`(최종 검사), `stream_reserve`(요청 ID와 턴 예약)를 나눠요. 일반적인 기존 대화 발화의 검사는 `stream_precheck.access`(프로필 잠금·이용 권한), `stream_precheck.ownership`(대화 소유권), `stream_precheck.unresolved`(미해결 턴)로 세분화해요. `stream_context.conversation`은 소유권 조회와 같은 SQL을 감싸며 별도 재조회가 아니에요. `stream_context.history_before`에서 읽은 최근 메시지는 문법 피드백과 LLM 이력에 함께 사용하고 `stream_context.history_after`는 실행하지 않아요. `stream_context.prompt`는 LLM 입력 구성, `stream_context.user_message`는 사용자 발화와 예약의 단일 커밋을 기록해요. 재시도는 저장된 사용자 발화를 재사용하고 기존 이력 조회 단계를 유지해요. 새 대화는 실행된 `stream_context.user_message`와 `stream_context.prompt`만 기록해요. 각 단계의 `operation`은 내부 요청 종류(`turn`, `message`, `free_chat_start`, `roleplay_start`, `retry`)만 기록해요. 모든 단계는 `duration_ms`와 요청 시작 기준 `start_offset_ms`를 포함하고 실패 시 `status=error`를 남겨요. 상위·하위 단계는 포함 관계이므로 더하지 않아요. `stream_input`은 해당 입력 파싱이 있는 스트림 경로에서만 기록하고, `stt`가 실행되면 그 시간이 포함돼요.
 
@@ -29,7 +29,7 @@ API는 요청 완료, 처리 단계, 예외를 한 줄짜리 JSON으로 stdout�
 
 ## 시간 경계
 
-nginx `request_time`은 nginx가 요청을 읽기 시작한 때부터 응답 전송이 끝날 때까지의 초 단위 시간이에요. `upstream_connect_time`, `upstream_header_time`, `upstream_response_time`은 upstream 연결·첫 헤더·응답 수신 시간을 나타내요. 재시도나 여러 upstream을 거치면 한 필드에 여러 값이 들어갈 수 있어 문자열로 기록해요. API `duration_ms`는 ASGI 미들웨어 진입부터 마지막 응답 body가 서버 전송 계층으로 전달될 때까지예요. 응답 후 문법 작업은 포함하지 않아요. 이 시간들은 경계가 다르므로 서로 단순히 더하거나 빼서 순수 네트워크 지연으로 해석하지 않아요. [음성 지연 실험](VOICE_LATENCY.md)은 앱의 녹음 종료부터 첫 재생까지를 별도로 측정해요.
+nginx `request_time`은 nginx가 요청을 읽기 시작한 때부터 응답 전송이 끝날 때까지의 초 단위 시간이에요. `upstream_connect_time`, `upstream_header_time`, `upstream_response_time`은 upstream 연결·첫 헤더·응답 수신 시간을 나타내요. 재시도나 여러 upstream을 거치면 한 필드에 여러 값이 들어갈 수 있어 문자열로 기록해요. API `duration_ms`는 ASGI 미들웨어 진입부터 마지막 응답 body가 서버 전송 계층으로 전달될 때까지예요. 응답 후 문법 작업은 포함하지 않아요. 이 시간들은 경계가 다르므로 서로 단순히 더하거나 빼서 순수 네트워크 지연으로 해석하지 않아요. 앱은 Dart `Stopwatch`로 녹음 종료부터 첫 텍스트 프레임과 첫 재생까지를 별도로 측정해요.
 
 ### 음성 없는 GET 요청의 구간별 계측
 

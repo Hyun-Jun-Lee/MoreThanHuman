@@ -1,12 +1,12 @@
 # tomatalk Backend DSL
 
-> 최종 갱신: 2026-11-16 · 범위: FastAPI 백엔드 API + Flutter 모바일 연동
+> 최종 갱신: 2026-11-24 · 범위: FastAPI 백엔드 API + Flutter 모바일 연동
 
 사용자 클라이언트는 `mobile/`의 Flutter 기반 모바일 앱으로 개발해요. 이 문서는 모바일 앱이 연동할 백엔드 도메인, 데이터 모델, API 계약을 정의해요.
 
 ### API 진단 헤더 v2 (2026-10-09)
 
-모든 `/api/` 요청과 `/health`에 `X-Request-ID`를 선택적으로 전달할 수 있어요. 값은 소문자 16진수 32자리예요. 누락·형식 불일치 시 서버가 새 값을 만들며 FastAPI가 시작한 응답 헤더에도 반환해요. 로그 연결용이며 인증·멱등성을 제공하지 않아요. nginx가 자체 생성한 응답이나 ASGI 바깥의 500 응답에는 헤더가 없을 수 있어요. 서버는 각 HTTP 시도에 별도 `request_id`를 부여하고 nginx의 내부 `X-Proxy-Request-ID`를 `proxy_request_id`로 기록해요. JSON 본문·오류 상태 계약은 유지돼요. 필드와 조회법은 [API 로그 문서](OBSERVABILITY.md), 지연 실험은 [음성 지연 문서](VOICE_LATENCY.md), 스트림 경로의 단계별 범위는 [스트리밍 설계](VOICE_STREAMING.md)에 있어요.
+모든 `/api/` 요청과 `/health`에 `X-Request-ID`를 선택적으로 전달할 수 있어요. 값은 소문자 16진수 32자리예요. 누락·형식 불일치 시 서버가 새 값을 만들며 FastAPI가 시작한 응답 헤더에도 반환해요. 로그 연결용이며 인증·멱등성을 제공하지 않아요. nginx가 자체 생성한 응답이나 ASGI 바깥의 500 응답에는 헤더가 없을 수 있어요. 서버는 각 HTTP 시도에 별도 `request_id`를 부여하고 nginx의 내부 `X-Proxy-Request-ID`를 `proxy_request_id`로 기록해요. JSON 본문·오류 상태 계약은 유지돼요. 필드·조회법·지연 구간은 [API 로그 문서](OBSERVABILITY.md), 스트림의 상태 전이와 검증 범위는 [Voice Streaming 계약](../.agent/_contracts/VOICE_STREAMING.md)에 있어요.
 
 ## 1. 시스템
 
@@ -550,7 +550,7 @@ module Conversation {
 
 NDJSON 각 줄에는 `event`, 0부터 증가하는 `seq`, `turn_id`, `attempt_id`가 있어요. `turn_started` 뒤 확정 사용자 발화가 있으면 `user_message_committed`를 보내고, 생성 중 `text_delta`와 문장별 `audio_segment`(`segment_index`, `text`, `content_type`, `format`, `base64`)를 보내요. 끝에는 `turn_completed`(`conversation_id`, `assistant_message_id`, `text`, `audio_status`) 또는 `turn_error` 하나를 보내요. TTS 실패 때는 `audio_error` 뒤 `audio_status: failed`인 `turn_completed`를 보내고 AI 메시지는 보존해요. 연결 단절 때는 마지막 이벤트를 받았다고 추정하지 않고 상태 조회로 확인해요. 같은 키의 중복 요청은 현재 상태에 따라 HTTP 409 `TURN_IN_PROGRESS`, `TURN_ALREADY_COMPLETED`, `TURN_FAILED_RETRY_REQUIRED`예요. 앱은 증분 UTF-8로 읽고, 세그먼트를 순서대로 재생해요.
 
-새 모바일 앱은 위 대화 흐름의 스트림 경로를 사용해요. 기존 JSON 경로는 유지돼요. `GET /api/conversations/{id}/messages/`의 완료된 스트림 assistant 메시지에는 `audio_available: true`가 포함돼요. 이 값은 재생 경로가 있다는 뜻이며 현재 파일 존재 여부는 뜻하지 않아요. TTS 조각을 정상 전달한 뒤 캐시 기록만 실패하면 음성은 완료로 유지하고 서버에 오류를 기록해요. 다음 재생 요청이 저장된 텍스트로 음성을 다시 생성해요. 실패한 AI 답변은 사용자가 재시도 버튼을 누를 때만 다시 생성하고, 음성 생성·재생 자체가 실패하면 앱에 오류와 다시 시도를 표시해요. 실기기·프록시·동시 부하 검증은 [7단계](VOICE_STREAMING.md#권장-개발-순서)예요.
+새 모바일 앱은 위 대화 흐름의 스트림 경로를 사용해요. 기존 JSON 경로는 유지돼요. `GET /api/conversations/{id}/messages/`의 완료된 스트림 assistant 메시지에는 `audio_available: true`가 포함돼요. 이 값은 재생 경로가 있다는 뜻이며 현재 파일 존재 여부는 뜻하지 않아요. TTS 조각을 정상 전달한 뒤 캐시 기록만 실패하면 음성은 완료로 유지하고 서버에 오류를 기록해요. 다음 재생 요청이 저장된 텍스트로 음성을 다시 생성해요. 실패한 AI 답변은 사용자가 재시도 버튼을 누를 때만 다시 생성하고, 음성 생성·재생 자체가 실패하면 앱에 오류와 다시 시도를 표시해요. 실기기·프록시·동시 부하 검증 항목은 [Voice Streaming 계약](../.agent/_contracts/VOICE_STREAMING.md#active-전-확인)을 따라요.
 이전 turn이 미해결이면 새 발화는 409 `PREVIOUS_TURN_UNRESOLVED`예요. 앱은 `GET /api/conversations/{id}/turns/`에서 이전 turn을 찾아 상태 확인·수동 재시도를 제공하고, 거절된 새 발화를 저장된 메시지로 취급하지 않아요.
 
 홈은 발행된 주제가 있으면 최근 대화 로딩 상태와 저장된 대화 수에 관계없이 추천 주제를 보여줘요. 이전 주의 발행 주제도 보관되지 않았다면 시작할 수 있어요. 탭 시 검색·사실 확인·Topic Prep은 실행하지 않아요.

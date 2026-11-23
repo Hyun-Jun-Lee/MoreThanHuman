@@ -1,7 +1,7 @@
 # 모바일 화면별 UX Flow / Wireframe
 
 > 기준일: 2026-06-11  
-> 게스트·대화 권한 갱신: 2026-11-23
+> 최종 갱신: 2026-11-24
 > 대상: Flutter v1 모바일 앱  
 > 범위: 화면 구조, 사용자 흐름, API 연결 지점, low-fi wireframe
 
@@ -13,7 +13,7 @@
 
 - 온보딩 뒤 Supabase 익명 게스트로 Home에 진입하고 Google·iOS Apple로 회원 전환할 수 있어요.
 - 게스트는 스낵·주간 추천·최근 대화를 보고 활성 대화 1개에서 계정 누적 5회 발화할 수 있어요.
-- v1에도 온보딩 2~3장을 포함해요.
+- 온보딩은 앱 언어·학습 언어·관심사·주제 준비·피드백의 5장으로 구성해요.
 - Home에는 최근 대화 목록과 `대화 시작` 단일 CTA를 보여줘요.
 - `대화 시작`을 누르면 자유 대화와 롤플레이 중 선택해요.
 - 자유 대화는 `주제 입력 → 주제 준비 카드 → 방향 선택 → 첫 질문 선택 → 사용자 답변 → 대화 시작` 흐름을 사용해요.
@@ -34,7 +34,7 @@
 | Free Chat Start | 첫 질문 선택 후 답변 | `POST /api/conversations/start/free-chat/` |
 | Roleplay Setup | 롤플레이 상황 선택 | 없음 |
 | Conversation | 채팅, 문법 피드백 polling | `POST /api/conversations/{id}/message/`, `GET /api/grammar/message/{message_id}/` |
-| Settings | 계정, 로그아웃 | `GET /api/auth/me`, `POST /api/auth/logout` |
+| Profile | 닉네임·구독·학습 언어·계정 관리 | `GET /api/auth/me`, `PUT /api/auth/me/nickname`, `PUT /api/auth/me/language-preferences` |
 
 ## 3. 글로벌 UX Flow
 
@@ -73,7 +73,7 @@ flowchart TD
 - Home의 `대화 시작` CTA는 자유 대화/롤플레이 선택 sheet를 열어요.
 - 자유 대화와 롤플레이는 모두 Conversation 화면으로 합류해요.
 - Conversation에서 뒤로 가면 Home으로 돌아가요.
-- Settings는 Home에서 접근해요.
+- Profile은 Home의 `내 정보` 탭에서 접근해요.
 
 ## 5. 화면별 Wireframe
 
@@ -119,7 +119,7 @@ flowchart TD
 
 **페이지 구성**
 
-- 2~3장을 사용해요.
+- 앱 언어, 학습 언어, 관심사, 주제 준비, 피드백의 5장을 사용해요.
 - 마지막 페이지 전까지 CTA는 `다음`, 마지막 페이지 CTA는 `시작`이에요.
 
 **Wireframe**
@@ -137,16 +137,18 @@ flowchart TD
 │ news, hobbies, sports,  │
 │ travel, or anything.    │
 │                         │
-│        ● ○ ○            │
+│      ● ○ ○ ○ ○          │
 │        [ Next ]         │
 └─────────────────────────┘
 ```
 
-**추천 메시지**
+**페이지 역할**
 
-1. 관심사 기반 대화: “Talk about what you actually care about.”
-2. 주제 준비 카드: “Get context and questions before you speak.”
-3. 부담 없는 피드백: “See gentle grammar feedback under your messages.”
+1. 앱에서 사용할 한국어·영어를 선택해 나머지 온보딩에 즉시 적용해요.
+2. 지원하는 학습 언어쌍을 선택해 첫 bootstrap 기본값으로 저장해요.
+3. 관심사 기반 대화의 가치를 소개해요.
+4. 주제 준비와 첫 질문 흐름을 소개해요.
+5. 대화 중 피드백 경험을 소개해요.
 
 **동작**
 
@@ -500,7 +502,7 @@ Timeout:
 - `200`이면 피드백을 메시지 아래에 표시해요.
 - `404`이면 pending으로 처리하고 일정 시간 후 timeout으로 전환해요.
 
-### 5.11 Settings
+### 5.11 Profile
 
 **목적**
 
@@ -510,7 +512,7 @@ Timeout:
 
 ```text
 ┌─────────────────────────┐
-│ ← Settings              │
+│ ← 내 정보               │
 │                         │
 │ Account                 │
 │ user@example.com        │
