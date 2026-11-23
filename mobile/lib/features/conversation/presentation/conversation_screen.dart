@@ -109,6 +109,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
               canLoadOlder: false,
               turnLimitReached: false,
               locked: false,
+              limitAction: 'upgrade',
               suggestedAudioFailed: false,
             ),
       error: (_, _) => AppAsyncStateView.error(
@@ -128,6 +129,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
         canLoadOlder: !_voiceInput.isRecordingActive && !_voiceInput.isBusy,
         turnLimitReached: turnLimitReached,
         locked: access?.locked == true,
+        limitAction: access?.limitAction ?? 'upgrade',
         suggestedAudioFailed: suggestedAudioFailed,
       ),
     );
@@ -445,6 +447,7 @@ class _ConversationMessageList extends ConsumerStatefulWidget {
     required this.canLoadOlder,
     required this.turnLimitReached,
     required this.locked,
+    required this.limitAction,
     required this.suggestedAudioFailed,
     this.voiceFailureReason,
     super.key,
@@ -455,6 +458,7 @@ class _ConversationMessageList extends ConsumerStatefulWidget {
   final bool canLoadOlder;
   final bool turnLimitReached;
   final bool locked;
+  final String limitAction;
   final bool suggestedAudioFailed;
   final ConversationAudioExceptionReason? voiceFailureReason;
 
@@ -614,10 +618,17 @@ class _ConversationMessageListState
               Text(
                 widget.locked
                     ? copy.conversationLockedReadOnly
+                    : widget.limitAction == 'login'
+                    ? copy.guestTurnLimitReached
                     : copy.conversationTurnLimitReached,
                 style: AppTypography.bodySm,
               ),
-              if (Platform.isIOS)
+              if (widget.limitAction == 'login')
+                TextButton(
+                  onPressed: () => context.push(AppRoute.login),
+                  child: Text(copy.signInToContinueLabel),
+                )
+              else if (Platform.isIOS)
                 TextButton(
                   onPressed: () => context.push(AppRoute.paywall),
                   child: Text(copy.subscriptionTitle),

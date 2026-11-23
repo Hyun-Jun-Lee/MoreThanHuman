@@ -84,6 +84,9 @@ class ConversationAccess(BaseModel):
     remaining_slots: int | None
     locked_count: int = 0
     plan: str = "free"
+    turn_scope: str = "conversation"
+    remaining_turns: int | None = None
+    limit_action: str = "upgrade"
 
 
 class ConversationTurnAccess(BaseModel):
@@ -92,6 +95,9 @@ class ConversationTurnAccess(BaseModel):
     turn_limit: int | None
     can_send: bool
     locked: bool = False
+    turn_scope: str = "conversation"
+    remaining_turns: int | None = None
+    limit_action: str = "upgrade"
 
 
 class Conversation(BaseModel):

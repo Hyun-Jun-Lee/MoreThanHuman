@@ -153,9 +153,9 @@ assets/
 
 `ApiClient`는 백엔드의 `{ success, data, message }` envelope를 `ApiResponse<T>`로 변환하고, FastAPI·네트워크·timeout 오류를 `ApiException`으로 통일해요. 인증 요청에는 Supabase SDK의 현재 access token을 `Authorization: Bearer` 헤더로 자동 추가하며 공개 요청은 `requiresAuth: false`로 제외할 수 있어요.
 
-`SupabaseAuthService`는 `supabase_flutter`를 감싸 Google·Apple token sign-in, 현재 session 확인, access token 조회, session refresh, sign-out을 제공해요. iOS Apple 로그인은 매 요청마다 원본 nonce를 만들고 SHA-256 해시를 Apple에 전달한 뒤, Apple identity token과 원본 nonce를 Supabase에 전달해요. Runner의 Debug·Profile·Release 서명 설정에 Sign in with Apple entitlement가 필요해요. Supabase Apple provider의 Client IDs에는 iOS bundle ID `com.morethanhuman.curitalk`가 포함돼야 해요. `SecureTokenStorage`는 더 이상 FastAPI token pair의 source of truth가 아니며 installation ID와 온보딩 같은 로컬 상태 보관에 사용해요.
+`SupabaseAuthService`는 `supabase_flutter`를 감싸 익명 로그인, Google·Apple token sign-in과 익명 사용자 신원 연결, 현재 session 확인, access token 조회, session refresh, sign-out을 제공해요. iOS Apple 로그인은 매 요청마다 원본 nonce를 만들고 SHA-256 해시를 Apple에 전달한 뒤, Apple identity token과 원본 nonce를 Supabase에 전달해요. Runner의 Debug·Profile·Release 서명 설정에 Sign in with Apple entitlement가 필요해요. Supabase Apple provider의 Client IDs에는 iOS bundle ID `com.morethanhuman.curitalk`가 포함돼야 해요. `SecureTokenStorage`는 더 이상 FastAPI token pair의 source of truth가 아니며 installation ID, 온보딩, 기존 계정 충돌 시 일회용 게스트 이전 영수증 같은 로컬 상태 보관에 사용해요.
 
-`authControllerProvider`는 앱 시작 시 Supabase current session을 확인하고 `POST /auth/bootstrap`으로 프로필을 준비해 `authenticated` 또는 `unauthenticated` 상태를 제공해요. Google SDK에서 받은 `idToken`과 `accessToken`은 `signInWithGoogleTokens()`에, Apple에서 받은 identity token과 원본 nonce는 `signInWithAppleToken()`에 전달해요. 로그아웃은 Supabase sign-out과 Google sign-out을 best-effort로 처리해요. 온보딩에서 선택했지만 아직 인증 전인 언어쌍은 secure storage에 pending 상태로 저장해요. 로그인 또는 세션 복원 직후 bootstrap 요청에 함께 보내고, 성공 응답의 최종 프로필로 첫 서비스 화면을 구성한 뒤 pending 값을 지워요.
+`authControllerProvider`는 앱 시작 시 Supabase current session을 확인하고, 온보딩이 끝났지만 세션이 없으면 익명 세션을 만든 뒤 `POST /auth/bootstrap`으로 프로필을 준비해 `guest`, `member` 또는 `unauthenticated` 상태를 제공해요. Google SDK에서 받은 `idToken`과 `accessToken`은 익명 사용자의 Google 신원 연결 또는 정식 로그인에, Apple identity token과 원본 nonce는 Apple 신원 연결 또는 로그인에 사용해요. 이미 다른 계정에 연결된 신원이면 로그인 전에 받은 이전 영수증을 회원 세션에서 claim해 게스트 데이터를 합쳐요. 로그아웃은 Supabase sign-out과 Google sign-out을 best-effort로 처리한 뒤 새 익명 세션을 준비해요. 온보딩에서 선택한 언어쌍은 secure storage에 pending 상태로 저장하고 첫 bootstrap 요청에 함께 보내며, 성공한 뒤 pending 값을 지워요.
 
 인증 API가 `401`을 반환하면 `TokenRefreshInterceptor`가 Supabase SDK의 `refreshSession()` 결과를 사용해 원 요청을 한 번 재시도해요. 동시 `401`은 하나의 refresh 작업을 공유해요. refresh 후에도 세션이 없거나 재시도가 다시 `401`이면 Riverpod 상태를 `unauthenticated`로 전환해요.
 
@@ -164,12 +164,14 @@ assets/
 `go_router`는 onboarding 완료 상태와 `authControllerProvider`를 관찰해 아래 순서로 이동해요.
 
 ```text
-Splash → Onboarding(최초 1회) → Google 또는 iOS Apple Login → Home
+Splash → Onboarding(최초 1회) → 익명 게스트 Home
 ```
 
 - Splash: 제공된 Toma Talk 이미지와 제목을 화면 중앙보다 위쪽에 함께 놓고, 진입 시 한 번 살짝 눌렀다 놓는 650ms 모션으로 표시해요. 저장된 세션과 onboarding 완료 여부를 확인하며, 확인이 먼저 끝나도 모션이 완료된 뒤 이동해요. 동작 줄이기 설정에서는 모션을 생략하고, 확인 오류 시 하단 재시도 아이콘을 표시해요.
 - Onboarding: 기기 locale 기반 언어쌍 기본값을 보여주고 4장 소개 후 완료 상태와 pending 언어쌍을 secure storage에 저장
-- Login: Google Sign-In SDK의 `idToken`/`accessToken` 또는 iOS Apple identity token/원본 nonce로 Supabase 세션 생성 후 `/auth/bootstrap` 초기화
+- Login: Home의 `내 정보` 탭이나 누적 5회 뒤 CTA에서 진입하고, Google 또는 Apple 신원을 현재 게스트에 연결하거나 기존 회원으로 로그인한 뒤 게스트 데이터를 이전해요. Google·Apple·게스트 계속 액션은 같은 전체 너비·48pt 높이·pill 형태의 검정 버튼으로 표시하고 Apple은 공식 로고·텍스트 규칙을 유지해요. 뒤로가기는 Home으로 돌아가요.
+- AI 동의: 게스트와 회원 모두 첫 AI 동작 전에 현재 개인정보처리방침과 AI 데이터 처리 고지를 함께 수락해요.
+- 게스트 대화: 활성 대화 1개, 계정 전체 누적 사용자 발화 5회예요. 추천 주제도 로그인 없이 시작할 수 있고 한도 뒤에는 읽기만 유지해요.
 - Home: 사용자 이름, 활성 언어쌍, 학습 언어별 스낵, 대화와 시작 제안을 표시해요. 전체 대화를 페이지별로 조회한 뒤 활성 대화를 먼저 정렬해 처음 5개를 보여주고, `더 보기`를 누르면 나머지를 펼쳐요. 스낵은 바구니에서 꺼낸 토마토 3개를 각각 4입 먹으며 팝업으로 읽어요. 5초 자동 전환은 사용하지 않아요.
 - 스낵 v2 (2026-09-12): target_language 변경 시 즉시 재조회하고 이전 응답을 버려요. API 실패 시 `curitalk.language_snacks.v2.{target_language}.{explanation_language}`의 마지막 성공 목록을 사용하며 캐시가 없으면 영역만 숨겨요. Home 재진입·앱 복귀 시 5분 기준으로 갱신해요.
 - 토마토 스낵 v2.1 (2026-09-19): `order=random&limit=12`로 전체 발행 콘텐츠에서 무작위 추출해요. 당일 묶음·순서·진행은 사용자와 학습 언어별 기기 저장소에 유지하며, 4입마다 팝업을 닫으면 2·1·0개가 남은 바구니로 돌아가요. 다음 토마토는 바구니를 눌러 꺼내고, 12개를 모두 보면 빈 바구니를 현지 자정까지 유지해요. 자정 또는 앱 복귀 시 새 묶음을 구성하고, 열린 팝업·애니메이션이 있으면 종료 후 갱신해요. 12개 미만이면 있는 목록을 반복해요. 기기 간 진행 동기화나 서버 이용 제한은 없어요. 원본 `snack_content_tomato/`의 PNG 9장은 `mobile/assets/images/snack_tomato/`에 복사해 번들링했으며 원본 변경 시 앱 에셋도 함께 갱신해야 해요.
@@ -296,7 +298,7 @@ flutter run \
   --dart-define=GOOGLE_SERVER_CLIENT_ID=<web-oauth-client-id>
 ```
 
-iOS 앱을 배포할 때는 공개 개인정보처리방침 주소를 `--dart-define=PRIVACY_POLICY_URL=https://...`로 전달해요. 로컬 결제 테스트에서는 이 값이 없어도 App Store 상품을 불러오면 구매 버튼을 사용할 수 있고, 개인정보처리방침 링크만 비활성화돼요. 별도 이용약관을 사용하면 `--dart-define=SUBSCRIPTION_TERMS_URL=https://...`도 전달해요. 기본 이용약관 링크는 Apple 표준 EULA예요. 앱은 제품 가격을 App Store에서 직접 조회하므로 가격용 `dart-define`은 없어요.
+iOS 앱의 개인정보처리방침은 한국어 `https://www.curitalk.app/privacy`, 영어 `https://www.curitalk.app/en/privacy`를 기본값으로 사용해요. 배포별로 바꿀 때는 `--dart-define=PRIVACY_POLICY_URL=...`와 `--dart-define=PRIVACY_POLICY_URL_EN=...`을 함께 전달해요. 별도 이용약관을 사용하면 `--dart-define=SUBSCRIPTION_TERMS_URL=https://...`도 전달해요. 기본 이용약관 링크는 Apple 표준 EULA예요. 앱은 제품 가격을 App Store에서 직접 조회하므로 가격용 `dart-define`은 없어요.
 
 Android에서 `google-services.json`을 사용하지 않으면 `GOOGLE_SERVER_CLIENT_ID`가 필요해요. iOS는 `GOOGLE_CLIENT_ID`와 별개로 OAuth 설정의 `REVERSED_CLIENT_ID` URL scheme을 `Info.plist`에 등록해야 실제 로그인이 동작해요. `GOOGLE_SERVER_CLIENT_ID`는 Supabase Google Provider에 등록한 Web OAuth client ID와 같아야 해요.
 

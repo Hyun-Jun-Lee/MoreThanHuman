@@ -6,6 +6,7 @@ import 'package:curitalk/core/storage/snack_widget_bridge.dart';
 import 'package:curitalk/features/auth/auth.dart';
 import 'package:curitalk/features/home/application/language_snack_language.dart';
 import 'package:curitalk/features/home/application/language_snacks_controller.dart';
+import 'package:curitalk/features/home/application/snack_account_scope.dart';
 import 'package:curitalk/features/home/data/snack_basket_reset_repository.dart';
 import 'package:curitalk/features/home/domain/daily_snack_basket.dart';
 import 'package:curitalk/features/home/domain/language_snack.dart';
@@ -13,9 +14,16 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final snackClockProvider = Provider<DateTime Function()>((ref) => DateTime.now);
-final snackUserIdProvider = Provider<String?>(
-  (ref) => ref.watch(authControllerProvider).value?.user?.id,
-);
+final snackUserIdProvider = Provider<String?>((ref) {
+  final configured = ref.watch(snackAccountScopeProvider);
+  return configured?.userId ??
+      ref.watch(authControllerProvider).value?.user?.id;
+});
+final snackWidgetEnabledProvider = Provider<bool>((ref) {
+  final configured = ref.watch(snackAccountScopeProvider);
+  return configured?.widgetEnabled ??
+      (ref.watch(authControllerProvider).value?.isMember ?? false);
+});
 
 class DailySnackBasketController extends AsyncNotifier<DailySnackBasket?> {
   Future<void> _writes = Future.value();
@@ -30,6 +38,7 @@ class DailySnackBasketController extends AsyncNotifier<DailySnackBasket?> {
   String? _pendingResetId;
   String? _permissionScope;
   bool _unlimitedReplayEnabled = false;
+  bool _widgetEnabled = false;
 
   @override
   Future<DailySnackBasket?> build() async {
@@ -37,8 +46,20 @@ class DailySnackBasketController extends AsyncNotifier<DailySnackBasket?> {
     _pendingResetId = null;
     _interacting = false;
     ref.onDispose(() => _generation++);
-    final userId = ref.watch(snackUserIdProvider);
-    final language = ref.watch(languageSnackLanguageProvider);
+    final configuredAccount = ref.watch(snackAccountScopeProvider);
+    final user = configuredAccount == null
+        ? ref.watch(authControllerProvider.select((value) => value.value?.user))
+        : null;
+    final account =
+        configuredAccount ??
+        SnackAccountScope(
+          userId: user?.id,
+          language: user?.language.targetLanguage.code ?? 'en',
+          widgetEnabled: user != null && !user.isGuest,
+        );
+    final userId = account.userId;
+    _widgetEnabled = account.widgetEnabled;
+    final language = account.language;
     final permissionScope = '$userId.$language';
     if (_permissionScope != permissionScope) {
       _permissionScope = permissionScope;
@@ -59,7 +80,9 @@ class DailySnackBasketController extends AsyncNotifier<DailySnackBasket?> {
     String? resetId;
     ref.onDispose(() => active = false);
     await _writes;
-    final widgetBasket = await _readWidgetBasket(userId, language);
+    final widgetBasket = _widgetEnabled
+        ? await _readWidgetBasket(userId, language)
+        : null;
     if (!active) return null;
     if (widgetBasket != null &&
         widgetBasket.day == DailySnackBasket.dayOf(now())) {
@@ -121,6 +144,7 @@ class DailySnackBasketController extends AsyncNotifier<DailySnackBasket?> {
     if (state.isLoading ||
         state.value == null ||
         _interacting ||
+        !_widgetEnabled ||
         ref.read(snackUserIdProvider) == null) {
       return;
     }
@@ -262,6 +286,7 @@ class DailySnackBasketController extends AsyncNotifier<DailySnackBasket?> {
     });
     final widgetBridge = _widgetBridge;
     final userId = _userId;
+    final widgetEnabled = _widgetEnabled;
     _writes = _writes.then((_) async {
       try {
         await storage.write(key, encoded);
@@ -269,7 +294,10 @@ class DailySnackBasketController extends AsyncNotifier<DailySnackBasket?> {
         // 진행은 메모리에서 유지하며 저장 실패를 학습 실패로 처리하지 않아요.
       }
       try {
-        if (ref.mounted && ref.read(snackUserIdProvider) == userId) {
+        if (widgetEnabled &&
+            ref.mounted &&
+            ref.read(snackUserIdProvider) == userId &&
+            ref.read(snackWidgetEnabledProvider)) {
           await widgetBridge.write(widgetEncoded);
         }
       } on Object {

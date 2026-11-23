@@ -8,11 +8,13 @@ class UserProfile {
     this.nickname,
     required this.isActive,
     this.isAdmin = false,
+    this.isGuest = false,
     required this.createdAt,
     required this.updatedAt,
     this.language = LearningLanguageContext.defaultContext,
     this.appLocale,
     this.oauthProvider,
+    this.lastActiveAt,
   });
 
   factory UserProfile.fromJson(Object? json) {
@@ -26,14 +28,18 @@ class UserProfile {
     final Object? nickname = json['nickname'];
     final Object? isActive = json['is_active'];
     final Object? isAdmin = json['is_admin'];
+    final Object? isGuest = json['is_guest'];
     final Object? oauthProvider = json['oauth_provider'];
     final Object? appLocale = json['app_locale'];
     final DateTime? createdAt = DateTime.tryParse('${json['created_at']}');
     final DateTime? updatedAt = DateTime.tryParse('${json['updated_at']}');
+    final DateTime? lastActiveAt = json['last_active_at'] == null
+        ? updatedAt
+        : DateTime.tryParse('${json['last_active_at']}');
     if (id is! String || id.isEmpty) {
       throw const FormatException('User profile id is missing.');
     }
-    if (email is! String || email.isEmpty) {
+    if (email != null && (email is! String || email.isEmpty)) {
       throw const FormatException('User profile email is missing.');
     }
     if (name is! String || name.isEmpty) {
@@ -48,6 +54,12 @@ class UserProfile {
     if (isAdmin != null && isAdmin is! bool) {
       throw const FormatException('User profile admin state is invalid.');
     }
+    if (isGuest != null && isGuest is! bool) {
+      throw const FormatException('User profile guest state is invalid.');
+    }
+    if (email == null && isGuest != true) {
+      throw const FormatException('Member profile email is missing.');
+    }
     if (oauthProvider != null && oauthProvider is! String) {
       throw const FormatException('User profile OAuth provider is invalid.');
     }
@@ -57,38 +69,42 @@ class UserProfile {
     if (appLocale != null && appLocale != 'ko' && appLocale != 'en') {
       throw const FormatException('User profile app locale is unsupported.');
     }
-    if (createdAt == null || updatedAt == null) {
+    if (createdAt == null || updatedAt == null || lastActiveAt == null) {
       throw const FormatException('User profile timestamp is invalid.');
     }
 
     return UserProfile(
       id: id,
-      email: email,
+      email: email as String?,
       name: name,
       nickname: nickname as String?,
       isActive: isActive,
       isAdmin: isAdmin as bool? ?? false,
+      isGuest: isGuest as bool? ?? false,
       oauthProvider: oauthProvider as String?,
       appLocale: appLocale as String?,
       language: LearningLanguageContext.fromJson(json['language']),
       createdAt: createdAt,
       updatedAt: updatedAt,
+      lastActiveAt: lastActiveAt,
     );
   }
 
   final String id;
-  final String email;
+  final String? email;
   final String name;
   final String? nickname;
   String get displayName =>
       nickname?.trim().isNotEmpty == true ? nickname!.trim() : name.trim();
   final bool isActive;
   final bool isAdmin;
+  final bool isGuest;
   final String? oauthProvider;
   final String? appLocale;
   final LearningLanguageContext language;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final DateTime? lastActiveAt;
 
   UserProfile copyWith({String? appLocale, String? nickname}) {
     return UserProfile(
@@ -98,11 +114,13 @@ class UserProfile {
       nickname: nickname ?? this.nickname,
       isActive: isActive,
       isAdmin: isAdmin,
+      isGuest: isGuest,
       oauthProvider: oauthProvider,
       language: language,
       appLocale: appLocale ?? this.appLocale,
       createdAt: createdAt,
       updatedAt: updatedAt,
+      lastActiveAt: lastActiveAt,
     );
   }
 }

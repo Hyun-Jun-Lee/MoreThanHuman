@@ -1,6 +1,6 @@
 # Weekly Conversation Topics — ACTIVE
 
-주간 추천은 로그인한 사용자의 학습 언어쌍에 공통으로 발행돼요. 운영자가 서버 CLI를 직접 실행해 생성하며 예약 worker는 이 계약의 범위 밖이에요.
+주간 추천은 정식 회원과 Supabase 익명 게스트의 학습 언어쌍에 공통으로 발행돼요. 운영자가 서버 CLI를 직접 실행해 생성하며 예약 worker는 이 계약의 범위 밖이에요.
 
 ## Publication
 
@@ -17,6 +17,7 @@
 - `GET /api/conversation-topics/weekly/`는 인증된 profile의 언어쌍에서 최신 발행 묶음을 반환해요. 성공 `data`는 `{week_start, topics: [{id, text}]}`예요. 목록이 없으면 `week_start: null`, `topics: []`예요.
 - `POST /api/conversations/start/free-chat/suggested/`는 `{topic_id, start_request_id, include_audio_response}`를 받아요. 성공 `data`는 `{conversation_id, assistant_message_id, conversation_type, language, response, audio?, audio_error?}`예요.
 - 시작 시 profile 언어쌍, 발행 및 보관 상태, 첫 질문 존재 여부, 대화 슬롯을 검사해요. 생성된 대화는 `FREE_CHAT`이고 첫 메시지는 발행 시 저장된 AI 질문 하나예요. 사용자 발화 수는 0이에요.
+- 게스트가 주제를 확인하면 로그인 화면이 아니라 같은 추천 시작 API로 대화를 시작해요. 현재 AI 처리 동의와 게스트 1개 슬롯·계정 누적 5회 권한을 서버에서 확인하며 저장된 첫 AI 질문은 사용량에 포함하지 않아요.
 - `start_request_id`는 클라이언트가 탭마다 만든 UUID예요. 같은 사용자와 요청 ID의 성공한 요청은 같은 대화·첫 메시지를 반환해요. 처리 중 요청의 중복 호출은 `START_IN_PROGRESS`예요.
 - 탭 시 웹 검색·사실 확인·Topic Prep 검사는 실행하지 않아요. 발행 전에 형식·중복·안전성 검사를 실행해요.
 

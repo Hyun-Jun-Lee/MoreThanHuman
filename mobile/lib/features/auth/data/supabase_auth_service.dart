@@ -15,6 +15,26 @@ abstract interface class SessionRefreshProvider {
   Future<void> expireSession();
 }
 
+abstract interface class AnonymousAuthService {
+  Future<void> signInAnonymously();
+}
+
+abstract interface class IdentityLinkingAuthService {
+  Future<void> linkGoogleIdentity({
+    required String idToken,
+    required String accessToken,
+  });
+
+  Future<void> linkAppleIdentity({
+    required String idToken,
+    required String rawNonce,
+  });
+}
+
+class IdentityAlreadyLinkedException implements Exception {
+  const IdentityAlreadyLinkedException();
+}
+
 enum SupabaseSessionEvent {
   initialSession,
   signedIn,
@@ -55,7 +75,11 @@ abstract interface class SupabaseAuthService
   Future<void> signOut();
 }
 
-class SupabaseFlutterAuthService implements SupabaseAuthService {
+class SupabaseFlutterAuthService
+    implements
+        SupabaseAuthService,
+        AnonymousAuthService,
+        IdentityLinkingAuthService {
   SupabaseFlutterAuthService({SupabaseClient? client})
     : _client = client ?? Supabase.instance.client;
 
@@ -82,6 +106,11 @@ class SupabaseFlutterAuthService implements SupabaseAuthService {
   @override
   Future<bool> hasCurrentSession() async {
     return _client.auth.currentSession != null;
+  }
+
+  @override
+  Future<void> signInAnonymously() async {
+    await _client.auth.signInAnonymously();
   }
 
   @override
@@ -134,6 +163,52 @@ class SupabaseFlutterAuthService implements SupabaseAuthService {
       idToken: idToken,
       nonce: rawNonce,
     );
+  }
+
+  @override
+  Future<void> linkGoogleIdentity({
+    required String idToken,
+    required String accessToken,
+  }) async {
+    try {
+      await _client.auth.linkIdentityWithIdToken(
+        provider: OAuthProvider.google,
+        idToken: idToken,
+        accessToken: accessToken,
+      );
+    } on AuthException catch (error) {
+      if (_isIdentityConflict(error)) {
+        throw const IdentityAlreadyLinkedException();
+      }
+      rethrow;
+    }
+  }
+
+  @override
+  Future<void> linkAppleIdentity({
+    required String idToken,
+    required String rawNonce,
+  }) async {
+    try {
+      await _client.auth.linkIdentityWithIdToken(
+        provider: OAuthProvider.apple,
+        idToken: idToken,
+        nonce: rawNonce,
+      );
+    } on AuthException catch (error) {
+      if (_isIdentityConflict(error)) {
+        throw const IdentityAlreadyLinkedException();
+      }
+      rethrow;
+    }
+  }
+
+  bool _isIdentityConflict(AuthException error) {
+    return const <String>{
+      'identity_already_exists',
+      'email_exists',
+      'user_already_exists',
+    }.contains(error.code);
   }
 
   @override

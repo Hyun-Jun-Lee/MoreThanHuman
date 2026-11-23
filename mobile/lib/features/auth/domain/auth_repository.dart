@@ -14,6 +14,79 @@ abstract interface class NicknameRepository {
   Future<UserProfile> updateNickname(String nickname);
 }
 
+class AIConsentStatus {
+  const AIConsentStatus({
+    required this.accepted,
+    required this.requiredVersions,
+    required this.acceptedVersions,
+    required this.missing,
+    required this.privacyPolicyUrl,
+    required this.privacyPolicyUrlEn,
+  });
+
+  factory AIConsentStatus.fromJson(Object? value) {
+    if (value is! Map<String, dynamic> ||
+        value['accepted'] is! bool ||
+        value['privacy_policy_url'] is! String ||
+        (value['privacy_policy_url_en'] != null &&
+            value['privacy_policy_url_en'] is! String)) {
+      throw const FormatException('Invalid AI consent status.');
+    }
+    Map<String, String> strings(Object? raw) => raw is Map
+        ? raw.map((key, item) => MapEntry(key.toString(), item.toString()))
+        : const <String, String>{};
+    return AIConsentStatus(
+      accepted: value['accepted'] as bool,
+      requiredVersions: strings(value['required_versions']),
+      acceptedVersions: strings(value['accepted_versions']),
+      missing: (value['missing'] as List? ?? const <Object>[])
+          .map((item) => item.toString())
+          .toList(growable: false),
+      privacyPolicyUrl: value['privacy_policy_url'] as String,
+      privacyPolicyUrlEn:
+          value['privacy_policy_url_en'] as String? ??
+          value['privacy_policy_url'] as String,
+    );
+  }
+
+  final bool accepted;
+  final Map<String, String> requiredVersions;
+  final Map<String, String> acceptedVersions;
+  final List<String> missing;
+  final String privacyPolicyUrl;
+  final String privacyPolicyUrlEn;
+
+  String privacyPolicyUrlFor({required bool isKorean}) =>
+      isKorean ? privacyPolicyUrl : privacyPolicyUrlEn;
+}
+
+abstract interface class AIConsentRepository {
+  Future<AIConsentStatus> getAIConsentStatus();
+  Future<AIConsentStatus> acceptAIConsent();
+}
+
+class GuestTransferReceipt {
+  const GuestTransferReceipt({required this.receipt, required this.expiresAt});
+
+  final String receipt;
+  final DateTime expiresAt;
+}
+
+class GuestTransferClaimResult {
+  const GuestTransferClaimResult({
+    required this.profile,
+    required this.guestUserId,
+  });
+
+  final UserProfile profile;
+  final String guestUserId;
+}
+
+abstract interface class GuestTransferRepository {
+  Future<GuestTransferReceipt> issueGuestTransferReceipt();
+  Future<GuestTransferClaimResult> claimGuestTransferReceipt(String receipt);
+}
+
 class AccountDeletionResult {
   const AccountDeletionResult({
     required this.status,

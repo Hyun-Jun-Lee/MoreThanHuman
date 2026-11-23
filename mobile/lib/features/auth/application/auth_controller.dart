@@ -71,7 +71,7 @@ class AuthController extends AsyncNotifier<AuthSession> {
       throw StateError('Refreshed profile belongs to another user.');
     }
     if (ref.mounted && state.value?.user?.id == userId) {
-      state = AsyncData<AuthSession>(AuthSession.authenticated(refreshed));
+      state = AsyncData<AuthSession>(AuthSession.fromProfile(refreshed));
     }
   }
 
@@ -85,26 +85,46 @@ class AuthController extends AsyncNotifier<AuthSession> {
     state = const AsyncLoading<AuthSession>();
     try {
       debugPrint('CuritalkAuth controller: signing in with Supabase');
-      await _supabaseAuthService.signInWithGoogleTokens(
-        idToken: tokens.idToken.trim(),
-        accessToken: tokens.accessToken.trim(),
-      );
+      if (previousSession.isGuest &&
+          _supabaseAuthService is IdentityLinkingAuthService) {
+        final linking = _supabaseAuthService as IdentityLinkingAuthService;
+        try {
+          await linking.linkGoogleIdentity(
+            idToken: tokens.idToken.trim(),
+            accessToken: tokens.accessToken.trim(),
+          );
+        } on IdentityAlreadyLinkedException {
+          await _prepareGuestTransfer();
+          await _supabaseAuthService.signInWithGoogleTokens(
+            idToken: tokens.idToken.trim(),
+            accessToken: tokens.accessToken.trim(),
+          );
+        }
+      } else {
+        await _supabaseAuthService.signInWithGoogleTokens(
+          idToken: tokens.idToken.trim(),
+          accessToken: tokens.accessToken.trim(),
+        );
+      }
       debugPrint('CuritalkAuth controller: Supabase sign-in completed');
       _sessionCoordinator.activateSession();
       debugPrint('CuritalkAuth controller: requesting /auth/bootstrap');
-      final UserProfile user = await _bootstrapProfile();
+      final UserProfile user = await _bootstrapAndClaimGuestTransfer();
       debugPrint(
         'CuritalkAuth controller: bootstrap success userId=${user.id}',
       );
-      state = AsyncData<AuthSession>(AuthSession.authenticated(user));
+      state = AsyncData<AuthSession>(AuthSession.fromProfile(user));
     } on Object catch (error, stackTrace) {
       debugPrint('CuritalkAuth controller sign-in failed: $error');
       debugPrintStack(stackTrace: stackTrace);
-      await _signOutSafely();
-      if (previousSession.isAuthenticated) {
+      if (previousSession.isGuest) {
+        state = await AsyncValue.guard(_recoverGuestConversion);
+      } else if (previousSession.isAuthenticated) {
+        await _signOutSafely();
         _sessionCoordinator.activateSession();
         state = AsyncData<AuthSession>(previousSession);
       } else {
+        await _signOutSafely();
         _sessionCoordinator.deactivateSession();
         state = AsyncError<AuthSession>(error, stackTrace);
       }
@@ -121,19 +141,39 @@ class AuthController extends AsyncNotifier<AuthSession> {
         state.value ?? const AuthSession.unauthenticated();
     state = const AsyncLoading<AuthSession>();
     try {
-      await _supabaseAuthService.signInWithAppleToken(
-        idToken: tokens.idToken.trim(),
-        rawNonce: tokens.rawNonce.trim(),
-      );
+      if (previousSession.isGuest &&
+          _supabaseAuthService is IdentityLinkingAuthService) {
+        final linking = _supabaseAuthService as IdentityLinkingAuthService;
+        try {
+          await linking.linkAppleIdentity(
+            idToken: tokens.idToken.trim(),
+            rawNonce: tokens.rawNonce.trim(),
+          );
+        } on IdentityAlreadyLinkedException {
+          await _prepareGuestTransfer();
+          await _supabaseAuthService.signInWithAppleToken(
+            idToken: tokens.idToken.trim(),
+            rawNonce: tokens.rawNonce.trim(),
+          );
+        }
+      } else {
+        await _supabaseAuthService.signInWithAppleToken(
+          idToken: tokens.idToken.trim(),
+          rawNonce: tokens.rawNonce.trim(),
+        );
+      }
       _sessionCoordinator.activateSession();
-      final UserProfile user = await _bootstrapProfile();
-      state = AsyncData<AuthSession>(AuthSession.authenticated(user));
+      final UserProfile user = await _bootstrapAndClaimGuestTransfer();
+      state = AsyncData<AuthSession>(AuthSession.fromProfile(user));
     } on Object catch (error, stackTrace) {
-      await _signOutSafely();
-      if (previousSession.isAuthenticated) {
+      if (previousSession.isGuest) {
+        state = await AsyncValue.guard(_recoverGuestConversion);
+      } else if (previousSession.isAuthenticated) {
+        await _signOutSafely();
         _sessionCoordinator.activateSession();
         state = AsyncData<AuthSession>(previousSession);
       } else {
+        await _signOutSafely();
         _sessionCoordinator.deactivateSession();
         state = AsyncError<AuthSession>(error, stackTrace);
       }
@@ -145,8 +185,14 @@ class AuthController extends AsyncNotifier<AuthSession> {
     state = const AsyncLoading<AuthSession>();
     _sessionCoordinator.deactivateSession();
     await _signOutSafely();
-    state = const AsyncData<AuthSession>(AuthSession.unauthenticated());
     await _clearSnackWidget();
+    state = await AsyncValue.guard(_createGuestSession);
+  }
+
+  Future<void> continueAsGuest() async {
+    await _accountLocalData.allowGuestCreation();
+    state = const AsyncLoading<AuthSession>();
+    state = await AsyncValue.guard(_createGuestSession);
   }
 
   Future<AccountDeletionResult> deleteAccount({
@@ -165,6 +211,7 @@ class AuthController extends AsyncNotifier<AuthSession> {
           appleIdentityToken: appleTokens?.idToken,
           appleAuthorizationCode: appleTokens?.authorizationCode,
         );
+    await _accountLocalData.suppressGuestCreation();
     _sessionCoordinator.deactivateSession();
     var localCleanupFailed = false;
     try {
@@ -211,7 +258,7 @@ class AuthController extends AsyncNotifier<AuthSession> {
     }
     final UserProfile updated = await (repository as AppLocaleRepository)
         .updateAppLocale(appLocale);
-    state = AsyncData<AuthSession>(AuthSession.authenticated(updated));
+    state = AsyncData<AuthSession>(AuthSession.fromProfile(updated));
   }
 
   Future<void> updateNickname(String nickname) async {
@@ -226,22 +273,28 @@ class AuthController extends AsyncNotifier<AuthSession> {
     final UserProfile updated = await (repository as NicknameRepository)
         .updateNickname(nickname);
     if (ref.mounted && state.value?.user?.id == currentUser.id) {
-      state = AsyncData<AuthSession>(AuthSession.authenticated(updated));
+      state = AsyncData<AuthSession>(AuthSession.fromProfile(updated));
     }
   }
 
   Future<AuthSession> _restoreSession() async {
     final bool hasSession = await _supabaseAuthService.hasCurrentSession();
     if (!hasSession) {
-      _sessionCoordinator.deactivateSession();
-      await _clearSnackWidget();
-      return const AuthSession.unauthenticated();
+      if (await _accountLocalData.isGuestCreationSuppressed() ||
+          !await _onboardingStorage.isCompleted()) {
+        _sessionCoordinator.deactivateSession();
+        await _clearSnackWidget();
+        return const AuthSession.unauthenticated();
+      }
+      return _createGuestSession();
     }
 
     try {
       final UserProfile user = await _bootstrapProfile();
       _sessionCoordinator.activateSession();
-      return AuthSession.authenticated(user);
+      final session = AuthSession.fromProfile(user);
+      if (session.isGuest) unawaited(_clearSnackWidget());
+      return session;
     } on ApiException catch (error) {
       if (error.kind != ApiErrorKind.unauthorized) {
         rethrow;
@@ -251,6 +304,21 @@ class AuthController extends AsyncNotifier<AuthSession> {
       await _clearSnackWidget();
       return const AuthSession.unauthenticated();
     }
+  }
+
+  Future<AuthSession> _createGuestSession() async {
+    if (_supabaseAuthService case final AnonymousAuthService anonymousAuth) {
+      if (!await _supabaseAuthService.hasCurrentSession()) {
+        await anonymousAuth.signInAnonymously();
+      }
+      final profile = await _bootstrapProfile();
+      _sessionCoordinator.activateSession();
+      final session = AuthSession.fromProfile(profile);
+      if (session.isGuest) unawaited(_clearSnackWidget());
+      return session;
+    }
+    _sessionCoordinator.deactivateSession();
+    return const AuthSession.unauthenticated();
   }
 
   void _handleSupabaseSessionChange(SupabaseSessionChange change) {
@@ -295,6 +363,41 @@ class AuthController extends AsyncNotifier<AuthSession> {
       await _onboardingStorage.clearPendingLanguageContext();
     }
     return profile;
+  }
+
+  Future<void> _prepareGuestTransfer() async {
+    if (await _accountLocalData.readGuestTransferReceipt() != null) return;
+    final repository = _repository;
+    if (repository is! GuestTransferRepository) {
+      throw StateError('Guest transfer is unavailable.');
+    }
+    final transfer = await (repository as GuestTransferRepository)
+        .issueGuestTransferReceipt();
+    await _accountLocalData.saveGuestTransferReceipt(transfer.receipt);
+  }
+
+  Future<UserProfile> _bootstrapAndClaimGuestTransfer() async {
+    final profile = await _bootstrapProfile();
+    if (profile.isGuest) return profile;
+    final receipt = await _accountLocalData.readGuestTransferReceipt();
+    if (receipt == null) return profile;
+    final repository = _repository;
+    if (repository is! GuestTransferRepository) return profile;
+    final merged = await (repository as GuestTransferRepository)
+        .claimGuestTransferReceipt(receipt);
+    await _accountLocalData.clearAccountScopedLearningData(merged.guestUserId);
+    await _accountLocalData.clearGuestTransferReceipt();
+    return merged.profile;
+  }
+
+  Future<AuthSession> _recoverGuestConversion() async {
+    if (await _supabaseAuthService.hasCurrentSession()) {
+      final profile = await _bootstrapAndClaimGuestTransfer();
+      _sessionCoordinator.activateSession();
+      return AuthSession.fromProfile(profile);
+    }
+    await _signOutSafely();
+    return _createGuestSession();
   }
 }
 

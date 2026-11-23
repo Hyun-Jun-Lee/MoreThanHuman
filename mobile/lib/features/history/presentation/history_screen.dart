@@ -157,8 +157,12 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
   }
 
   Future<void> _showStartSheet() async {
-    if (ref.read(conversationAccessProvider).value?.isLocked == true) {
-      await showConversationAccessDialog(context);
+    final access = ref.read(conversationAccessProvider).value;
+    if (access?.isLocked == true) {
+      await showConversationAccessDialog(
+        context,
+        guestLimit: access?.limitAction == 'login',
+      );
       return;
     }
     final selected = await showConversationStartSheet(context);

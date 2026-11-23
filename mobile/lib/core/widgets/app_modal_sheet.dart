@@ -38,7 +38,7 @@ class AppModalSheet extends StatelessWidget {
       padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
       child: SafeArea(
         top: false,
-        child: Padding(padding: padding, child: child),
+        child: SingleChildScrollView(padding: padding, child: child),
       ),
     );
   }

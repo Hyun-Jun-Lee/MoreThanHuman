@@ -5,6 +5,8 @@ import 'package:curitalk/features/history/data/conversation_history_repository.d
 import 'package:curitalk/app/app.dart';
 import 'package:curitalk/core/storage/storage.dart';
 import 'package:curitalk/features/auth/auth.dart';
+import 'package:curitalk/features/conversation/conversation.dart';
+import 'package:curitalk/features/auth/data/account_local_data.dart';
 import 'package:curitalk/features/home/home.dart';
 import 'package:curitalk/features/language/language.dart';
 import 'package:curitalk/features/onboarding/onboarding.dart';
@@ -157,13 +159,30 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      expect(find.text('Start a conversation'), findsOneWidget);
+      await tester.tap(find.text('Profile'));
+      await tester.pumpAndSettle();
+
+      final googleButton = find.byKey(
+        const ValueKey<String>('google-login-button'),
+      );
+      final appleButton = find.byKey(
+        const ValueKey<String>('apple-login-button'),
+      );
+      final guestButton = find.byKey(
+        const ValueKey<String>('guest-login-button'),
+      );
+      expect(googleButton, findsOneWidget);
+      expect(appleButton, findsOneWidget);
+      expect(guestButton, findsOneWidget);
+      expect(tester.getSize(googleButton), tester.getSize(appleButton));
+      expect(tester.getSize(googleButton), tester.getSize(guestButton));
+      expect(tester.getSize(googleButton).height, 48);
+
       await tester.tap(find.text('CONTINUE WITH APPLE'));
       await tester.pumpAndSettle();
 
-      expect(
-        find.widgetWithText(FilledButton, 'Start a conversation'),
-        findsOneWidget,
-      );
+      expect(find.text('Start a conversation'), findsOneWidget);
       expect(supabaseAuth.lastAppleIdToken, 'apple-id-token');
       expect(supabaseAuth.lastRawNonce, 'raw-nonce');
     } finally {
@@ -224,22 +243,23 @@ void main() {
     await tester.tap(find.text('GET STARTED'));
     await tester.pumpAndSettle();
 
+    expect(find.text('Start a conversation'), findsOneWidget);
+    expect(supabaseAuth.anonymousSignInCount, 1);
+    await tester.tap(find.text('Profile'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('CONTINUE WITH GOOGLE'));
     await tester.pumpAndSettle();
 
     expect(find.text('Hi, Learner'), findsNothing);
-    expect(
-      find.widgetWithText(FilledButton, 'Start a conversation'),
-      findsOneWidget,
-    );
+    expect(find.text('Start a conversation'), findsOneWidget);
     expect(onboardingStorage.completed, isTrue);
     expect(supabaseAuth.hasSession, isTrue);
     expect(supabaseAuth.lastIdToken, 'google-id-token');
 
-    await tester.ensureVisible(
-      find.widgetWithText(FilledButton, 'Start a conversation'),
-    );
-    await tester.tap(find.widgetWithText(FilledButton, 'Start a conversation'));
+    await tester.ensureVisible(find.text('Start a conversation'));
+    await tester.tap(find.text('Start a conversation'));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.ensureVisible(find.text('FreeChat'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('FreeChat'));
     await tester.pumpAndSettle();
@@ -291,6 +311,10 @@ void main() {
     expect(find.text('재미있게 대화하고 자연스레 학습해요.'), findsOneWidget);
 
     await tester.tap(find.text('건너뛰기'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('대화를 시작하세요'), findsOneWidget);
+    await tester.tap(find.text('내 정보'));
     await tester.pumpAndSettle();
 
     expect(find.text('내가 고른 주제로\n대화해요.'), findsOneWidget);
@@ -356,10 +380,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.ensureVisible(
-      find.widgetWithText(FilledButton, 'Start a conversation'),
-    );
-    await tester.tap(find.widgetWithText(FilledButton, 'Start a conversation'));
+    await tester.ensureVisible(find.text('Start a conversation'));
+    await tester.tap(find.text('Start a conversation'));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.ensureVisible(find.text('Role Playing'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Role Playing'));
     await tester.pumpAndSettle();
@@ -428,11 +452,15 @@ void main() {
     await tester.tap(find.text('Log out'));
     await tester.pumpAndSettle();
 
-    expect(supabaseAuth.hasSession, isFalse);
+    expect(supabaseAuth.hasSession, isTrue);
+    expect(supabaseAuth.anonymousSignInCount, 1);
     expect(
       find.text('Practice conversation with your own topics.'),
       findsOneWidget,
     );
+    await tester.tap(find.text('CONTINUE AS GUEST'));
+    await tester.pumpAndSettle();
+    expect(find.text('Start a conversation'), findsOneWidget);
   });
 
   testWidgets('Profile tab stays open after refresh and locale save', (
@@ -494,6 +522,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await tester.tap(find.text('내 정보'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Google로 계속하기'));
     await tester.pumpAndSettle();
 
@@ -520,6 +550,15 @@ final UserProfile _user = UserProfile(
   createdAt: DateTime.utc(2026, 6, 24),
   updatedAt: DateTime.utc(2026, 6, 24),
 );
+final UserProfile _guest = UserProfile(
+  id: 'guest-id',
+  email: null,
+  name: 'Guest',
+  isActive: true,
+  isGuest: true,
+  createdAt: DateTime.utc(2026, 11, 23),
+  updatedAt: DateTime.utc(2026, 11, 23),
+);
 
 ProviderScope _appScope({
   required _MemoryTokenStorage tokenStorage,
@@ -530,6 +569,10 @@ ProviderScope _appScope({
       const _FakeGoogleIdentityService(),
   AppleIdentityService appleIdentityService = const _FakeAppleIdentityService(),
 }) {
+  final auth = supabaseAuth ?? _FakeSupabaseAuthService();
+  auth.onAnonymousSignIn = () => authRepository.user = _guest;
+  auth.onMemberSignIn = () => authRepository.user = _user;
+  final accountStorage = _MemorySecureStorage();
   return ProviderScope(
     overrides: [
       tokenStorageProvider.overrideWithValue(tokenStorage),
@@ -537,17 +580,21 @@ ProviderScope _appScope({
         InstallationIdService(tokenStorage, generateId: () => _deviceId),
       ),
       onboardingStorageProvider.overrideWithValue(onboardingStorage),
+      accountLocalDataProvider.overrideWithValue(
+        AccountLocalData(accountStorage),
+      ),
       googleIdentityServiceProvider.overrideWithValue(googleIdentityService),
       appleIdentityServiceProvider.overrideWithValue(appleIdentityService),
       authRepositoryProvider.overrideWithValue(authRepository),
       languagePreferencesRepositoryProvider.overrideWithValue(
         _FakeLanguagePreferencesRepository(),
       ),
-      supabaseAuthServiceProvider.overrideWithValue(
-        supabaseAuth ?? _FakeSupabaseAuthService(),
-      ),
+      supabaseAuthServiceProvider.overrideWithValue(auth),
       conversationHistoryRepositoryProvider.overrideWithValue(
         const _FakeHistoryRepository(),
+      ),
+      conversationAccessRepositoryProvider.overrideWithValue(
+        const _FakeConversationAccessRepository(),
       ),
       homeRepositoryProvider.overrideWithValue(const _FakeHomeRepository()),
       topicPrepRepositoryProvider.overrideWithValue(
@@ -610,13 +657,17 @@ class _FakeAuthRepository
   }
 }
 
-class _FakeSupabaseAuthService implements SupabaseAuthService {
+class _FakeSupabaseAuthService
+    implements SupabaseAuthService, AnonymousAuthService {
   _FakeSupabaseAuthService({this.hasSession = false});
 
   bool hasSession;
   String? lastIdToken;
   String? lastAppleIdToken;
   String? lastRawNonce;
+  int anonymousSignInCount = 0;
+  void Function()? onAnonymousSignIn;
+  void Function()? onMemberSignIn;
 
   @override
   Stream<SupabaseSessionChange> get authStateChanges =>
@@ -627,6 +678,13 @@ class _FakeSupabaseAuthService implements SupabaseAuthService {
 
   @override
   Future<bool> hasCurrentSession() async => hasSession;
+
+  @override
+  Future<void> signInAnonymously() async {
+    anonymousSignInCount += 1;
+    hasSession = true;
+    onAnonymousSignIn?.call();
+  }
 
   @override
   Future<String?> readAccessToken() async =>
@@ -646,6 +704,7 @@ class _FakeSupabaseAuthService implements SupabaseAuthService {
   }) async {
     lastIdToken = idToken;
     hasSession = true;
+    onMemberSignIn?.call();
   }
 
   @override
@@ -656,12 +715,39 @@ class _FakeSupabaseAuthService implements SupabaseAuthService {
     lastAppleIdToken = idToken;
     lastRawNonce = rawNonce;
     hasSession = true;
+    onMemberSignIn?.call();
   }
 
   @override
   Future<void> signOut() async {
     hasSession = false;
   }
+}
+
+class _FakeConversationAccessRepository
+    implements ConversationAccessRepository {
+  const _FakeConversationAccessRepository();
+
+  @override
+  Future<ConversationAccess> getAccess() async =>
+      const ConversationAccess.disabled();
+
+  @override
+  Future<ConversationTurnAccess> getTurnAccess(String conversationId) async =>
+      const ConversationTurnAccess.disabled();
+}
+
+class _MemorySecureStorage implements SecureStorageBackend {
+  final Map<String, String> values = <String, String>{};
+
+  @override
+  Future<void> delete(String key) async => values.remove(key);
+
+  @override
+  Future<String?> read(String key) async => values[key];
+
+  @override
+  Future<void> write(String key, String value) async => values[key] = value;
 }
 
 class _FakeHomeRepository implements HomeRepository {

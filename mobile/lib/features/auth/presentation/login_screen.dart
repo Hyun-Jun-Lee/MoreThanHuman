@@ -7,6 +7,7 @@ import 'package:curitalk/features/auth/data/account_local_data.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -20,6 +21,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   LoginFailureReason? _failureReason;
   bool _isSigningIn = false;
   bool _checkingDeletionStatus = false;
+  bool _isDeletingGuest = false;
   String? _deletionStatus;
 
   @override
@@ -68,6 +70,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       await ref
           .read(authControllerProvider.notifier)
           .signInWithGoogleTokens(tokens);
+      _finishSignIn();
     } on GoogleIdentityException catch (error) {
       debugPrint('CuritalkAuth login screen GoogleIdentityException: $error');
       _showFailure(LoginFailureReason.identity);
@@ -104,6 +107,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       await ref
           .read(authControllerProvider.notifier)
           .signInWithAppleToken(tokens);
+      _finishSignIn();
     } on AppleIdentityException catch (error) {
       debugPrint('CuritalkAuth login screen AppleIdentityException: $error');
       _showFailure(LoginFailureReason.appleIdentity);
@@ -117,6 +121,70 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     } finally {
       if (mounted) setState(() => _isSigningIn = false);
     }
+  }
+
+  Future<void> _continueAsGuest() async {
+    final session = ref.read(authControllerProvider).value;
+    if (session?.isGuest == true) {
+      if (context.canPop()) {
+        context.pop();
+      } else {
+        context.go('/home');
+      }
+      return;
+    }
+    await ref.read(authControllerProvider.notifier).continueAsGuest();
+    _finishSignIn();
+  }
+
+  Future<void> _deleteGuestData() async {
+    if (_isDeletingGuest) return;
+    final copy = AppCopy.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(copy.deleteAccountLabel),
+        content: Text(copy.deleteAccountWarning),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(copy.cancelLabel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(
+              copy.deleteAccountLabel,
+              style: TextStyle(
+                color: Theme.of(dialogContext).colorScheme.error,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _isDeletingGuest = true);
+    try {
+      final result = await ref
+          .read(authControllerProvider.notifier)
+          .deleteAccount();
+      if (mounted) setState(() => _deletionStatus = result.status);
+    } on Object {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(copy.deletionFailed)));
+      }
+    } finally {
+      if (mounted) setState(() => _isDeletingGuest = false);
+    }
+  }
+
+  void _finishSignIn() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.go('/home');
+    });
   }
 
   void _showFailure(LoginFailureReason reason) {
@@ -138,79 +206,118 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final AsyncValue<AuthSession> auth = ref.watch(authControllerProvider);
     final AppCopy appCopy = AppCopy.of(context);
     final AppLoginCopy copy = appCopy.login;
-    return AppScaffold(
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            SizedBox(
-              width: 164,
-              height: 40,
-              child: Image.asset(
-                'logo_img/KakaoTalk_Photo_2026-10-08-22-20-21 002.png',
-                key: const ValueKey<String>('login-brand-logo'),
-                fit: BoxFit.cover,
-                alignment: Alignment.center,
-                semanticLabel: 'Toma Talk',
-              ),
-            ),
-            const SizedBox(height: AppSpacing.xxl),
-            Text(copy.title, style: AppTypography.displayLg),
-            const SizedBox(height: AppSpacing.lg),
-            Text(
-              copy.description,
-              style: AppTypography.body.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-            if (_deletionStatus != null) ...[
-              const SizedBox(height: AppSpacing.md),
-              Semantics(
-                liveRegion: true,
-                child: Text(switch (_deletionStatus) {
-                  'completed' => appCopy.deletionCompleted,
-                  'processing' => appCopy.deletionProcessing,
-                  _ => appCopy.deletionStatusUnavailable,
-                }),
-              ),
-              if (_deletionStatus != 'completed')
-                TextButton(
-                  onPressed: _checkingDeletionStatus
-                      ? null
-                      : _checkDeletionStatus,
-                  child: Text(appCopy.checkDeletionStatus),
+    final bool canReturnHome = auth.value?.isGuest == true;
+    return PopScope(
+      canPop: !canReturnHome,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && canReturnHome) context.go('/home');
+      },
+      child: AppScaffold(
+        appBar: canReturnHome
+            ? AppBar(leading: BackButton(onPressed: () => context.go('/home')))
+            : null,
+        body: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              SizedBox(
+                width: 164,
+                height: 40,
+                child: Image.asset(
+                  'logo_img/KakaoTalk_Photo_2026-10-08-22-20-21 002.png',
+                  key: const ValueKey<String>('login-brand-logo'),
+                  fit: BoxFit.cover,
+                  alignment: Alignment.center,
+                  semanticLabel: 'Toma Talk',
                 ),
-            ],
-            const SizedBox(height: AppSpacing.xl),
-            AppPrimaryButton(
-              label: auth.hasError ? copy.tryAgainLabel : copy.googleLabel,
-              leading: const _GoogleMark(),
-              isLoading: auth.isLoading || _isSigningIn,
-              onPressed: auth.isLoading || _isSigningIn ? null : _signIn,
-            ),
-            if (!kIsWeb &&
-                defaultTargetPlatform == TargetPlatform.iOS) ...<Widget>[
+              ),
+              const SizedBox(height: AppSpacing.xxl),
+              Text(copy.title, style: AppTypography.displayLg),
+              const SizedBox(height: AppSpacing.lg),
+              Text(
+                copy.description,
+                style: AppTypography.body.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+              if (_deletionStatus != null) ...[
+                const SizedBox(height: AppSpacing.md),
+                Semantics(
+                  liveRegion: true,
+                  child: Text(switch (_deletionStatus) {
+                    'completed' => appCopy.deletionCompleted,
+                    'processing' => appCopy.deletionProcessing,
+                    _ => appCopy.deletionStatusUnavailable,
+                  }),
+                ),
+                if (_deletionStatus != 'completed')
+                  TextButton(
+                    onPressed: _checkingDeletionStatus
+                        ? null
+                        : _checkDeletionStatus,
+                    child: Text(appCopy.checkDeletionStatus),
+                  ),
+              ],
+              const SizedBox(height: AppSpacing.xl),
+              AppPrimaryButton(
+                key: const ValueKey<String>('google-login-button'),
+                label: auth.hasError ? copy.tryAgainLabel : copy.googleLabel,
+                leading: const _GoogleMark(),
+                isLoading: auth.isLoading || _isSigningIn,
+                onPressed: auth.isLoading || _isSigningIn ? null : _signIn,
+              ),
+              if (!kIsWeb &&
+                  defaultTargetPlatform == TargetPlatform.iOS) ...<Widget>[
+                const SizedBox(height: AppSpacing.md),
+                SignInWithAppleButton(
+                  key: const ValueKey<String>('apple-login-button'),
+                  text: copy.appleLabel,
+                  height: AppSize.touchTarget,
+                  borderRadius: const BorderRadius.all(
+                    Radius.circular(AppRadius.pill),
+                  ),
+                  onPressed: auth.isLoading || _isSigningIn
+                      ? null
+                      : _signInWithApple,
+                ),
+              ],
               const SizedBox(height: AppSpacing.md),
-              SignInWithAppleButton(
-                text: copy.appleLabel,
+              AppPrimaryButton(
+                key: const ValueKey<String>('guest-login-button'),
+                label: copy.continueGuestLabel,
+                leading: const Icon(
+                  Icons.person_outline_rounded,
+                  size: AppSize.icon,
+                ),
                 onPressed: auth.isLoading || _isSigningIn
                     ? null
-                    : _signInWithApple,
+                    : _continueAsGuest,
               ),
-            ],
-            if (_failureReason != null) ...<Widget>[
-              const SizedBox(height: AppSpacing.md),
-              Semantics(
-                liveRegion: true,
-                child: Text(
-                  appCopy.loginFailureMessage(_failureReason!.name),
-                  style: AppTypography.bodySm.copyWith(
-                    color: Theme.of(context).colorScheme.error,
+              if (canReturnHome) ...<Widget>[
+                const SizedBox(height: AppSpacing.xs),
+                Center(
+                  child: TextButton(
+                    onPressed: auth.isLoading || _isDeletingGuest
+                        ? null
+                        : _deleteGuestData,
+                    child: Text(appCopy.deleteAccountLabel),
                   ),
                 ),
-              ),
+              ],
+              if (_failureReason != null) ...<Widget>[
+                const SizedBox(height: AppSpacing.md),
+                Semantics(
+                  liveRegion: true,
+                  child: Text(
+                    appCopy.loginFailureMessage(_failureReason!.name),
+                    style: AppTypography.bodySm.copyWith(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );

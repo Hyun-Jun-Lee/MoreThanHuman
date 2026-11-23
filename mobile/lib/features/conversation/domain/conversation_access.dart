@@ -7,6 +7,9 @@ class ConversationAccess {
     this.remainingSlots,
     this.lockedCount = 0,
     this.plan = 'free',
+    this.turnScope = 'conversation',
+    this.remainingTurns,
+    this.limitAction = 'upgrade',
   });
 
   const ConversationAccess.disabled()
@@ -16,7 +19,10 @@ class ConversationAccess {
       slotLimit = null,
       remainingSlots = null,
       lockedCount = 0,
-      plan = 'free';
+      plan = 'free',
+      turnScope = 'conversation',
+      remainingTurns = null,
+      limitAction = 'upgrade';
 
   factory ConversationAccess.fromJson(Object? value) {
     if (value is! Map<String, dynamic> ||
@@ -33,6 +39,9 @@ class ConversationAccess {
       remainingSlots: value['remaining_slots'] as int?,
       lockedCount: value['locked_count'] as int? ?? 0,
       plan: value['plan'] as String? ?? 'free',
+      turnScope: value['turn_scope'] as String? ?? 'conversation',
+      remainingTurns: value['remaining_turns'] as int?,
+      limitAction: value['limit_action'] as String? ?? 'upgrade',
     );
   }
 
@@ -43,6 +52,9 @@ class ConversationAccess {
   final int? remainingSlots;
   final int lockedCount;
   final String plan;
+  final String turnScope;
+  final int? remainingTurns;
+  final String limitAction;
 
   bool get isLocked => enabled && !canCreate;
 }
@@ -54,6 +66,9 @@ class ConversationTurnAccess {
     required this.canSend,
     this.turnLimit,
     this.locked = false,
+    this.turnScope = 'conversation',
+    this.remainingTurns,
+    this.limitAction = 'upgrade',
   });
 
   const ConversationTurnAccess.disabled()
@@ -61,7 +76,10 @@ class ConversationTurnAccess {
       userTurns = 0,
       canSend = true,
       turnLimit = null,
-      locked = false;
+      locked = false,
+      turnScope = 'conversation',
+      remainingTurns = null,
+      limitAction = 'upgrade';
 
   factory ConversationTurnAccess.fromJson(Object? value) {
     if (value is! Map<String, dynamic> ||
@@ -78,6 +96,9 @@ class ConversationTurnAccess {
       canSend: value['can_send'] as bool,
       turnLimit: value['turn_limit'] as int?,
       locked: value['locked'] as bool? ?? false,
+      turnScope: value['turn_scope'] as String? ?? 'conversation',
+      remainingTurns: value['remaining_turns'] as int?,
+      limitAction: value['limit_action'] as String? ?? 'upgrade',
     );
   }
 
@@ -86,4 +107,7 @@ class ConversationTurnAccess {
   final int? turnLimit;
   final bool canSend;
   final bool locked;
+  final String turnScope;
+  final int? remainingTurns;
+  final String limitAction;
 }

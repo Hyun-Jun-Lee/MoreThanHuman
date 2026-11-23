@@ -74,6 +74,34 @@ class Settings(BaseSettings):
     swagger_token_issuer_secret: str | None = None
     auto_create_tables: bool = False
 
+    # Versioned privacy / AI processing notice
+    privacy_policy_version: str = "2026-11-23"
+    ai_data_processing_version: str = "2026-11-23"
+    privacy_policy_url: str = "https://www.curitalk.app/privacy"
+    privacy_policy_url_en: str = "https://www.curitalk.app/en/privacy"
+    ai_consent_required: bool = True
+    guest_transfer_receipt_ttl_minutes: int = 10
+    guest_retention_days: int = Field(30, ge=1)
+
+    @model_validator(mode="after")
+    def validate_ai_notice(self) -> "Settings":
+        values = {
+            "PRIVACY_POLICY_VERSION": self.privacy_policy_version,
+            "AI_DATA_PROCESSING_VERSION": self.ai_data_processing_version,
+            "PRIVACY_POLICY_URL": self.privacy_policy_url,
+            "PRIVACY_POLICY_URL_EN": self.privacy_policy_url_en,
+        }
+        for name, value in values.items():
+            if not value or not value.strip():
+                raise ValueError(f"{name} must not be blank")
+        for name, value in {
+            "PRIVACY_POLICY_URL": self.privacy_policy_url,
+            "PRIVACY_POLICY_URL_EN": self.privacy_policy_url_en,
+        }.items():
+            if not value.startswith(("https://", "http://")):
+                raise ValueError(f"{name} must be an HTTP(S) URL")
+        return self
+
     @model_validator(mode="after")
     def validate_admin_access_code(self) -> "Settings":
         if self.admin_access_code is not None and self.admin_access_code != self.admin_access_code.strip():

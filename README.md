@@ -6,7 +6,7 @@ tomatalk은 관심 있는 주제로 AI와 대화하고 문법 피드백과 짧�
 
 - 백엔드: Python 3.12 이상과 uv
 - 모바일: Dart 3.12.2 이상을 포함한 Flutter SDK, iOS용 Xcode 또는 Android SDK
-- 인증·LLM: Google 로그인이 설정된 Supabase 프로젝트와 OpenRouter 설정
+- 인증·LLM: 익명 로그인과 Google·Apple 로그인이 설정된 Supabase 프로젝트, OpenRouter 설정
 - Docker 실행을 선택할 때만 Docker Engine과 Compose가 필요해요.
 
 **아래 명령 블록은 각각 저장소 루트에서 시작하는 기준이에요.** 이미 .env가 있다면 덮어쓰지 말고 필요한 항목만 추가해요.

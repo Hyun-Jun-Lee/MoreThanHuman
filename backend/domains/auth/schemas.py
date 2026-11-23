@@ -87,17 +87,19 @@ class UserProfile(BaseModel):
     """사용자 프로필"""
 
     id: str
-    email: str
+    email: str | None
     name: str
     nickname: str | None = None
     is_active: bool
     is_admin: bool
+    is_guest: bool
     oauth_provider: str | None = None
     avatar_url: str | None = None
     app_locale: AppLocaleCode | None = None
     language: LearningLanguageContext = Field(default_factory=LearningLanguageContext)
     created_at: datetime
     updated_at: datetime
+    last_active_at: datetime
 
     class Config:
         from_attributes = True
@@ -115,6 +117,29 @@ class BootstrapRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     language: LanguagePreferencesRequest | None = None
+
+
+class AIConsentStatus(BaseModel):
+    accepted: bool
+    required_versions: dict[str, str]
+    accepted_versions: dict[str, str]
+    missing: list[str]
+    privacy_policy_url: str
+    privacy_policy_url_en: str
+
+
+class GuestTransferReceiptResponse(BaseModel):
+    receipt: str
+    expires_at: datetime
+
+
+class GuestTransferClaimRequest(BaseModel):
+    receipt: str = Field(min_length=32, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
+
+
+class GuestTransferClaimResponse(BaseModel):
+    profile: UserProfile
+    guest_user_id: str
 
 
 class LanguagePreferencesResponse(LearningLanguageContext):

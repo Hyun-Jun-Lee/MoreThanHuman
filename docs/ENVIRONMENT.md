@@ -1,6 +1,6 @@
 # 환경변수
 
-> 최종 갱신: 2026-11-01 · 환경변수 설명의 단일 기준 문서
+> 최종 갱신: 2026-11-23 · 환경변수 설명의 단일 기준 문서
 
 [빠른 시작](../README.md#실행-준비) · [운영 가이드](OPERATIONS.md)
 
@@ -32,6 +32,13 @@
 | `SUPABASE_PUBLISHABLE_KEY` | 예 | 없음 | 원격 Supabase Auth `/user` 검증에 사용하는 publishable key |
 | `SUPABASE_AUTH_VERIFY_MODE` | 아니오 | `auto` | ES256 token을 JWKS 공개 키로 검증하고 그 외 token은 `/user`로 검증해요. `remote`는 모든 token을 `/user`로 검증해요 |
 | `SUPABASE_AUTH_TIMEOUT_SECONDS` | 아니오 | `5` | Supabase Auth `/user`와 JWKS 조회 timeout |
+| `PRIVACY_POLICY_VERSION` | 아니오 | `2026-11-23` | 현재 개인정보처리방침 동의 버전. 값을 바꾸면 게스트와 회원 모두 새 버전에 다시 동의해야 해요 |
+| `AI_DATA_PROCESSING_VERSION` | 아니오 | `2026-11-23` | 현재 AI 데이터 처리 고지 동의 버전. 값을 바꾸면 AI 기능 전에 다시 동의해야 해요 |
+| `PRIVACY_POLICY_URL` | 아니오 | `https://www.curitalk.app/privacy` | 한국어 앱의 동의·구독 화면에서 여는 공개 개인정보처리방침 URL |
+| `PRIVACY_POLICY_URL_EN` | 아니오 | `https://www.curitalk.app/en/privacy` | 영어 앱의 동의·구독 화면에서 여는 공개 개인정보처리방침 URL |
+| `AI_CONSENT_REQUIRED` | 아니오 | `true` | `true`이면 현재 두 고지에 동의하기 전 AI 요청을 HTTP 403으로 차단해요. 테스트 외 운영 비활성화를 권장하지 않아요 |
+| `GUEST_TRANSFER_RECEIPT_TTL_MINUTES` | 아니오 | `10` | 기존 회원 계정으로 게스트 데이터를 이전하는 일회용 영수증 유효 시간(분) |
+| `GUEST_RETENTION_DAYS` | 아니오 | `30` | 회원으로 전환하지 않은 게스트를 마지막 bootstrap 또는 AI 활동 뒤 삭제 후보로 삼는 기간(일) |
 | `ADMIN_PUBLIC_ORIGIN` | 아니오 | `https://api.curitalk.app` | 관리자 웹 쓰기 요청의 Origin 검사 기준. 로컬에서는 `http://localhost:8010`으로 설정해요 |
 | `ADMIN_ACCESS_CODE` | 관리자 웹 사용 시 | 없음 | 관리자 웹·API 공유 입장 코드. 길이 제한은 없고 앞뒤 공백은 허용하지 않아요. 빈 값은 미설정으로 처리해요. 서버 환경변수에만 저장하며 변경 후 API를 재시작하면 기존 관리자 세션이 무효화돼요 |
 | `SWAGGER_TOKEN_ISSUER_ENABLED` | 아니오 | `false` | `ENV`가 dev가 아닐 때 Swagger token helper를 명시적으로 활성화 |
@@ -80,7 +87,7 @@
 | `SEARCH_MAX_RESULTS` | 아니오 | `6` | 필터링 전 수집할 검색 결과 수. 최소 관련 출처 2개를 확보하지 못할 수 있어 품질 지표를 함께 확인해요. |
 | `SEARCH_MIN_RELEVANT_RESULTS` | 아니오 | `2` | LLM judge가 accept해야 하는 최소 출처 수 |
 | `MAX_HISTORY_TURNS` | 아니오 | `10` | 대화 기록 최대 턴 |
-| `CONVERSATION_ACCESS_ENABLED` | 아니오 | `false` | 무료 1개·15회, Advance 5개·무제한, Plus 10개·무제한 정책을 서버에서 집행. 운영은 Apple Sandbox 검증과 기존 대화 초기화 후 활성화 |
+| `CONVERSATION_ACCESS_ENABLED` | 아니오 | `false` | 회원의 무료 1개·15회, Advance 5개·무제한, Plus 10개·무제한 정책 rollout을 제어해요. 게스트 1개·누적 5회는 이 값과 무관하게 항상 집행해요. 운영은 Apple Sandbox 검증과 기존 대화 초기화 후 회원 정책을 활성화해요 |
 | `APPLE_IAP_ENVIRONMENT` | Apple 결제 시 필수 | 없음 | `sandbox` 또는 `production`; 서명과 API 환경이 일치해야 함 |
 | `SUPABASE_SECRET_KEY` | 계정 삭제 시 필수 | 없음 | 서버 전용 Supabase 관리자 키. Auth 사용자 삭제에 사용하며 모바일 환경에 전달하지 않음 |
 | `APPLE_SIGNIN_TEAM_ID` | Apple 로그인 연결 해제 시 필수 | 없음 | Apple Developer Team ID |

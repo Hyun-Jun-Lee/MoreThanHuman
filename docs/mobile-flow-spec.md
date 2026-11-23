@@ -1,7 +1,7 @@
 # 모바일 화면별 UX Flow / Wireframe
 
 > 기준일: 2026-06-11  
-> 대화 권한 갱신: 2026-11-16
+> 게스트·대화 권한 갱신: 2026-11-23
 > 대상: Flutter v1 모바일 앱  
 > 범위: 화면 구조, 사용자 흐름, API 연결 지점, low-fi wireframe
 
@@ -11,7 +11,8 @@
 
 확정된 방향:
 
-- 로그인은 Google 로그인만 제공해요.
+- 온보딩 뒤 Supabase 익명 게스트로 Home에 진입하고 Google·iOS Apple로 회원 전환할 수 있어요.
+- 게스트는 스낵·주간 추천·최근 대화를 보고 활성 대화 1개에서 계정 누적 5회 발화할 수 있어요.
 - v1에도 온보딩 2~3장을 포함해요.
 - Home에는 최근 대화 목록과 `대화 시작` 단일 CTA를 보여줘요.
 - `대화 시작`을 누르면 자유 대화와 롤플레이 중 선택해요.
@@ -23,10 +24,10 @@
 
 | 화면 | 역할 | 주요 API |
 |------|------|----------|
-| Splash | 토큰 복구, 로그인 여부 확인 | `POST /api/auth/refresh`, `GET /api/auth/me` |
+| Splash | Supabase 세션 복구, 게스트 초기화 | `POST /api/auth/bootstrap` |
 | Onboarding | 서비스 가치 소개 | 없음 |
-| Login | Google 로그인 | `POST /api/auth/google/mobile` |
-| Home | 시작 진입점, 최근 대화 | `GET /api/conversations/` |
+| Login | Google·Apple 회원 전환, 게스트 삭제 | `/api/auth/bootstrap`, `/api/auth/guest-transfer/*`, `DELETE /api/auth/me` |
+| Home | 스낵·주간 추천·시작 진입점·최근 대화 | `GET /api/conversations/`, `GET /api/conversation-topics/weekly/` |
 | Conversation Start Sheet | 자유 대화/롤플레이 선택 | 없음 |
 | Topic Input | 자유 대화 주제 입력 | 없음 |
 | Topic Prep | 주제 준비 카드 확인 | `POST /api/search/topic-prep/` |
@@ -43,11 +44,9 @@ flowchart TD
   B --> C{"Has valid session?"}
   C -->|No| D{"Onboarding seen?"}
   D -->|No| E["Onboarding"]
-  E --> F["Login"]
+  E --> F["Anonymous sign-in + bootstrap"]
   D -->|Yes| F
-  F --> G["Google Sign-In"]
-  G --> H["POST /api/auth/google/mobile"]
-  H --> I["Home"]
+  F --> I["Guest Home"]
   C -->|Yes| I
   I --> J["Start Conversation Sheet"]
   J -->|Free Chat| K["Topic Input"]
@@ -59,13 +58,18 @@ flowchart TD
   I --> Q["Recent Conversation"]
   Q --> N
   N --> R["Grammar Feedback Polling"]
+  I --> S["Profile tab / guest limit CTA"]
+  S --> T["Login"]
+  T --> U["Link new identity or claim transfer receipt"]
+  U --> I
 ```
 
 ## 4. 공통 네비게이션 원칙
 
-- Splash 이후 인증 상태에 따라 Login 또는 Home으로 이동해요.
-- 첫 방문자는 Login 전에 Onboarding을 볼 수 있어요.
+- Splash 이후 저장된 회원·게스트 세션을 복원하고, 온보딩 완료 기기에 세션이 없으면 익명 게스트를 초기화해 Home으로 이동해요.
+- 첫 방문자는 Onboarding을 마친 뒤 로그인 화면을 거치지 않고 Home으로 이동해요.
 - Home은 앱의 기준 화면이에요.
+- 게스트의 두 번째 탭도 `내 정보`이며 탭하면 Login을 push하고 뒤로가기는 Home 상태를 복원해요.
 - Home의 `대화 시작` CTA는 자유 대화/롤플레이 선택 sheet를 열어요.
 - 자유 대화와 롤플레이는 모두 Conversation 화면으로 합류해요.
 - Conversation에서 뒤로 가면 Home으로 돌아가요.
@@ -102,10 +106,9 @@ flowchart TD
 
 **동작**
 
-- secure storage에서 `access_token`, `refresh_token`, `device_id`를 읽어요.
-- access token이 있으면 `GET /api/auth/me`로 확인해요.
-- 실패하면 `POST /api/auth/refresh`를 1회 시도해요.
-- refresh도 실패하면 Login으로 이동해요.
+- Supabase SDK의 현재 세션을 확인하고 `POST /api/auth/bootstrap`으로 프로필을 복원해요.
+- 온보딩 완료 상태인데 세션이 없으면 익명 로그인 뒤 같은 bootstrap을 호출해요.
+- 네트워크 초기화 실패는 Login으로 보내지 않고 재시도 가능한 상태를 보여줘요.
 
 ### 5.2 Onboarding
 
@@ -147,14 +150,14 @@ flowchart TD
 
 **동작**
 
-- `Skip` 또는 마지막 `시작`을 누르면 Login으로 이동해요.
+- `Skip` 또는 마지막 `시작`을 누르면 선택 언어를 pending으로 저장하고 익명 bootstrap 뒤 Home으로 이동해요.
 - onboarding 완료 여부는 local storage에 저장해요.
 
 ### 5.3 Login
 
 **목적**
 
-- Google SDK 로그인으로 사용자를 인증해요.
+- 게스트를 Google 또는 iOS Apple 회원으로 전환하고, 게스트 데이터 삭제 진입점도 제공해요.
 
 **Wireframe**
 
@@ -174,14 +177,15 @@ flowchart TD
 
 **동작**
 
-- Flutter Google Sign-In SDK로 `id_token`을 받아요.
-- 앱 설치 단위 `device_id`를 함께 보내요.
-- `POST /api/auth/google/mobile` 성공 시 token pair를 secure storage에 저장해요.
+- 새 신원이면 Supabase 익명 사용자에 Google·Apple identity를 연결해 사용자 ID와 데이터를 유지해요.
+- 이미 존재하는 신원이면 게스트 세션에서 일회용 이전 영수증을 발급한 뒤 회원 세션에서 claim해 대화·동의·사용 기록을 옮겨요.
+- 게스트 상태의 뒤로가기와 `게스트로 계속`은 Home으로 돌아가요.
+- `계정 삭제`는 확인 뒤 공통 계정 삭제 API를 호출하고 완료 직후 새 익명 계정을 자동 생성하지 않아요.
 
 **오류 처리**
 
-- Google 취소: Login 화면 유지
-- 서버 `409`: 같은 이메일의 기존 계정 안내
+- Google·Apple 취소: Login 화면 유지
+- 회원 전환 실패: 원래 게스트 세션 또는 저장된 이전 영수증으로 복구하고 다시 시도 안내
 - 서버 `400/401`: 다시 시도 안내
 
 ### 5.4 Home
@@ -500,7 +504,7 @@ Timeout:
 
 **목적**
 
-- 최소 계정 관리와 로그아웃을 제공해요.
+- 회원에게 계정 설정·로그아웃을 제공하고, 게스트 탭 진입은 Login으로 연결해요.
 
 **Wireframe**
 
@@ -520,15 +524,15 @@ Timeout:
 
 **동작**
 
-- `GET /api/auth/me`로 사용자 정보를 보여줘요.
-- 로그아웃 시 `POST /api/auth/logout` 호출 후 secure storage를 비우고 Login으로 이동해요.
+- 회원은 `GET /api/auth/me`로 사용자 정보를 보여줘요.
+- 회원 로그아웃은 Supabase 세션과 회원 전용 로컬 상태를 정리한 뒤 새 익명 게스트를 초기화해 Home으로 이동해요.
 
 ## 6. 핵심 상태 모델
 
 | 상태 | 설명 |
 |------|------|
-| AuthState | splash checking, authenticated, unauthenticated |
-| SessionState | access token, refresh token, device id |
+| AuthState | splash checking, guest, member, unauthenticated |
+| SessionState | Supabase session, guest transfer receipt, account-scoped local data |
 | HomeState | recent conversations loading/loaded/empty/error |
 | StartConversationState | idle, choosingType |
 | TopicPrepState | input, loading, ready, lowQuality, error |
@@ -540,8 +544,9 @@ Timeout:
 
 | 사용자 행동 | API | 성공 후 |
 |------------|-----|---------|
-| Google 로그인 | `POST /api/auth/google/mobile` | Home 이동 |
-| 앱 재실행 | `GET /api/auth/me`, `POST /api/auth/refresh` | Home 또는 Login 이동 |
+| 앱 첫 진입·재실행 | Supabase 익명 로그인, `POST /api/auth/bootstrap` | 게스트 또는 회원 Home 이동 |
+| Google·Apple 회원 전환 | Supabase identity link 또는 `POST /api/auth/guest-transfer/*` | 데이터가 유지된 회원 Home 이동 |
+| AI 동의 | `GET/POST /api/auth/me/ai-consent` | 첫 AI action 계속 |
 | 최근 대화 보기 | `GET /api/conversations/` | Home 최근 목록 표시 |
 | 대화 시작 선택 | 없음 | 자유 대화 또는 롤플레이로 분기 |
 | 주제 준비 | `POST /api/search/topic-prep/` | Topic Prep 표시 |
@@ -549,7 +554,7 @@ Timeout:
 | 롤플레이 시작 | `POST /api/conversations/start/roleplay/` | Conversation 이동 |
 | 메시지 전송 | `POST /api/conversations/{conversation_id}/message/` | 메시지 추가, grammar polling 시작 |
 | 문법 피드백 확인 | `GET /api/grammar/message/{message_id}/` | 메시지 아래 피드백 표시 |
-| 로그아웃 | `POST /api/auth/logout` | Login 이동 |
+| 로그아웃 | Supabase sign-out, 익명 bootstrap | 게스트 Home 이동 |
 
 ## 8. v1에서 의도적으로 제외
 
@@ -559,11 +564,11 @@ Timeout:
 - WebSocket/SSE 기반 실시간 피드백
 - 결제/구독
 
-대화 권한 v2는 코드 기본값과 운영에서 비활성화이고 Sandbox 검증 뒤 활성화해요. 무료 계정은 활성 대화 1개와 대화별 사용자 발화 15회를 사용해요. Advance·Plus 구독자는 각각 활성 대화 5개·10개와 무제한 발화를 사용해요. 한도를 넘는 실제 기록은 잠긴 상태로 표시하며 열거나 발화할 수 없고 삭제할 수 있어요. 슬롯 한도가 늘어나면 잠긴 대화가 최근 사용 순서대로 활성화돼요. iOS 내 정보에서 paywall을 열어 App Store 현지 가격, 구매·복원, 약관·개인정보처리방침을 확인해요. Android 구매 UI는 숨겨요. 세부 계약은 [대화 권한 계약](../.agent/_contracts/CONVERSATION_ACCESS.md)을 따라요.
+회원용 대화 권한 v2는 코드 기본값과 운영에서 비활성화이고 Sandbox 검증 뒤 활성화해요. 게스트의 활성 대화 1개·계정 누적 5회 제한은 이 rollout과 무관하게 항상 적용해요. 무료 회원은 활성 대화 1개와 대화별 사용자 발화 15회를 사용해요. Advance·Plus 구독자는 각각 활성 대화 5개·10개와 무제한 발화를 사용해요. 한도를 넘는 실제 기록은 잠긴 상태로 표시하며 열거나 발화할 수 없고 삭제할 수 있어요. 슬롯 한도가 늘어나면 잠긴 대화가 최근 사용 순서대로 활성화돼요. iOS 내 정보에서 paywall을 열어 App Store 현지 가격, 구매·복원, 약관·개인정보처리방침을 확인해요. Android 구매 UI는 숨겨요. 세부 계약은 [대화 권한 계약](../.agent/_contracts/CONVERSATION_ACCESS.md)을 따라요.
 
 ## 9. 구현 순서
 
-1. `Splash → Onboarding → Google Login → Home` 시작 흐름을 연결해요.
+1. `Splash → Onboarding → 익명 게스트 Home` 시작 흐름과 Google·Apple 회원 전환을 연결해요.
 2. Home의 Free Chat 시작을 Topic Input과 Topic Prep API에 연결해요.
 3. Roleplay Setup을 연결해요.
 4. Free Chat Start와 Conversation 생성 흐름을 연결해요.

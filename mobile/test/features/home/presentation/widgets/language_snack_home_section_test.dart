@@ -5,6 +5,7 @@ import 'package:curitalk/core/storage/storage.dart';
 import 'package:curitalk/features/home/application/daily_snack_basket_controller.dart';
 import 'package:curitalk/features/home/application/language_snack_language.dart';
 import 'package:curitalk/features/home/application/language_snacks_controller.dart';
+import 'package:curitalk/features/home/application/snack_account_scope.dart';
 import 'package:curitalk/features/home/data/api_language_snack_repository.dart';
 import 'package:curitalk/features/home/data/language_snack_cache.dart';
 import 'package:curitalk/features/home/data/snack_basket_reset_repository.dart';
@@ -359,6 +360,13 @@ Widget _app(
     snackClockProvider.overrideWithValue(clock),
     snackUserIdProvider.overrideWithValue('user'),
     languageSnackLanguageProvider.overrideWithValue('en'),
+    snackAccountScopeProvider.overrideWithValue(
+      const SnackAccountScope(
+        userId: 'user',
+        language: 'en',
+        widgetEnabled: false,
+      ),
+    ),
     languageSnacksEnabledProvider.overrideWithValue(true),
     secureStorageBackendProvider.overrideWithValue(storage),
     languageSnackRepositoryProvider.overrideWithValue(_Repository()),

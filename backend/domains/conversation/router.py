@@ -18,12 +18,18 @@ from sqlalchemy.orm import Session
 
 from config import get_settings
 from database import SessionLocal, get_db
-from domains.auth.dependencies import AuthenticatedUser, get_current_profile, get_current_user, get_current_user_from_token_param
+from domains.auth.dependencies import (
+    AuthenticatedUser,
+    get_current_ai_profile,
+    get_current_profile,
+    get_current_user,
+    get_current_user_from_token_param,
+)
 from domains.auth.models import ProfileModel
 from domains.conversation.enums import ConversationType
 from domains.conversation.models import ConversationModel, MessageModel, StreamTurnModel
 from domains.conversation.repository import ConversationRepository
-from domains.conversation.repository import ConversationLocked, ConversationSlotsFull, ConversationTurnsFull, PreviousTurnUnresolved, SuggestedStartInProgress
+from domains.conversation.repository import ConversationLocked, ConversationSlotsFull, ConversationTurnsFull, GuestTurnsFull, PreviousTurnUnresolved, SuggestedStartInProgress
 from domains.conversation.schemas import (
     Conversation,
     ConversationAccess,
@@ -74,6 +80,19 @@ def _access_conflict(code: str, message: str) -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_409_CONFLICT,
         detail={"code": code, "message": message},
+    )
+
+
+def _guest_turns_conflict(message: str) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail={
+            "code": "GUEST_TURNS_FULL",
+            "message": message,
+            "turn_scope": "account",
+            "remaining_turns": 0,
+            "limit_action": "login",
+        },
     )
 
 
@@ -219,6 +238,8 @@ def _prepare_stream_or_http_error(**kwargs) -> PreparedGeneration:
         raise HTTPException(status_code=404, detail="turn을 찾을 수 없어요") from error
     except StreamTurnConflict as error:
         raise _access_conflict(error.code, "요청 상태를 확인한 뒤 다시 시도해 주세요") from error
+    except GuestTurnsFull as error:
+        raise _guest_turns_conflict(error.message) from error
     except ConversationSlotsFull as error:
         raise _access_conflict("CONVERSATION_SLOTS_FULL", error.message) from error
     except ConversationTurnsFull as error:
@@ -439,13 +460,13 @@ async def _synthesize_optional_audio(
 )
 async def start_free_chat_conversation(
     http_request: Request,
-    current_user: ProfileModel = Depends(get_current_profile),
+    current_user: ProfileModel = Depends(get_current_ai_profile),
     service: ConversationService = Depends(get_conversation_service),
     voice_service: VoiceService = Depends(get_voice_service),
 ):
     """자유 대화 시작"""
     try:
-        if settings.conversation_access_enabled:
+        if settings.conversation_access_enabled or getattr(current_user, "is_guest", False):
             service.assert_can_create(current_user.id)
         request, include_audio_response, audio_file = await _parse_free_chat_input(http_request)
         input_mode, first_message = await voice_service.resolve_input_text(
@@ -481,6 +502,8 @@ async def start_free_chat_conversation(
         return SuccessResponse(data=data, message="자유 대화가 시작되었습니다")
     except ValidationError as e:
         raise _validation_error_response(e)
+    except GuestTurnsFull as e:
+        raise _guest_turns_conflict(e.message)
     except ConversationSlotsFull as e:
         raise _access_conflict("CONVERSATION_SLOTS_FULL", e.message)
     except RateLimitException as e:
@@ -505,7 +528,7 @@ async def start_free_chat_conversation(
 )
 async def start_suggested_free_chat(
     request: StartSuggestedFreeChatRequest,
-    current_user: ProfileModel = Depends(get_current_profile),
+    current_user: ProfileModel = Depends(get_current_ai_profile),
     service: ConversationService = Depends(get_conversation_service),
     voice_service: VoiceService = Depends(get_voice_service),
 ):
@@ -520,6 +543,8 @@ async def start_suggested_free_chat(
             voice_service=voice_service,
         )
         return SuccessResponse(data=response.model_copy(update={"audio": audio, "audio_error": audio_error}))
+    except GuestTurnsFull as error:
+        raise _guest_turns_conflict(error.message)
     except ConversationSlotsFull as error:
         raise _access_conflict("CONVERSATION_SLOTS_FULL", error.message)
     except SuggestedStartInProgress as error:
@@ -544,7 +569,7 @@ async def start_suggested_free_chat(
 async def start_suggested_free_chat_stream(
     body: StartSuggestedFreeChatRequest,
     idempotency_key: UUID = Header(alias="Idempotency-Key"),
-    current_user: ProfileModel = Depends(get_current_profile),
+    current_user: ProfileModel = Depends(get_current_ai_profile),
     service: ConversationService = Depends(get_conversation_service),
     voice_service: VoiceService = Depends(get_voice_service),
 ):
@@ -577,6 +602,8 @@ async def start_suggested_free_chat_stream(
     except Exception as error:
         with SessionLocal() as db:
             StreamTurnStore(db).fail(turn_id, "START_FAILED")
+        if isinstance(error, GuestTurnsFull):
+            raise _guest_turns_conflict(error.message)
         if isinstance(error, ConversationSlotsFull):
             raise _access_conflict("CONVERSATION_SLOTS_FULL", error.message)
         if isinstance(error, SuggestedStartInProgress):
@@ -651,7 +678,7 @@ _STREAM_RESPONSES = {200: {"content": {"application/x-ndjson": {"schema": {"type
 async def start_free_chat_stream(
     http_request: Request,
     idempotency_key: UUID = Header(alias="Idempotency-Key"),
-    current_user: ProfileModel = Depends(get_current_profile),
+    current_user: ProfileModel = Depends(get_current_ai_profile),
     service: ConversationService = Depends(get_conversation_service),
     voice_service: VoiceService = Depends(get_voice_service),
 ):
@@ -684,7 +711,7 @@ async def start_free_chat_stream(
 async def start_roleplay_stream(
     body: StartRoleplayRequest,
     idempotency_key: UUID = Header(alias="Idempotency-Key"),
-    current_user: ProfileModel = Depends(get_current_profile),
+    current_user: ProfileModel = Depends(get_current_ai_profile),
     service: ConversationService = Depends(get_conversation_service),
     voice_service: VoiceService = Depends(get_voice_service),
 ):
@@ -706,7 +733,7 @@ async def send_turn_stream(
     conversation_id: UUID,
     http_request: Request,
     idempotency_key: UUID = Header(alias="Idempotency-Key"),
-    current_user: AuthenticatedUser = Depends(get_current_user),
+    current_user: ProfileModel = Depends(get_current_ai_profile),
     service: ConversationService = Depends(get_conversation_service),
     voice_service: VoiceService = Depends(get_voice_service),
 ):
@@ -732,7 +759,7 @@ async def send_message_stream(
     conversation_id: UUID,
     body: SendMessageRequest,
     idempotency_key: UUID = Header(alias="Idempotency-Key"),
-    current_user: AuthenticatedUser = Depends(get_current_user),
+    current_user: ProfileModel = Depends(get_current_ai_profile),
     service: ConversationService = Depends(get_conversation_service),
     voice_service: VoiceService = Depends(get_voice_service),
 ):
@@ -754,7 +781,7 @@ async def send_message_stream(
 async def retry_stream_turn(
     turn_id: UUID,
     idempotency_key: UUID = Header(alias="Idempotency-Key"),
-    current_user: ProfileModel = Depends(get_current_profile),
+    current_user: ProfileModel = Depends(get_current_ai_profile),
     service: ConversationService = Depends(get_conversation_service),
     voice_service: VoiceService = Depends(get_voice_service),
 ):
@@ -764,7 +791,10 @@ async def retry_stream_turn(
             raise HTTPException(status_code=404, detail="turn을 찾을 수 없어요")
         if turn.conversation_id:
             ConversationRepository(db).find_by_id(turn.conversation_id, current_user.id)
-            if settings.conversation_access_enabled and turn.kind in {"turn", "message", "free_chat_start"}:
+            access_enabled = ConversationRepository(db).access_enabled_for(
+                current_user.id, configured=settings.conversation_access_enabled
+            )
+            if access_enabled and turn.kind in {"turn", "message", "free_chat_start"}:
                 # 이미 확정된 사용자 발화는 다시 세지 않지만 현재 잠금은 확인해요.
                 conversation = db.query(ConversationModel).filter_by(id=turn.conversation_id).one()
                 if not conversation.slot_active:
@@ -795,6 +825,8 @@ async def retry_stream_turn(
         except Exception as error:
             with SessionLocal() as db:
                 StreamTurnStore(db).fail(str(turn_id), "START_FAILED", attempt_id=attempt_id)
+            if isinstance(error, GuestTurnsFull):
+                raise _guest_turns_conflict(error.message) from error
             if isinstance(error, ConversationSlotsFull):
                 raise _access_conflict("CONVERSATION_SLOTS_FULL", error.message) from error
             if isinstance(error, NotFoundException):
@@ -822,7 +854,7 @@ async def retry_stream_turn(
              responses=_STREAM_RESPONSES)
 async def retry_stream_audio(
     assistant_message_id: UUID,
-    current_user: AuthenticatedUser = Depends(get_current_user),
+    current_user: ProfileModel = Depends(get_current_ai_profile),
     voice_service: VoiceService = Depends(get_voice_service),
 ):
     message_id = str(assistant_message_id)
@@ -963,13 +995,13 @@ async def retry_stream_audio(
 )
 async def start_roleplay_conversation(
     request: StartRoleplayRequest,
-    current_user: ProfileModel = Depends(get_current_profile),
+    current_user: ProfileModel = Depends(get_current_ai_profile),
     service: ConversationService = Depends(get_conversation_service),
     voice_service: VoiceService = Depends(get_voice_service),
 ):
     """롤플레이 대화 시작 (AI가 먼저 인사)"""
     try:
-        if settings.conversation_access_enabled:
+        if settings.conversation_access_enabled or getattr(current_user, "is_guest", False):
             service.assert_can_create(current_user.id)
         response = await service.start_roleplay_conversation(
             request.role_character,
@@ -990,6 +1022,8 @@ async def start_roleplay_conversation(
             audio_error=audio_error,
         )
         return SuccessResponse(data=data, message="롤플레이 대화가 시작되었습니다")
+    except GuestTurnsFull as e:
+        raise _guest_turns_conflict(e.message)
     except ConversationSlotsFull as e:
         raise _access_conflict("CONVERSATION_SLOTS_FULL", e.message)
     except RateLimitException as e:
@@ -1010,7 +1044,7 @@ async def start_roleplay_conversation(
 async def send_message(
     conversation_id: UUID,
     request: SendMessageRequest,
-    current_user: AuthenticatedUser = Depends(get_current_user),
+    current_user: ProfileModel = Depends(get_current_ai_profile),
     service: ConversationService = Depends(get_conversation_service),
 ):
     """메시지 전송"""
@@ -1021,6 +1055,8 @@ async def send_message(
         return SuccessResponse(data=response)
     except PreviousTurnUnresolved as e:
         raise _access_conflict("PREVIOUS_TURN_UNRESOLVED", e.message)
+    except GuestTurnsFull as e:
+        raise _guest_turns_conflict(e.message)
     except ConversationTurnsFull as e:
         raise _access_conflict("CONVERSATION_TURNS_FULL", e.message)
     except ConversationLocked as e:
@@ -1047,13 +1083,13 @@ async def send_message(
 async def send_multimodal_turn(
     conversation_id: UUID,
     http_request: Request,
-    current_user: AuthenticatedUser = Depends(get_current_user),
+    current_user: ProfileModel = Depends(get_current_ai_profile),
     service: ConversationService = Depends(get_conversation_service),
     voice_service: VoiceService = Depends(get_voice_service),
 ):
     """텍스트 또는 음성 파일로 대화 이어가기"""
     try:
-        if settings.conversation_access_enabled:
+        if settings.conversation_access_enabled or getattr(current_user, "is_guest", False):
             service.assert_can_send(str(conversation_id), current_user.id)
         text, include_audio_response, audio_file = await _parse_turn_input(http_request)
         input_mode, user_text = await voice_service.resolve_input_text(
@@ -1082,6 +1118,8 @@ async def send_multimodal_turn(
         raise _validation_error_response(e)
     except PreviousTurnUnresolved as e:
         raise _access_conflict("PREVIOUS_TURN_UNRESOLVED", e.message)
+    except GuestTurnsFull as e:
+        raise _guest_turns_conflict(e.message)
     except ConversationTurnsFull as e:
         raise _access_conflict("CONVERSATION_TURNS_FULL", e.message)
     except ConversationLocked as e:

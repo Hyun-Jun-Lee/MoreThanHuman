@@ -27,10 +27,11 @@ class SupabaseUserClaims:
     """Supabase access token 검증 후 앱에서 필요한 사용자 claim"""
 
     sub: str
-    email: str
+    email: str | None
     name: str
     oauth_provider: str | None = None
     avatar_url: str | None = None
+    is_anonymous: bool = False
 
 
 class AuthService:
@@ -46,16 +47,17 @@ class AuthService:
         """Supabase claim 기반으로 앱 프로필을 조회하거나 처음 생성해요."""
         if not claims.sub:
             raise AuthenticationException("Invalid Supabase token: missing subject")
-        if not claims.email:
+        if not claims.email and not claims.is_anonymous:
             raise AuthenticationException("Invalid Supabase token: missing email")
 
         return self.repository.get_or_create_profile(
             profile_id=claims.sub,
             email=claims.email,
-            name=claims.name or claims.email.split("@")[0],
+            name=claims.name or (claims.email.split("@")[0] if claims.email else "Guest"),
             oauth_provider=claims.oauth_provider,
             avatar_url=claims.avatar_url,
             language=language,
+            is_guest=claims.is_anonymous,
         )
 
     def bootstrap_profile(self, claims: SupabaseUserClaims, request: BootstrapRequest) -> UserProfile:

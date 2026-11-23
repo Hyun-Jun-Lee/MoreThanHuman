@@ -570,6 +570,9 @@ ProviderContainer _conversationContainer({
     overrides: [
       conversationRepositoryProvider.overrideWithValue(conversationRepository),
       homeRepositoryProvider.overrideWithValue(homeRepository),
+      conversationAccessProvider.overrideWith(
+        (ref) async => const ConversationAccess.disabled(),
+      ),
       authRepositoryProvider.overrideWithValue(_FakeAuthRepository()),
       supabaseAuthServiceProvider.overrideWithValue(_FakeSupabaseAuthService()),
       googleIdentityServiceProvider.overrideWithValue(

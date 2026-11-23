@@ -14,7 +14,14 @@ from sqlalchemy.orm.exc import NoResultFound
 from domains.conversation.enums import ConversationStatus
 from domains.auth.models import ProfileModel
 from domains.conversation.enums import MessageRole
-from domains.conversation.models import ConversationModel, MessageModel, StreamTurnModel, SuggestedStartModel, WeeklyTopicModel
+from domains.conversation.models import (
+    ConversationModel,
+    GuestTurnUsageModel,
+    MessageModel,
+    StreamTurnModel,
+    SuggestedStartModel,
+    WeeklyTopicModel,
+)
 from domains.conversation.stream_turns import StreamTurnStore
 from shared.exceptions import AppException, NotFoundException
 from shared.latency import latency_span
@@ -27,6 +34,10 @@ class ConversationSlotsFull(AppException):
 
 class ConversationTurnsFull(AppException):
     """대화별 무료 사용자 발화 한도에 도달했어요."""
+
+
+class GuestTurnsFull(AppException):
+    """게스트 계정의 누적 체험 발화를 모두 사용했어요."""
 
 
 class ConversationLocked(AppException):
@@ -46,6 +57,12 @@ class ConversationRepository:
 
     def __init__(self, db: Session):
         self.db = db
+
+    def access_enabled_for(self, user_id: str, *, configured: bool) -> bool:
+        """회원 rollout과 무관하게 게스트의 1개·5회 한도는 항상 집행해요."""
+        if configured:
+            return True
+        return self.db.query(ProfileModel.is_guest).filter_by(id=user_id).scalar() is True
 
     def completed_suggested_start(self, user_id: str, request_id: str, topic_id: str) -> SuggestedStartModel | None:
         """완료된 요청은 주제 보관 후에도 같은 결과로 재조회해요."""
@@ -89,6 +106,7 @@ class ConversationRepository:
 
     def complete_suggested_start(self, reservation_id: str, conversation: ConversationModel, message: MessageModel, *, enabled: bool) -> None:
         """슬롯 검사와 대화·AI 메시지·예약 완료를 한 트랜잭션에 저장해요."""
+        enabled = self.access_enabled_for(conversation.user_id, configured=enabled)
         try:
             profile = self.db.query(ProfileModel).filter_by(id=conversation.user_id).with_for_update().one()
             reservation = self.db.query(SuggestedStartModel).filter_by(id=reservation_id, status="pending").one_or_none()
@@ -102,6 +120,11 @@ class ConversationRepository:
                 raise NotFoundException("추천 주제를 찾을 수 없어요")
             if enabled:
                 entitlement = self._reconcile_slots_locked(profile)
+                if profile.is_guest and (
+                    self.count_guest_turns(profile.id, include_reserved=True)
+                    >= entitlement["turn_limit"]
+                ):
+                    raise GuestTurnsFull("게스트 체험 5회를 모두 사용했어요")
             if enabled and entitlement["slot_limit"] is not None and (
                 self.count_active_conversations(conversation.user_id)
                 + self.count_pending_roleplay_starts(conversation.user_id)
@@ -188,6 +211,10 @@ class ConversationRepository:
         self.db.flush()
         return entitlement
 
+    def reconcile_slots_in_transaction(self, profile: ProfileModel) -> dict:
+        """호출자가 보유한 프로필 잠금·트랜잭션 안에서 슬롯을 재계산해요."""
+        return self._reconcile_slots_locked(profile)
+
     def _locked_entitlement(self, user_id: str) -> tuple[ProfileModel, dict]:
         with latency_span("entitlement_lock"):
             profile = self.db.query(ProfileModel).filter_by(id=user_id).with_for_update().one()
@@ -213,8 +240,78 @@ class ConversationRepository:
             StreamTurnModel.deadline_at >= datetime.utcnow(),
         ).count()
 
+    def count_guest_turns(self, user_id: str, *, include_reserved: bool = False) -> int:
+        statuses = ["committed", "reserved"] if include_reserved else ["committed"]
+        return self.db.query(GuestTurnUsageModel).filter(
+            GuestTurnUsageModel.user_id == user_id,
+            GuestTurnUsageModel.status.in_(statuses),
+        ).count()
+
+    def reserve_guest_turn_locked(
+        self,
+        profile: ProfileModel,
+        *,
+        request_key: str,
+        conversation_id: str,
+    ) -> GuestTurnUsageModel | None:
+        """프로필 잠금 아래 게스트 발화를 멱등 예약해요."""
+        if not profile.is_guest:
+            return None
+        existing = self.db.query(GuestTurnUsageModel).filter_by(
+            user_id=profile.id, request_key=request_key
+        ).one_or_none()
+        if existing is not None and existing.status in {"reserved", "committed"}:
+            return existing
+        if self.count_guest_turns(profile.id, include_reserved=True) >= 5:
+            raise GuestTurnsFull("게스트 체험 5회를 모두 사용했어요")
+        now = datetime.utcnow()
+        if existing is None:
+            existing = GuestTurnUsageModel(
+                id=str(uuid4()),
+                user_id=profile.id,
+                request_key=request_key,
+                conversation_id=conversation_id,
+                status="reserved",
+                created_at=now,
+            )
+            self.db.add(existing)
+        else:
+            existing.status = "reserved"
+            existing.conversation_id = conversation_id
+            existing.committed_at = None
+            existing.released_at = None
+        self.db.flush()
+        return existing
+
+    def reserve_guest_turn(
+        self, user_id: str, *, request_key: str, conversation_id: str
+    ) -> GuestTurnUsageModel | None:
+        profile, _ = self._locked_entitlement(user_id)
+        return self.reserve_guest_turn_locked(
+            profile, request_key=request_key, conversation_id=conversation_id
+        )
+
+    def commit_guest_turn(self, user_id: str, request_key: str) -> None:
+        usage = self.db.query(GuestTurnUsageModel).filter_by(
+            user_id=user_id, request_key=request_key, status="reserved"
+        ).with_for_update().one_or_none()
+        if usage is not None:
+            usage.status = "committed"
+            usage.committed_at = datetime.utcnow()
+            usage.released_at = None
+
+    def release_guest_turn(self, request_key: str) -> None:
+        usage = self.db.query(GuestTurnUsageModel).filter_by(
+            request_key=request_key, status="reserved"
+        ).with_for_update().one_or_none()
+        if usage is not None:
+            usage.status = "released"
+            usage.committed_at = None
+            usage.released_at = datetime.utcnow()
+
     def access_summary(self, user_id: str, *, enabled: bool) -> dict:
         """새 대화 생성 권한과 슬롯 사용량을 반환해요."""
+        enabled = self.access_enabled_for(user_id, configured=enabled)
         if not enabled:
             used = self.count_conversations(user_id)
             return {
@@ -225,21 +322,32 @@ class ConversationRepository:
                 "remaining_slots": None,
                 "locked_count": 0,
             }
-        _, entitlement = self._locked_entitlement(user_id)
+        profile, entitlement = self._locked_entitlement(user_id)
         with latency_span("entitlement_held_after_reconcile"):
             limit = entitlement["slot_limit"]
             active_count = self.count_active_conversations(user_id)
             used = active_count + self.count_pending_roleplay_starts(user_id)
+            guest_turns = (
+                self.count_guest_turns(user_id, include_reserved=True)
+                if profile.is_guest else None
+            )
             self.db.commit()
         total_count = self.count_conversations(user_id)
         return {
             "enabled": True,
-            "can_create": limit is None or used < limit,
+            "can_create": (limit is None or used < limit)
+            and (guest_turns is None or guest_turns < entitlement["turn_limit"]),
             "used_slots": used,
             "slot_limit": limit,
             "remaining_slots": None if limit is None else max(0, limit - used),
             "locked_count": max(0, total_count - active_count),
             "plan": entitlement["plan"],
+            "turn_scope": entitlement.get("turn_scope", "conversation"),
+            "remaining_turns": (
+                None if guest_turns is None
+                else max(0, entitlement["turn_limit"] - guest_turns)
+            ),
+            "limit_action": entitlement.get("limit_action", "upgrade"),
         }
 
     def assert_can_create(self, user_id: str, *, enabled: bool) -> None:
@@ -247,14 +355,21 @@ class ConversationRepository:
 
         저장 단계의 잠금 아래 한도 검사가 동시 생성의 최종 판정이에요.
         """
+        enabled = self.access_enabled_for(user_id, configured=enabled)
         if not enabled:
             return
         try:
-            _, entitlement = self._locked_entitlement(user_id)
+            profile, entitlement = self._locked_entitlement(user_id)
             with latency_span("entitlement_held_after_reconcile"):
                 used = self.count_active_conversations(user_id) + self.count_pending_roleplay_starts(user_id)
                 limit = entitlement["slot_limit"]
                 can_create = limit is None or used < limit
+                if profile.is_guest and (
+                    self.count_guest_turns(user_id, include_reserved=True)
+                    >= entitlement["turn_limit"]
+                ):
+                    self.db.commit()
+                    raise GuestTurnsFull("게스트 체험 5회를 모두 사용했어요")
                 # 한도 변경에 따른 슬롯 재조정은 생성 불가일 때도 저장해요.
                 self.db.commit()
         except Exception:
@@ -265,10 +380,16 @@ class ConversationRepository:
 
     def create_with_access(self, conversation: ConversationModel, *, enabled: bool) -> ConversationModel:
         """프로필 행 잠금 아래에서 슬롯 검사와 새 대화 INSERT를 직렬화해요."""
+        enabled = self.access_enabled_for(conversation.user_id, configured=enabled)
         if not enabled:
             return self.save(conversation)
         try:
-            _, entitlement = self._locked_entitlement(conversation.user_id)
+            profile, entitlement = self._locked_entitlement(conversation.user_id)
+            if profile.is_guest and (
+                self.count_guest_turns(profile.id, include_reserved=True)
+                >= entitlement["turn_limit"]
+            ):
+                raise GuestTurnsFull("게스트 체험 5회를 모두 사용했어요")
             used = self.count_active_conversations(conversation.user_id) + self.count_pending_roleplay_starts(conversation.user_id)
             if entitlement["slot_limit"] is not None and used >= entitlement["slot_limit"]:
                 raise ConversationSlotsFull("추가 대화 이용권이 필요해요")
@@ -286,9 +407,10 @@ class ConversationRepository:
         *, turn_id: str, enabled: bool,
     ) -> None:
         """새 대화·확정 발화·turn 연결을 한 트랜잭션에 저장해요."""
+        enabled = self.access_enabled_for(conversation.user_id, configured=enabled)
         try:
             if enabled:
-                _, entitlement = self._locked_entitlement(conversation.user_id)
+                profile, entitlement = self._locked_entitlement(conversation.user_id)
                 used = (self.count_active_conversations(conversation.user_id)
                         + self.count_pending_roleplay_starts(conversation.user_id))
                 if entitlement["slot_limit"] is not None and used >= entitlement["slot_limit"]:
@@ -302,6 +424,12 @@ class ConversationRepository:
             self.db.flush()
             self.db.add(user_message)
             self.db.flush()
+            if enabled:
+                self.reserve_guest_turn_locked(
+                    profile,
+                    request_key=user_message.id,
+                    conversation_id=conversation.id,
+                )
             turn.conversation_id = conversation.id
             turn.user_message_id = user_message.id
             self.db.commit()
@@ -317,13 +445,20 @@ class ConversationRepository:
         ) or 0
 
     def turn_access(self, conversation_id: str, user_id: str, *, enabled: bool) -> dict:
+        enabled = self.access_enabled_for(user_id, configured=enabled)
         if enabled:
-            _, entitlement = self._locked_entitlement(user_id)
+            profile, entitlement = self._locked_entitlement(user_id)
         else:
+            profile = None
             entitlement = {"turn_limit": None}
         with latency_span("entitlement_held_after_reconcile") if enabled else nullcontext():
             conversation = self.find_by_id(conversation_id, user_id)
-            used = self.count_user_turns(conversation_id)
+            conversation_turns = self.count_user_turns(conversation_id)
+            guest_turns = (
+                self.count_guest_turns(user_id, include_reserved=True)
+                if profile is not None and profile.is_guest else None
+            )
+            used = guest_turns if guest_turns is not None else conversation_turns
             locked = enabled and not conversation.slot_active
             if enabled:
                 self.db.commit()
@@ -334,23 +469,30 @@ class ConversationRepository:
             "turn_limit": limit,
             "can_send": not locked and (limit is None or used < limit),
             "locked": locked,
+            "turn_scope": entitlement.get("turn_scope", "conversation"),
+            "remaining_turns": None if limit is None else max(0, limit - used),
+            "limit_action": entitlement.get("limit_action", "upgrade"),
         }
 
     def assert_can_send(self, conversation_id: str, user_id: str, *, enabled: bool) -> None:
+        enabled = self.access_enabled_for(user_id, configured=enabled)
         if enabled:
             access = self.turn_access(conversation_id, user_id, enabled=True)
             if access["locked"]:
                 raise ConversationLocked("읽기 전용 대화예요")
             if not access["can_send"]:
+                if access["turn_scope"] == "account":
+                    raise GuestTurnsFull("게스트 체험 5회를 모두 사용했어요")
                 raise ConversationTurnsFull("이 대화의 무료 15턴을 모두 사용했어요")
 
     def lock_sendable_conversation(
         self, conversation_id: str, user_id: str, *, enabled: bool, operation: str,
     ) -> ConversationModel:
         """스트림 발화의 최종 권한을 검사하고 호출자의 커밋까지 잠금을 유지해요."""
+        enabled = self.access_enabled_for(user_id, configured=enabled)
         if enabled:
             try:
-                _, entitlement = self._locked_entitlement(user_id)
+                profile, entitlement = self._locked_entitlement(user_id)
             except NoResultFound as error:
                 raise NotFoundException(f"Conversation {conversation_id} not found") from error
         with latency_span("stream_precheck.ownership", operation=operation):
@@ -368,8 +510,14 @@ class ConversationRepository:
                 self.db.commit()  # 슬롯 재조정 결과는 거절된 요청에도 반영해요.
                 raise ConversationLocked("읽기 전용 대화예요")
             limit = entitlement["turn_limit"]
-            if limit is not None and self.count_user_turns(conversation.id) >= limit:
+            used = (
+                self.count_guest_turns(user_id, include_reserved=True)
+                if profile.is_guest else self.count_user_turns(conversation.id)
+            )
+            if limit is not None and used >= limit:
                 self.db.commit()
+                if profile.is_guest:
+                    raise GuestTurnsFull("게스트 체험 5회를 모두 사용했어요")
                 raise ConversationTurnsFull("이 대화의 무료 15턴을 모두 사용했어요")
         return conversation
 
@@ -394,6 +542,7 @@ class ConversationRepository:
         stream_turn_id: str | None = None,
     ) -> MessageModel:
         """대화 행 잠금 아래에서 사용자 발화 수와 INSERT를 원자적으로 처리해요."""
+        enabled = self.access_enabled_for(user_id, configured=enabled)
         self.assert_no_unresolved_turn(message.conversation_id, user_id,
                                        exclude_turn_id=stream_turn_id)
         if not enabled:
@@ -412,7 +561,7 @@ class ConversationRepository:
                 self.db.rollback()
                 raise
         try:
-            _, entitlement = self._locked_entitlement(user_id)
+            profile, entitlement = self._locked_entitlement(user_id)
             conversation = (
                 self.db.query(ConversationModel)
                 .filter(ConversationModel.id == message.conversation_id, ConversationModel.user_id == user_id)
@@ -424,8 +573,19 @@ class ConversationRepository:
             if not conversation.slot_active:
                 raise ConversationLocked("읽기 전용 대화예요")
             limit = entitlement["turn_limit"]
-            if limit is not None and self.count_user_turns(conversation.id) >= limit:
+            used = (
+                self.count_guest_turns(user_id, include_reserved=True)
+                if profile.is_guest else self.count_user_turns(conversation.id)
+            )
+            if limit is not None and used >= limit:
+                if profile.is_guest:
+                    raise GuestTurnsFull("게스트 체험 5회를 모두 사용했어요")
                 raise ConversationTurnsFull("이 대화의 무료 15턴을 모두 사용했어요")
+            self.reserve_guest_turn_locked(
+                profile,
+                request_key=message.id,
+                conversation_id=conversation.id,
+            )
             self.db.add(message)
             if stream_turn_id:
                 self.db.flush()
@@ -443,8 +603,28 @@ class ConversationRepository:
     def delete_failed_user_turn(self, message_id: str) -> None:
         message = self.db.query(MessageModel).filter(MessageModel.id == message_id).one_or_none()
         if message is not None:
+            self.release_guest_turn(message_id)
             self.db.delete(message)
             self.db.commit()
+
+    def save_assistant_turn(
+        self,
+        message: MessageModel,
+        *,
+        user_id: str,
+        user_message_id: str,
+    ) -> MessageModel:
+        """사용 가능한 AI 응답 저장과 게스트 차감을 함께 확정해요."""
+        try:
+            self.db.add(message)
+            self.db.flush()
+            self.commit_guest_turn(user_id, user_message_id)
+            self.db.commit()
+            self.db.refresh(message)
+            return message
+        except Exception:
+            self.db.rollback()
+            raise
 
     def find_by_id(self, conversation_id: str, user_id: str) -> ConversationModel:
         """

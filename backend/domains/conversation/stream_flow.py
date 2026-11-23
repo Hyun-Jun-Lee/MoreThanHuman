@@ -12,7 +12,7 @@ from config import get_settings
 from database import SessionLocal
 from domains.conversation.enums import ConversationStatus, ConversationType, MessageRole
 from domains.conversation.models import ConversationModel, MessageModel, StreamAttemptModel, StreamTurnModel
-from domains.conversation.repository import ConversationRepository, ConversationSlotsFull, PreviousTurnUnresolved
+from domains.conversation.repository import ConversationRepository, ConversationSlotsFull, GuestTurnsFull, PreviousTurnUnresolved
 from domains.conversation.service import ConversationService, free_chat_title
 from domains.conversation.stream_turns import StreamTurnConflict, StreamTurnStore
 from shared.background_tasks import BackgroundTaskRegistry
@@ -44,7 +44,7 @@ def _language(data: dict) -> LearningLanguageContext:
 def _prepare_existing_turn(
     *, db: Session, store: StreamTurnStore, repository: ConversationRepository,
     service: ConversationService, user_id: str, request_id: str, kind: str,
-    input_data: dict, background_tasks: BackgroundTaskRegistry,
+    input_data: dict, background_tasks: BackgroundTaskRegistry, access_enabled: bool,
 ) -> PreparedGeneration:
     """기존 대화의 검사·이력 조회·예약·발화를 한 커밋으로 확정해요."""
     conversation_id = input_data["conversation_id"]
@@ -56,7 +56,7 @@ def _prepare_existing_turn(
             with latency_span("stream_precheck.access", operation=kind):
                 conversation = repository.lock_sendable_conversation(
                     conversation_id, user_id,
-                    enabled=settings.conversation_access_enabled, operation=kind,
+                    enabled=access_enabled, operation=kind,
                 )
             with latency_span("stream_precheck.unresolved", operation=kind):
                 try:
@@ -95,6 +95,12 @@ def _prepare_existing_turn(
             )
             db.add(user_message)
             db.flush()
+            if access_enabled:
+                repository.reserve_guest_turn(
+                    user_id,
+                    request_key=user_message.id,
+                    conversation_id=conversation_id,
+                )
             turn.user_message_id = user_message.id
             prepared = PreparedGeneration(
                 turn_id=turn.id, attempt_id=turn.attempt_id,
@@ -128,24 +134,39 @@ def prepare_generation(
         repository = ConversationRepository(db)
         service = ConversationService(repository, http_client=http_client, background_tasks=background_tasks)
         operation = kind or "retry"
+        access_enabled = repository.access_enabled_for(
+            user_id, configured=settings.conversation_access_enabled
+        )
         if retry_turn_id is None and kind in {"turn", "message"}:
             assert input_data is not None
             return _prepare_existing_turn(
                 db=db, store=store, repository=repository, service=service,
                 user_id=user_id, request_id=request_id, kind=kind,
                 input_data=input_data, background_tasks=background_tasks,
+                access_enabled=access_enabled,
             )
         if retry_turn_id:
             with latency_span("stream_precheck", operation=operation):
                 previous_turn = store.get(user_id, retry_turn_id)
                 if previous_turn is None:
                     raise LookupError(retry_turn_id)
-                if previous_turn.kind == "roleplay_start" and settings.conversation_access_enabled:
-                    _, entitlement = repository._locked_entitlement(user_id)
+                if previous_turn.kind == "roleplay_start" and access_enabled:
+                    profile, entitlement = repository._locked_entitlement(user_id)
+                    if profile.is_guest and (
+                        repository.count_guest_turns(user_id, include_reserved=True)
+                        >= entitlement["turn_limit"]
+                    ):
+                        raise GuestTurnsFull("게스트 체험 5회를 모두 사용했어요")
                     reserved = (repository.count_active_conversations(user_id)
                                 + repository.count_pending_roleplay_starts(user_id))
                     if entitlement["slot_limit"] is not None and reserved >= entitlement["slot_limit"]:
                         raise ConversationSlotsFull("추가 대화 이용권이 필요해요")
+                if previous_turn.user_message_id and access_enabled:
+                    repository.reserve_guest_turn(
+                        user_id,
+                        request_key=previous_turn.user_message_id,
+                        conversation_id=previous_turn.conversation_id,
+                    )
             with latency_span("stream_reserve", operation=operation):
                 turn = store.retry(user_id=user_id, turn_id=retry_turn_id, request_id=request_id)
             kind = turn.kind
@@ -158,7 +179,7 @@ def prepare_generation(
                     with latency_span("stream_precheck.ownership", operation=operation):
                         conversation = repository.find_by_id(conversation_id, user_id)
                     with latency_span("stream_precheck.access", operation=operation):
-                        repository.assert_can_send(conversation_id, user_id, enabled=settings.conversation_access_enabled)
+                        repository.assert_can_send(conversation_id, user_id, enabled=access_enabled)
                     with latency_span("stream_precheck.unresolved", operation=operation):
                         unresolved = store.unresolved(user_id, conversation_id)
                     if any(item.status != "completed" for item in unresolved):
@@ -169,9 +190,14 @@ def prepare_generation(
                         )
                         raise StreamTurnConflict("PREVIOUS_TURN_UNRESOLVED")
                 elif kind == "free_chat_start":
-                    repository.assert_can_create(user_id, enabled=settings.conversation_access_enabled)
-                elif kind == "roleplay_start" and settings.conversation_access_enabled:
-                    _, entitlement = repository._locked_entitlement(user_id)
+                    repository.assert_can_create(user_id, enabled=access_enabled)
+                elif kind == "roleplay_start" and access_enabled:
+                    profile, entitlement = repository._locked_entitlement(user_id)
+                    if profile.is_guest and (
+                        repository.count_guest_turns(user_id, include_reserved=True)
+                        >= entitlement["turn_limit"]
+                    ):
+                        raise GuestTurnsFull("게스트 체험 5회를 모두 사용했어요")
                     reserved = (repository.count_active_conversations(user_id)
                                 + repository.count_pending_roleplay_starts(user_id))
                     if entitlement["slot_limit"] is not None and reserved >= entitlement["slot_limit"]:
@@ -199,7 +225,7 @@ def prepare_generation(
                         user_message = MessageModel(id=str(uuid4()), conversation_id=conversation.id,
                                                     role=MessageRole.USER, content=user_text)
                         repository.save_user_turn(
-                            user_message, user_id, enabled=settings.conversation_access_enabled,
+                            user_message, user_id, enabled=access_enabled,
                             stream_turn_id=turn.id,
                         )
                     prior_assistant = next((item.content for item in reversed(previous)
@@ -243,7 +269,7 @@ def prepare_generation(
                                                     role=MessageRole.USER, content=user_text)
                         repository.create_stream_free_chat(
                             conversation, user_message, turn_id=turn.id,
-                            enabled=settings.conversation_access_enabled,
+                            enabled=access_enabled,
                         )
                         background_tasks.start(service.process_grammar_feedback_background(
                             user_message.id, user_text, language_context=language,
@@ -293,6 +319,10 @@ def prepare_generation(
 def complete_generated_text(user_id: str, prepared: PreparedGeneration, answer: str) -> tuple[str, str]:
     """assistant 메시지와 turn 완료를 같은 트랜잭션에 저장해요."""
     with SessionLocal() as db:
+        repository = ConversationRepository(db)
+        access_enabled = repository.access_enabled_for(
+            user_id, configured=settings.conversation_access_enabled
+        )
         turn = db.query(StreamTurnModel).filter_by(
             id=prepared.turn_id, user_id=user_id, status="pending", attempt_id=prepared.attempt_id,
         ).with_for_update().one()
@@ -300,9 +330,13 @@ def complete_generated_text(user_id: str, prepared: PreparedGeneration, answer: 
             data = json.loads(turn.input_json)
             language = _language(data)
             role = data["role_character"]
-            repository = ConversationRepository(db)
-            if settings.conversation_access_enabled:
-                _, entitlement = repository._locked_entitlement(user_id)
+            if access_enabled:
+                profile, entitlement = repository._locked_entitlement(user_id)
+                if profile.is_guest and (
+                    repository.count_guest_turns(user_id, include_reserved=True)
+                    >= entitlement["turn_limit"]
+                ):
+                    raise GuestTurnsFull("게스트 체험 5회를 모두 사용했어요")
                 if (entitlement["slot_limit"] is not None
                         and repository.count_active_conversations(user_id)
                         + repository.count_pending_roleplay_starts(user_id) > entitlement["slot_limit"]):
@@ -311,7 +345,7 @@ def complete_generated_text(user_id: str, prepared: PreparedGeneration, answer: 
                 id=str(uuid4()), user_id=user_id, title=role[:200],
                 conversation_type=ConversationType.ROLE_PLAYING, role_character=role,
                 message_count=1, status=ConversationStatus.ACTIVE,
-                slot_active=settings.conversation_access_enabled,
+                slot_active=access_enabled,
                 **language_context_to_dict(language),
             )
             db.add(conversation)
@@ -328,6 +362,8 @@ def complete_generated_text(user_id: str, prepared: PreparedGeneration, answer: 
                                  role=MessageRole.ASSISTANT, content=answer)
         db.add(assistant)
         db.flush()
+        if turn.user_message_id:
+            repository.commit_guest_turn(user_id, turn.user_message_id)
         now = datetime.utcnow()
         turn.assistant_message_id = assistant.id
         turn.status = "completed"

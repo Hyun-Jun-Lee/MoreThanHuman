@@ -42,11 +42,12 @@ class AuthRepository:
         self,
         *,
         profile_id: str,
-        email: str,
+        email: str | None,
         name: str,
         oauth_provider: str | None,
         avatar_url: str | None = None,
         language: LearningLanguageContext | None = None,
+        is_guest: bool = False,
     ) -> ProfileModel:
         """Supabase claim으로 프로필을 준비하고 선택한 학습 언어를 적용해요."""
         if self.db.query(AccountDeletionModel.user_id).filter_by(user_id=profile_id).first():
@@ -60,8 +61,10 @@ class AuthRepository:
                 name=name,
                 oauth_provider=oauth_provider,
                 avatar_url=avatar_url,
+                is_guest=is_guest,
                 created_at=now,
                 updated_at=now,
+                last_active_at=now,
             )
             self.db.add(profile)
             self._apply_language(profile, language)
@@ -77,7 +80,19 @@ class AuthRepository:
             self.db.refresh(profile)
             return profile
 
-        if self._apply_language(profile, language):
+        changed = self._apply_language(profile, language)
+        if profile.is_guest and not is_guest:
+            profile.email = email
+            profile.name = name
+            profile.oauth_provider = oauth_provider
+            profile.avatar_url = avatar_url
+            profile.is_guest = False
+            profile.updated_at = datetime.utcnow()
+            changed = True
+        elif profile.is_guest and is_guest:
+            profile.last_active_at = datetime.utcnow()
+            changed = True
+        if changed:
             self.db.commit()
             self.db.refresh(profile)
         return profile

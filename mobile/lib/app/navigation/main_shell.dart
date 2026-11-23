@@ -48,7 +48,7 @@ class _MainShellState extends ConsumerState<MainShell> {
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authControllerProvider).value?.user;
-    if (user != null && user.nickname == null) {
+    if (user != null && !user.isGuest && user.nickname == null) {
       _openNicknameDialog(user.id);
     }
     ref.listen(authControllerProvider, (_, next) {
@@ -73,6 +73,11 @@ class _MainShellState extends ConsumerState<MainShell> {
             destination: MainNavigationDestination
                 .values[widget.navigationShell.currentIndex],
             onDestinationSelected: (destination) {
+              if (destination == MainNavigationDestination.profile &&
+                  ref.read(authControllerProvider).value?.isGuest == true) {
+                context.go('/login');
+                return;
+              }
               final repeated =
                   destination.index == widget.navigationShell.currentIndex;
               widget.navigationShell.goBranch(
