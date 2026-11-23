@@ -34,6 +34,7 @@ class FakeConversationService:
         selected_question=None,
         custom_focus=None,
         language_context=None,
+        nickname=None,
     ):
         self.started.append(
             {
@@ -61,6 +62,7 @@ class FakeConversationService:
         search_context=None,
         user_id="",
         language_context=None,
+        nickname=None,
     ):
         self.started.append(
             {
@@ -79,7 +81,9 @@ class FakeConversationService:
             grammar_feedback=None,
         )
 
-    async def continue_conversation(self, conversation_id, user_message, user_id=""):
+    async def continue_conversation(
+        self, conversation_id, user_message, user_id="", nickname=None,
+    ):
         self.continued.append(
             {
                 "conversation_id": conversation_id,

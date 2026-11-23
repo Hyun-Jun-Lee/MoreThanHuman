@@ -7,7 +7,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 class ApiAuthRepository
     implements
         AuthRepository,
-        AppLocaleRepository,
         NicknameRepository,
         AIConsentRepository,
         GuestTransferRepository,
@@ -19,13 +18,15 @@ class ApiAuthRepository
   @override
   Future<UserProfile> bootstrap(
     LearningLanguageContext? pendingLanguage,
+    String? pendingAppLocale,
   ) async {
     final ApiResponse<UserProfile> response = await apiClient
         .request<UserProfile>(
           'auth/bootstrap',
           method: 'POST',
           data: <String, dynamic>{
-            if (pendingLanguage != null) 'language': pendingLanguage.toJson(),
+            'language': ?pendingLanguage?.toJson(),
+            'app_locale': ?pendingAppLocale,
           },
           decodeData: UserProfile.fromJson,
         );
@@ -38,18 +39,6 @@ class ApiAuthRepository
       'auth/me',
       decodeData: UserProfile.fromJson,
     );
-    return response.data;
-  }
-
-  @override
-  Future<UserProfile> updateAppLocale(String appLocale) async {
-    final ApiResponse<UserProfile> response = await apiClient
-        .request<UserProfile>(
-          'auth/me/app-locale',
-          method: 'PUT',
-          data: <String, String>{'app_locale': appLocale},
-          decodeData: UserProfile.fromJson,
-        );
     return response.data;
   }
 

@@ -200,21 +200,26 @@ module Auth {
   }
 
   type LanguagePreferencesRequest extends LearningLanguageContext
-  type BootstrapRequest { language?: LearningLanguageContext }
+  type BootstrapRequest {
+    language?: LearningLanguageContext
+    app_locale?: "ko" | "en"
+  }
   type LanguagePreferencesResponse extends LearningLanguageContext
   type AppLocaleRequest { app_locale: "ko" | "en" }
   type NicknameRequest { nickname: String }
 }
 ```
 
-모바일 앱은 Supabase Auth로 Google 또는 iOS Apple 로그인을 완료한 뒤 Supabase `access_token`을 FastAPI 보호 API의 `Authorization: Bearer` 헤더에 전달해요. `POST /api/auth/bootstrap`은 세션 시작·복원 시 `{ "language": LearningLanguageContext }` 또는 빈 객체를 받아 프로필을 조회하거나 생성하고 최종 `UserProfile`을 반환해요. `language`가 있으면 프로필의 학습 언어 기본값에 적용하고, 없으면 기존 값을 유지해요. 기존 앱과의 전환 기간 동안 `GET /api/auth/me` 및 로그인 직후 `PUT /api/auth/me/language-preferences`에서도 프로필을 생성할 수 있어요.
+모바일 앱은 Supabase Auth의 익명·Google·iOS Apple 세션에서 받은 `access_token`을 FastAPI 보호 API의 `Authorization: Bearer` 헤더에 전달해요. `POST /api/auth/bootstrap`은 세션 시작·복원 시 optional `language`와 `app_locale` 또는 빈 객체를 받아 프로필을 조회하거나 생성하고 최종 `UserProfile`을 반환해요. 온보딩에서 확정한 두 값은 한 요청으로 적용하며, 생략한 값은 기존 프로필 값을 유지해요. 기존 앱과의 전환 기간 동안 `GET /api/auth/me` 및 로그인 직후 `PUT /api/auth/me/language-preferences`에서도 프로필을 생성할 수 있어요.
 온보딩 뒤 정식 회원 세션이 없으면 새 앱은 Supabase 익명 세션으로 같은 bootstrap을 호출해요. 검증된 `is_anonymous=true`, `role=authenticated` token만 이메일 없이 허용하고 `email=null`, `is_guest=true` 프로필을 만들어요. 익명 bootstrap과 성공한 AI action은 `last_active_at`을 갱신해요. 정식 회원 token의 이메일 누락은 인증 오류예요.
 일반 보호 API는 토큰에서 사용자 ID를 검증하며, 언어 등 프로필 값이 필요한 API만 기존 프로필을 조회해요. 프로필 없이 후자에 접근하면 409 `프로필 초기화가 필요합니다`를 반환해요. `is_active`는 현재 인증 차단 정책에 사용하지 않지만 기존 응답 필드로 유지해요.
 `POST /api/auth/swagger/token`은 Swagger 수동 테스트를 위한 Supabase email/password token helper예요. `ENV=dev`에서는 사용할 수 있고, dev 외 환경에서는 `SWAGGER_TOKEN_ISSUER_ENABLED=true`와 `SWAGGER_TOKEN_ISSUER_SECRET`을 설정한 뒤 요청 body의 `secret`이 일치해야 해요. 발급된 `access_token`을 Swagger `Authorize`에 `Bearer <access_token>` 형식으로 넣어요.
 언어 선호는 프로필 기본값이며 새 대화 시작 시 `conversations` row에 snapshot으로 저장돼요. 기존 값이 없으면 `ko -> en`, feedback `ko`로 보정해요.
 `PUT /api/auth/me/language-preferences`는 profile default만 갱신해요. 모바일 Account UX는 변경값이 새 대화부터 적용되고 기존 conversation은 생성 시점 snapshot을 유지한다고 안내해야 해요.
-`PUT /api/auth/me/app-locale`는 앱 chrome 표시 언어만 저장해요. 값이 없는 기존 profile은 기기 system locale을 따르며 학습 언어쌍과 기존 conversation snapshot은 바꾸지 않아요.
+앱 언어는 온보딩에서 한국어 또는 영어로 선택하고 system locale이 `ko`이면 한국어, 그 밖에는 영어를 초기값으로 사용해요. 선택값은 인증 전 pending 상태로 앱 chrome에 즉시 반영하고 bootstrap 성공 후 profile의 기본값이 돼요. 값이 없는 기존 profile은 기기 system locale을 따르며 학습 언어쌍과 기존 conversation snapshot은 바꾸지 않아요. 내 정보 화면에는 앱 언어 변경 UI를 제공하지 않으며, 구버전 클라이언트 호환을 위해 `PUT /api/auth/me/app-locale`는 유지해요.
 `PUT /api/auth/me/nickname`은 인증된 사용자 본인의 닉네임만 저장하고 `{ success, data: UserProfile }`을 반환해요. 앞뒤 공백 제거와 NFC 정규화 후 1~20자이며 줄바꿈·제어 문자는 허용하지 않아요. 닉네임 중복은 허용하고 UNIQUE 제약이나 중복 조회는 없어요. `nickname: null`은 신규 앱 프로필의 첫 설정이 끝나지 않았음을 뜻해요. 기존 프로필은 migration에서 현재 `name`을 닉네임으로 이관해요. 화면 표시에는 `nickname`을 우선 사용하고 `name`은 OAuth 원본으로 보존해요.
+
+자유 대화와 롤플레이의 생성형 응답은 현재 profile의 `nickname`만 사용자 식별 정보로 prompt에 전달해요. 닉네임은 지시가 아닌 구분된 데이터로 취급하고 내부의 명령형 문구를 무시하며, 인사·격려·화제 전환처럼 자연스러운 순간에만 간헐적으로 사용해요. 대화 row에 snapshot으로 저장하지 않으므로 기존 대화의 다음 turn과 retry도 최신 닉네임을 사용해요. 이메일과 OAuth 원본 이름은 이 prompt context에 포함하지 않아요.
 
 `DELETE /api/auth/me`는 현재 계정의 삭제 요청을 영속화해 기존 Supabase JWT 접근을 즉시 차단해요. 응답의 `data`는 `status: completed|processing`, 서버가 생성한 고엔트로피 `receipt`, `apple_disconnect_required`를 담아요. Apple 로그인 사용자는 새 Apple 승인 코드와 ID 토큰을 선택적으로 body의 `apple_authorization_code`, `apple_identity_token`으로 보내 연결 해제를 시도할 수 있어요. 연결 해제 실패는 데이터 삭제를 막지 않으며 앱이 Apple 계정 설정에서 수동 해제를 안내해요. 데이터 삭제와 Supabase Auth 삭제 중 외부 오류가 나면 `processing`과 HTTP 202를 반환하고 운영 재시도 작업이 완료해요. `GET /api/auth/deletion-status/{receipt}`는 인증 없이 해당 영수증의 `processing|completed`만 반환해요. 삭제된 프로필·대화·학습 기록은 재가입 시 복구되지 않아요.
 

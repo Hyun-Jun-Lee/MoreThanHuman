@@ -59,7 +59,7 @@ lib/
     ├── auth/                # 인증 API, 세션 모델, Riverpod controller
     ├── billing/             # iOS paywall, StoreKit 구매·복원, 서버 권한
     ├── language/            # 언어쌍 모델, preference API, selector UI
-    ├── onboarding/          # 완료 상태, pending 언어쌍, 4장 onboarding 화면
+    ├── onboarding/          # 완료 상태, pending 앱·학습 언어, 5장 onboarding 화면
     ├── conversation/
     │   ├── application/      # 메시지 목록·전송·grammar polling 상태
     │   ├── data/             # conversation, grammar API repository
@@ -155,7 +155,7 @@ assets/
 
 `SupabaseAuthService`는 `supabase_flutter`를 감싸 익명 로그인, Google·Apple token sign-in과 익명 사용자 신원 연결, 현재 session 확인, access token 조회, session refresh, sign-out을 제공해요. iOS Apple 로그인은 매 요청마다 원본 nonce를 만들고 SHA-256 해시를 Apple에 전달한 뒤, Apple identity token과 원본 nonce를 Supabase에 전달해요. Runner의 Debug·Profile·Release 서명 설정에 Sign in with Apple entitlement가 필요해요. Supabase Apple provider의 Client IDs에는 iOS bundle ID `com.morethanhuman.curitalk`가 포함돼야 해요. `SecureTokenStorage`는 더 이상 FastAPI token pair의 source of truth가 아니며 installation ID, 온보딩, 기존 계정 충돌 시 일회용 게스트 이전 영수증 같은 로컬 상태 보관에 사용해요.
 
-`authControllerProvider`는 앱 시작 시 Supabase current session을 확인하고, 온보딩이 끝났지만 세션이 없으면 익명 세션을 만든 뒤 `POST /auth/bootstrap`으로 프로필을 준비해 `guest`, `member` 또는 `unauthenticated` 상태를 제공해요. Google SDK에서 받은 `idToken`과 `accessToken`은 익명 사용자의 Google 신원 연결 또는 정식 로그인에, Apple identity token과 원본 nonce는 Apple 신원 연결 또는 로그인에 사용해요. 이미 다른 계정에 연결된 신원이면 로그인 전에 받은 이전 영수증을 회원 세션에서 claim해 게스트 데이터를 합쳐요. 로그아웃은 Supabase sign-out과 Google sign-out을 best-effort로 처리한 뒤 새 익명 세션을 준비해요. 온보딩에서 선택한 언어쌍은 secure storage에 pending 상태로 저장하고 첫 bootstrap 요청에 함께 보내며, 성공한 뒤 pending 값을 지워요.
+`authControllerProvider`는 앱 시작 시 Supabase current session을 확인하고, 온보딩이 끝났지만 세션이 없으면 익명 세션을 만든 뒤 `POST /auth/bootstrap`으로 프로필을 준비해 `guest`, `member` 또는 `unauthenticated` 상태를 제공해요. Google SDK에서 받은 `idToken`과 `accessToken`은 익명 사용자의 Google 신원 연결 또는 정식 로그인에, Apple identity token과 원본 nonce는 Apple 신원 연결 또는 로그인에 사용해요. 이미 다른 계정에 연결된 신원이면 로그인 전에 받은 이전 영수증을 회원 세션에서 claim해 게스트 데이터를 합쳐요. 로그아웃은 Supabase sign-out과 Google sign-out을 best-effort로 처리한 뒤 새 익명 세션을 준비해요. 온보딩에서 선택한 앱 언어와 학습 언어는 secure storage에 pending 상태로 저장하고 첫 bootstrap 요청에 함께 보내며, 성공한 뒤 두 pending 값을 지워요.
 
 인증 API가 `401`을 반환하면 `TokenRefreshInterceptor`가 Supabase SDK의 `refreshSession()` 결과를 사용해 원 요청을 한 번 재시도해요. 동시 `401`은 하나의 refresh 작업을 공유해요. refresh 후에도 세션이 없거나 재시도가 다시 `401`이면 Riverpod 상태를 `unauthenticated`로 전환해요.
 
@@ -168,7 +168,7 @@ Splash → Onboarding(최초 1회) → 익명 게스트 Home
 ```
 
 - Splash: 제공된 Toma Talk 이미지와 제목을 화면 중앙보다 위쪽에 함께 놓고, 진입 시 한 번 살짝 눌렀다 놓는 650ms 모션으로 표시해요. 저장된 세션과 onboarding 완료 여부를 확인하며, 확인이 먼저 끝나도 모션이 완료된 뒤 이동해요. 동작 줄이기 설정에서는 모션을 생략하고, 확인 오류 시 하단 재시도 아이콘을 표시해요.
-- Onboarding: 기기 locale 기반 언어쌍 기본값을 보여주고 4장 소개 후 완료 상태와 pending 언어쌍을 secure storage에 저장
+- Onboarding: system locale이 `ko`이면 한국어, 그 밖에는 영어 앱 언어를 먼저 제안하고 선택 즉시 chrome에 반영해요. 이어서 기기 locale 기반 학습 언어 기본값을 보여주며 5장 소개 후 완료 상태와 두 pending 값을 secure storage에 저장해요.
 - Login: Home의 `내 정보` 탭이나 누적 5회 뒤 CTA에서 진입하고, Google 또는 Apple 신원을 현재 게스트에 연결하거나 기존 회원으로 로그인한 뒤 게스트 데이터를 이전해요. Google·Apple·게스트 계속 액션은 같은 전체 너비·48pt 높이·pill 형태의 검정 버튼으로 표시하고 Apple은 공식 로고·텍스트 규칙을 유지해요. 뒤로가기는 Home으로 돌아가요.
 - AI 동의: 게스트와 회원 모두 첫 AI 동작 전에 현재 개인정보처리방침과 AI 데이터 처리 고지를 함께 수락해요.
 - 게스트 대화: 활성 대화 1개, 계정 전체 누적 사용자 발화 5회예요. 추천 주제도 로그인 없이 시작할 수 있고 한도 뒤에는 읽기만 유지해요.
@@ -180,17 +180,17 @@ Splash → Onboarding(최초 1회) → 익명 게스트 Home
 - 설명은 영어 학습자에게 한국어, 한국어 학습자에게 영어로 제공하며 앱 chrome locale과 분리해요. 미지원 유형·버전은 건너뛰고 알려진 유형의 손상된 응답은 캐시로 복원해요. 운영 키나 생성 기능은 앱에 포함하지 않아요.
 - Home Navigation v2 (2026-09-22, 2026-11-10 갱신): 홈은 언어 스낵 → `오늘의 토마토` 제목과 대화 카드(기본 5개, 더 보기·접기)를 스크롤해요. `＋ 새 대화` 버튼은 하단 탭 위 중앙에 너비 240px로 고정하고 마지막 대화가 버튼에 가리지 않도록 아래 여백을 둬요. 제목은 16px 글자 크기·좌우 8px 여백을 사용하고 가운데 정렬해요.
 - 대화 권한 v2 (2026-10-04, 2026-11-08 UI 갱신): 서버 정책이 켜지면 무료 계정은 활성 대화 1개·대화별 15회, Advance·Plus는 각각 5개·10개와 무제한 발화를 사용해요. 초과 대화는 실제 기록에 읽기 전용으로 표시하고 전체 대화 화면에서 활성 대화를 교체·해제해요. iOS paywall은 Free·Advance·Plus 카드를 순서대로 표시하고, Advance는 `동시 대화 5개`·`발화 무제한`, Plus는 `동시 대화 10개`·`발화 무제한`·`비즈니스 대화 모드`로 혜택을 구체적으로 안내해요. 유료 플랜 카드를 누르면 선택 상태가 바뀌며 선택 카드만 브랜드색, 나머지는 중립 배경을 사용해요. 현재 플랜은 카드 제목 옆의 점멸 화살표로 표시하며 Reduce Motion에서는 화살표를 정적으로 보여줘요. App Store 가격은 금액을 크게, 월 단위를 보조 텍스트로 분리해요. 카드별 구매 버튼 대신 카드 아래 단일 `구독하기` 버튼으로 선택한 상품을 구매하고, 그 아래에 `이전에 구매했었나요?` 안내와 구매 복원·구독 관리·약관 링크를 제공해요. 비즈니스 대화 모드는 향후 Plus 전용으로 구현할 계획이며 현재 동작은 제공하지 않아요. Android에서는 구매 버튼을 숨겨요.
-- Account (2026-11-08 UI 갱신): 하단 `내 정보` 탭은 중립 배경 위에 프로필·구독·언어 설정·계정 그룹을 카드로 구분해요. 프로필 행에서 닉네임을 관리하고, iOS 구독 행은 현재 플랜과 `플랜 살펴보기`를 함께 표시해요. 앱 언어와 학습 언어는 최소 44pt 분할 선택지와 짧은 적용 범위 안내를 사용하며, 로그아웃과 빨간색 계정 삭제는 별도 계정 카드에 배치해요. 홈 헤더 오른쪽에는 현재 언어쌍 배지를 표시해요. 언어쌍 변경은 새 대화부터 적용되고 기존 대화는 시작 시점 언어쌍을 유지해요. 저장 후 현재 탭을 유지하며 profile과 Home의 활성 언어쌍을 갱신해요. 로그아웃 시 앱 token 삭제·서버 revoke·Google sign out을 best-effort로 처리해요.
+- Account (2026-11-23 UI 갱신): 하단 `내 정보` 탭은 중립 배경 위에 프로필·구독·학습 언어·계정 그룹을 카드로 구분해요. 프로필 행에서 닉네임을 관리하고, iOS 구독 행은 현재 플랜과 `플랜 살펴보기`를 함께 표시해요. 앱 언어 설정은 온보딩으로 이동해 내 정보에 표시하지 않아요. 학습 언어는 최소 44pt 버튼에 한국어 UI 기준 `한국어로 영어 공부하기`, `영어로 한국어 공부하기`를 표시하고 언어 이름만 굵게 강조해요. 언어쌍 변경은 새 대화부터 적용되고 기존 대화는 시작 시점 언어쌍을 유지해요. 저장 후 현재 탭을 유지하며 profile과 Home의 활성 언어쌍을 갱신해요. 로그아웃 시 앱 token 삭제·서버 revoke·Google sign out을 best-effort로 처리해요.
 - Free Chat: 홈·전체 대화 화면의 공통 시작 sheet에서 Topic Input → Topic Prep으로 이동한 뒤 첫 답변으로 대화를 시작
 - Roleplay: 홈·전체 대화 화면의 공통 시작 sheet에서 Roleplay Setup으로 이동한 뒤 상황을 골라 롤플레이 대화를 시작
 - Conversations: 홈에서는 활성 대화 우선·그룹별 최신 순으로 첫 5개를 표시하고 `더 보기`로 나머지를 펼쳐 기존 대화 카드에서 다시 진입
 - Conversation: 최근 대화, Free Chat 시작, Roleplay 시작이 모두 `/conversation/:conversationId`로 합류
 
-## 시스템 UI 언어와 학습 언어
+## 앱 UI 언어와 학습 언어
 
-`AppCopy.of(context)`는 기기 시스템 locale이 `ko`일 때만 한국어 UI를 표시하고, 영어와 그 밖의 locale은 영어 UI로 표시해요. 이 규칙은 온보딩과 로그인뿐 아니라 내비게이션, 버튼, 로딩·오류 안내, 음성 control, 접근성 label까지 적용돼요.
+첫 온보딩의 앱 언어는 system locale이 `ko`일 때 한국어, 영어와 그 밖의 locale은 영어를 초기값으로 사용해요. 사용자가 한국어 또는 영어를 선택하면 남은 온보딩과 로그인 chrome에 즉시 적용하고, 인증 bootstrap 성공 후 profile `app_locale`을 기본값으로 사용해요. 이미 온보딩을 마친 profile의 값이 null이면 기존처럼 system locale fallback을 유지해요.
 
-시스템 UI 언어는 profile의 학습 언어와 별개예요. `LearningLanguageContext`는 native/target/feedback language와 기존 conversation snapshot을 계속 소유하므로, 시스템 언어가 바뀌어도 대화·문법 피드백·역할극·Topic Prep의 원문 콘텐츠와 서버 요청은 바뀌지 않아요. Topic Input의 정적 예시 검색어만 사용자의 native language로 선택하고, 누른 문구를 그대로 검색 요청에 사용해요. 레거시 `zh` 학습 프로필은 유지하며, 이때도 앱 chrome은 영어 fallback을 사용해요.
+앱 UI 언어는 profile의 학습 언어와 별개예요. `LearningLanguageContext`는 native/target/feedback language와 기존 conversation snapshot을 계속 소유하므로, 앱 언어가 바뀌어도 대화·문법 피드백·역할극·Topic Prep의 원문 콘텐츠와 서버 요청은 바뀌지 않아요. Topic Input의 정적 예시 검색어만 사용자의 native language로 선택하고, 누른 문구를 그대로 검색 요청에 사용해요. 레거시 `zh` 학습 프로필은 유지해요.
 
 클라이언트 전송·녹음·재생·문법 조회 실패는 controller가 locale-neutral reason으로 전달하고 presentation이 `AppCopy`의 낮은 압박의 재시도 문구로 표시해요. 서버·provider의 원본 오류 detail은 사용자 화면에 노출하지 않아요.
 
@@ -201,7 +201,7 @@ Splash → Onboarding(최초 1회) → 익명 게스트 Home
 | 탭 | 경로와 동작 |
 |----|------|
 | 홈 / Home | `/home`: 언어 스낵, 최근 2개 카드, 그 아래 `＋ 새 대화` |
-| 내 정보 / Profile | `/profile`: 계정, 앱 언어, 학습 언어, 로그아웃 |
+| 내 정보 / Profile | `/profile`: 계정, 학습 언어, 로그아웃 |
 
 탭 전환은 각 화면과 스크롤을 보존하고, 같은 탭 재선택은 맨 위로 이동해요. 전체 대화 경로 `/history`로 직접 진입하면 shell 위에 열려 하단 바를 숨겨요. 전체 대화 화면의 상단 `＋`와 홈의 새 대화 버튼은 같은 선택 시트를 열고, 선택지 제목은 앱 표시 언어와 관계없이 `Free Chat`·`Roleplay`로 보여줘요. 준비·대화 화면도 shell 위에 열며, 대화 생성 성공 후 완료한 준비 단계는 제거해요. 뒤로가기는 출발 화면으로 복귀하고, 직접 진입한 기존 대화는 홈으로 돌아와요.
 

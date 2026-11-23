@@ -14,7 +14,7 @@ class OnboardingScreen extends ConsumerStatefulWidget {
 }
 
 class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
-  static const int _pageCount = 4;
+  static const int _pageCount = 5;
 
   final PageController _pageController = PageController();
   int _currentIndex = 0;
@@ -29,9 +29,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     if (_initializedLanguage) {
       return;
     }
-    _selectedLanguage = defaultLanguageContextForLocale(
-      Localizations.localeOf(context).languageCode,
-    );
+    final Locale locale = Localizations.localeOf(context);
+    final String languageCode = locale.languageCode;
+    _selectedLanguage = defaultLanguageContextForLocale(languageCode);
     _initializedLanguage = true;
   }
 
@@ -47,9 +47,12 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     }
     setState(() => _isCompleting = true);
     try {
+      final String selectedAppLocale =
+          ref.read(onboardingAppLocaleControllerProvider).value ??
+          AppCopy.resolveLocaleCode(Localizations.localeOf(context));
       await ref
           .read(onboardingControllerProvider.notifier)
-          .complete(_selectedLanguage);
+          .complete(_selectedLanguage, selectedAppLocale);
     } finally {
       if (mounted) {
         setState(() => _isCompleting = false);
@@ -72,6 +75,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   Widget build(BuildContext context) {
     final AppCopy appCopy = AppCopy.of(context);
     final AppOnboardingCopy copy = appCopy.onboarding;
+    final String selectedAppLocale =
+        ref.watch(onboardingAppLocaleControllerProvider).value ??
+        AppCopy.resolveLocaleCode(Localizations.localeOf(context));
 
     return Scaffold(
       body: SafeArea(
@@ -115,6 +121,17 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     setState(() => _currentIndex = index);
                   },
                   children: <Widget>[
+                    _AppLanguagePage(
+                      copy: copy.appLanguage,
+                      selected: selectedAppLocale,
+                      onChanged: (String next) {
+                        ref
+                            .read(
+                              onboardingAppLocaleControllerProvider.notifier,
+                            )
+                            .select(next);
+                      },
+                    ),
                     _LanguagePairPage(
                       copy: copy.languagePair,
                       selected: _selectedLanguage,
@@ -144,6 +161,41 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _AppLanguagePage extends StatelessWidget {
+  const _AppLanguagePage({
+    required this.copy,
+    required this.selected,
+    required this.onChanged,
+  });
+
+  final AppOnboardingAppLanguageCopy copy;
+  final String selected;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return _OnboardingPageLayout(
+      title: copy.title,
+      description: copy.description,
+      illustration: Column(
+        children: <Widget>[
+          AppSelectionCard(
+            title: copy.koreanLabel,
+            selected: selected == 'ko',
+            onTap: () => onChanged('ko'),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          AppSelectionCard(
+            title: copy.englishLabel,
+            selected: selected == 'en',
+            onTap: () => onChanged('en'),
+          ),
+        ],
       ),
     );
   }

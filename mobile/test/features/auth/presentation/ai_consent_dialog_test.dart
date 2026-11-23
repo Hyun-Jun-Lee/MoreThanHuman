@@ -95,7 +95,10 @@ class _ConsentRepository implements AuthRepository, AIConsentRepository {
   }
 
   @override
-  Future<UserProfile> bootstrap(LearningLanguageContext? pendingLanguage) {
+  Future<UserProfile> bootstrap(
+    LearningLanguageContext? pendingLanguage,
+    String? pendingAppLocale,
+  ) {
     throw UnimplementedError();
   }
 

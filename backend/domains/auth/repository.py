@@ -48,8 +48,8 @@ class AuthRepository:
         avatar_url: str | None = None,
         language: LearningLanguageContext | None = None,
         is_guest: bool = False,
+        app_locale: str | None = None,
     ) -> ProfileModel:
-        """Supabase claim으로 프로필을 준비하고 선택한 학습 언어를 적용해요."""
         if self.db.query(AccountDeletionModel.user_id).filter_by(user_id=profile_id).first():
             raise AuthenticationException("Account deletion is in progress or completed")
         profile = self.db.query(ProfileModel).filter(ProfileModel.id == profile_id).first()
@@ -68,6 +68,7 @@ class AuthRepository:
             )
             self.db.add(profile)
             self._apply_language(profile, language)
+            self._apply_app_locale(profile, app_locale)
             try:
                 self.db.commit()
             except IntegrityError:
@@ -75,12 +76,15 @@ class AuthRepository:
                 profile = self.db.query(ProfileModel).filter(ProfileModel.id == profile_id).first()
                 if profile is None:
                     raise
-                if self._apply_language(profile, language):
+                language_changed = self._apply_language(profile, language)
+                locale_changed = self._apply_app_locale(profile, app_locale)
+                if language_changed or locale_changed:
                     self.db.commit()
             self.db.refresh(profile)
             return profile
 
         changed = self._apply_language(profile, language)
+        changed = self._apply_app_locale(profile, app_locale) or changed
         if profile.is_guest and not is_guest:
             profile.email = email
             profile.name = name
@@ -112,6 +116,14 @@ class AuthRepository:
         profile.updated_at = datetime.utcnow()
         return True
 
+    @staticmethod
+    def _apply_app_locale(profile: ProfileModel, app_locale: str | None) -> bool:
+        if app_locale is None or profile.app_locale == app_locale:
+            return False
+        profile.app_locale = app_locale
+        profile.updated_at = datetime.utcnow()
+        return True
+
     def update_language_preferences(
         self,
         *,
@@ -139,10 +151,8 @@ class AuthRepository:
     def update_app_locale(self, *, profile_id: str, app_locale: str) -> ProfileModel:
         """프로필의 앱 표시 언어를 갱신"""
         profile = self.find_by_id(profile_id)
-        if profile.app_locale == app_locale:
+        if not self._apply_app_locale(profile, app_locale):
             return profile
-        profile.app_locale = app_locale
-        profile.updated_at = datetime.utcnow()
         self.db.commit()
         self.db.refresh(profile)
         return profile
