@@ -85,7 +85,7 @@ def test_me_creates_profile_from_valid_supabase_token():
     assert verifier.token == "supabase-token"
 
 
-def test_bootstrap_creates_profile_with_pending_language_and_preserves_it_on_restore():
+def test_bootstrap_creates_profile_with_pending_defaults_and_preserves_them_on_restore():
     verifier = FakeVerifier(
         SupabaseUserClaims(
             sub="550e8400-e29b-41d4-a716-446655440000",
@@ -101,20 +101,50 @@ def test_bootstrap_creates_profile_with_pending_language_and_preserves_it_on_res
         "feedback_language": "en",
     }
 
-    created = client.post("/api/auth/bootstrap", headers=headers, json={"language": language})
+    created = client.post(
+        "/api/auth/bootstrap",
+        headers=headers,
+        json={"language": language, "app_locale": "ko"},
+    )
     restored = client.post("/api/auth/bootstrap", headers=headers, json={})
 
     assert created.status_code == 200
     assert created.json()["data"]["is_admin"] is False
     assert created.json()["data"]["language"] == language
+    assert created.json()["data"]["app_locale"] == "ko"
     assert restored.status_code == 200
     assert restored.json()["data"]["language"] == language
+    assert restored.json()["data"]["app_locale"] == "ko"
 
     with client.app.state.session_factory() as db:
         profile = db.get(ProfileModel, verifier.claims.sub)
         profile.is_admin = True
         db.commit()
     assert client.get("/api/auth/me", headers=headers).json()["data"]["is_admin"] is True
+
+
+def test_bootstrap_rejects_unsupported_or_extra_app_locale_fields():
+    verifier = FakeVerifier(
+        SupabaseUserClaims(
+            sub="550e8400-e29b-41d4-a716-446655440000",
+            email="learner@example.com",
+            name="Learner",
+        )
+    )
+    client = _client(verifier)
+    headers = {"Authorization": "Bearer supabase-token"}
+
+    unsupported = client.post(
+        "/api/auth/bootstrap", headers=headers, json={"app_locale": "ja"}
+    )
+    extra = client.post(
+        "/api/auth/bootstrap",
+        headers=headers,
+        json={"app_locale": "en", "unexpected": True},
+    )
+
+    assert unsupported.status_code == 422
+    assert extra.status_code == 422
 
 
 def test_inactive_profile_does_not_block_authenticated_requests():

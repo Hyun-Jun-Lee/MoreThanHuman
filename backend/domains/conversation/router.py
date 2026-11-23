@@ -465,6 +465,7 @@ async def start_free_chat_conversation(
             selected_question=request.selected_question,
             custom_focus=request.custom_focus,
             language_context=ensure_language_context(getattr(current_user, "language", None)),
+            nickname=getattr(current_user, "nickname", None),
         )
         audio, audio_error = await _synthesize_optional_audio(
             include_audio_response=include_audio_response,
@@ -675,6 +676,7 @@ async def start_free_chat_stream(
             "language": language_context_to_dict(ensure_language_context(current_user.language)),
         },
         http_client=service.http_client, background_tasks=service.background_tasks,
+        nickname=getattr(current_user, "nickname", None),
     )
     return _prepared_stream_response(prepared, user_id=current_user.id,
                                      service=service, voice_service=voice_service)
@@ -695,6 +697,7 @@ async def start_roleplay_stream(
             "language": language_context_to_dict(ensure_language_context(current_user.language)),
         },
         http_client=service.http_client, background_tasks=service.background_tasks,
+        nickname=getattr(current_user, "nickname", None),
     )
     return _prepared_stream_response(prepared, user_id=current_user.id,
                                      service=service, voice_service=voice_service)
@@ -706,7 +709,7 @@ async def send_turn_stream(
     conversation_id: UUID,
     http_request: Request,
     idempotency_key: UUID = Header(alias="Idempotency-Key"),
-    current_user: AuthenticatedUser = Depends(get_current_user),
+    current_user: ProfileModel = Depends(get_current_profile),
     service: ConversationService = Depends(get_conversation_service),
     voice_service: VoiceService = Depends(get_voice_service),
 ):
@@ -721,6 +724,7 @@ async def send_turn_stream(
         input_data={"conversation_id": str(conversation_id), "text": user_text,
                     "input_mode": input_mode.value},
         http_client=service.http_client, background_tasks=service.background_tasks,
+        nickname=getattr(current_user, "nickname", None),
     )
     return _prepared_stream_response(prepared, user_id=current_user.id,
                                      service=service, voice_service=voice_service)
@@ -732,7 +736,7 @@ async def send_message_stream(
     conversation_id: UUID,
     body: SendMessageRequest,
     idempotency_key: UUID = Header(alias="Idempotency-Key"),
-    current_user: AuthenticatedUser = Depends(get_current_user),
+    current_user: ProfileModel = Depends(get_current_profile),
     service: ConversationService = Depends(get_conversation_service),
     voice_service: VoiceService = Depends(get_voice_service),
 ):
@@ -744,6 +748,7 @@ async def send_message_stream(
         input_data={"conversation_id": str(conversation_id), "text": user_text,
                     "input_mode": "text"},
         http_client=service.http_client, background_tasks=service.background_tasks,
+        nickname=getattr(current_user, "nickname", None),
     )
     return _prepared_stream_response(prepared, user_id=current_user.id,
                                      service=service, voice_service=voice_service)
@@ -813,6 +818,7 @@ async def retry_stream_turn(
         user_id=current_user.id, request_id=str(idempotency_key), kind=None,
         input_data=None, retry_turn_id=str(turn_id),
         http_client=service.http_client, background_tasks=service.background_tasks,
+        nickname=getattr(current_user, "nickname", None),
     )
     return _prepared_stream_response(prepared, user_id=current_user.id,
                                      service=service, voice_service=voice_service)
@@ -976,6 +982,7 @@ async def start_roleplay_conversation(
             request.search_context,
             user_id=current_user.id,
             language_context=ensure_language_context(getattr(current_user, "language", None)),
+            nickname=getattr(current_user, "nickname", None),
         )
         audio, audio_error = await _synthesize_optional_audio(
             include_audio_response=request.include_audio_response,
@@ -1010,13 +1017,14 @@ async def start_roleplay_conversation(
 async def send_message(
     conversation_id: UUID,
     request: SendMessageRequest,
-    current_user: AuthenticatedUser = Depends(get_current_user),
+    current_user: ProfileModel = Depends(get_current_profile),
     service: ConversationService = Depends(get_conversation_service),
 ):
     """메시지 전송"""
     try:
         response = await service.continue_conversation(
-            str(conversation_id), request.message, user_id=current_user.id
+            str(conversation_id), request.message, user_id=current_user.id,
+            nickname=getattr(current_user, "nickname", None),
         )
         return SuccessResponse(data=response)
     except PreviousTurnUnresolved as e:
@@ -1047,7 +1055,7 @@ async def send_message(
 async def send_multimodal_turn(
     conversation_id: UUID,
     http_request: Request,
-    current_user: AuthenticatedUser = Depends(get_current_user),
+    current_user: ProfileModel = Depends(get_current_profile),
     service: ConversationService = Depends(get_conversation_service),
     voice_service: VoiceService = Depends(get_voice_service),
 ):
@@ -1064,6 +1072,7 @@ async def send_multimodal_turn(
             str(conversation_id),
             user_text,
             user_id=current_user.id,
+            nickname=getattr(current_user, "nickname", None),
         )
         audio, audio_error = await _synthesize_optional_audio(
             include_audio_response=include_audio_response,

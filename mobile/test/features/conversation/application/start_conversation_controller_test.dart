@@ -786,8 +786,10 @@ class _FakeHomeRepository implements HomeRepository {
 
 class _FakeAuthRepository implements AuthRepository {
   @override
-  Future<UserProfile> bootstrap(LearningLanguageContext? pendingLanguage) =>
-      getCurrentUser();
+  Future<UserProfile> bootstrap(
+    LearningLanguageContext? pendingLanguage,
+    String? pendingAppLocale,
+  ) => getCurrentUser();
 
   @override
   Future<UserProfile> getCurrentUser() async {
@@ -854,6 +856,9 @@ class _FakeGoogleIdentityService implements GoogleIdentityService {
 
 class _FakeOnboardingStorage implements OnboardingStorage {
   @override
+  Future<void> clearPendingAppLocale() async {}
+
+  @override
   Future<void> clearPendingLanguageContext() async {}
 
   @override
@@ -864,6 +869,12 @@ class _FakeOnboardingStorage implements OnboardingStorage {
 
   @override
   Future<LearningLanguageContext?> readPendingLanguageContext() async => null;
+
+  @override
+  Future<String?> readPendingAppLocale() async => null;
+
+  @override
+  Future<void> writePendingAppLocale(String appLocale) async {}
 
   @override
   Future<void> writePendingLanguageContext(

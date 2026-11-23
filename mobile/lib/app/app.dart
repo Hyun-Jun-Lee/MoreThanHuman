@@ -5,6 +5,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:curitalk/features/auth/auth.dart';
 import 'package:curitalk/features/billing/billing_controller.dart';
+import 'package:curitalk/features/onboarding/application/onboarding_controller.dart';
 import 'package:flutter/foundation.dart';
 
 class CuritalkApp extends ConsumerWidget {
@@ -15,11 +16,15 @@ class CuritalkApp extends ConsumerWidget {
     if (defaultTargetPlatform == TargetPlatform.iOS) {
       ref.watch(billingControllerProvider);
     }
-    final String? appLocale = ref
+    final String? profileAppLocale = ref
         .watch(authControllerProvider)
         .value
         ?.user
         ?.appLocale;
+    final String? pendingAppLocale = ref
+        .watch(onboardingAppLocaleControllerProvider)
+        .value;
+    final String? appLocale = profileAppLocale ?? pendingAppLocale;
     return MaterialApp.router(
       title: 'tomatalk',
       debugShowCheckedModeBanner: false,

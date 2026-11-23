@@ -198,22 +198,6 @@ class AuthController extends AsyncNotifier<AuthSession> {
     );
   }
 
-  Future<void> updateAppLocale(String appLocale) async {
-    final UserProfile? currentUser = state.value?.user;
-    if (currentUser == null) {
-      throw StateError('A signed-in user is required to update app locale.');
-    }
-    final AuthRepository repository = _repository;
-    if (repository is! AppLocaleRepository) {
-      throw StateError(
-        'App locale updates are unavailable for this repository.',
-      );
-    }
-    final UserProfile updated = await (repository as AppLocaleRepository)
-        .updateAppLocale(appLocale);
-    state = AsyncData<AuthSession>(AuthSession.authenticated(updated));
-  }
-
   Future<void> updateNickname(String nickname) async {
     final UserProfile? currentUser = state.value?.user;
     if (currentUser == null) {
@@ -288,12 +272,22 @@ class AuthController extends AsyncNotifier<AuthSession> {
   }
 
   Future<UserProfile> _bootstrapProfile() async {
-    final LearningLanguageContext? pending = await _onboardingStorage
-        .readPendingLanguageContext();
-    final UserProfile profile = await _repository.bootstrap(pending);
-    if (pending != null) {
-      await _onboardingStorage.clearPendingLanguageContext();
-    }
+    final List<Object?> pending = await Future.wait<Object?>(<Future<Object?>>[
+      _onboardingStorage.readPendingLanguageContext(),
+      _onboardingStorage.readPendingAppLocale(),
+    ]);
+    final LearningLanguageContext? pendingLanguage =
+        pending[0] as LearningLanguageContext?;
+    final String? pendingAppLocale = pending[1] as String?;
+    final UserProfile profile = await _repository.bootstrap(
+      pendingLanguage,
+      pendingAppLocale,
+    );
+    await Future.wait(<Future<void>>[
+      if (pendingLanguage != null)
+        _onboardingStorage.clearPendingLanguageContext(),
+      if (pendingAppLocale != null) _onboardingStorage.clearPendingAppLocale(),
+    ]);
     return profile;
   }
 }

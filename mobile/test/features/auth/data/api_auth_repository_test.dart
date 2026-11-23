@@ -9,7 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test(
-    'bootstrap sends pending learning language and returns the profile',
+    'bootstrap sends pending app and learning language and returns the profile',
     () async {
       final client = ApiClient.create(
         tokenProvider: const _StaticSessionProvider('supabase-access-token'),
@@ -24,13 +24,14 @@ void main() {
 
       final profile = await ApiAuthRepository(
         client,
-      ).bootstrap(LearningLanguageContext.defaultContext);
+      ).bootstrap(LearningLanguageContext.defaultContext, 'ko');
 
       expect(profile.id, 'user-id');
       expect(adapter.requests.single.uri.path, '/api/auth/bootstrap');
       expect(adapter.requests.single.method, 'POST');
       expect(adapter.requests.single.data, <String, dynamic>{
         'language': LearningLanguageContext.defaultContext.toJson(),
+        'app_locale': 'ko',
       });
     },
   );

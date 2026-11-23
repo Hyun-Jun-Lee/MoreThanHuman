@@ -14,6 +14,7 @@ from domains.auth.schemas import (
     LanguagePreferencesResponse,
     BootstrapRequest,
     AppLocaleRequest,
+    AppLocaleCode,
     NicknameRequest,
     TokenResponse,
     UserProfile,
@@ -41,7 +42,10 @@ class AuthService:
         self.repository = repository
 
     def get_or_create_profile_from_claims(
-        self, claims: SupabaseUserClaims, language: LanguagePreferencesRequest | None = None,
+        self,
+        claims: SupabaseUserClaims,
+        language: LanguagePreferencesRequest | None = None,
+        app_locale: AppLocaleCode | None = None,
     ) -> ProfileModel:
         """Supabase claim 기반으로 앱 프로필을 조회하거나 처음 생성해요."""
         if not claims.sub:
@@ -56,11 +60,16 @@ class AuthService:
             oauth_provider=claims.oauth_provider,
             avatar_url=claims.avatar_url,
             language=language,
+            app_locale=app_locale.value if app_locale is not None else None,
         )
 
     def bootstrap_profile(self, claims: SupabaseUserClaims, request: BootstrapRequest) -> UserProfile:
         return UserProfile.model_validate(
-            self.get_or_create_profile_from_claims(claims, request.language)
+            self.get_or_create_profile_from_claims(
+                claims,
+                request.language,
+                request.app_locale,
+            )
         )
 
     async def issue_swagger_token(self, *, email: str, password: str) -> TokenResponse:

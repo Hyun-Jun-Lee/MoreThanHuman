@@ -191,6 +191,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(find.text('Choose your app language.'), findsOneWidget);
+
+    await tester.tap(find.text('CONTINUE'));
+    await tester.pumpAndSettle();
     expect(find.text('What do you want\nto practice?'), findsOneWidget);
 
     await tester.tap(find.text('CONTINUE'));
@@ -233,6 +237,8 @@ void main() {
       findsOneWidget,
     );
     expect(onboardingStorage.completed, isTrue);
+    expect(onboardingStorage.pendingAppLocale, isNull);
+    expect(authRepository.lastBootstrapAppLocale, 'en');
     expect(supabaseAuth.hasSession, isTrue);
     expect(supabaseAuth.lastIdToken, 'google-id-token');
 
@@ -268,16 +274,20 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('무엇을 연습할까요?'), findsOneWidget);
+    expect(find.text('앱 언어를 선택하세요.'), findsOneWidget);
     expect(find.text('건너뛰기'), findsOneWidget);
     expect(find.text('계속'), findsOneWidget);
     expect(find.text('你想练习什么？'), findsNothing);
 
     await tester.tap(find.text('계속'));
     await tester.pumpAndSettle();
+    expect(find.text('무엇을 연습할까요?'), findsOneWidget);
     await tester.tap(find.text('계속'));
     await tester.pumpAndSettle();
 
+    expect(find.text('진짜 관심사를\n이야기해요.'), findsOneWidget);
+    await tester.tap(find.text('계속'));
+    await tester.pumpAndSettle();
     expect(find.text('주제만 정하면,\n바로 이야기할 수 있는 질문이 준비돼요.'), findsOneWidget);
     expect(
       find.text('대화하고 싶은 주제를 고르면, 바로 이야기할 수 있는 질문을 받아볼 수 있어요.'),
@@ -312,6 +322,36 @@ void main() {
     expect(find.text('글로벌 뉴스'), findsNothing);
     expect(find.text('GLOBAL NEWS'), findsNothing);
   });
+
+  testWidgets(
+    'onboarding app language updates the remaining chrome immediately',
+    (WidgetTester tester) async {
+      tester.binding.platformDispatcher.localesTestValue = const <Locale>[
+        Locale('en'),
+      ];
+      addTearDown(tester.binding.platformDispatcher.clearLocalesTestValue);
+
+      await tester.pumpWidget(
+        _appScope(
+          tokenStorage: _MemoryTokenStorage(),
+          onboardingStorage: _MemoryOnboardingStorage(false),
+          authRepository: _FakeAuthRepository(),
+          supabaseAuth: _FakeSupabaseAuthService(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Choose your app language.'), findsOneWidget);
+      await tester.tap(find.text('한국어'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('앱 언어를 선택하세요.'), findsOneWidget);
+      expect(find.text('계속'), findsOneWidget);
+      await tester.tap(find.text('계속'));
+      await tester.pumpAndSettle();
+      expect(find.text('무엇을 연습할까요?'), findsOneWidget);
+    },
+  );
 
   testWidgets('returning authenticated user moves from Splash to Home', (
     WidgetTester tester,
@@ -435,9 +475,7 @@ void main() {
     );
   });
 
-  testWidgets('Profile tab stays open after refresh and locale save', (
-    tester,
-  ) async {
+  testWidgets('Profile tab stays open after refresh', (tester) async {
     await tester.pumpWidget(
       _appScope(
         tokenStorage: _MemoryTokenStorage(tokens: _tokens, deviceId: _deviceId),
@@ -463,11 +501,6 @@ void main() {
       container.read(appRouterProvider).routeInformationProvider.value.uri.path,
       AppRoute.profile,
     );
-    await tester.tap(find.text('Korean'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('CHANGE'));
-    await tester.pumpAndSettle();
-    expect(find.text('내 정보'), findsNWidgets(2));
     expect(
       container.read(appRouterProvider).routeInformationProvider.value.uri.path,
       AppRoute.profile,
@@ -589,20 +622,34 @@ class _FakeGoogleIdentityService implements GoogleIdentityService {
   Future<void> signOut() async {}
 }
 
-class _FakeAuthRepository
-    implements AuthRepository, AppLocaleRepository, NicknameRepository {
+class _FakeAuthRepository implements AuthRepository, NicknameRepository {
   UserProfile user = _user;
   bool failNicknameUpdate = false;
+  String? lastBootstrapAppLocale;
   @override
-  Future<UserProfile> bootstrap(LearningLanguageContext? pendingLanguage) =>
-      getCurrentUser();
+  Future<UserProfile> bootstrap(
+    LearningLanguageContext? pendingLanguage,
+    String? pendingAppLocale,
+  ) async {
+    lastBootstrapAppLocale = pendingAppLocale;
+    user = UserProfile(
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      nickname: user.nickname,
+      isActive: user.isActive,
+      isAdmin: user.isAdmin,
+      oauthProvider: user.oauthProvider,
+      language: pendingLanguage ?? user.language,
+      appLocale: pendingAppLocale ?? user.appLocale,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    );
+    return user;
+  }
 
   @override
   Future<UserProfile> getCurrentUser() async => user;
-  @override
-  Future<UserProfile> updateAppLocale(String appLocale) async =>
-      user = user.copyWith(appLocale: appLocale);
-
   @override
   Future<UserProfile> updateNickname(String nickname) async {
     if (failNicknameUpdate) throw StateError('offline');
@@ -689,6 +736,12 @@ class _MemoryOnboardingStorage implements OnboardingStorage {
 
   bool completed;
   LearningLanguageContext? pendingLanguage;
+  String? pendingAppLocale;
+
+  @override
+  Future<void> clearPendingAppLocale() async {
+    pendingAppLocale = null;
+  }
 
   @override
   Future<void> clearPendingLanguageContext() async {
@@ -706,6 +759,14 @@ class _MemoryOnboardingStorage implements OnboardingStorage {
   @override
   Future<LearningLanguageContext?> readPendingLanguageContext() async {
     return pendingLanguage;
+  }
+
+  @override
+  Future<String?> readPendingAppLocale() async => pendingAppLocale;
+
+  @override
+  Future<void> writePendingAppLocale(String appLocale) async {
+    pendingAppLocale = appLocale;
   }
 
   @override

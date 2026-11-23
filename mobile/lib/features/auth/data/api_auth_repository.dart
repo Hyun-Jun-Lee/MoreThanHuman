@@ -5,11 +5,7 @@ import 'package:curitalk/features/language/domain/learning_language.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class ApiAuthRepository
-    implements
-        AuthRepository,
-        AppLocaleRepository,
-        NicknameRepository,
-        AccountDeletionRepository {
+    implements AuthRepository, NicknameRepository, AccountDeletionRepository {
   const ApiAuthRepository(this.apiClient);
 
   final ApiClient apiClient;
@@ -17,14 +13,20 @@ class ApiAuthRepository
   @override
   Future<UserProfile> bootstrap(
     LearningLanguageContext? pendingLanguage,
+    String? pendingAppLocale,
   ) async {
+    final Map<String, dynamic> data = <String, dynamic>{};
+    if (pendingLanguage != null) {
+      data['language'] = pendingLanguage.toJson();
+    }
+    if (pendingAppLocale != null) {
+      data['app_locale'] = pendingAppLocale;
+    }
     final ApiResponse<UserProfile> response = await apiClient
         .request<UserProfile>(
           'auth/bootstrap',
           method: 'POST',
-          data: <String, dynamic>{
-            if (pendingLanguage != null) 'language': pendingLanguage.toJson(),
-          },
+          data: data,
           decodeData: UserProfile.fromJson,
         );
     return response.data;
@@ -36,18 +38,6 @@ class ApiAuthRepository
       'auth/me',
       decodeData: UserProfile.fromJson,
     );
-    return response.data;
-  }
-
-  @override
-  Future<UserProfile> updateAppLocale(String appLocale) async {
-    final ApiResponse<UserProfile> response = await apiClient
-        .request<UserProfile>(
-          'auth/me/app-locale',
-          method: 'PUT',
-          data: <String, String>{'app_locale': appLocale},
-          decodeData: UserProfile.fromJson,
-        );
     return response.data;
   }
 

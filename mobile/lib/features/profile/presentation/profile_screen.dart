@@ -27,17 +27,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   bool isLoggingOut = false;
   bool isDeletingAccount = false;
   bool isSavingLanguage = false;
-  bool isSavingAppLocale = false;
   String? languageError;
-  String? appLocaleError;
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authControllerProvider).value?.user;
     final selectedLanguage =
         user?.language ?? LearningLanguageContext.defaultContext;
-    final selectedAppLocale =
-        user?.appLocale ??
-        (Localizations.localeOf(context).languageCode == 'ko' ? 'ko' : 'en');
     final name = user?.displayName.isNotEmpty == true
         ? user!.displayName
         : 'tomatalk user';
@@ -60,10 +55,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         : copy.profilePlanTitle(entitlement.plan);
     final ColorScheme colors = Theme.of(context).colorScheme;
     final bool actionsDisabled =
-        isLoggingOut ||
-        isDeletingAccount ||
-        isSavingLanguage ||
-        isSavingAppLocale;
+        isLoggingOut || isDeletingAccount || isSavingLanguage;
     return AppScaffold(
       backgroundColor: colors.surfaceContainer,
       padding: EdgeInsets.zero,
@@ -245,73 +237,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           children: <Widget>[
                             Padding(
                               padding: const EdgeInsets.all(AppSpacing.md),
-                              child: LayoutBuilder(
-                                builder:
-                                    (
-                                      BuildContext context,
-                                      BoxConstraints rowConstraints,
-                                    ) {
-                                      final selector =
-                                          _ProfileSegmentedControl<String>(
-                                            values: const <String>['ko', 'en'],
-                                            selectedValue: selectedAppLocale,
-                                            labelBuilder: (String value) =>
-                                                value == 'ko'
-                                                ? copy.appLanguageKoreanLabel
-                                                : copy.appLanguageEnglishLabel,
-                                            keyBuilder: (String value) =>
-                                                ValueKey(
-                                                  'profile-app-language-$value',
-                                                ),
-                                            onSelected: actionsDisabled
-                                                ? null
-                                                : _changeAppLocale,
-                                          );
-                                      final description = _ProfileSettingCopy(
-                                        title: copy.appLanguageSectionLabel,
-                                        description:
-                                            copy.appLanguageDescription,
-                                      );
-                                      if (rowConstraints.maxWidth < 320) {
-                                        return Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.stretch,
-                                          children: <Widget>[
-                                            description,
-                                            const SizedBox(
-                                              height: AppSpacing.sm,
-                                            ),
-                                            selector,
-                                          ],
-                                        );
-                                      }
-                                      return Row(
-                                        children: <Widget>[
-                                          Expanded(child: description),
-                                          const SizedBox(width: AppSpacing.md),
-                                          SizedBox(width: 148, child: selector),
-                                        ],
-                                      );
-                                    },
-                              ),
-                            ),
-                            if (appLocaleError != null)
-                              _ProfileInlineMessage(
-                                message: appLocaleError!,
-                                color: colors.error,
-                              ),
-                            if (isSavingAppLocale)
-                              const Padding(
-                                padding: EdgeInsets.only(bottom: AppSpacing.md),
-                                child: AppLoadingIndicator(width: 120),
-                              ),
-                            Divider(
-                              height: AppSpacing.hair,
-                              indent: AppSpacing.md,
-                              color: colors.outlineVariant,
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.all(AppSpacing.md),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: <Widget>[
@@ -330,7 +255,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                     values: _mobileLanguageContexts,
                                     selectedValue: selectedLanguage,
                                     labelBuilder: (option) =>
-                                        _languagePairChipLabel(copy, option),
+                                        _learningLanguageLabel(copy, option),
+                                    keyBuilder: (option) => ValueKey(
+                                      'profile-learning-language-'
+                                      '${option.nativeLanguage.code}-'
+                                      '${option.targetLanguage.code}',
+                                    ),
                                     onSelected: actionsDisabled
                                         ? null
                                         : _changeLanguagePair,
@@ -407,10 +337,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 
   Future<void> _refreshProfile() async {
-    if (isLoggingOut ||
-        isDeletingAccount ||
-        isSavingLanguage ||
-        isSavingAppLocale) {
+    if (isLoggingOut || isDeletingAccount || isSavingLanguage) {
       return;
     }
     var failed = false;
@@ -525,36 +452,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
   }
 
-  Future<void> _changeAppLocale(String nextLocale) async {
-    final copy = AppCopy.of(context);
-    final user = ref.read(authControllerProvider).value?.user;
-    if (nextLocale == user?.appLocale) return;
-    final bool confirmed = await _showPreferenceChangeDialog(
-      context: context,
-      copy: copy,
-      message: copy.changeAppLanguageMessage(copy.languageName(nextLocale)),
-    );
-    if (!confirmed || !mounted) return;
-
-    setState(() {
-      isSavingAppLocale = true;
-      appLocaleError = null;
-    });
-    try {
-      await ref
-          .read(authControllerProvider.notifier)
-          .updateAppLocale(nextLocale);
-    } on Object {
-      if (mounted) {
-        setState(() => appLocaleError = copy.appLanguageSaveFailed);
-      }
-    } finally {
-      if (mounted) {
-        setState(() => isSavingAppLocale = false);
-      }
-    }
-  }
-
   Future<void> _changeLanguagePair(LearningLanguageContext nextLanguage) async {
     final copy = AppCopy.of(context);
     final currentLanguage = ref
@@ -592,15 +489,33 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
   }
 
-  String _languagePairChipLabel(
+  TextSpan _learningLanguageLabel(
     AppCopy copy,
     LearningLanguageContext language,
   ) {
-    if (!copy.isKorean) {
-      return '${language.nativeLanguage.shortCode} → '
-          '${language.targetLanguage.shortCode}';
-    }
-    return _languagePairLabel(copy, language);
+    final TextSpan native = TextSpan(
+      text: copy.languageName(language.nativeLanguage.code),
+      style: const TextStyle(fontWeight: FontWeight.w700),
+    );
+    final TextSpan target = TextSpan(
+      text: copy.languageName(language.targetLanguage.code),
+      style: const TextStyle(fontWeight: FontWeight.w700),
+    );
+    return TextSpan(
+      children: copy.isKorean
+          ? <InlineSpan>[
+              native,
+              const TextSpan(text: '로 '),
+              target,
+              const TextSpan(text: ' 공부하기'),
+            ]
+          : <InlineSpan>[
+              const TextSpan(text: 'Learn '),
+              target,
+              const TextSpan(text: ' in '),
+              native,
+            ],
+    );
   }
 
   String _languagePairLabel(AppCopy copy, LearningLanguageContext language) {
@@ -705,7 +620,7 @@ class _ProfileSegmentedControl<T> extends StatelessWidget {
 
   final List<T> values;
   final T selectedValue;
-  final String Function(T value) labelBuilder;
+  final TextSpan Function(T value) labelBuilder;
   final ValueChanged<T>? onSelected;
   final Key Function(T value)? keyBuilder;
 
@@ -725,6 +640,8 @@ class _ProfileSegmentedControl<T> extends StatelessWidget {
               child: Semantics(
                 selected: value == selectedValue,
                 button: true,
+                label: labelBuilder(value).toPlainText(),
+                excludeSemantics: true,
                 child: Material(
                   key: keyBuilder?.call(value),
                   color: value == selectedValue
@@ -745,15 +662,15 @@ class _ProfileSegmentedControl<T> extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(
                             horizontal: AppSpacing.xs,
                           ),
-                          child: Text(
+                          child: Text.rich(
                             labelBuilder(value),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                            maxLines: 2,
+                            textAlign: TextAlign.center,
                             style: AppTypography.caption.copyWith(
                               color: value == selectedValue
                                   ? colors.onPrimary
                                   : colors.onSurface,
-                              fontWeight: FontWeight.w700,
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
                         ),

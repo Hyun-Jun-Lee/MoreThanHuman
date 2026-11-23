@@ -113,7 +113,7 @@ void main() {
   );
 
   test(
-    'syncs pending onboarding language before publishing the user',
+    'syncs pending onboarding defaults before publishing the user',
     () async {
       final _FakeSupabaseAuthService supabaseAuth = _FakeSupabaseAuthService();
       final _FakeAuthRepository repository = _FakeAuthRepository(user: _user);
@@ -123,6 +123,7 @@ void main() {
           targetLanguage: LearningLanguageCode.ko,
           feedbackLanguage: LearningLanguageCode.zh,
         ),
+        pendingAppLocale: 'ko',
       );
       final _FakeLanguagePreferencesRepository languageRepository =
           _FakeLanguagePreferencesRepository();
@@ -150,6 +151,8 @@ void main() {
       );
       expect(languageRepository.updated, isEmpty);
       expect(onboardingStorage.pendingLanguage, isNull);
+      expect(repository.bootstrapAppLocale, 'ko');
+      expect(onboardingStorage.pendingAppLocale, isNull);
       expect(
         container.read(authControllerProvider).requireValue.isAuthenticated,
         isTrue,
@@ -165,27 +168,6 @@ void main() {
       );
     },
   );
-
-  test('updates the signed-in user app locale', () async {
-    final _FakeSupabaseAuthService supabaseAuth = _FakeSupabaseAuthService(
-      hasSession: true,
-    );
-    final _FakeAuthRepository repository = _FakeAuthRepository(user: _user);
-    final ProviderContainer container = _createContainer(
-      supabaseAuth,
-      repository,
-    );
-    addTearDown(container.dispose);
-    await container.read(authControllerProvider.future);
-
-    await container.read(authControllerProvider.notifier).updateAppLocale('ko');
-
-    expect(repository.updatedAppLocale, 'ko');
-    expect(
-      container.read(authControllerProvider).requireValue.user?.appLocale,
-      'ko',
-    );
-  });
 
   test('saving a nickname updates the authenticated profile', () async {
     final supabaseAuth = _FakeSupabaseAuthService(hasSession: true);
@@ -245,6 +227,7 @@ void main() {
       );
       final _FakeOnboardingStorage onboardingStorage = _FakeOnboardingStorage(
         pendingLanguage: LearningLanguageContext.defaultContext,
+        pendingAppLocale: 'ko',
       );
       final ProviderContainer container = _createContainer(
         supabaseAuth,
@@ -270,6 +253,7 @@ void main() {
       expect(error, isA<ApiException>());
       expect(supabaseAuth.hasSession, isTrue);
       expect(onboardingStorage.pendingLanguage, isNotNull);
+      expect(onboardingStorage.pendingAppLocale, 'ko');
     },
   );
 
@@ -368,9 +352,15 @@ ProviderContainer _createContainer(
 }
 
 class _FakeOnboardingStorage implements OnboardingStorage {
-  _FakeOnboardingStorage({this.pendingLanguage});
+  _FakeOnboardingStorage({this.pendingLanguage, this.pendingAppLocale});
 
   LearningLanguageContext? pendingLanguage;
+  String? pendingAppLocale;
+
+  @override
+  Future<void> clearPendingAppLocale() async {
+    pendingAppLocale = null;
+  }
 
   @override
   Future<void> clearPendingLanguageContext() async {
@@ -386,6 +376,14 @@ class _FakeOnboardingStorage implements OnboardingStorage {
   @override
   Future<LearningLanguageContext?> readPendingLanguageContext() async {
     return pendingLanguage;
+  }
+
+  @override
+  Future<String?> readPendingAppLocale() async => pendingAppLocale;
+
+  @override
+  Future<void> writePendingAppLocale(String appLocale) async {
+    pendingAppLocale = appLocale;
   }
 
   @override
@@ -417,8 +415,7 @@ class _FakeLanguagePreferencesRepository
   }
 }
 
-class _FakeAuthRepository
-    implements AuthRepository, AppLocaleRepository, NicknameRepository {
+class _FakeAuthRepository implements AuthRepository, NicknameRepository {
   _FakeAuthRepository({this.user, this.profileError});
 
   final UserProfile? user;
@@ -427,7 +424,7 @@ class _FakeAuthRepository
   int bootstrapRequestCount = 0;
   int getCurrentUserCount = 0;
   LearningLanguageContext? bootstrapLanguage;
-  String? updatedAppLocale;
+  String? bootstrapAppLocale;
   String? updatedNickname;
 
   @override
@@ -443,10 +440,12 @@ class _FakeAuthRepository
   @override
   Future<UserProfile> bootstrap(
     LearningLanguageContext? pendingLanguage,
+    String? pendingAppLocale,
   ) async {
     profileRequestCount += 1;
     bootstrapRequestCount += 1;
     bootstrapLanguage = pendingLanguage;
+    bootstrapAppLocale = pendingAppLocale;
     if (profileError case final Object error) {
       throw error;
     }
@@ -460,15 +459,9 @@ class _FakeAuthRepository
       createdAt: current.createdAt,
       updatedAt: current.updatedAt,
       language: pendingLanguage ?? current.language,
-      appLocale: current.appLocale,
+      appLocale: pendingAppLocale ?? current.appLocale,
       oauthProvider: current.oauthProvider,
     );
-  }
-
-  @override
-  Future<UserProfile> updateAppLocale(String appLocale) async {
-    updatedAppLocale = appLocale;
-    return (user ?? _user).copyWith(appLocale: appLocale);
   }
 
   @override
