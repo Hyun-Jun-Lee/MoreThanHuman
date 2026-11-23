@@ -7,7 +7,12 @@ from sqlalchemy.pool import StaticPool
 from database import Base, get_db
 from domains.auth.models import ProfileModel
 from shared.http_clients import get_auth_http_client
-from domains.auth.dependencies import get_current_profile, get_current_user, get_supabase_auth_verifier
+from domains.auth.dependencies import (
+    get_current_member_profile,
+    get_current_profile,
+    get_current_user,
+    get_supabase_auth_verifier,
+)
 from domains.auth.router import router
 from domains.auth.service import SupabaseUserClaims
 from domains.conversation.models import ConversationModel  # noqa: F401 - SQLAlchemy relationship registration
@@ -56,6 +61,10 @@ def _client(verifier: FakeVerifier) -> TestClient:
     @app.get("/api/profile-required")
     def profile_required(profile=Depends(get_current_profile)):
         return {"id": profile.id}
+
+    @app.get("/api/member-required")
+    def member_required(profile=Depends(get_current_member_profile)):
+        return {"id": profile.id}
     app.dependency_overrides[get_db] = override_db
     app.dependency_overrides[get_supabase_auth_verifier] = lambda: verifier
     app.state.session_factory = session_factory
@@ -82,6 +91,7 @@ def test_me_creates_profile_from_valid_supabase_token():
     assert body["data"]["id"] == "550e8400-e29b-41d4-a716-446655440000"
     assert body["data"]["email"] == "learner@example.com"
     assert body["data"]["oauth_provider"] == "google"
+    assert body["data"]["is_guest"] is False
     assert verifier.token == "supabase-token"
 
 
@@ -177,3 +187,74 @@ def test_me_requires_authorization_header():
     response = client.get("/api/auth/me")
 
     assert response.status_code == 403
+
+
+def test_anonymous_bootstrap_creates_guest_and_member_guard_rejects_it():
+    verifier = FakeVerifier(
+        SupabaseUserClaims(
+            sub="anonymous-user",
+            email=None,
+            name="Guest",
+            oauth_provider="anonymous",
+            is_anonymous=True,
+        )
+    )
+    client = _client(verifier)
+    headers = {"Authorization": "Bearer anonymous-token"}
+
+    created = client.post(
+        "/api/auth/bootstrap",
+        headers=headers,
+        json={
+            "language": {
+                "native_language": "en",
+                "target_language": "ko",
+                "feedback_language": "en",
+            }
+        },
+    )
+    repeated = client.post("/api/auth/bootstrap", headers=headers, json={})
+    member_only = client.get("/api/member-required", headers=headers)
+
+    assert created.status_code == 200
+    assert created.json()["data"]["email"] is None
+    assert created.json()["data"]["is_guest"] is True
+    assert repeated.status_code == 200
+    assert repeated.json()["data"]["id"] == "anonymous-user"
+    assert member_only.status_code == 403
+    with client.app.state.session_factory() as db:
+        assert db.query(ProfileModel).count() == 1
+
+
+def test_linked_identity_promotes_the_same_guest_profile():
+    verifier = FakeVerifier(
+        SupabaseUserClaims(
+            sub="linked-user",
+            email=None,
+            name="Guest",
+            oauth_provider="anonymous",
+            is_anonymous=True,
+        )
+    )
+    client = _client(verifier)
+    headers = {"Authorization": "Bearer linked-token"}
+    created = client.post("/api/auth/bootstrap", headers=headers, json={})
+    assert created.status_code == 200
+    original_created_at = created.json()["data"]["created_at"]
+
+    verifier.claims = SupabaseUserClaims(
+        sub="linked-user",
+        email="linked@example.com",
+        name="Linked Member",
+        oauth_provider="google",
+        is_anonymous=False,
+    )
+    promoted = client.post("/api/auth/bootstrap", headers=headers, json={})
+
+    assert promoted.status_code == 200
+    assert promoted.json()["data"]["id"] == "linked-user"
+    assert promoted.json()["data"]["is_guest"] is False
+    assert promoted.json()["data"]["email"] == "linked@example.com"
+    assert promoted.json()["data"]["created_at"] == original_created_at
+    with client.app.state.session_factory() as db:
+        assert db.query(ProfileModel).count() == 1

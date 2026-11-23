@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:curitalk/features/auth/auth.dart';
+import 'package:curitalk/features/conversation/data/conversation_access_repository.dart';
 import 'package:curitalk/features/home/data/api_home_repository.dart';
 import 'package:curitalk/features/home/domain/conversation_summary.dart';
 import 'package:curitalk/features/home/domain/home_repository.dart';
@@ -14,6 +15,7 @@ class RecentConversationsController
     if (session == null || !session.isAuthenticated) {
       return const <ConversationSummary>[];
     }
+    await _reconcileAccessBestEffort();
     final HomeRepository repository = ref.watch(homeRepositoryProvider);
     try {
       return await repository.listRecentConversations();
@@ -30,6 +32,7 @@ class RecentConversationsController
     _setRefreshing(true);
     state = const AsyncLoading<List<ConversationSummary>>();
     try {
+      await _reconcileAccessBestEffort(refresh: true);
       state = await AsyncValue.guard(
         ref.read(homeRepositoryProvider).listRecentConversations,
       );
@@ -44,6 +47,7 @@ class RecentConversationsController
     state = const AsyncLoading<List<ConversationSummary>>();
     try {
       await mutation();
+      await _reconcileAccessBestEffort(refresh: true);
       final List<ConversationSummary> conversations = await ref
           .read(homeRepositoryProvider)
           .listRecentConversations();
@@ -55,6 +59,17 @@ class RecentConversationsController
       rethrow;
     } finally {
       _setRefreshing(false);
+    }
+  }
+
+  Future<void> _reconcileAccessBestEffort({bool refresh = false}) async {
+    if (refresh) {
+      ref.invalidate(conversationAccessProvider);
+    }
+    try {
+      await ref.read(conversationAccessProvider.future);
+    } on Object {
+      return;
     }
   }
 

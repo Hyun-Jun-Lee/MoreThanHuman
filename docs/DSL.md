@@ -186,15 +186,17 @@ module Auth {
 
   type UserProfile {
     id: UUID
-    email: String
+    email?: String
     name: String
     nickname?: String
     is_active: Boolean
     is_admin: Boolean
+    is_guest: Boolean
     oauth_provider?: String
     avatar_url?: String
     app_locale?: "ko" | "en"
     language: LearningLanguageContext
+    last_active_at: DateTime
   }
 
   type LanguagePreferencesRequest extends LearningLanguageContext
@@ -206,6 +208,7 @@ module Auth {
 ```
 
 모바일 앱은 Supabase Auth로 Google 또는 iOS Apple 로그인을 완료한 뒤 Supabase `access_token`을 FastAPI 보호 API의 `Authorization: Bearer` 헤더에 전달해요. `POST /api/auth/bootstrap`은 세션 시작·복원 시 `{ "language": LearningLanguageContext }` 또는 빈 객체를 받아 프로필을 조회하거나 생성하고 최종 `UserProfile`을 반환해요. `language`가 있으면 프로필의 학습 언어 기본값에 적용하고, 없으면 기존 값을 유지해요. 기존 앱과의 전환 기간 동안 `GET /api/auth/me` 및 로그인 직후 `PUT /api/auth/me/language-preferences`에서도 프로필을 생성할 수 있어요.
+온보딩 뒤 정식 회원 세션이 없으면 새 앱은 Supabase 익명 세션으로 같은 bootstrap을 호출해요. 검증된 `is_anonymous=true`, `role=authenticated` token만 이메일 없이 허용하고 `email=null`, `is_guest=true` 프로필을 만들어요. 익명 bootstrap과 성공한 AI action은 `last_active_at`을 갱신해요. 정식 회원 token의 이메일 누락은 인증 오류예요.
 일반 보호 API는 토큰에서 사용자 ID를 검증하며, 언어 등 프로필 값이 필요한 API만 기존 프로필을 조회해요. 프로필 없이 후자에 접근하면 409 `프로필 초기화가 필요합니다`를 반환해요. `is_active`는 현재 인증 차단 정책에 사용하지 않지만 기존 응답 필드로 유지해요.
 `POST /api/auth/swagger/token`은 Swagger 수동 테스트를 위한 Supabase email/password token helper예요. `ENV=dev`에서는 사용할 수 있고, dev 외 환경에서는 `SWAGGER_TOKEN_ISSUER_ENABLED=true`와 `SWAGGER_TOKEN_ISSUER_SECRET`을 설정한 뒤 요청 body의 `secret`이 일치해야 해요. 발급된 `access_token`을 Swagger `Authorize`에 `Bearer <access_token>` 형식으로 넣어요.
 언어 선호는 프로필 기본값이며 새 대화 시작 시 `conversations` row에 snapshot으로 저장돼요. 기존 값이 없으면 `ko -> en`, feedback `ko`로 보정해요.
@@ -214,6 +217,10 @@ module Auth {
 `PUT /api/auth/me/nickname`은 인증된 사용자 본인의 닉네임만 저장하고 `{ success, data: UserProfile }`을 반환해요. 앞뒤 공백 제거와 NFC 정규화 후 1~20자이며 줄바꿈·제어 문자는 허용하지 않아요. 닉네임 중복은 허용하고 UNIQUE 제약이나 중복 조회는 없어요. `nickname: null`은 신규 앱 프로필의 첫 설정이 끝나지 않았음을 뜻해요. 기존 프로필은 migration에서 현재 `name`을 닉네임으로 이관해요. 화면 표시에는 `nickname`을 우선 사용하고 `name`은 OAuth 원본으로 보존해요.
 
 `DELETE /api/auth/me`는 현재 계정의 삭제 요청을 영속화해 기존 Supabase JWT 접근을 즉시 차단해요. 응답의 `data`는 `status: completed|processing`, 서버가 생성한 고엔트로피 `receipt`, `apple_disconnect_required`를 담아요. Apple 로그인 사용자는 새 Apple 승인 코드와 ID 토큰을 선택적으로 body의 `apple_authorization_code`, `apple_identity_token`으로 보내 연결 해제를 시도할 수 있어요. 연결 해제 실패는 데이터 삭제를 막지 않으며 앱이 Apple 계정 설정에서 수동 해제를 안내해요. 데이터 삭제와 Supabase Auth 삭제 중 외부 오류가 나면 `processing`과 HTTP 202를 반환하고 운영 재시도 작업이 완료해요. `GET /api/auth/deletion-status/{receipt}`는 인증 없이 해당 영수증의 `processing|completed`만 반환해요. 삭제된 프로필·대화·학습 기록은 재가입 시 복구되지 않아요.
+
+게스트와 회원은 현재 개인정보처리방침 및 AI 데이터 처리 고지 버전에 모두 동의하기 전 AI API를 사용할 수 없어요. `GET /api/auth/me/ai-consent`는 현재 버전과 각 고지의 수락 여부, 한국어·영어 개인정보처리방침 URL을 반환하고, `POST /api/auth/me/ai-consent`는 두 현재 버전을 함께 수락해요. 앱은 표시 언어가 한국어이면 `https://www.curitalk.app/privacy`, 영어이면 `https://www.curitalk.app/en/privacy`를 열어요. 미동의 AI 요청은 provider 호출 전에 HTTP 403 `CONSENT_REQUIRED`로 거절해요. 읽기와 계정 삭제는 동의가 없어도 가능해요.
+
+아직 사용되지 않은 Google·Apple 신원은 익명 Supabase 사용자에 연결해 같은 ID와 데이터를 유지해요. 기존 신원 충돌은 게스트 JWT로 `POST /api/auth/guest-transfer/receipt`를 호출해 10분짜리 일회용 이전 영수증을 만들고, 정식 회원 JWT로 `POST /api/auth/guest-transfer/claim`을 호출해 대화·동의·사용 기록을 원자적으로 이전해요. 회원 프로필·언어·구독을 우선하고 슬롯이 찬 가져온 대화는 읽기 전용으로 보존해요. 이전 완료 뒤 옛 게스트 JWT는 삭제 tombstone으로 차단해요.
 
 삭제에 필요한 서버 전용 Supabase 관리자 키가 설정되지 않았으면 요청을 영속화하기 전에 HTTP 503을 반환해요.
 첫 설정 팝업은 기기의 우선 시스템 언어가 한국어면 영어, 영어를 포함한 그 밖의 언어면 한국어 닉네임을 기기에서 생성해 입력 칸에 미리 채워요. 사용자는 수정할 수 있으며 저장 전에는 서버에 전송하지 않아요. 내 정보의 닉네임 수정 팝업은 현재 값을 유지해요.
@@ -543,11 +550,13 @@ NDJSON 각 줄에는 `event`, 0부터 증가하는 `seq`, `turn_id`, `attempt_id
 
 홈은 발행된 주제가 있으면 최근 대화 로딩 상태와 저장된 대화 수에 관계없이 추천 주제를 보여줘요. 이전 주의 발행 주제도 보관되지 않았다면 시작할 수 있어요. 탭 시 검색·사실 확인·Topic Prep은 실행하지 않아요.
 
-### 구독과 대화 접근 정책 v2 (기본 비활성화)
+### 구독과 대화 접근 정책 v2.3 (기본 비활성화)
 
-`CONVERSATION_ACCESS_ENABLED=false`가 코드 기본값이에요. 개발 환경 미리보기에서는 `true`로 설정해 슬롯·15턴 제한과 모바일 잠금을 함께 확인할 수 있어요. `false`일 때 `GET /access/`는 `enabled=false`, `can_create=true`, `slot_limit=null`, `remaining_slots=null`을 반환하고, 대화별 `GET /{id}/access/`는 `enabled=false`, `can_send=true`, `turn_limit=null`을 반환해요. 기존 생성·발화 API는 한도를 적용하지 않아요.
+`CONVERSATION_ACCESS_ENABLED=false`가 코드 기본값이에요. 개발 환경 미리보기에서는 `true`로 설정해 회원 슬롯·15턴 제한과 모바일 잠금을 함께 확인할 수 있어요. `false`인 회원에게 `GET /access/`는 `enabled=false`, `can_create=true`, `slot_limit=null`, `remaining_slots=null`을 반환하고, 대화별 `GET /{id}/access/`는 `enabled=false`, `can_send=true`, `turn_limit=null`을 반환해요. 회원의 기존 생성·발화 API는 한도를 적용하지 않아요. 게스트에게는 플래그 값과 무관하게 `enabled=true`와 1개·누적 5회 정책을 반환하고 모든 생성·발화 경로에서 집행해요.
 
 활성화하면 무료 계정은 활성 대화 1개와 대화당 사용자 발화 15회를 사용할 수 있어요. Advance는 활성 대화 5개, Plus는 10개이고 두 구독 모두 발화 수 제한이 없어요. 저장된 대화 수는 제한하지 않아요. 비활성 대화는 앱에서 열 수 없고 삭제할 수 있으며 발화할 수 없어요. 서버의 메시지 조회 API는 기존 읽기 권한을 유지해요. 구독 만료·환불·철회 또는 하위 플랜 전환 시 최근 사용한 활성 대화만 현재 한도까지 남겨요. 기존 다중 대화 계정은 마지막 사용자 발화가 가장 최근인 대화 1개를 활성화하고 나머지를 잠가요. 활성 대화를 삭제해 빈 슬롯이 생겨도 잠긴 대화는 그대로예요. 플랜의 슬롯 한도가 늘어나면 잠긴 대화를 최근 사용 순서대로 남은 슬롯 수만큼 활성화해요. 사용자가 대화를 직접 활성화하거나 해제할 수는 없어요. 기존 `legacy_conversation_slots`와 `conversation_slot_grants`는 보존하지만 구독 권한에 반영하지 않아요.
+
+게스트는 활성 대화 1개와 계정 전체 누적 사용자 발화 5회를 사용해요. 멱등 요청 키별 원장이 committed 발화만 계산하므로 대화 삭제로 한도가 복구되지 않아요. 다섯 번째 usable AI 응답 뒤에는 기록·오디오를 읽을 수 있지만 새 시작과 작성기는 잠기고 API는 409 `GUEST_TURNS_FULL`, `limit_action=login`, `remaining_turns=0`을 반환해요. 추천 주제의 저장된 첫 assistant 질문과 TTS 다시 듣기는 발화 수를 올리지 않아요.
 
 자유 대화의 첫 발화는 1회이며 역할극의 AI 첫 인사는 세지 않아요. 기존에 15회를 넘긴 무료 대화는 열람할 수 있으나 새 발화는 막아요. 생성 API는 한도 초과 시 HTTP 409 `CONVERSATION_SLOTS_FULL`, 잠긴 대화의 `/message/`·`/turn/`은 `CONVERSATION_LOCKED`, 무료 발화 초과는 `CONVERSATION_TURNS_FULL`을 반환해요. 음성 요청은 STT 전에 한도를 미리 확인하고 저장 시 다시 검사해요.
 
@@ -846,6 +855,7 @@ module LLM {
 
 ## 문서 변경 기록
 
+- 2026-11-23: 익명 게스트 bootstrap, 버전형 동의, 계정 누적 5회, 계정 이전·30일 삭제 계약을 추가했어요.
 - 2026-11-15: 관리자 입장 코드를 DB에서 서버 환경변수로 옮기고 세션 검증 방식을 갱신했어요.
 - 2026-11-15: 관리자 입장 코드의 길이 제한을 제거했어요.
 - 2026-11-15: 관리자 웹을 공유 코드 단독 로그인으로 바꾸고 세션 쿠키·CSRF API 계약을 갱신했어요.

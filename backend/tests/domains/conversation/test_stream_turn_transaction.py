@@ -1,3 +1,4 @@
+from datetime import datetime
 from uuid import uuid4
 
 import pytest
@@ -8,8 +9,8 @@ from sqlalchemy.pool import StaticPool
 from database import Base
 from domains.auth.models import ProfileModel
 from domains.conversation.enums import ConversationType, MessageRole
-from domains.conversation.models import ConversationModel, MessageModel, StreamAttemptModel, StreamTurnModel
-from domains.conversation.repository import ConversationLocked, ConversationTurnsFull, PreviousTurnUnresolved
+from domains.conversation.models import ConversationModel, GuestTurnUsageModel, MessageModel, StreamAttemptModel, StreamTurnModel
+from domains.conversation.repository import ConversationLocked, ConversationTurnsFull, GuestTurnsFull, PreviousTurnUnresolved
 from domains.conversation.stream_flow import complete_generated_text, prepare_generation
 from domains.conversation.stream_turns import StreamTurnConflict, StreamTurnStore
 from shared.exceptions import NotFoundException
@@ -64,6 +65,35 @@ def _prepare(user_id: str, conversation_id: str, *, request_id: str | None = Non
         input_data={"conversation_id": conversation_id, "text": "I'm well.", "input_mode": "text"},
         http_client=None, background_tasks=_BackgroundTasks(),
     )
+
+
+def test_guest_cannot_start_stream_roleplay_after_five_account_turns(stream_db):
+    _engine, sessions, user_id, _conversation_id = stream_db
+    with sessions() as db:
+        profile = db.get(ProfileModel, user_id)
+        profile.is_guest = True
+        profile.email = None
+        for index in range(5):
+            db.add(
+                GuestTurnUsageModel(
+                    id=str(uuid4()),
+                    user_id=user_id,
+                    request_key=f"used-{index}",
+                    status="committed",
+                    committed_at=datetime.utcnow(),
+                )
+            )
+        db.commit()
+
+    with pytest.raises(GuestTurnsFull):
+        prepare_generation(
+            user_id=user_id,
+            request_id=str(uuid4()),
+            kind="roleplay_start",
+            input_data={"role_character": "Barista"},
+            http_client=None,
+            background_tasks=_BackgroundTasks(),
+        )
 
 
 @pytest.mark.parametrize("kind", ["turn", "message"])

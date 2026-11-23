@@ -1,16 +1,18 @@
 import 'dart:async';
 
 import 'package:curitalk/core/network/network.dart';
+import 'package:curitalk/core/storage/storage.dart';
 import 'package:curitalk/features/auth/auth.dart';
+import 'package:curitalk/features/auth/data/account_local_data.dart';
 import 'package:curitalk/features/language/language.dart';
 import 'package:curitalk/features/onboarding/onboarding.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('starts unauthenticated when Supabase has no current session', () async {
+  test('creates a guest session when onboarding is complete', () async {
     final _FakeSupabaseAuthService supabaseAuth = _FakeSupabaseAuthService();
-    final _FakeAuthRepository repository = _FakeAuthRepository();
+    final _FakeAuthRepository repository = _FakeAuthRepository(user: _guest);
     final ProviderContainer container = _createContainer(
       supabaseAuth,
       repository,
@@ -21,8 +23,10 @@ void main() {
       authControllerProvider.future,
     );
 
-    expect(session.status, AuthStatus.unauthenticated);
-    expect(repository.profileRequestCount, 0);
+    expect(session.status, AuthStatus.guest);
+    expect(session.isGuest, isTrue);
+    expect(supabaseAuth.anonymousSignInCount, 1);
+    expect(repository.profileRequestCount, 1);
   });
 
   test(
@@ -43,10 +47,27 @@ void main() {
       );
 
       expect(session.isAuthenticated, isTrue);
+      expect(session.isMember, isTrue);
       expect(session.user?.email, 'learner@example.com');
       expect(repository.profileRequestCount, 1);
       expect(repository.bootstrapRequestCount, 1);
       expect(repository.getCurrentUserCount, 0);
+    },
+  );
+
+  test(
+    'restores a guest session without creating another anonymous user',
+    () async {
+      final supabaseAuth = _FakeSupabaseAuthService(hasSession: true);
+      final repository = _FakeAuthRepository(user: _guest);
+      final container = _createContainer(supabaseAuth, repository);
+      addTearDown(container.dispose);
+
+      final session = await container.read(authControllerProvider.future);
+
+      expect(session.status, AuthStatus.guest);
+      expect(session.user?.id, 'guest-id');
+      expect(supabaseAuth.anonymousSignInCount, 0);
     },
   );
 
@@ -77,7 +98,7 @@ void main() {
       expect(session.isAuthenticated, isTrue);
       expect(supabaseAuth.lastIdToken, 'google-id-token');
       expect(supabaseAuth.lastAccessToken, 'google-access-token');
-      expect(repository.profileRequestCount, 1);
+      expect(repository.profileRequestCount, 2);
     },
   );
 
@@ -104,10 +125,105 @@ void main() {
 
       expect(supabaseAuth.lastAppleIdToken, 'apple-id-token');
       expect(supabaseAuth.lastRawNonce, 'raw-nonce');
-      expect(repository.profileRequestCount, 1);
+      expect(repository.profileRequestCount, 2);
       expect(
         container.read(authControllerProvider).requireValue.isAuthenticated,
         isTrue,
+      );
+    },
+  );
+
+  test('guest links a new identity without changing its user id', () async {
+    final supabaseAuth = _FakeSupabaseAuthService();
+    final repository = _FakeAuthRepository(user: _guest);
+    final container = _createContainer(supabaseAuth, repository);
+    addTearDown(container.dispose);
+    await container.read(authControllerProvider.future);
+    repository.user = UserProfile(
+      id: _guest.id,
+      email: 'linked@example.com',
+      name: _guest.name,
+      isActive: true,
+      isGuest: false,
+      oauthProvider: 'google',
+      createdAt: _guest.createdAt,
+      updatedAt: _guest.updatedAt,
+    );
+
+    await container
+        .read(authControllerProvider.notifier)
+        .signInWithGoogleTokens(
+          const GoogleIdentityTokens(
+            idToken: 'google-id-token',
+            accessToken: 'google-access-token',
+          ),
+        );
+
+    expect(supabaseAuth.googleLinkCount, 1);
+    expect(supabaseAuth.googleSignInCount, 0);
+    expect(
+      container.read(authControllerProvider).requireValue.user?.id,
+      'guest-id',
+    );
+    expect(
+      container.read(authControllerProvider).requireValue.isMember,
+      isTrue,
+    );
+  });
+
+  test('failed identity link keeps the original guest session', () async {
+    final supabaseAuth = _FakeSupabaseAuthService(
+      linkError: StateError('temporary link failure'),
+    );
+    final repository = _FakeAuthRepository(user: _guest);
+    final container = _createContainer(supabaseAuth, repository);
+    addTearDown(container.dispose);
+    await container.read(authControllerProvider.future);
+
+    await expectLater(
+      container
+          .read(authControllerProvider.notifier)
+          .signInWithGoogleTokens(
+            const GoogleIdentityTokens(
+              idToken: 'google-id-token',
+              accessToken: 'google-access-token',
+            ),
+          ),
+      throwsA(isA<StateError>()),
+    );
+
+    final session = container.read(authControllerProvider).requireValue;
+    expect(session.isGuest, isTrue);
+    expect(session.user?.id, 'guest-id');
+    expect(supabaseAuth.hasSession, isTrue);
+    expect(supabaseAuth.anonymousSignInCount, 1);
+  });
+
+  test(
+    'identity conflict issues and claims a guest transfer receipt',
+    () async {
+      final supabaseAuth = _FakeSupabaseAuthService(linkConflict: true);
+      final repository = _FakeAuthRepository(user: _guest);
+      final container = _createContainer(supabaseAuth, repository);
+      addTearDown(container.dispose);
+      await container.read(authControllerProvider.future);
+      repository.user = _user;
+
+      await container
+          .read(authControllerProvider.notifier)
+          .signInWithGoogleTokens(
+            const GoogleIdentityTokens(
+              idToken: 'google-id-token',
+              accessToken: 'google-access-token',
+            ),
+          );
+
+      expect(repository.transferIssueCount, 1);
+      expect(repository.transferClaimCount, 1);
+      expect(supabaseAuth.googleSignInCount, 1);
+      expect(
+        container.read(authControllerProvider).requireValue.user?.id,
+        'user-id',
       );
     },
   );
@@ -145,7 +261,7 @@ void main() {
           );
 
       expect(
-        repository.bootstrapLanguage?.targetLanguage,
+        repository.bootstrapLanguages.first?.targetLanguage,
         LearningLanguageCode.ko,
       );
       expect(languageRepository.updated, isEmpty);
@@ -317,10 +433,35 @@ void main() {
       addTearDown(container.dispose);
       await container.read(authControllerProvider.future);
 
+      repository.user = _guest;
       await container.read(authControllerProvider.notifier).logout();
 
-      expect(supabaseAuth.hasSession, isFalse);
+      expect(supabaseAuth.hasSession, isTrue);
       expect(googleIdentityService.signOutCount, 1);
+      expect(
+        container.read(authControllerProvider).requireValue.status,
+        AuthStatus.guest,
+      );
+    },
+  );
+
+  test(
+    'guest account deletion signs out without creating a new guest',
+    () async {
+      final supabaseAuth = _FakeSupabaseAuthService(hasSession: true);
+      final repository = _FakeAuthRepository(user: _guest);
+      final container = _createContainer(supabaseAuth, repository);
+      addTearDown(container.dispose);
+      await container.read(authControllerProvider.future);
+
+      final result = await container
+          .read(authControllerProvider.notifier)
+          .deleteAccount();
+
+      expect(result.status, 'completed');
+      expect(repository.deleteAccountCount, 1);
+      expect(supabaseAuth.hasSession, isFalse);
+      expect(supabaseAuth.anonymousSignInCount, 0);
       expect(
         container.read(authControllerProvider).requireValue.status,
         AuthStatus.unauthenticated,
@@ -339,6 +480,16 @@ final UserProfile _user = UserProfile(
   updatedAt: DateTime.utc(2026, 6, 23),
 );
 
+final UserProfile _guest = UserProfile(
+  id: 'guest-id',
+  email: null,
+  name: 'Guest',
+  isActive: true,
+  isGuest: true,
+  createdAt: DateTime.utc(2026, 11, 23),
+  updatedAt: DateTime.utc(2026, 11, 23),
+);
+
 ProviderContainer _createContainer(
   _FakeSupabaseAuthService supabaseAuth,
   _FakeAuthRepository repository, {
@@ -352,6 +503,9 @@ ProviderContainer _createContainer(
   return ProviderContainer(
     overrides: [
       authSessionCoordinatorProvider.overrideWithValue(coordinator),
+      accountLocalDataProvider.overrideWithValue(
+        AccountLocalData(_MemorySecureStorage()),
+      ),
       authRepositoryProvider.overrideWithValue(repository),
       onboardingStorageProvider.overrideWithValue(
         onboardingStorage ?? _FakeOnboardingStorage(),
@@ -418,17 +572,27 @@ class _FakeLanguagePreferencesRepository
 }
 
 class _FakeAuthRepository
-    implements AuthRepository, AppLocaleRepository, NicknameRepository {
+    implements
+        AuthRepository,
+        AppLocaleRepository,
+        NicknameRepository,
+        GuestTransferRepository,
+        AccountDeletionRepository {
   _FakeAuthRepository({this.user, this.profileError});
 
-  final UserProfile? user;
+  UserProfile? user;
   final Object? profileError;
   int profileRequestCount = 0;
   int bootstrapRequestCount = 0;
   int getCurrentUserCount = 0;
   LearningLanguageContext? bootstrapLanguage;
+  final List<LearningLanguageContext?> bootstrapLanguages =
+      <LearningLanguageContext?>[];
   String? updatedAppLocale;
   String? updatedNickname;
+  int transferIssueCount = 0;
+  int transferClaimCount = 0;
+  int deleteAccountCount = 0;
 
   @override
   Future<UserProfile> getCurrentUser() async {
@@ -447,22 +611,28 @@ class _FakeAuthRepository
     profileRequestCount += 1;
     bootstrapRequestCount += 1;
     bootstrapLanguage = pendingLanguage;
+    bootstrapLanguages.add(pendingLanguage);
     if (profileError case final Object error) {
       throw error;
     }
     final current = user ?? _user;
-    return UserProfile(
+    final result = UserProfile(
       id: current.id,
       email: current.email,
       name: current.name,
       nickname: current.nickname,
       isActive: current.isActive,
+      isAdmin: current.isAdmin,
+      isGuest: current.isGuest,
       createdAt: current.createdAt,
       updatedAt: current.updatedAt,
       language: pendingLanguage ?? current.language,
       appLocale: current.appLocale,
       oauthProvider: current.oauthProvider,
+      lastActiveAt: current.lastActiveAt,
     );
+    user = result;
+    return result;
   }
 
   @override
@@ -476,16 +646,65 @@ class _FakeAuthRepository
     updatedNickname = nickname;
     return (user ?? _user).copyWith(nickname: nickname);
   }
+
+  @override
+  Future<GuestTransferReceipt> issueGuestTransferReceipt() async {
+    transferIssueCount += 1;
+    return GuestTransferReceipt(
+      receipt: 'guest-transfer-receipt-abcdefghijklmnopqrstuvwxyz',
+      expiresAt: DateTime.utc(2026, 11, 23, 1),
+    );
+  }
+
+  @override
+  Future<GuestTransferClaimResult> claimGuestTransferReceipt(
+    String receipt,
+  ) async {
+    transferClaimCount += 1;
+    return GuestTransferClaimResult(
+      profile: user ?? _user,
+      guestUserId: 'guest-id',
+    );
+  }
+
+  @override
+  Future<AccountDeletionResult> deleteAccount({
+    String? appleIdentityToken,
+    String? appleAuthorizationCode,
+  }) async {
+    deleteAccountCount += 1;
+    return const AccountDeletionResult(
+      status: 'completed',
+      receipt: 'account-deletion-receipt-abcdefghijklmnopqrstuvwxyz',
+      appleDisconnectRequired: false,
+    );
+  }
+
+  @override
+  Future<String> deletionStatus(String receipt) async => 'completed';
 }
 
-class _FakeSupabaseAuthService implements SupabaseAuthService {
-  _FakeSupabaseAuthService({this.hasSession = false});
+class _FakeSupabaseAuthService
+    implements
+        SupabaseAuthService,
+        AnonymousAuthService,
+        IdentityLinkingAuthService {
+  _FakeSupabaseAuthService({
+    this.hasSession = false,
+    this.linkConflict = false,
+    this.linkError,
+  });
 
   bool hasSession;
+  final bool linkConflict;
+  final Object? linkError;
   String? lastIdToken;
   String? lastAccessToken;
   String? lastAppleIdToken;
   String? lastRawNonce;
+  int anonymousSignInCount = 0;
+  int googleLinkCount = 0;
+  int googleSignInCount = 0;
   final StreamController<SupabaseSessionChange> _controller =
       StreamController<SupabaseSessionChange>.broadcast();
 
@@ -497,6 +716,12 @@ class _FakeSupabaseAuthService implements SupabaseAuthService {
 
   @override
   Future<bool> hasCurrentSession() async => hasSession;
+
+  @override
+  Future<void> signInAnonymously() async {
+    anonymousSignInCount += 1;
+    hasSession = true;
+  }
 
   @override
   Future<String?> readAccessToken() async =>
@@ -514,6 +739,7 @@ class _FakeSupabaseAuthService implements SupabaseAuthService {
     required String idToken,
     required String accessToken,
   }) async {
+    googleSignInCount += 1;
     lastIdToken = idToken;
     lastAccessToken = accessToken;
     hasSession = true;
@@ -523,6 +749,29 @@ class _FakeSupabaseAuthService implements SupabaseAuthService {
         hasSession: true,
       ),
     );
+  }
+
+  @override
+  Future<void> linkGoogleIdentity({
+    required String idToken,
+    required String accessToken,
+  }) async {
+    googleLinkCount += 1;
+    if (linkError case final Object error) throw error;
+    if (linkConflict) throw const IdentityAlreadyLinkedException();
+    lastIdToken = idToken;
+    lastAccessToken = accessToken;
+  }
+
+  @override
+  Future<void> linkAppleIdentity({
+    required String idToken,
+    required String rawNonce,
+  }) async {
+    if (linkError case final Object error) throw error;
+    if (linkConflict) throw const IdentityAlreadyLinkedException();
+    lastAppleIdToken = idToken;
+    lastRawNonce = rawNonce;
   }
 
   @override
@@ -574,4 +823,17 @@ class _FakeGoogleIdentityService implements GoogleIdentityService {
       throw error;
     }
   }
+}
+
+class _MemorySecureStorage implements SecureStorageBackend {
+  final Map<String, String> values = <String, String>{};
+
+  @override
+  Future<void> delete(String key) async => values.remove(key);
+
+  @override
+  Future<String?> read(String key) async => values[key];
+
+  @override
+  Future<void> write(String key, String value) async => values[key] = value;
 }

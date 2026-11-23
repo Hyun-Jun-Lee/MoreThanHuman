@@ -76,10 +76,14 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
         return location == AppRoute.login ? null : AppRoute.login;
       }
 
+      final bool isGuest = auth.value?.isGuest == true;
+      if (isGuest &&
+          (location == AppRoute.profile || location == AppRoute.paywall)) {
+        return AppRoute.login;
+      }
+
       final bool isBootstrapRoute =
-          location == AppRoute.splash ||
-          location == AppRoute.onboarding ||
-          location == AppRoute.login;
+          location == AppRoute.splash || location == AppRoute.onboarding;
       return isBootstrapRoute ? AppRoute.home : null;
     },
     routes: <RouteBase>[
@@ -93,14 +97,16 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
       ),
       GoRoute(
         path: AppRoute.login,
-        builder: (context, state) => const LoginScreen(),
+        pageBuilder: (context, state) =>
+            const NoTransitionPage<void>(child: LoginScreen()),
       ),
       GoRoute(
         path: AppRoute.paywall,
         builder: (context, state) => const PaywallScreen(),
       ),
       StatefulShellRoute.indexedStack(
-        builder: (context, state, shell) => MainShell(navigationShell: shell),
+        pageBuilder: (context, state, shell) =>
+            NoTransitionPage<void>(child: MainShell(navigationShell: shell)),
         branches: [
           StatefulShellBranch(
             routes: [

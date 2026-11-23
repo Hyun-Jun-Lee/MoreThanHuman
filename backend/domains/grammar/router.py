@@ -8,7 +8,8 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from database import get_db
-from domains.auth.dependencies import AuthenticatedUser, get_current_user
+from domains.auth.dependencies import AuthenticatedUser, get_current_ai_profile, get_current_user
+from domains.auth.models import ProfileModel
 from domains.conversation.repository import ConversationRepository
 from domains.grammar.repository import GrammarRepository
 from domains.grammar.schemas import GrammarFeedback, GrammarStats
@@ -43,7 +44,7 @@ def get_grammar_service(
 @router.post("/check/", response_model=SuccessResponse[GrammarFeedback])
 async def check_grammar(
     request: CheckGrammarRequest,
-    current_user: AuthenticatedUser = Depends(get_current_user),
+    current_user: ProfileModel = Depends(get_current_ai_profile),
     service: GrammarService = Depends(get_grammar_service),
 ):
     """문법 체크"""

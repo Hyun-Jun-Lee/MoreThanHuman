@@ -97,6 +97,19 @@ def effective_entitlement(
         return {"plan": "plus", "status": "admin", "expires_at": None,
                 "slot_limit": None, "turn_limit": None, "source": "admin",
                 "is_admin": True, "unlimited": True}
+    if profile is not None and profile.is_guest:
+        return {
+            "plan": "guest",
+            "status": "guest",
+            "expires_at": None,
+            "slot_limit": 1,
+            "turn_limit": 5,
+            "turn_scope": "account",
+            "limit_action": "login",
+            "source": "guest",
+            "is_admin": False,
+            "unlimited": False,
+        }
     assert apple is not None
     rank = {"free": 0, "advance": 1, "plus": 2}
     if grant is not None and rank[grant.plan] > rank[apple["plan"]]:

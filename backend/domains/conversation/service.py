@@ -67,6 +67,15 @@ class ConversationService:
         self.http_client = http_client
         self.background_tasks = background_tasks
 
+    def _access_enabled(self, user_id: str) -> bool:
+        """회원 rollout과 독립된 게스트 제한 적용 여부를 반환해요."""
+        if settings.conversation_access_enabled:
+            return True
+        resolver = getattr(self.repository, "access_enabled_for", None)
+        if resolver is None:
+            return False
+        return bool(resolver(user_id, configured=False))
+
     async def start_suggested_free_chat(
         self,
         topic_id: str,
@@ -183,6 +192,9 @@ class ConversationService:
         if self.background_tasks is None:
             raise RuntimeError("Conversation turns require an app-owned background task registry")
         created_conversation_id: str | None = None
+        reserved_user_message_id: str | None = None
+        assistant_saved = False
+        access_enabled = self._access_enabled(user_id)
         try:
             # 1. Conversation 생성
             language_context = ensure_language_context(language_context)
@@ -204,7 +216,7 @@ class ConversationService:
                 message_count=0,
                 status=ConversationStatus.ACTIVE,
             )
-            if settings.conversation_access_enabled:
+            if access_enabled:
                 self.repository.create_with_access(conversation, enabled=True)
             else:
                 self.repository.save(conversation)
@@ -229,7 +241,11 @@ class ConversationService:
                 role=MessageRole.USER,
                 content=first_message,
             )
-            self.repository.save_message(user_message)
+            if access_enabled:
+                self.repository.save_user_turn(user_message, user_id, enabled=True)
+                reserved_user_message_id = user_message.id
+            else:
+                self.repository.save_message(user_message)
 
             # 4. AI 응답만 먼저 생성 (문법 체크는 백그라운드에서 처리)
             ai_response = await self.generate_response(system_prompt, [], first_message)
@@ -241,7 +257,15 @@ class ConversationService:
                 role=MessageRole.ASSISTANT,
                 content=ai_response,
             )
-            self.repository.save_message(assistant_message)
+            if access_enabled:
+                self.repository.save_assistant_turn(
+                    assistant_message,
+                    user_id=user_id,
+                    user_message_id=user_message.id,
+                )
+            else:
+                self.repository.save_message(assistant_message)
+            assistant_saved = True
 
             # 6. 메시지 카운트 업데이트
             self.repository.update_message_count(conversation.id, user_id, 2)
@@ -267,7 +291,12 @@ class ConversationService:
                 grammar_feedback=None,  # 백그라운드에서 처리 중
             )
         except Exception as e:
-            if settings.conversation_access_enabled and created_conversation_id is not None:
+            if reserved_user_message_id is not None and not assistant_saved:
+                try:
+                    self.repository.delete_failed_user_turn(reserved_user_message_id)
+                except Exception:
+                    logger.exception("Failed to release unsuccessful guest turn")
+            if access_enabled and created_conversation_id is not None:
                 try:
                     self.repository.delete_by_id(created_conversation_id, user_id)
                 except Exception:
@@ -293,6 +322,7 @@ class ConversationService:
             대화 응답
         """
         created_conversation_id: str | None = None
+        access_enabled = self._access_enabled(user_id)
         try:
             # 1. Conversation 생성
             language_context = ensure_language_context(language_context)
@@ -310,7 +340,7 @@ class ConversationService:
                 message_count=0,
                 status=ConversationStatus.ACTIVE,
             )
-            if settings.conversation_access_enabled:
+            if access_enabled:
                 self.repository.create_with_access(conversation, enabled=True)
             else:
                 self.repository.save(conversation)
@@ -356,7 +386,7 @@ class ConversationService:
                 grammar_feedback=None,
             )
         except Exception as e:
-            if settings.conversation_access_enabled and created_conversation_id is not None:
+            if access_enabled and created_conversation_id is not None:
                 try:
                     self.repository.delete_by_id(created_conversation_id, user_id)
                 except Exception:
@@ -379,6 +409,7 @@ class ConversationService:
             raise RuntimeError("Conversation turns require an app-owned background task registry")
         reserved_user_message_id: str | None = None
         assistant_saved = False
+        access_enabled = self._access_enabled(user_id)
         try:
             # 1. 대화 조회
             conversation = self.repository.find_by_id(conversation_id, user_id)
@@ -392,7 +423,7 @@ class ConversationService:
                 role=MessageRole.USER,
                 content=user_message,
             )
-            if settings.conversation_access_enabled:
+            if access_enabled:
                 self.repository.save_user_turn(user_msg, user_id, enabled=True)
                 reserved_user_message_id = user_msg.id
             else:
@@ -430,13 +461,17 @@ class ConversationService:
                 role=MessageRole.ASSISTANT,
                 content=ai_response,
             )
-            self.repository.save_message(assistant_msg)
+            self.repository.save_assistant_turn(
+                assistant_msg,
+                user_id=user_id,
+                user_message_id=user_msg.id,
+            )
             assistant_saved = True
 
             # 9. 메시지 카운트 업데이트
             new_count = (
                 self.repository.count_messages(conversation.id)
-                if settings.conversation_access_enabled
+                if access_enabled
                 else conversation.message_count + 2
             )
             self.repository.update_message_count(conversation.id, user_id, new_count)
@@ -458,7 +493,7 @@ class ConversationService:
                 grammar_feedback=None,  # 백그라운드에서 처리 중
                 turn_count=(
                     self.repository.count_user_turns(conversation.id)
-                    if settings.conversation_access_enabled
+                    if access_enabled
                     else new_count // 2
                 ),
             )
@@ -482,8 +517,9 @@ class ConversationService:
             대화
         """
         conversation = self.repository.find_by_id(conversation_id, user_id)
+        access_enabled = self._access_enabled(user_id)
         return Conversation.model_validate(conversation).model_copy(
-            update={"locked": settings.conversation_access_enabled and not conversation.slot_active}
+            update={"locked": access_enabled and not conversation.slot_active}
         )
 
     def get_access(self, user_id: str) -> dict:
@@ -497,12 +533,14 @@ class ConversationService:
             )
 
     def assert_can_create(self, user_id: str) -> None:
-        if settings.conversation_access_enabled:
-            self.repository.assert_can_create(user_id, enabled=True)
+        self.repository.assert_can_create(
+            user_id, enabled=settings.conversation_access_enabled
+        )
 
     def assert_can_send(self, conversation_id: str, user_id: str) -> None:
-        if settings.conversation_access_enabled:
-            self.repository.assert_can_send(conversation_id, user_id, enabled=True)
+        self.repository.assert_can_send(
+            conversation_id, user_id, enabled=settings.conversation_access_enabled
+        )
 
     @staticmethod
     def _build_pagination(*, limit: int, offset: int, total_count: int, current_count: int) -> Pagination:
@@ -529,8 +567,9 @@ class ConversationService:
         """
         conversations = self.repository.find_all(user_id, limit, offset)
         total_count = self.repository.count_conversations(user_id)
+        access_enabled = self._access_enabled(user_id)
         results = [Conversation.model_validate(c).model_copy(
-            update={"locked": settings.conversation_access_enabled and not c.slot_active}
+            update={"locked": access_enabled and not c.slot_active}
         ) for c in conversations]
         pagination = self._build_pagination(
             limit=limit,

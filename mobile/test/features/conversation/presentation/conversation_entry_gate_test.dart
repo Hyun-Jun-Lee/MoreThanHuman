@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:curitalk/features/auth/auth.dart';
 import 'package:curitalk/features/conversation/conversation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -76,6 +77,7 @@ void main() {
 Widget _app(ConversationAccessRepository repository) => ProviderScope(
   overrides: [
     conversationAccessRepositoryProvider.overrideWithValue(repository),
+    aiConsentGateProvider.overrideWithValue((context, ref) async => true),
   ],
   child: const MaterialApp(
     home: ConversationEntryGate(conversationId: 'conversation-id'),

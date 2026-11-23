@@ -76,6 +76,7 @@ async def test_es256_uses_cached_jwks_without_user_request(auto_verify):
             assert claims.email == "learner@example.com"
             assert claims.name == "Learner"
             assert claims.oauth_provider == "google"
+            assert claims.is_anonymous is False
     assert len(requests) == 1
 
 
@@ -152,3 +153,48 @@ async def test_hs256_keeps_remote_verification(auto_verify):
         claims = await SupabaseAuthVerifier(client).verify_access_token(token)
     assert claims.sub == "legacy-user"
     assert paths == ["/auth/v1/user"]
+
+
+@pytest.mark.asyncio
+async def test_es256_accepts_email_less_anonymous_user(auto_verify):
+    pem, public = _signing_key("guest-key")
+
+    def upstream(_request):
+        return httpx.Response(200, json={"keys": [public]})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(upstream)) as client:
+        claims = await SupabaseAuthVerifier(client).verify_access_token(
+            _token(
+                pem,
+                "guest-key",
+                email=None,
+                is_anonymous=True,
+                user_metadata={},
+                app_metadata={"provider": "anonymous"},
+            )
+        )
+
+    assert claims.email is None
+    assert claims.name == "Guest"
+    assert claims.is_anonymous is True
+
+
+@pytest.mark.asyncio
+async def test_remote_accepts_anonymous_but_rejects_email_less_member(auto_verify):
+    token = jwt.encode({"sub": "user"}, "legacy-secret", algorithm="HS256")
+    responses = iter(
+        [
+            {"id": "guest-user", "email": None, "is_anonymous": True},
+            {"id": "member-user", "email": None, "is_anonymous": False},
+        ]
+    )
+
+    def upstream(_request):
+        return httpx.Response(200, json=next(responses))
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(upstream)) as client:
+        verifier = SupabaseAuthVerifier(client)
+        guest = await verifier.verify_access_token(token)
+        assert guest.is_anonymous is True
+        with pytest.raises(AuthenticationException, match="missing email"):
+            await verifier.verify_access_token(token)

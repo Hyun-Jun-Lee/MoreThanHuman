@@ -1291,7 +1291,9 @@ class StartConversationController extends Notifier<StartConversationState> {
   }
 
   bool _isSlotLimit(Object error) {
-    if (error is ApiException && error.code == 'CONVERSATION_SLOTS_FULL') {
+    if (error is ApiException &&
+        (error.code == 'CONVERSATION_SLOTS_FULL' ||
+            error.code == 'GUEST_TURNS_FULL')) {
       ref.invalidate(conversationAccessProvider);
       return true;
     }

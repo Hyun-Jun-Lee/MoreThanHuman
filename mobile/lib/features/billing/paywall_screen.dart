@@ -40,6 +40,9 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
   @override
   Widget build(BuildContext context) {
     final copy = AppCopy.of(context);
+    final privacyPolicyUrl = AppConfig.privacyPolicyUrlFor(
+      isKorean: copy.isKorean,
+    );
     if (!_supportsPurchases) {
       return Scaffold(
         appBar: AppBar(title: Text(copy.subscriptionTitle)),
@@ -187,10 +190,10 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                       ),
                       TextButton(
                         style: AppComponentThemes.mutedTextButton,
-                        onPressed: AppConfig.privacyPolicyUrl.isEmpty
+                        onPressed: privacyPolicyUrl.isEmpty
                             ? null
                             : () => launchUrl(
-                                Uri.parse(AppConfig.privacyPolicyUrl),
+                                Uri.parse(privacyPolicyUrl),
                                 mode: LaunchMode.externalApplication,
                               ),
                         child: Text(copy.privacyPolicy),

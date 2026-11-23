@@ -9,6 +9,8 @@ class ApiAuthRepository
         AuthRepository,
         AppLocaleRepository,
         NicknameRepository,
+        AIConsentRepository,
+        GuestTransferRepository,
         AccountDeletionRepository {
   const ApiAuthRepository(this.apiClient);
 
@@ -95,6 +97,67 @@ class ApiAuthRepository
           throw const FormatException('Invalid account deletion status.');
         }
         return value['status'] as String;
+      },
+    );
+    return response.data;
+  }
+
+  @override
+  Future<AIConsentStatus> getAIConsentStatus() async {
+    final response = await apiClient.get<AIConsentStatus>(
+      'auth/me/ai-consent',
+      decodeData: AIConsentStatus.fromJson,
+    );
+    return response.data;
+  }
+
+  @override
+  Future<AIConsentStatus> acceptAIConsent() async {
+    final response = await apiClient.request<AIConsentStatus>(
+      'auth/me/ai-consent',
+      method: 'POST',
+      decodeData: AIConsentStatus.fromJson,
+    );
+    return response.data;
+  }
+
+  @override
+  Future<GuestTransferReceipt> issueGuestTransferReceipt() async {
+    final response = await apiClient.request<GuestTransferReceipt>(
+      'auth/guest-transfer/receipt',
+      method: 'POST',
+      decodeData: (value) {
+        if (value is! Map<String, dynamic> ||
+            value['receipt'] is! String ||
+            value['expires_at'] is! String) {
+          throw const FormatException('Invalid guest transfer receipt.');
+        }
+        return GuestTransferReceipt(
+          receipt: value['receipt'] as String,
+          expiresAt: DateTime.parse(value['expires_at'] as String),
+        );
+      },
+    );
+    return response.data;
+  }
+
+  @override
+  Future<GuestTransferClaimResult> claimGuestTransferReceipt(
+    String receipt,
+  ) async {
+    final response = await apiClient.request<GuestTransferClaimResult>(
+      'auth/guest-transfer/claim',
+      method: 'POST',
+      data: <String, String>{'receipt': receipt},
+      decodeData: (value) {
+        if (value is! Map<String, dynamic> ||
+            value['guest_user_id'] is! String) {
+          throw const FormatException('Invalid guest transfer claim.');
+        }
+        return GuestTransferClaimResult(
+          profile: UserProfile.fromJson(value['profile']),
+          guestUserId: value['guest_user_id'] as String,
+        );
       },
     );
     return response.data;

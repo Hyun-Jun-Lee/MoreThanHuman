@@ -66,6 +66,7 @@ class SupabaseAuthVerifier:
             raise AuthenticationException("Invalid Supabase access token")
         return self._claims_from_user_response({
             "id": claims.get("sub"), "email": claims.get("email"),
+            "is_anonymous": claims.get("is_anonymous", False),
             "user_metadata": claims.get("user_metadata"),
             "app_metadata": claims.get("app_metadata"),
         })
@@ -131,14 +132,16 @@ class SupabaseAuthVerifier:
 
     def _claims_from_user_response(self, user: dict[str, Any]) -> SupabaseUserClaims:
         sub = str(user.get("id") or "")
-        email = str(user.get("email") or "")
+        raw_email = user.get("email")
+        email = raw_email.strip() if isinstance(raw_email, str) and raw_email.strip() else None
+        is_anonymous = user.get("is_anonymous") is True
         user_metadata = user.get("user_metadata") if isinstance(user.get("user_metadata"), dict) else {}
         app_metadata = user.get("app_metadata") if isinstance(user.get("app_metadata"), dict) else {}
 
         name = (
             self._string_metadata(user_metadata, "name")
             or self._string_metadata(user_metadata, "full_name")
-            or email.split("@")[0]
+            or (email.split("@")[0] if email else "Guest")
         )
         oauth_provider = self._string_metadata(app_metadata, "provider")
         avatar_url = self._string_metadata(user_metadata, "avatar_url") or self._string_metadata(
@@ -148,7 +151,7 @@ class SupabaseAuthVerifier:
 
         if not sub:
             raise AuthenticationException("Invalid Supabase token: missing subject")
-        if not email:
+        if not email and not is_anonymous:
             raise AuthenticationException("Invalid Supabase token: missing email")
 
         return SupabaseUserClaims(
@@ -157,6 +160,7 @@ class SupabaseAuthVerifier:
             name=name,
             oauth_provider=oauth_provider,
             avatar_url=avatar_url,
+            is_anonymous=is_anonymous,
         )
 
     @staticmethod

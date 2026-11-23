@@ -18,10 +18,18 @@ abstract final class AppConfig {
     'SUPABASE_PUBLISHABLE_KEY',
   );
 
-  static const String privacyPolicyUrl = String.fromEnvironment('PRIVACY_POLICY_URL');
+  static const String privacyPolicyUrl = String.fromEnvironment(
+    'PRIVACY_POLICY_URL',
+    defaultValue: 'https://www.curitalk.app/privacy',
+  );
+  static const String privacyPolicyUrlEn = String.fromEnvironment(
+    'PRIVACY_POLICY_URL_EN',
+    defaultValue: 'https://www.curitalk.app/en/privacy',
+  );
   static const String subscriptionTermsUrl = String.fromEnvironment(
     'SUBSCRIPTION_TERMS_URL',
-    defaultValue: 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/',
+    defaultValue:
+        'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/',
   );
 
   static String? get optionalGoogleClientId => _optional(googleClientId);
@@ -34,6 +42,9 @@ abstract final class AppConfig {
 
   static String get requiredSupabasePublishableKey =>
       _required(supabasePublishableKey, 'SUPABASE_PUBLISHABLE_KEY');
+
+  static String privacyPolicyUrlFor({required bool isKorean}) =>
+      isKorean ? privacyPolicyUrl : privacyPolicyUrlEn;
 
   static String? _optional(String value) {
     final String normalized = value.trim();

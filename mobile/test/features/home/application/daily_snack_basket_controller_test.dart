@@ -2,6 +2,7 @@ import 'package:curitalk/core/storage/storage.dart';
 import 'package:curitalk/features/home/application/daily_snack_basket_controller.dart';
 import 'package:curitalk/features/home/application/language_snack_language.dart';
 import 'package:curitalk/features/home/application/language_snacks_controller.dart';
+import 'package:curitalk/features/home/application/snack_account_scope.dart';
 import 'package:curitalk/features/home/data/api_language_snack_repository.dart';
 import 'package:curitalk/features/home/data/language_snack_cache.dart';
 import 'package:curitalk/features/home/data/snack_basket_reset_repository.dart';
@@ -27,7 +28,15 @@ void main() {
       snackBasketResetRepositoryProvider.overrideWithValue(resets),
       snackClockProvider.overrideWithValue(() => now),
       snackUserIdProvider.overrideWith((ref) => user),
+      snackWidgetEnabledProvider.overrideWithValue(true),
       languageSnackLanguageProvider.overrideWith((ref) => language),
+      snackAccountScopeProvider.overrideWith((ref) {
+        return SnackAccountScope(
+          userId: user,
+          language: language,
+          widgetEnabled: true,
+        );
+      }),
       languageSnacksEnabledProvider.overrideWithValue(true),
       secureStorageBackendProvider.overrideWithValue(storage),
       snackWidgetBridgeProvider.overrideWithValue(widgetBridge),
@@ -248,7 +257,7 @@ void main() {
     await c.read(dailySnackBasketProvider.future);
     await c.read(dailySnackBasketProvider.notifier).refreshReset();
     user = 'user-2';
-    c.invalidate(snackUserIdProvider);
+    c.invalidate(snackAccountScopeProvider);
     await c.read(dailySnackBasketProvider.future);
     final controller = c.read(dailySnackBasketProvider.notifier);
     controller.setInteractionActive(true);
@@ -315,7 +324,7 @@ void main() {
     resets.pending = pending.future;
     final request = c.read(dailySnackBasketProvider.notifier).refreshReset();
     user = 'user-2';
-    c.invalidate(snackUserIdProvider);
+    c.invalidate(snackAccountScopeProvider);
     await c.read(dailySnackBasketProvider.future);
     c.read(dailySnackBasketProvider.notifier).takeBite();
     pending.complete(
@@ -400,10 +409,11 @@ void main() {
     await c.read(dailySnackBasketProvider.future);
     c.read(dailySnackBasketProvider.notifier).takeBite();
     user = 'user-2';
-    c.invalidate(snackUserIdProvider);
+    c.invalidate(snackAccountScopeProvider);
     expect((await c.read(dailySnackBasketProvider.future))!.consumed, 0);
     language = 'ko';
     repository.snacks = [testSnack(0, language: 'ko')];
+    c.invalidate(snackAccountScopeProvider);
     c.invalidate(languageSnackLanguageProvider);
     final korean = (await c.read(dailySnackBasketProvider.future))!;
     expect(korean.snacks.every((s) => s.contentLanguage == 'ko'), isTrue);

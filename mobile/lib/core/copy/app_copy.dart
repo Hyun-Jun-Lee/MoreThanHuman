@@ -237,6 +237,11 @@ class AppCopy {
   String get conversationTurnLimitReached => isKorean
       ? '이 대화의 무료 15턴을 모두 사용했어요. 이전 대화는 계속 볼 수 있어요.'
       : 'You have used all 15 free turns in this conversation. You can still read it.';
+  String get guestTurnLimitReached => isKorean
+      ? '게스트 체험 5회를 모두 사용했어요. 로그인하면 대화를 보존한 채 계속할 수 있어요.'
+      : 'You have used all 5 guest turns. Sign in to keep your conversations and continue.';
+  String get signInToContinueLabel =>
+      isKorean ? '로그인하고 계속하기' : 'Sign in to continue';
   String get deleteConversationTooltip =>
       isKorean ? '대화 삭제' : 'Delete conversation';
   String deleteConversationTitle(String title) =>
@@ -462,6 +467,14 @@ class AppCopy {
   String get roleplayDescription =>
       isKorean ? '현실 상황을 연습하기' : 'Practice a real-world situation';
   String get cancelLabel => isKorean ? '취소' : 'CANCEL';
+  String get aiConsentTitle =>
+      isKorean ? 'AI 대화를 위한 동의' : 'Consent for AI conversations';
+  String get aiConsentDescription => isKorean
+      ? '대화 내용이 AI 응답 생성과 학습 피드백 제공을 위해 처리돼요. 개인정보 처리방침과 AI 데이터 처리 고지를 확인하고 동의해 주세요.'
+      : 'Your conversation is processed to generate AI responses and learning feedback. Review and accept the privacy and AI data notices to continue.';
+  String get privacyPolicyLabel => isKorean ? '개인정보 처리방침' : 'Privacy policy';
+  String get agreeAndContinueLabel =>
+      isKorean ? '동의하고 계속' : 'Agree and continue';
   String get historyTitle => isKorean ? '대화 기록' : 'History';
   String get loadingHistory =>
       isKorean ? '대화 기록을 불러오는 중...' : 'Loading conversation history...';
@@ -726,6 +739,7 @@ class AppLoginCopy {
     required this.googleLabel,
     required this.appleLabel,
     required this.tryAgainLabel,
+    required this.continueGuestLabel,
   });
 
   static const AppLoginCopy korean = AppLoginCopy(
@@ -734,6 +748,7 @@ class AppLoginCopy {
     googleLabel: 'Google로 계속하기',
     appleLabel: 'Apple로 계속하기',
     tryAgainLabel: '다시 시도',
+    continueGuestLabel: '게스트로 계속',
   );
 
   static const AppLoginCopy english = AppLoginCopy(
@@ -743,6 +758,7 @@ class AppLoginCopy {
     googleLabel: 'CONTINUE WITH GOOGLE',
     appleLabel: 'CONTINUE WITH APPLE',
     tryAgainLabel: 'TRY AGAIN',
+    continueGuestLabel: 'CONTINUE AS GUEST',
   );
 
   final String title;
@@ -750,4 +766,5 @@ class AppLoginCopy {
   final String googleLabel;
   final String appleLabel;
   final String tryAgainLabel;
+  final String continueGuestLabel;
 }

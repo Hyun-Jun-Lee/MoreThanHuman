@@ -14,19 +14,25 @@ from config import get_settings
 from database import get_db
 from domains.auth.apple_revoke import revoke_apple_sign_in
 from domains.auth.deletion import AccountDeletionService, DeletionAlreadyStarted
+from domains.auth.consent import AIConsentService
 from domains.auth.dependencies import get_auth_service, get_current_profile, get_legacy_profile, get_verified_claims
 from domains.auth.models import ProfileModel
 from domains.auth.schemas import (
     LanguagePreferencesRequest,
     LanguagePreferencesResponse,
     AppLocaleRequest,
+    AIConsentStatus,
     NicknameRequest,
     SwaggerTokenRequest,
     TokenResponse,
     UserProfile,
     BootstrapRequest,
+    GuestTransferClaimRequest,
+    GuestTransferClaimResponse,
+    GuestTransferReceiptResponse,
 )
 from domains.auth.service import AuthService, SupabaseUserClaims
+from domains.auth.transfer import GuestTransferError, GuestTransferService
 from shared.exceptions import AuthenticationException
 from shared.logging_config import log_exception
 from shared.types import SuccessResponse
@@ -151,6 +157,70 @@ def bootstrap_profile(
 ):
     """로그인·세션 복원 시 프로필을 준비하고 pending 언어를 적용해요."""
     return SuccessResponse(data=service.bootstrap_profile(claims, request))
+
+
+@router.get("/me/ai-consent", response_model=SuccessResponse[AIConsentStatus])
+def get_ai_consent_status(
+    current_user: ProfileModel = Depends(get_current_profile),
+    db: Session = Depends(get_db),
+):
+    return SuccessResponse(data=AIConsentService(db).status(current_user.id))
+
+
+@router.post("/me/ai-consent", response_model=SuccessResponse[AIConsentStatus])
+def accept_ai_consent(
+    current_user: ProfileModel = Depends(get_current_profile),
+    db: Session = Depends(get_db),
+):
+    return SuccessResponse(data=AIConsentService(db).accept_current(current_user.id))
+
+
+@router.post(
+    "/guest-transfer/receipt",
+    response_model=SuccessResponse[GuestTransferReceiptResponse],
+)
+def issue_guest_transfer_receipt(
+    current_user: ProfileModel = Depends(get_current_profile),
+    db: Session = Depends(get_db),
+):
+    """기존 계정 로그인 전에 게스트 소유권을 증명할 일회용 영수증을 발급해요."""
+    try:
+        receipt, expires_at = GuestTransferService(db).issue(current_user.id)
+    except GuestTransferError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    return SuccessResponse(
+        data=GuestTransferReceiptResponse(receipt=receipt, expires_at=expires_at)
+    )
+
+
+@router.post(
+    "/guest-transfer/claim",
+    response_model=SuccessResponse[GuestTransferClaimResponse],
+)
+async def claim_guest_transfer_receipt(
+    request: GuestTransferClaimRequest,
+    current_user: ProfileModel = Depends(get_current_profile),
+    db: Session = Depends(get_db),
+    http_client: httpx.AsyncClient = Depends(get_auth_http_client),
+):
+    """회원 JWT로 영수증을 한 번만 사용해 게스트 데이터를 합쳐요."""
+    try:
+        member, guest_user_id = GuestTransferService(db).claim(
+            current_user.id, request.receipt
+        )
+    except GuestTransferError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    try:
+        await AccountDeletionService(db, http_client).process(guest_user_id)
+    except Exception:
+        db.rollback()
+        logger.exception("Transferred guest auth deletion requires retry")
+    return SuccessResponse(
+        data=GuestTransferClaimResponse(
+            profile=UserProfile.model_validate(member),
+            guest_user_id=guest_user_id,
+        )
+    )
 
 
 @router.get("/me/language-preferences", response_model=SuccessResponse[LanguagePreferencesResponse])

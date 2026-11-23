@@ -2,6 +2,7 @@
 Auth 의존성 (라우트 보호)
 """
 from dataclasses import dataclass
+from datetime import datetime
 
 import httpx
 
@@ -11,6 +12,8 @@ from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
 from database import get_db
+from config import get_settings
+from domains.auth.consent import AIConsentService
 from domains.auth.models import AccountDeletionModel, ProfileModel
 from domains.auth.repository import AuthRepository
 from domains.auth.service import AuthService, SupabaseUserClaims
@@ -90,6 +93,41 @@ def get_current_profile(
             return service.repository.find_by_id(current_user.id)
     except NotFoundException as exc:
         raise HTTPException(status_code=409, detail="프로필 초기화가 필요합니다") from exc
+
+
+def get_current_member_profile(
+    profile: ProfileModel = Depends(get_current_profile),
+) -> ProfileModel:
+    """결제·관리처럼 정식 회원에게만 허용되는 요청에 사용해요."""
+    if getattr(profile, "is_guest", False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Member account is required",
+        )
+    return profile
+
+
+def get_current_ai_profile(
+    profile: ProfileModel = Depends(get_current_profile),
+    db: Session = Depends(get_db),
+) -> ProfileModel:
+    """현재 버전 개인정보·AI 처리 동의가 있는 AI 요청만 허용해요."""
+    if getattr(profile, "is_guest", False):
+        profile.last_active_at = datetime.utcnow()
+        db.commit()
+    if not get_settings().ai_consent_required:
+        return profile
+    consent = AIConsentService(db).status(profile.id)
+    if not consent["accepted"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "CONSENT_REQUIRED",
+                "message": "AI 기능을 사용하려면 현재 개인정보 및 AI 처리 고지에 동의해야 해요.",
+                **consent,
+            },
+        )
+    return profile
 
 
 def get_legacy_profile(

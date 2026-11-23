@@ -4,6 +4,7 @@ import 'package:curitalk/core/widgets/widgets.dart';
 import 'package:curitalk/features/conversation/data/conversation_access_repository.dart';
 import 'package:curitalk/features/conversation/domain/conversation_access.dart';
 import 'package:curitalk/features/conversation/presentation/conversation_screen.dart';
+import 'package:curitalk/features/auth/auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -36,9 +37,16 @@ class _ConversationEntryGateState extends ConsumerState<ConversationEntryGate> {
     }
   }
 
-  Future<ConversationTurnAccess> _loadAccess() => ref
-      .read(conversationAccessRepositoryProvider)
-      .getTurnAccess(widget.conversationId);
+  Future<ConversationTurnAccess> _loadAccess() async {
+    await WidgetsBinding.instance.endOfFrame;
+    final consentGate = ref.read(aiConsentGateProvider);
+    if (!mounted || !await consentGate(context, ref)) {
+      throw const _ConsentDeclined();
+    }
+    return ref
+        .read(conversationAccessRepositoryProvider)
+        .getTurnAccess(widget.conversationId);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -92,4 +100,8 @@ class _ConversationEntryGateState extends ConsumerState<ConversationEntryGate> {
     ),
     body: body,
   );
+}
+
+class _ConsentDeclined implements Exception {
+  const _ConsentDeclined();
 }

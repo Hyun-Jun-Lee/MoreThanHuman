@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from config import get_settings
 from database import get_db
-from domains.auth.dependencies import AuthenticatedUser, get_current_profile, get_current_user
+from domains.auth.dependencies import AuthenticatedUser, get_current_member_profile, get_current_user
 from domains.auth.models import ProfileModel
 from domains.billing.apple import AppleConfigurationError, AppleGateway, AppleUnavailableError, AppleVerificationError
 from domains.billing.service import BillingService, PurchaseOwnedByAnotherAccount
@@ -40,7 +40,7 @@ def get_entitlement(current_user: AuthenticatedUser = Depends(get_current_user),
 @router.post("/apple/verify/")
 def verify_purchase(
     payload: VerifyPurchaseRequest,
-    current_user: ProfileModel = Depends(get_current_profile),
+    current_user: ProfileModel = Depends(get_current_member_profile),
     service: BillingService = Depends(get_billing_service),
 ):
     try:
@@ -59,7 +59,7 @@ def verify_purchase(
 @router.post("/apple/restore/")
 def restore_purchase(
     payload: VerifyPurchaseRequest,
-    current_user: ProfileModel = Depends(get_current_profile),
+    current_user: ProfileModel = Depends(get_current_member_profile),
     service: BillingService = Depends(get_billing_service),
 ):
     try:

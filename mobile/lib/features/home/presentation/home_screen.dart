@@ -86,7 +86,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
               sliver: SliverList(
                 delegate: SliverChildListDelegate(<Widget>[
-                  const LanguageSnackHomeSection(),
+                  LanguageSnackHomeSection(key: ValueKey<String?>(user?.id)),
                   Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: AppSpacing.sm,
@@ -156,10 +156,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     if (_checkingAccess) return false;
     setState(() => _checkingAccess = true);
     bool isLocked;
+    bool guestLimit = false;
     try {
+      if (!await ensureAIConsent(context, ref)) return false;
       final access = await ref.refresh(conversationAccessProvider.future);
       if (!mounted) return false;
       isLocked = access.isLocked;
+      guestLimit = access.limitAction == 'login';
     } on Object {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -173,7 +176,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       if (mounted) setState(() => _checkingAccess = false);
     }
     if (isLocked) {
-      await showConversationAccessDialog(context);
+      await showConversationAccessDialog(context, guestLimit: guestLimit);
       return false;
     }
     return true;
@@ -226,7 +229,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
     final failure = ref.read(startConversationControllerProvider).failureReason;
     if (failure == StartConversationFailureReason.slotsFull) {
-      await showConversationAccessDialog(context);
+      final access = ref.read(conversationAccessProvider).value;
+      await showConversationAccessDialog(
+        context,
+        guestLimit: access?.limitAction == 'login',
+      );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

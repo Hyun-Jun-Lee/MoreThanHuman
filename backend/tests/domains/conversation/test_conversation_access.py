@@ -18,6 +18,7 @@ from domains.conversation.repository import (
     ConversationLocked,
     ConversationSlotsFull,
     ConversationTurnsFull,
+    GuestTurnsFull,
 )
 from domains.conversation.service import ConversationService
 from domains.conversation.stream_turns import StreamTurnStore
@@ -152,6 +153,9 @@ def test_each_conversation_stops_at_fifteen_user_turns():
         "turn_limit": 15,
         "can_send": False,
         "locked": False,
+        "turn_scope": "conversation",
+        "remaining_turns": 0,
+        "limit_action": "upgrade",
     }
     with pytest.raises(ConversationTurnsFull):
         repository.save_user_turn(
@@ -181,6 +185,121 @@ def test_failed_turn_release_restores_allowance():
     )
     repository.delete_failed_user_turn(message.id)
     assert repository.turn_access(conversation.id, user_id, enabled=True)["user_turns"] == 0
+
+
+def test_guest_turn_limit_is_account_wide_and_survives_conversation_deletion():
+    repository, user_id = _setup()
+    profile = repository.db.get(ProfileModel, user_id)
+    profile.is_guest = True
+    profile.email = None
+    repository.db.commit()
+    conversation = repository.create_with_access(_conversation(user_id), enabled=True)
+
+    for index in range(5):
+        user_message = repository.save_user_turn(
+            MessageModel(
+                id=str(uuid4()),
+                conversation_id=conversation.id,
+                role=MessageRole.USER,
+                content=f"guest turn {index}",
+            ),
+            user_id,
+            enabled=True,
+        )
+        repository.save_assistant_turn(
+            MessageModel(
+                id=str(uuid4()),
+                conversation_id=conversation.id,
+                role=MessageRole.ASSISTANT,
+                content="response",
+            ),
+            user_id=user_id,
+            user_message_id=user_message.id,
+        )
+
+    access = repository.turn_access(conversation.id, user_id, enabled=True)
+    assert access == {
+        "enabled": True,
+        "user_turns": 5,
+        "turn_limit": 5,
+        "can_send": False,
+        "locked": False,
+        "turn_scope": "account",
+        "remaining_turns": 0,
+        "limit_action": "login",
+    }
+    assert repository.access_summary(user_id, enabled=True)["plan"] == "guest"
+
+    repository.delete_by_id(conversation.id, user_id)
+    with pytest.raises(GuestTurnsFull):
+        repository.create_with_access(_conversation(user_id), enabled=True)
+    assert repository.count_guest_turns(user_id) == 5
+
+
+def test_guest_limits_stay_enabled_when_member_access_rollout_is_disabled():
+    repository, user_id = _setup()
+    profile = repository.db.get(ProfileModel, user_id)
+    profile.is_guest = True
+    profile.email = None
+    repository.db.commit()
+
+    conversation = repository.create_with_access(_conversation(user_id), enabled=False)
+    access = repository.access_summary(user_id, enabled=False)
+    assert access["enabled"] is True
+    assert access["plan"] == "guest"
+    assert access["slot_limit"] == 1
+    assert access["remaining_turns"] == 5
+
+    for index in range(5):
+        user_message = repository.save_user_turn(
+            MessageModel(
+                id=str(uuid4()),
+                conversation_id=conversation.id,
+                role=MessageRole.USER,
+                content=f"guest rollout-independent turn {index}",
+            ),
+            user_id,
+            enabled=False,
+        )
+        repository.save_assistant_turn(
+            MessageModel(
+                id=str(uuid4()),
+                conversation_id=conversation.id,
+                role=MessageRole.ASSISTANT,
+                content="response",
+            ),
+            user_id=user_id,
+            user_message_id=user_message.id,
+        )
+
+    with pytest.raises(GuestTurnsFull):
+        repository.assert_can_create(user_id, enabled=False)
+    with pytest.raises(GuestTurnsFull):
+        repository.assert_can_send(conversation.id, user_id, enabled=False)
+
+
+def test_failed_guest_turn_is_released_and_can_be_retried_once():
+    repository, user_id = _setup()
+    profile = repository.db.get(ProfileModel, user_id)
+    profile.is_guest = True
+    profile.email = None
+    repository.db.commit()
+    conversation = repository.create_with_access(_conversation(user_id), enabled=True)
+    message = repository.save_user_turn(
+        MessageModel(
+            id=str(uuid4()),
+            conversation_id=conversation.id,
+            role=MessageRole.USER,
+            content="retry me",
+        ),
+        user_id,
+        enabled=True,
+    )
+
+    repository.delete_failed_user_turn(message.id)
+
+    assert repository.count_guest_turns(user_id, include_reserved=True) == 0
+    assert repository.turn_access(conversation.id, user_id, enabled=True)["remaining_turns"] == 5
 
 
 @pytest.mark.asyncio

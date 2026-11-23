@@ -8,7 +8,7 @@ from uuid import uuid4
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from domains.conversation.models import StreamAttemptModel, StreamTurnModel
+from domains.conversation.models import GuestTurnUsageModel, StreamAttemptModel, StreamTurnModel
 from shared.logging_config import log_event
 
 
@@ -150,8 +150,22 @@ class StreamTurnStore:
             turn.audio_status = "failed"
             turn.error_code = code
             turn.updated_at = datetime.utcnow()
+            self._release_guest_usage(turn.user_id, turn.user_message_id)
             self._finish_attempt(turn, "failed", code)
             self.db.commit()
+
+    def _release_guest_usage(self, user_id: str, request_key: str | None) -> None:
+        if request_key is None:
+            return
+        usage = self.db.query(GuestTurnUsageModel).filter_by(
+            user_id=user_id,
+            request_key=request_key,
+            status="reserved",
+        ).one_or_none()
+        if usage is not None:
+            usage.status = "released"
+            usage.committed_at = None
+            usage.released_at = datetime.utcnow()
 
     def retry(self, *, user_id: str, turn_id: str, request_id: str) -> StreamTurnModel:
         """같은 입력·사용자 메시지를 유지한 채 실패한 생성 시도만 교체해요."""

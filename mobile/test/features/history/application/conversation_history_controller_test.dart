@@ -173,7 +173,7 @@ class _Repository implements ConversationHistoryRepository {
 
 class _Auth extends AuthController {
   @override
-  Future<AuthSession> build() async => AuthSession.authenticated(
+  Future<AuthSession> build() async => AuthSession.member(
     UserProfile(
       id: 'user',
       email: 'a@example.com',

@@ -1,6 +1,6 @@
 # Language Snacks API Contract
 
-> Status: ACTIVE · Version: 2.12 · Updated: 2026-11-18
+> Status: REVIEW · Version: 2.13 · Updated: 2026-11-23
 
 외부 계약의 단일 기준은 [DSL Language Snack 모듈](../../docs/DSL.md#5-language-snack-모듈)이에요. CLI는 [README](../../README.md#스낵-콘텐츠-생성), 배포는 [운영 가이드](../../docs/OPERATIONS.md#언어-스낵-운영), 설정은 [환경변수](../../docs/ENVIRONMENT.md), 내부 상태·중복 검사는 [아키텍처](../architecture.md)를 참고해요.
 
@@ -9,6 +9,7 @@
 - content_language는 학습 대상 언어, explanation_language는 설명 언어예요. 현재 영어 학습은 한국어 설명, 한국어 학습은 영어 설명을 제공해요.
 - JSONB payload는 regional_variant, usage_contrast, homonym이며 schema_version은 1이에요. identity와 knowledge_key는 표시 데이터와 분리하며 학습자 API에 노출하지 않아요.
 - GET v2는 Bearer profile.target_language 기준 published 12개(최대 30개)를 반환해요. `order=latest`가 기본이고 `order=random`은 전체 발행 목록에서 중복 없이 무작위 추출해요.
+- Supabase 익명 게스트도 자신의 Bearer profile로 인앱 feed를 조회하고 회원과 같은 로컬 일일 스냅샷을 사용해요. 회원 전환이 같은 사용자 ID를 유지하면 캐시를 보존하고, 기존 계정으로 이전하면 회원 캐시를 우선해 게스트 캐시를 지워요.
 - POST/PATCH v2는 서버 운영 키로 보호하며 일반 학습자 앱에는 생성 기능·키를 넣지 않아요.
 - GET `/api/v2/language-snacks/basket-reset/`은 Bearer 사용자의 현재 학습 언어별 최신 `reset_id`를 반환해요. 기록이 없으면 null이에요. 같은 경로 POST는 운영 키로 보호하며 `{user_id, content_language}` 대상의 새 리셋 ID를 저장해요. 사용자·언어별 마지막 기록만 유지하며 일반 앱에는 운영 키를 넣지 않아요.
 - 백엔드 `profiles.snack_unlimited_replay_enabled`는 기본 false인 계정별 권한이에요. 관리자는 이 값과 관계없이 무제한 반복해요. 바구니 리셋 GET·POST 응답의 `unlimited_replay_enabled`에 대상 계정의 적용 권한을 담고, 일반 사용자가 이를 수정하는 API는 제공하지 않아요. 이전 서버의 응답에 필드가 없으면 앱은 false로 처리해요.
@@ -41,6 +42,7 @@
 
 ## Change Log
 
+- 2026-11-23 v2.13: 익명 게스트의 인앱 스낵 조회와 회원 전환 시 캐시 소유권 규칙을 추가해요. iOS 위젯은 게스트 범위에서 제외해요.
 - 2026-11-18 v2.12: Home의 일일 열람 수와 현재 토마토 번호를 모든 빌드 모드에서 숨겨요. 디버그 전용 리셋 버튼은 유지해요.
 - 2026-11-13 v2.10: 홈 당겨서 새로고침에도 바구니 상태 API를 조회해 계정별 무제한 반복 권한을 갱신해요.
 - 2026-11-13 v2.9: 계정별 무제한 스낵 반복 권한과 Flutter 홈의 12번째 팝업 종료 후 자동 초기화를 추가해요. iOS 위젯 동작은 후속 작업으로 남겨요.

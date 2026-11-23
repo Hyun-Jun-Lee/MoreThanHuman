@@ -23,6 +23,11 @@ enum ConversationSendFailureReason {
 
 enum AssistantAudioStatus { unavailable }
 
+bool _isTurnLimitError(Object error) =>
+    error is ApiException &&
+    (error.code == 'CONVERSATION_TURNS_FULL' ||
+        error.code == 'GUEST_TURNS_FULL');
+
 class ConversationState {
   const ConversationState({
     required this.messages,
@@ -561,8 +566,7 @@ class ConversationController extends AsyncNotifier<ConversationState> {
       );
       ref.invalidate(conversationTurnAccessProvider(conversationId));
     } on Object catch (error) {
-      final bool limitReached =
-          error is ApiException && error.code == 'CONVERSATION_TURNS_FULL';
+      final bool limitReached = _isTurnLimitError(error);
       final bool locked =
           error is ApiException && error.code == 'CONVERSATION_LOCKED';
       if (limitReached || locked) {
@@ -660,8 +664,7 @@ class ConversationController extends AsyncNotifier<ConversationState> {
       );
       ref.invalidate(conversationTurnAccessProvider(conversationId));
     } on Object catch (error) {
-      final bool limitReached =
-          error is ApiException && error.code == 'CONVERSATION_TURNS_FULL';
+      final bool limitReached = _isTurnLimitError(error);
       final bool locked =
           error is ApiException && error.code == 'CONVERSATION_LOCKED';
       if (limitReached || locked) {
@@ -959,6 +962,27 @@ class ConversationController extends AsyncNotifier<ConversationState> {
       }
     } on Object catch (sendError) {
       if (!ref.mounted || token.isCancelled) return;
+      if (_isTurnLimitError(sendError)) {
+        final current = state.requireValue;
+        state = AsyncData(
+          current.copyWith(
+            messages: current.messages
+                .where(
+                  (message) =>
+                      message.id != localUserId &&
+                      message.id != localAssistantId,
+                )
+                .toList(),
+            isSending: false,
+            clearRevealingAssistant: true,
+            clearFailedMessage: true,
+            clearFailedAudioFile: true,
+            failureReason: ConversationSendFailureReason.turnLimitReached,
+          ),
+        );
+        ref.invalidate(conversationTurnAccessProvider(conversationId));
+        return;
+      }
       if (sendError is ApiException &&
           sendError.statusCode == 409 &&
           (sendError.code == 'PREVIOUS_TURN_UNRESOLVED' ||

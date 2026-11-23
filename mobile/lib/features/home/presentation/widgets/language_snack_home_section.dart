@@ -1,9 +1,10 @@
 import 'package:curitalk/core/widgets/main_tab_scope.dart';
 import 'dart:async';
 import 'package:curitalk/app/theme/tokens/tokens.dart';
-import 'package:curitalk/features/home/application/language_snack_language.dart';
+import 'package:curitalk/features/auth/auth.dart';
 import 'package:curitalk/features/home/application/language_snacks_controller.dart';
 import 'package:curitalk/features/home/application/daily_snack_basket_controller.dart';
+import 'package:curitalk/features/home/application/snack_account_scope.dart';
 import 'package:curitalk/features/home/presentation/widgets/snack_tomato_basket.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -115,8 +116,19 @@ class _LanguageSnackHomeSectionState
 
   @override
   Widget build(BuildContext context) {
-    final language = ref.watch(languageSnackLanguageProvider);
-    final userId = ref.watch(snackUserIdProvider);
+    final configuredAccount = ref.watch(snackAccountScopeProvider);
+    final user = configuredAccount == null
+        ? ref.watch(authControllerProvider.select((value) => value.value?.user))
+        : null;
+    final account =
+        configuredAccount ??
+        SnackAccountScope(
+          userId: user?.id,
+          language: user?.language.targetLanguage.code ?? 'en',
+          widgetEnabled: user != null && !user.isGuest,
+        );
+    final language = account.language;
+    final userId = account.userId;
     final scope = '$userId.$language';
     if (_scope != scope) {
       _scope = scope;

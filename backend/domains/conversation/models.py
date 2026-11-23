@@ -3,7 +3,7 @@ Conversation 도메인 SQLAlchemy 모델 정의
 """
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, Date, DateTime, Enum as SQLEnum, ForeignKey, Index, Integer, String, Text, UniqueConstraint, false, text
+from sqlalchemy import Boolean, CheckConstraint, Column, Date, DateTime, Enum as SQLEnum, ForeignKey, Index, Integer, String, Text, UniqueConstraint, false, text
 from sqlalchemy.orm import relationship
 
 from database import Base
@@ -171,3 +171,35 @@ class StreamAttemptModel(Base):
     error_code = Column(String(64), nullable=True)
     started_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     finished_at = Column(DateTime, nullable=True)
+
+
+class GuestTurnUsageModel(Base):
+    """대화 삭제와 무관하게 유지되는 게스트 계정 누적 발화 원장이에요."""
+
+    __tablename__ = "guest_turn_usages"
+    __table_args__ = (
+        UniqueConstraint("user_id", "request_key", name="uq_guest_turn_usage_user_request"),
+        CheckConstraint(
+            "status IN ('reserved', 'committed', 'released')",
+            name="ck_guest_turn_usage_status",
+        ),
+        CheckConstraint(
+            "(status = 'reserved' AND committed_at IS NULL AND released_at IS NULL) "
+            "OR (status = 'committed' AND committed_at IS NOT NULL AND released_at IS NULL) "
+            "OR (status = 'released' AND committed_at IS NULL AND released_at IS NOT NULL)",
+            name="ck_guest_turn_usage_timestamps",
+        ),
+    )
+
+    id = Column(String(36), primary_key=True)
+    user_id = Column(
+        String(36), ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    request_key = Column(String(128), nullable=False)
+    conversation_id = Column(
+        String(36), ForeignKey("conversations.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    status = Column(String(16), nullable=False, default="reserved")
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    committed_at = Column(DateTime, nullable=True)
+    released_at = Column(DateTime, nullable=True)

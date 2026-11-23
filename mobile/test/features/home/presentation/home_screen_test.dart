@@ -659,7 +659,7 @@ void main() {
     );
   });
 
-  testWidgets('suggested topic checks access only after selection', (
+  testWidgets('suggested topic rechecks access after selection', (
     WidgetTester tester,
   ) async {
     final repository = _DeferredSuggestedConversationRepository();
@@ -682,12 +682,12 @@ void main() {
     );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 20));
-    expect(accessReads, 0);
+    expect(accessReads, 1);
 
     await tester.tap(find.byKey(const ValueKey('weekly-topic-topic-1-1')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
-    expect(accessReads, 1);
+    expect(accessReads, 2);
     expect(repository.startCalls, 0);
     expect(find.text('Start a conversation?'), findsNothing);
     expect(
@@ -946,21 +946,24 @@ void main() {
     );
   });
 
-  testWidgets('pulling down refreshes cards without checking access', (
+  testWidgets('home reconciles access before initial and refreshed lists', (
     WidgetTester tester,
   ) async {
     final events = <String>[];
     final homeRepository = _TrackedHomeRepository(events);
+    homeRepository.lockedIds = {'conversation-2'};
     await tester.pumpWidget(
       _homeApp(
         homeRepository: homeRepository,
         accessGetter: () {
           events.add('access');
+          homeRepository.lockedIds.clear();
           return const ConversationAccess.disabled();
         },
       ),
     );
     await tester.pumpAndSettle();
+    expect(events, ['access', 'list']);
     expect(
       find.byKey(const ValueKey('locked-conversation-overlay')),
       findsNothing,
@@ -971,7 +974,7 @@ void main() {
     await tester.drag(find.byType(CustomScrollView), const Offset(0, 350));
     await tester.pumpAndSettle();
 
-    expect(events, ['list']);
+    expect(events, ['access', 'list']);
     expect(
       find.descendant(
         of: find.byKey(const ValueKey('conversation-1')),
@@ -984,12 +987,26 @@ void main() {
         of: find.byKey(const ValueKey('conversation-2')),
         matching: find.byKey(const ValueKey('locked-conversation-overlay')),
       ),
-      findsOneWidget,
+      findsNothing,
     );
     expect(find.text('Read-only'), findsNothing);
   });
 
-  testWidgets('shows conversations after list response without access lookup', (
+  testWidgets('home still lists conversations when access lookup fails', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      _homeApp(
+        conversations: _recentConversations(count: 1),
+        accessGetter: () => throw StateError('Access unavailable'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Conversation 1'), findsOneWidget);
+  });
+
+  testWidgets('checks access before requesting the conversation list', (
     WidgetTester tester,
   ) async {
     final homeRepository = _DelayedHomeRepository();
@@ -1007,10 +1024,10 @@ void main() {
     await tester.pump();
 
     expect(homeRepository.reads, 1);
-    expect(accessReads, 0);
+    expect(accessReads, 1);
     homeRepository.complete(_recentConversations(count: 2));
     await tester.pumpAndSettle();
-    expect(accessReads, 0);
+    expect(accessReads, 1);
     expect(find.byKey(const ValueKey('conversation-1')), findsOneWidget);
     expect(
       tester
@@ -1031,18 +1048,18 @@ void main() {
         conversations: _recentConversations(count: 1),
         accessGetter: () {
           accessReads += 1;
-          if (accessReads == 1) throw StateError('Access unavailable');
+          if (accessReads <= 2) throw StateError('Access unavailable');
           return const ConversationAccess.disabled();
         },
       ),
     );
     await tester.pumpAndSettle();
 
-    expect(accessReads, 0);
+    expect(accessReads, 1);
     expect(find.byKey(const ValueKey('conversation-1')), findsOneWidget);
     await tester.tap(find.widgetWithText(FilledButton, 'Start a conversation'));
     await tester.pumpAndSettle();
-    expect(accessReads, 1);
+    expect(accessReads, 2);
     expect(
       find.text('Could not check your conversation access.'),
       findsOneWidget,
@@ -1057,7 +1074,7 @@ void main() {
     );
     await tester.tap(find.widgetWithText(FilledButton, 'Start a conversation'));
     await tester.pumpAndSettle();
-    expect(accessReads, 2);
+    expect(accessReads, 3);
     expect(find.byKey(const ValueKey('conversation-1')), findsOneWidget);
     expect(find.text('FreeChat'), findsOneWidget);
   });
@@ -1072,17 +1089,19 @@ void main() {
         conversations: _recentConversations(count: 2),
         accessGetter: () {
           accessReads += 1;
-          return accessResponse.future;
+          return accessReads == 1
+              ? const ConversationAccess.disabled()
+              : accessResponse.future;
         },
       ),
     );
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('conversation-2')), findsOneWidget);
-    expect(accessReads, 0);
+    expect(accessReads, 1);
 
     await tester.tap(find.widgetWithText(FilledButton, 'Start a conversation'));
     await tester.pump();
-    expect(accessReads, 1);
+    expect(accessReads, 2);
     expect(find.byKey(const ValueKey('conversation-1')), findsOneWidget);
     expect(find.byKey(const ValueKey('conversation-2')), findsOneWidget);
     expect(
