@@ -113,6 +113,40 @@ def test_get_or_create_profile_preserves_explicit_language_changes():
     assert profile.updated_at == updated_at
 
 
+def test_get_or_create_profile_applies_app_locale_without_overwriting_other_profile_fields():
+    repository = _repository()
+    profile_id = "550e8400-e29b-41d4-a716-446655440000"
+    profile = repository.get_or_create_profile(
+        profile_id=profile_id,
+        email="learner@example.com",
+        name="Learner",
+        oauth_provider="google",
+        app_locale="ko",
+    )
+    repository.update_nickname(profile_id=profile_id, nickname="토마토")
+
+    updated = repository.get_or_create_profile(
+        profile_id=profile_id,
+        email="changed@example.com",
+        name="Changed",
+        oauth_provider="apple",
+        app_locale="en",
+    )
+    restored = repository.get_or_create_profile(
+        profile_id=profile_id,
+        email="changed-again@example.com",
+        name="Changed Again",
+        oauth_provider="apple",
+    )
+
+    assert profile.app_locale == "en"
+    assert updated.app_locale == "en"
+    assert updated.nickname == "토마토"
+    assert updated.email == "learner@example.com"
+    assert restored.app_locale == "en"
+    assert restored.nickname == "토마토"
+
+
 def test_profile_settings_update_timestamp_only_when_values_change():
     repository = _repository()
     profile_id = "550e8400-e29b-41d4-a716-446655440000"

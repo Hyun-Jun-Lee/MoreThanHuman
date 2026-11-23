@@ -44,7 +44,8 @@ def _language(data: dict) -> LearningLanguageContext:
 def _prepare_existing_turn(
     *, db: Session, store: StreamTurnStore, repository: ConversationRepository,
     service: ConversationService, user_id: str, request_id: str, kind: str,
-    input_data: dict, background_tasks: BackgroundTaskRegistry, access_enabled: bool,
+    input_data: dict, background_tasks: BackgroundTaskRegistry,
+    access_enabled: bool, nickname: str | None,
 ) -> PreparedGeneration:
     """기존 대화의 검사·이력 조회·예약·발화를 한 커밋으로 확정해요."""
     conversation_id = input_data["conversation_id"]
@@ -74,7 +75,7 @@ def _prepare_existing_turn(
         with latency_span("stream_context.prompt", operation=kind):
             system_prompt = service.build_system_prompt(
                 None, conversation.conversation_type, conversation.role_character,
-                language_context=language,
+                language_context=language, nickname=nickname,
             )
             history = service.prepare_message_history(previous)
 
@@ -127,6 +128,7 @@ def prepare_generation(
     *, user_id: str, request_id: str, kind: str | None, input_data: dict | None,
     http_client: httpx.AsyncClient, background_tasks: BackgroundTaskRegistry,
     retry_turn_id: str | None = None,
+    nickname: str | None = None,
 ) -> PreparedGeneration:
     """생성 전 입력과 사용자 발화를 확정하고 DB 연결을 닫아요."""
     with SessionLocal() as db:
@@ -144,6 +146,7 @@ def prepare_generation(
                 user_id=user_id, request_id=request_id, kind=kind,
                 input_data=input_data, background_tasks=background_tasks,
                 access_enabled=access_enabled,
+                nickname=nickname,
             )
         if retry_turn_id:
             with latency_span("stream_precheck", operation=operation):
@@ -240,7 +243,7 @@ def prepare_generation(
                 with latency_span("stream_context.prompt", operation=operation):
                     system_prompt = service.build_system_prompt(
                         None, conversation.conversation_type, conversation.role_character,
-                        language_context=language,
+                        language_context=language, nickname=nickname,
                     )
                     history = service.prepare_message_history(previous)
                 conversation_id = conversation.id
@@ -281,7 +284,7 @@ def prepare_generation(
                         conversation_direction=input_data.get("conversation_direction"),
                         selected_question=input_data.get("selected_question"),
                         custom_focus=input_data.get("custom_focus"),
-                        language_context=language,
+                        language_context=language, nickname=nickname,
                     )
                 conversation_id = conversation.id
                 user_message_id = user_message.id
@@ -293,7 +296,7 @@ def prepare_generation(
                 with latency_span("stream_context.prompt", operation=operation):
                     system_prompt = service.build_system_prompt(
                         input_data.get("search_context"), ConversationType.ROLE_PLAYING,
-                        role, language_context=language,
+                        role, language_context=language, nickname=nickname,
                     )
                     prompt = (
                         f"You are starting a role-play as '{role}'. "

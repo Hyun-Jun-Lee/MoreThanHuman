@@ -59,7 +59,7 @@ void main() {
     });
   }
 
-  testWidgets('English profile uses sentence case for settings chips', (
+  testWidgets('English profile uses sentence learning-language actions', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
@@ -75,11 +75,10 @@ void main() {
     expect(find.text('Free plan'), findsOneWidget);
     expect(find.text('Current plan'), findsOneWidget);
     expect(find.text('View plans'), findsOneWidget);
-    expect(find.text('Korean'), findsOneWidget);
-    expect(find.text('English'), findsOneWidget);
+    expect(find.text('Learn English in Korean'), findsOneWidget);
+    expect(find.text('Learn Korean in English'), findsOneWidget);
     expect(find.text('SHOW MORE'), findsNothing);
-    expect(find.text('KOREAN'), findsNothing);
-    expect(find.text('ENGLISH'), findsNothing);
+    expect(find.text('App language'), findsNothing);
   });
 
   testWidgets('profile waits for a confirmed plan before showing Free', (
@@ -347,11 +346,14 @@ void main() {
     expect(find.text('Log out'), findsOneWidget);
     expect(find.text('Delete account'), findsOneWidget);
     expect(find.text('Language settings'), findsOneWidget);
-    expect(find.text('Language used for menus and guidance'), findsOneWidget);
+    expect(find.text('App language'), findsNothing);
+    expect(find.text('Language used for menus and guidance'), findsNothing);
     expect(find.text('Applies to new conversations.'), findsOneWidget);
     expect(
       tester
-          .getSize(find.byKey(const ValueKey('profile-app-language-ko')))
+          .getSize(
+            find.byKey(const ValueKey('profile-learning-language-ko-en')),
+          )
           .height,
       greaterThanOrEqualTo(44),
     );
@@ -360,19 +362,11 @@ void main() {
       Theme.of(tester.element(find.text('Delete account'))).colorScheme.error,
     );
     expect(find.text('LEARNING LANGUAGE'), findsNothing);
-    final appLanguageStyle = DefaultTextStyle.of(
-      tester.element(find.text('Korean')),
-    ).style;
-    final pairStyle = DefaultTextStyle.of(
-      tester.element(find.text('KR → EN')),
-    ).style;
-    expect(pairStyle.fontFamily, appLanguageStyle.fontFamily);
-    expect(pairStyle.fontSize, appLanguageStyle.fontSize);
-    expect(pairStyle.fontWeight, appLanguageStyle.fontWeight);
+    expect(find.bySemanticsLabel('Learn English in Korean'), findsOneWidget);
     expect(find.textContaining('CHINESE'), findsNothing);
     expect(
-      tester.getTopLeft(find.text('KR → EN')).dy,
-      tester.getTopLeft(find.text('EN → KR')).dy,
+      tester.getTopLeft(find.text('Learn English in Korean')).dy,
+      tester.getTopLeft(find.text('Learn Korean in English')).dy,
     );
     expect(
       tester.getTopLeft(find.text('Log out')).dy,
@@ -392,17 +386,27 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('한국어 → 영어'), findsOneWidget);
-    expect(find.text('영어 → 한국어'), findsOneWidget);
+    expect(find.text('한국어로 영어 공부하기'), findsOneWidget);
+    expect(find.text('영어로 한국어 공부하기'), findsOneWidget);
     expect(find.text('로그아웃'), findsOneWidget);
     expect(find.text('언어 설정'), findsOneWidget);
-    expect(find.text('메뉴와 안내에 사용하는 언어'), findsOneWidget);
+    expect(find.text('앱 언어'), findsNothing);
+    expect(find.text('메뉴와 안내에 사용하는 언어'), findsNothing);
     expect(find.text('새로 시작하는 대화에 적용돼요.'), findsOneWidget);
     expect(find.textContaining('중국어'), findsNothing);
     expect(
-      tester.getTopLeft(find.text('한국어 → 영어')).dy,
-      tester.getTopLeft(find.text('영어 → 한국어')).dy,
+      tester.getTopLeft(find.text('한국어로 영어 공부하기')).dy,
+      tester.getTopLeft(find.text('영어로 한국어 공부하기')).dy,
     );
+
+    final Text koreanToEnglish = tester.widget<Text>(find.text('한국어로 영어 공부하기'));
+    final List<InlineSpan> spans =
+        (koreanToEnglish.textSpan as TextSpan).children!;
+    expect((spans[0] as TextSpan).style?.fontWeight, FontWeight.w700);
+    expect((spans[1] as TextSpan).style?.fontWeight, isNot(FontWeight.w700));
+    expect((spans[2] as TextSpan).style?.fontWeight, FontWeight.w700);
+    expect((spans[3] as TextSpan).style?.fontWeight, isNot(FontWeight.w700));
+    expect(find.bySemanticsLabel('한국어로 영어 공부하기'), findsOneWidget);
   });
 
   testWidgets('language pair confirmation keeps Profile open', (
@@ -423,9 +427,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.ensureVisible(find.text('EN → KR'));
+    await tester.ensureVisible(find.text('Learn Korean in English'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('EN → KR'));
+    await tester.tap(find.text('Learn Korean in English'));
     await tester.pumpAndSettle();
     expect(find.text('Save this change?'), findsOneWidget);
     await tester.tap(find.text('CHANGE'));
@@ -451,9 +455,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.ensureVisible(find.text('EN → KR'));
+    await tester.ensureVisible(find.text('Learn Korean in English'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('EN → KR'));
+    await tester.tap(find.text('Learn Korean in English'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('CHANGE'));
     await tester.pumpAndSettle();
@@ -480,8 +484,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.ensureVisible(find.text('EN → KR'));
-    await tester.tap(find.text('EN → KR'));
+    await tester.ensureVisible(find.text('Learn Korean in English'));
+    await tester.tap(find.text('Learn Korean in English'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('CANCEL'));
     await tester.pumpAndSettle();
@@ -490,27 +494,6 @@ void main() {
       languageRepository.currentLanguage,
       LearningLanguageContext.defaultContext,
     );
-    expect(find.text('ACCOUNT'), findsNothing);
-  });
-
-  testWidgets('app language saves immediately after confirmation', (
-    WidgetTester tester,
-  ) async {
-    final _FakeAuthRepository authRepository = _FakeAuthRepository();
-    await tester.pumpWidget(
-      _homeApp(profile: true, authRepository: authRepository),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Korean'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Change the app language to Korean?'), findsOneWidget);
-    expect(find.widgetWithText(FilledButton, 'CHANGE'), findsOneWidget);
-    await tester.tap(find.text('CHANGE'));
-    await tester.pumpAndSettle();
-
-    expect(authRepository.appLocale, 'ko');
     expect(find.text('ACCOUNT'), findsNothing);
   });
 
@@ -1451,11 +1434,10 @@ class _FakeGoogleIdentityService implements GoogleIdentityService {
   }
 }
 
-class _FakeAuthRepository implements AuthRepository, AppLocaleRepository {
+class _FakeAuthRepository implements AuthRepository {
   _FakeAuthRepository({this.languageProvider});
 
   final LearningLanguageContext Function()? languageProvider;
-  String? appLocale;
   String? nickname;
   int bootstrapReads = 0;
   int currentUserReads = 0;
@@ -1463,6 +1445,7 @@ class _FakeAuthRepository implements AuthRepository, AppLocaleRepository {
   @override
   Future<UserProfile> bootstrap(
     LearningLanguageContext? pendingLanguage,
+    String? pendingAppLocale,
   ) async {
     bootstrapReads += 1;
     return _profile();
@@ -1477,18 +1460,18 @@ class _FakeAuthRepository implements AuthRepository, AppLocaleRepository {
   UserProfile _profile() {
     return _userWithLanguage(
       languageProvider?.call() ?? LearningLanguageContext.defaultContext,
-    ).copyWith(appLocale: appLocale, nickname: nickname);
-  }
-
-  @override
-  Future<UserProfile> updateAppLocale(String value) async {
-    appLocale = value;
-    return getCurrentUser();
+    ).copyWith(nickname: nickname);
   }
 }
 
 class _FakeOnboardingStorage implements OnboardingStorage {
   LearningLanguageContext? pendingLanguage;
+  String? pendingAppLocale;
+
+  @override
+  Future<void> clearPendingAppLocale() async {
+    pendingAppLocale = null;
+  }
 
   @override
   Future<void> clearPendingLanguageContext() async {
@@ -1504,6 +1487,14 @@ class _FakeOnboardingStorage implements OnboardingStorage {
   @override
   Future<LearningLanguageContext?> readPendingLanguageContext() async {
     return pendingLanguage;
+  }
+
+  @override
+  Future<String?> readPendingAppLocale() async => pendingAppLocale;
+
+  @override
+  Future<void> writePendingAppLocale(String appLocale) async {
+    pendingAppLocale = appLocale;
   }
 
   @override

@@ -155,7 +155,7 @@ def bootstrap_profile(
     claims: SupabaseUserClaims = Depends(get_verified_claims),
     service: AuthService = Depends(get_auth_service),
 ):
-    """로그인·세션 복원 시 프로필을 준비하고 pending 언어를 적용해요."""
+    """로그인·세션 복원 시 프로필을 준비하고 pending 앱·학습 언어를 적용해요."""
     return SuccessResponse(data=service.bootstrap_profile(claims, request))
 
 

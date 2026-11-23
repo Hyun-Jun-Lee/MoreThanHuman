@@ -64,6 +64,16 @@ class _LanguageSnackHomeSectionState
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.listenManual(languageSnacksControllerProvider, (_, next) {
+        if (!next.isLoading &&
+            next.value?.isNotEmpty == true &&
+            ref.read(dailySnackBasketProvider).value == null) {
+          ref.read(dailySnackBasketProvider.notifier).ensureToday();
+        }
+      });
+    });
     scheduleMicrotask(() {
       if (mounted) {
         ref.read(languageSnacksControllerProvider.notifier).refreshIfStale();
@@ -135,13 +145,6 @@ class _LanguageSnackHomeSectionState
       _interacting = false;
       scheduleMicrotask(_refreshBasket);
     }
-    ref.listen(languageSnacksControllerProvider, (_, next) {
-      if (!next.isLoading &&
-          next.value?.isNotEmpty == true &&
-          ref.read(dailySnackBasketProvider).value == null) {
-        ref.read(dailySnackBasketProvider.notifier).ensureToday();
-      }
-    });
     final value = ref.watch(dailySnackBasketProvider);
     final basket = value.value;
     if (value.isLoading ||

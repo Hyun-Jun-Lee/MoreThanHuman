@@ -112,11 +112,12 @@ class LanguagePreferencesRequest(LearningLanguageContext):
 
 
 class BootstrapRequest(BaseModel):
-    """로그인 초기화 시 적용할 선택적 학습 언어."""
+    """로그인 초기화 시 적용할 선택적 앱·학습 언어."""
 
     model_config = ConfigDict(extra="forbid")
 
     language: LanguagePreferencesRequest | None = None
+    app_locale: AppLocaleCode | None = None
 
 
 class AIConsentStatus(BaseModel):

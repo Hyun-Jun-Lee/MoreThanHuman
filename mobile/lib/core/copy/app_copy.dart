@@ -345,21 +345,10 @@ class AppCopy {
       isKorean ? '이전 대화 더 보기' : 'Load more conversations';
   String get moreConversationsFailed =>
       isKorean ? '이전 대화를 불러오지 못했어요.' : 'Could not load more conversations.';
-  String get appLanguageSectionLabel => isKorean ? '앱 언어' : 'App language';
   String get languageSettingsSectionLabel =>
       isKorean ? '언어 설정' : 'Language settings';
-  String get appLanguageDescription =>
-      isKorean ? '메뉴와 안내에 사용하는 언어' : 'Language used for menus and guidance';
-  String get appLanguageKoreanLabel => isKorean ? '한국어' : 'Korean';
-  String get appLanguageEnglishLabel => isKorean ? '영어' : 'English';
-  String get appLanguageSaveFailed => isKorean
-      ? '앱 언어를 저장하지 못했어요. 다시 시도해 주세요.'
-      : 'Could not save app language. Please try again.';
   String get preferenceChangeConfirmationTitle =>
       isKorean ? '변경하시겠습니까?' : 'Save this change?';
-  String changeAppLanguageMessage(String language) => isKorean
-      ? '앱 언어를 $language로 변경할까요?'
-      : 'Change the app language to $language?';
   String changeLanguagePairMessage(String pair) =>
       isKorean ? '언어쌍을 $pair로 변경할까요?' : 'Change the language pair to $pair?';
   String get confirmChangeLabel => isKorean ? '변경' : 'CHANGE';
@@ -601,6 +590,7 @@ class AppOnboardingCopy {
     required this.skipLabel,
     required this.continueLabel,
     required this.getStartedLabel,
+    required this.appLanguage,
     required this.languagePair,
     required this.interest,
     required this.topicPrep,
@@ -612,6 +602,12 @@ class AppOnboardingCopy {
     skipLabel: '건너뛰기',
     continueLabel: '계속',
     getStartedLabel: '시작하기',
+    appLanguage: AppOnboardingAppLanguageCopy(
+      title: '앱 언어를 선택하세요.',
+      description: '메뉴와 안내에 사용할 언어를 선택할 수 있어요.',
+      koreanLabel: '한국어',
+      englishLabel: 'English',
+    ),
     languagePair: AppOnboardingPageCopy(
       title: '무엇을 연습할까요?',
       description: '대화 언어와 피드백 언어를 먼저 선택하세요.',
@@ -644,6 +640,12 @@ class AppOnboardingCopy {
     skipLabel: 'SKIP',
     continueLabel: 'CONTINUE',
     getStartedLabel: 'GET STARTED',
+    appLanguage: AppOnboardingAppLanguageCopy(
+      title: 'Choose your app language.',
+      description: 'Choose the language used for menus and guidance.',
+      koreanLabel: '한국어',
+      englishLabel: 'English',
+    ),
     languagePair: AppOnboardingPageCopy(
       title: 'What do you want\nto practice?',
       description: 'Choose your conversation language and feedback language.',
@@ -677,10 +679,23 @@ class AppOnboardingCopy {
   final String skipLabel;
   final String continueLabel;
   final String getStartedLabel;
+  final AppOnboardingAppLanguageCopy appLanguage;
   final AppOnboardingPageCopy languagePair;
   final AppOnboardingInterestCopy interest;
   final AppOnboardingTopicPrepCopy topicPrep;
   final AppOnboardingFeedbackCopy feedback;
+}
+
+class AppOnboardingAppLanguageCopy extends AppOnboardingPageCopy {
+  const AppOnboardingAppLanguageCopy({
+    required super.title,
+    required super.description,
+    required this.koreanLabel,
+    required this.englishLabel,
+  });
+
+  final String koreanLabel;
+  final String englishLabel;
 }
 
 class AppOnboardingPageCopy {
