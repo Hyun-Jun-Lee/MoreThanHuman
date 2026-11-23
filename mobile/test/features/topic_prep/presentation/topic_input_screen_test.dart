@@ -19,7 +19,7 @@ void main() {
     await tester.pumpWidget(_routerApp(locale: const Locale('ko')));
 
     final Finder card = find.byKey(const ValueKey<String>('topic-input-card'));
-    final Finder hint = find.text('나누고 싶은 주제는 무엇인가요?');
+    final Finder hint = find.text('하고 싶은 이야기로 대화해봐요');
     expect(
       tester.getCenter(hint).dy - tester.getCenter(card).dy,
       closeTo(0, 2),
@@ -89,7 +89,22 @@ void main() {
       tester.widget<TextField>(find.byType(TextField)).controller?.text,
       'Osaka food trip',
     );
+    await tester.tap(find.byType(TextField));
+    await tester.pump();
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller?.text,
+      'Osaka food trip',
+    );
+    expect(
+      find.byWidgetPredicate(
+        (Widget widget) =>
+            widget is Semantics && widget.properties.selected == true,
+      ),
+      findsNothing,
+    );
 
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, 600));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('TALK'));
     await tester.pumpAndSettle();
 
@@ -134,17 +149,14 @@ void main() {
     expect(find.text('오늘은 어떤 이야기를 나눠볼까요?'), findsOneWidget);
     expect(find.text('FreeChat'), findsOneWidget);
     expect(find.text('하고 싶은 이야기로 대화해봐요'), findsOneWidget);
-    expect(
-      tester.widget<Text>(find.text('하고 싶은 이야기로 대화해봐요')).textAlign,
-      TextAlign.center,
-    );
+    expect(find.text('나누고 싶은 주제는 무엇인가요?'), findsNothing);
     final Text title = tester.widget<Text>(find.text('오늘은 어떤 이야기를 나눠볼까요?'));
     expect(title.maxLines, 1);
     expect(title.softWrap, isFalse);
     final TextField input = tester.widget<TextField>(find.byType(TextField));
     expect(input.textAlign, TextAlign.center);
     expect(input.textAlignVertical, TextAlignVertical.center);
-    expect(input.decoration?.hintText, '나누고 싶은 주제는 무엇인가요?');
+    expect(input.decoration?.hintText, '하고 싶은 이야기로 대화해봐요');
     expect(input.decoration?.filled, isFalse);
     expect(find.text('오사카 맛집 여행'), findsNothing);
     expect(find.text('Weekend plans'), findsOneWidget);
@@ -152,7 +164,7 @@ void main() {
     final Finder inputCard = find.byKey(
       const ValueKey<String>('topic-input-card'),
     );
-    final Finder examplesLabel = find.text('빠르게 골라주세요');
+    final Finder examplesLabel = find.text('빠르게 골라보세요');
     expect(tester.getSize(inputCard).height, 80);
     expect(
       tester.getTopLeft(examplesLabel).dy - tester.getBottomLeft(inputCard).dy,

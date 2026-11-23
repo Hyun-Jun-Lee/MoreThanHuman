@@ -283,13 +283,11 @@ class AppCopy {
   String get topicInputTitle => isKorean
       ? '오늘은 어떤 이야기를 나눠볼까요?'
       : 'What would you like to talk about today?';
-  String get topicInputDescription =>
-      isKorean ? '하고 싶은 이야기로 대화해봐요' : 'Talk about anything you like';
   String get topicInputHint =>
-      isKorean ? '나누고 싶은 주제는 무엇인가요?' : 'What would you like to talk about?';
+      isKorean ? '하고 싶은 이야기로 대화해봐요' : 'Talk about anything you like';
   String get conversationTopicLabel =>
       isKorean ? '대화 주제' : 'Conversation topic';
-  String get examplesLabel => isKorean ? '빠르게 골라주세요' : 'Pick a topic';
+  String get examplesLabel => isKorean ? '빠르게 골라보세요' : 'Pick a topic';
   String get topicInputStartLabel => isKorean ? '대화하기' : 'TALK';
   String get prepareLabel => isKorean ? '준비하기' : 'PREPARE';
   String get homeLabel => isKorean ? '홈' : 'Home';

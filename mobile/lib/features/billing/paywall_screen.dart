@@ -20,7 +20,9 @@ class PaywallScreen extends ConsumerStatefulWidget {
 }
 
 class _PaywallScreenState extends ConsumerState<PaywallScreen> {
-  String _selectedPlanId = 'Advance';
+  String? _selectedPlanId;
+  bool _hasInitializedPlanSelection = false;
+  bool _hasUserSelectedPlan = false;
   bool _restoring = false;
   bool _restoreMessageOwned = false;
   String? _dismissedRestoreStatus;
@@ -31,10 +33,34 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
   @override
   void initState() {
     super.initState();
+    ref.listenManual(billingEntitlementProvider, (_, next) {
+      final BillingEntitlement? entitlement = next.asData?.value;
+      if (entitlement == null ||
+          _hasInitializedPlanSelection ||
+          _hasUserSelectedPlan) {
+        return;
+      }
+
+      final String? planId = _planIdFor(entitlement.plan);
+      if (planId == null) return;
+      setState(() {
+        _selectedPlanId = planId;
+        _hasInitializedPlanSelection = true;
+      });
+    }, fireImmediately: true);
     if (!_supportsPurchases) return;
     Future<void>.microtask(
       () => ref.read(billingControllerProvider.notifier).loadProducts(),
     );
+  }
+
+  String? _planIdFor(String plan) {
+    return switch (plan.toLowerCase()) {
+      'free' => 'Free',
+      'advance' => 'Advance',
+      'plus' => 'Plus',
+      _ => null,
+    };
   }
 
   @override
@@ -50,6 +76,9 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
     final entitlement = ref.watch(billingEntitlementProvider);
     final currentEntitlement = entitlement.asData?.value;
     final isAdmin = currentEntitlement?.isAdmin == true;
+    bool isCurrentPlan(String? planId) =>
+        !isAdmin &&
+        planId?.toLowerCase() == currentEntitlement?.plan.toLowerCase();
     final restoreStatus =
         state.message == null ||
             state.message == 'restore_requested' ||
@@ -65,6 +94,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
     final ProductDetails? selectedProduct = state.products
         .where((ProductDetails product) => product.id == _selectedPlanId)
         .firstOrNull;
+    final bool isSelectedCurrentPlan = isCurrentPlan(_selectedPlanId);
     return PopScope(
       canPop: !isUpdatingSubscription && !showRestoreDialog,
       child: Scaffold(
@@ -90,10 +120,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                   for (final id in const ['Free', 'Advance', 'Plus'])
                     _PlanCard(
                       id: id,
-                      isCurrentPlan:
-                          !isAdmin &&
-                          id.toLowerCase() ==
-                              currentEntitlement?.plan.toLowerCase(),
+                      isCurrentPlan: isCurrentPlan(id),
                       isSelected: id == _selectedPlanId,
                       product: state.products
                           .where((item) => item.id == id)
@@ -101,7 +128,10 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                       onSelected: () {
                         if (id == 'Free' || id == _selectedPlanId) return;
                         HapticFeedback.selectionClick();
-                        setState(() => _selectedPlanId = id);
+                        setState(() {
+                          _selectedPlanId = id;
+                          _hasUserSelectedPlan = true;
+                        });
                       },
                     ),
                   if (state.message != null && !_restoreMessageOwned) ...[
@@ -122,7 +152,10 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                   FilledButton(
                     key: const ValueKey<String>('paywall-subscribe'),
                     onPressed:
-                        isAdmin || state.isProcessing || selectedProduct == null
+                        isAdmin ||
+                            state.isProcessing ||
+                            isSelectedCurrentPlan ||
+                            selectedProduct == null
                         ? null
                         : () {
                             setState(() {
