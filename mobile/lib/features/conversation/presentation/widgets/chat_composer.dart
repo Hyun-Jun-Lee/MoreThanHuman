@@ -205,9 +205,9 @@ class _ChatComposerState extends State<ChatComposer> {
               onPressed: _canSend ? _send : null,
               tooltip: copy.sendMessageTooltip,
               style: IconButton.styleFrom(
-                backgroundColor: colors.selectedSurface,
-                foregroundColor: colors.onSelected,
-                disabledBackgroundColor: colors.disabledSurface,
+                backgroundColor: Colors.transparent,
+                foregroundColor: colors.selectedSurface,
+                disabledBackgroundColor: Colors.transparent,
                 disabledForegroundColor: colors.onDisabled,
               ),
               icon: const Icon(Icons.arrow_upward_rounded),

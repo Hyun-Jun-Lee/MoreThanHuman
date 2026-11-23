@@ -33,17 +33,29 @@ class _TopicInputScreenState extends ConsumerState<TopicInputScreen> {
   late final TextEditingController _controller;
   late final FocusNode _focusNode;
   String? _errorText;
+  String? _selectedExample;
 
   @override
   void initState() {
     super.initState();
     _controller = TextEditingController(text: widget.initialTopic ?? '');
     _focusNode = FocusNode();
-    _controller.addListener(_refresh);
-    _focusNode.addListener(_refresh);
+    _controller.addListener(_handleTextChanged);
+    _focusNode.addListener(_handleFocusChanged);
   }
 
-  void _refresh() => setState(() {});
+  void _handleTextChanged() {
+    setState(() {
+      _selectedExample = null;
+      _errorText = null;
+    });
+  }
+
+  void _handleFocusChanged() {
+    setState(() {
+      if (_focusNode.hasFocus) _selectedExample = null;
+    });
+  }
 
   @override
   void dispose() {
@@ -92,14 +104,6 @@ class _TopicInputScreenState extends ConsumerState<TopicInputScreen> {
               ),
             ),
           ),
-          const SizedBox(height: AppSpacing.md),
-          Text(
-            copy.topicInputDescription,
-            textAlign: TextAlign.center,
-            style: AppTypography.body.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
           const SizedBox(height: AppSpacing.lg),
           Container(
             key: const ValueKey<String>('topic-input-card'),
@@ -126,9 +130,6 @@ class _TopicInputScreenState extends ConsumerState<TopicInputScreen> {
                 maxLines: null,
                 textInputAction: TextInputAction.done,
                 onSubmitted: (_) => _prepare(),
-                onChanged: (_) {
-                  if (_errorText != null) setState(() => _errorText = null);
-                },
                 decoration: InputDecoration(
                   hintText: copy.topicInputHint,
                   filled: false,
@@ -161,7 +162,7 @@ class _TopicInputScreenState extends ConsumerState<TopicInputScreen> {
               for (final String example in examples)
                 Builder(
                   builder: (BuildContext context) {
-                    final bool selected = _controller.text.trim() == example;
+                    final bool selected = _selectedExample == example;
                     return Semantics(
                       button: true,
                       selected: selected,
@@ -170,7 +171,10 @@ class _TopicInputScreenState extends ConsumerState<TopicInputScreen> {
                         onTap: () {
                           _controller.text = example;
                           _focusNode.unfocus();
-                          setState(() => _errorText = null);
+                          setState(() {
+                            _selectedExample = example;
+                            _errorText = null;
+                          });
                         },
                         child: Container(
                           alignment: Alignment.center,

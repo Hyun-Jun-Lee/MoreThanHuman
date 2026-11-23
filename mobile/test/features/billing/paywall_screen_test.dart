@@ -135,11 +135,21 @@ void main() {
 
     expect(
       tester
+          .widget<Card>(find.byKey(const ValueKey<String>('paywall-plan-Free')))
+          .color,
+      AppPalette.subscriptionSelected,
+    );
+    expect(
+      tester
           .widget<Card>(
             find.byKey(const ValueKey<String>('paywall-plan-Advance')),
           )
           .color,
-      AppPalette.subscriptionSelected,
+      Theme.of(
+        tester.element(
+          find.byKey(const ValueKey<String>('paywall-plan-Advance')),
+        ),
+      ).colorScheme.surfaceContainerLow,
     );
     expect(
       tester
@@ -267,6 +277,149 @@ void main() {
         ),
       ),
       findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<Card>(find.byKey(const ValueKey<String>('paywall-plan-Plus')))
+          .color,
+      AppPalette.subscriptionSelected,
+    );
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey<String>('paywall-subscribe')),
+      300,
+    );
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.byKey(const ValueKey<String>('paywall-subscribe')),
+          )
+          .onPressed,
+      isNull,
+    );
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('keeps a paid plan tapped before entitlement loading completes', (
+    WidgetTester tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    final Completer<BillingEntitlement> entitlement =
+        Completer<BillingEntitlement>();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          billingControllerProvider.overrideWith(_TestBillingController.new),
+          billingEntitlementProvider.overrideWith(
+            (Ref ref) => entitlement.future,
+          ),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.light,
+          locale: const Locale('ko'),
+          supportedLocales: const <Locale>[Locale('ko'), Locale('en')],
+          localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
+            GlobalMaterialLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+          ],
+          home: const PaywallScreen(),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final Finder plusPlan = find.byKey(
+      const ValueKey<String>('paywall-plan-Plus'),
+    );
+    await tester.tap(plusPlan);
+    await tester.pump();
+
+    entitlement.complete(
+      const BillingEntitlement(plan: 'free', status: 'free'),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(
+      tester.widget<Card>(plusPlan).color,
+      AppPalette.subscriptionSelected,
+    );
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey<String>('paywall-subscribe')),
+      300,
+    );
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.byKey(const ValueKey<String>('paywall-subscribe')),
+          )
+          .onPressed,
+      isNotNull,
+    );
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('selects the current Advance plan and disables its CTA', (
+    WidgetTester tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          billingControllerProvider.overrideWith(_TestBillingController.new),
+          billingEntitlementProvider.overrideWith(
+            (Ref ref) async =>
+                const BillingEntitlement(plan: 'advance', status: 'active'),
+          ),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.light,
+          locale: const Locale('ko'),
+          supportedLocales: const <Locale>[Locale('ko'), Locale('en')],
+          localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
+            GlobalMaterialLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+          ],
+          home: const PaywallScreen(),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    final Finder advancePlan = find.byKey(
+      const ValueKey<String>('paywall-plan-Advance'),
+    );
+    expect(
+      find.descendant(
+        of: advancePlan,
+        matching: find.byKey(
+          const ValueKey<String>('paywall-current-plan-indicator'),
+        ),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      tester.widget<Card>(advancePlan).color,
+      AppPalette.subscriptionSelected,
+    );
+
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey<String>('paywall-subscribe')),
+      300,
+    );
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.byKey(const ValueKey<String>('paywall-subscribe')),
+          )
+          .onPressed,
+      isNull,
     );
     debugDefaultTargetPlatformOverride = null;
   });

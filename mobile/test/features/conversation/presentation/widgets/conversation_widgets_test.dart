@@ -37,6 +37,10 @@ void main() {
       find.widgetWithIcon(IconButton, Icons.arrow_upward_rounded),
     );
     expect(sendButton.onPressed, isNotNull);
+    expect(
+      sendButton.style?.backgroundColor?.resolve(<WidgetState>{}),
+      Colors.transparent,
+    );
 
     await tester.tap(find.byTooltip('Send message'));
     await tester.tap(find.byTooltip('Voice input'));
@@ -68,7 +72,7 @@ void main() {
       sendButton.style?.backgroundColor?.resolve(<WidgetState>{
         WidgetState.disabled,
       }),
-      AppSemanticColors.light.disabledSurface,
+      Colors.transparent,
     );
   });
 
