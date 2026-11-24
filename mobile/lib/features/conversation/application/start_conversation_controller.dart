@@ -112,6 +112,7 @@ enum StartConversationFailureReason {
   freeChatRequestFailed,
   roleplayRequestFailed,
   slotsFull,
+  creditsFull,
 }
 
 class StartConversationState {
@@ -252,7 +253,11 @@ class StartConversationController extends Notifier<StartConversationState> {
     } on Object catch (error) {
       state = StartConversationState(
         failureReason: _isSlotLimit(error)
-            ? StartConversationFailureReason.slotsFull
+            ? (error is ApiException &&
+                      (error.code == 'CREDITS_EXHAUSTED' ||
+                          error.code == 'CONVERSATION_TURNS_FULL')
+                  ? StartConversationFailureReason.creditsFull
+                  : StartConversationFailureReason.slotsFull)
             : StartConversationFailureReason.freeChatRequestFailed,
       );
       return null;
@@ -687,7 +692,11 @@ class StartConversationController extends Notifier<StartConversationState> {
     } on Object catch (error) {
       state = StartConversationState(
         failureReason: _isSlotLimit(error)
-            ? StartConversationFailureReason.slotsFull
+            ? (error is ApiException &&
+                      (error.code == 'CREDITS_EXHAUSTED' ||
+                          error.code == 'CONVERSATION_TURNS_FULL')
+                  ? StartConversationFailureReason.creditsFull
+                  : StartConversationFailureReason.slotsFull)
             : StartConversationFailureReason.freeChatRequestFailed,
       );
       return null;
@@ -755,7 +764,11 @@ class StartConversationController extends Notifier<StartConversationState> {
     } on Object catch (error) {
       state = StartConversationState(
         failureReason: _isSlotLimit(error)
-            ? StartConversationFailureReason.slotsFull
+            ? (error is ApiException &&
+                      (error.code == 'CREDITS_EXHAUSTED' ||
+                          error.code == 'CONVERSATION_TURNS_FULL')
+                  ? StartConversationFailureReason.creditsFull
+                  : StartConversationFailureReason.slotsFull)
             : StartConversationFailureReason.freeChatRequestFailed,
       );
       return null;
@@ -796,7 +809,11 @@ class StartConversationController extends Notifier<StartConversationState> {
     } on Object catch (error) {
       state = StartConversationState(
         failureReason: _isSlotLimit(error)
-            ? StartConversationFailureReason.slotsFull
+            ? (error is ApiException &&
+                      (error.code == 'CREDITS_EXHAUSTED' ||
+                          error.code == 'CONVERSATION_TURNS_FULL')
+                  ? StartConversationFailureReason.creditsFull
+                  : StartConversationFailureReason.slotsFull)
             : StartConversationFailureReason.roleplayRequestFailed,
       );
       return null;
@@ -1292,7 +1309,9 @@ class StartConversationController extends Notifier<StartConversationState> {
 
   bool _isSlotLimit(Object error) {
     if (error is ApiException &&
-        (error.code == 'CONVERSATION_SLOTS_FULL' ||
+        ((error.code == 'CREDITS_EXHAUSTED' ||
+                error.code == 'CONVERSATION_TURNS_FULL') ||
+            error.code == 'CONVERSATION_SLOTS_FULL' ||
             error.code == 'GUEST_TURNS_FULL')) {
       ref.invalidate(conversationAccessProvider);
       return true;

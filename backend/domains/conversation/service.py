@@ -11,6 +11,7 @@ import httpx
 
 from config import get_model_for_provider, get_settings
 from database import SessionLocal
+from domains.auth.models import ProfileModel
 from domains.conversation.enums import ConversationStatus, ConversationType, MessageRole
 from domains.conversation.models import ConversationModel, MessageModel
 from domains.conversation.repository import ConversationRepository
@@ -350,23 +351,9 @@ class ConversationService:
                 self.repository.save(conversation)
             created_conversation_id = conversation.id
 
-            # 2. 시스템 프롬프트 생성
-            system_prompt = self.build_system_prompt(
-                search_context,
-                ConversationType.ROLE_PLAYING,
-                role_character,
-                language_context=language_context,
-                nickname=nickname,
-            )
-
-            # 3. AI의 첫 인사 생성
-            target_name = language_name(language_context.target_language)
-            greeting_prompt = (
-                f"You are starting a role-play as '{role_character}'. "
-                f"Greet the user naturally in {target_name} and start the conversation "
-                "as this character would. Keep it short (1-2 sentences)."
-            )
-            ai_response = await self.generate_response(system_prompt, [], greeting_prompt)
+            ai_response = ('안녕하세요! 먼저 말을 걸어 주세요.'
+                           if language_context.target_language.value == 'ko'
+                           else 'Hello! Say something to begin our conversation.')
 
             # 4. AI 메시지만 저장 (사용자 메시지 없음)
             assistant_message = MessageModel(
@@ -531,7 +518,7 @@ class ConversationService:
         conversation = self.repository.find_by_id(conversation_id, user_id)
         access_enabled = self._access_enabled(user_id)
         return Conversation.model_validate(conversation).model_copy(
-            update={"locked": access_enabled and not conversation.slot_active}
+            update={"locked": access_enabled and self.repository.db.get(ProfileModel, user_id).is_guest and not conversation.slot_active}
         )
 
     def get_access(self, user_id: str) -> dict:
@@ -581,7 +568,7 @@ class ConversationService:
         total_count = self.repository.count_conversations(user_id)
         access_enabled = self._access_enabled(user_id)
         results = [Conversation.model_validate(c).model_copy(
-            update={"locked": access_enabled and not c.slot_active}
+            update={"locked": access_enabled and self.repository.db.get(ProfileModel, user_id).is_guest and not c.slot_active}
         ) for c in conversations]
         pagination = self._build_pagination(
             limit=limit,

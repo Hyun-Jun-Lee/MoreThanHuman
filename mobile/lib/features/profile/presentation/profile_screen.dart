@@ -10,7 +10,6 @@ import 'package:curitalk/features/profile/presentation/nickname_dialog.dart';
 import 'package:curitalk/features/language/language.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -45,14 +44,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         ? '—'
         : entitlement.isAdmin
         ? 'Admin'
-        : copy.planDisplayName(entitlement.plan);
+        : '${entitlement.remainingTurns ?? '—'}';
     final planTitle = entitlement == null
         ? entitlementState.isLoading
               ? copy.profilePlanLoading
               : copy.profilePlanLoadFailed
         : entitlement.isAdmin
         ? copy.adminUnlimitedAccess
-        : copy.profilePlanTitle(entitlement.plan);
+        : (copy.isKorean
+              ? 'AI 답변 ${entitlement.remainingTurns ?? '—'}회 · 대화 ${entitlement.slotLimit ?? '—'}개'
+              : '${entitlement.remainingTurns ?? '—'} replies · ${entitlement.slotLimit ?? '—'} conversations');
     final ColorScheme colors = Theme.of(context).colorScheme;
     final bool actionsDisabled =
         isLoggingOut || isDeletingAccount || isSavingLanguage;
@@ -368,7 +369,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final user = ref.read(authControllerProvider).value?.user;
     if (user == null) return;
     final copy = AppCopy.of(context);
-    final isIos = Theme.of(context).platform == TargetPlatform.iOS;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -379,20 +379,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(copy.deleteAccountWarning),
-              if (isIos) ...[
-                const SizedBox(height: AppSpacing.md),
-                Text(copy.deleteAccountSubscriptionWarning),
-                Align(
-                  alignment: Alignment.center,
-                  child: OutlinedButton(
-                    onPressed: () => launchUrl(
-                      Uri.parse('https://apps.apple.com/account/subscriptions'),
-                      mode: LaunchMode.externalApplication,
-                    ),
-                    child: Text(copy.manageSubscription),
-                  ),
-                ),
-              ],
+              const SizedBox(height: AppSpacing.md),
+              Text(copy.deleteAccountSubscriptionWarning),
               if (user.oauthProvider == 'apple') ...[
                 const SizedBox(height: AppSpacing.md),
                 Text(copy.deleteAccountAppleWarning),

@@ -28,7 +28,9 @@ security = HTTPBearer()
 
 def _account_deletion_started(db: Session, user_id: str) -> bool:
     """동기 DB 조회는 이벤트 루프 밖에서 실행해요."""
-    return db.query(AccountDeletionModel.user_id).filter_by(user_id=user_id).first() is not None
+    from shared.billing_tombstones import find_tombstone
+    return (db.query(AccountDeletionModel.user_id).filter_by(user_id=user_id).first() is not None
+            or find_tombstone(db, 'user', user_id) is not None)
 
 
 @dataclass(frozen=True)

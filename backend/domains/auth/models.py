@@ -64,7 +64,8 @@ class AccountDeletionModel(Base):
 
     __tablename__ = "account_deletions"
 
-    user_id = Column(String(36), primary_key=True)
+    user_id = Column(String(64), primary_key=True)
+    key_version = Column(String(64), nullable=True)
     receipt_hash = Column(String(64), unique=True, nullable=False)
     status = Column(String(16), nullable=False, default="processing")
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)

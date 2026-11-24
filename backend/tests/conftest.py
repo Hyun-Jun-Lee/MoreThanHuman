@@ -19,3 +19,5 @@ os.environ["SUPABASE_AUTH_VERIFY_MODE"] = "remote"
 # 로컬 개발 .env에서 잠금 UI를 켜도 기존 API 회귀 테스트는 독립적으로 실행해요.
 os.environ["CONVERSATION_ACCESS_ENABLED"] = "false"
 os.environ["AI_CONSENT_REQUIRED"] = "false"
+os.environ['BILLING_HMAC_KEYS'] = '{"test":"test-only-key-with-at-least-32-bytes"}'
+os.environ['BILLING_HMAC_CURRENT_KEY'] = 'test'

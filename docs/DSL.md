@@ -1,6 +1,6 @@
 # tomatalk Backend DSL
 
-> 최종 갱신: 2026-11-24 · 범위: FastAPI 백엔드 API + Flutter 모바일 연동
+> 최종 갱신: 2026-11-25 · 범위: FastAPI 백엔드 API + Flutter 모바일 연동
 
 사용자 클라이언트는 `mobile/`의 Flutter 기반 모바일 앱으로 개발해요. 이 문서는 모바일 앱이 연동할 백엔드 도메인, 데이터 모델, API 계약을 정의해요.
 
@@ -49,16 +49,18 @@ database Schema {
     updated_at: DATETIME
   }
 
-  table manual_entitlement_grants {
-    id: UUID PRIMARY KEY
+  table manual_resource_grants {
+    id: UUID PRIMARY KEY // request_id, idempotency key
     user_id: UUID FOREIGN KEY -> profiles(id)
-    plan: "advance" | "plus"
-    revoke_at: DATETIME?
+    resource_kind: "slots" | "turns"
+    quantity: POSITIVE_INTEGER
     revoked_at: DATETIME?
-    granted_by: UUID?
-    revoked_by: UUID?
     created_at: DATETIME
   }
+  // purchase_deliveries(transaction_id), credit_lots, turn_reservations:
+  // 계정 자원 원장. 정확한 필드/제약은 shared/billing_models.py 기준.
+  // billing_tombstones(kind, digest, key_version): 삭제·환불 재전송 차단.
+  // purchase_notifications(notification_uuid): 식별자 원문 없는 알림 감사 이력.
 
   table admin_access_sessions {
     token_hash: STRING PRIMARY KEY
@@ -225,7 +227,7 @@ module Auth {
 
 게스트와 회원은 현재 개인정보처리방침 및 AI 데이터 처리 고지 버전에 모두 동의하기 전 AI API를 사용할 수 없어요. `GET /api/auth/me/ai-consent`는 현재 버전과 각 고지의 수락 여부, 한국어·영어 개인정보처리방침 URL을 반환하고, `POST /api/auth/me/ai-consent`는 두 현재 버전을 함께 수락해요. 앱은 표시 언어가 한국어이면 `https://www.curitalk.app/privacy`, 영어이면 `https://www.curitalk.app/en/privacy`를 열어요. 미동의 AI 요청은 provider 호출 전에 HTTP 403 `CONSENT_REQUIRED`로 거절해요. 읽기와 계정 삭제는 동의가 없어도 가능해요.
 
-아직 사용되지 않은 Google·Apple 신원은 익명 Supabase 사용자에 연결해 같은 ID와 데이터를 유지해요. 기존 신원 충돌은 게스트 JWT로 `POST /api/auth/guest-transfer/receipt`를 호출해 10분짜리 일회용 이전 영수증을 만들고, 정식 회원 JWT로 `POST /api/auth/guest-transfer/claim`을 호출해 대화·동의·사용 기록을 원자적으로 이전해요. 회원 프로필·언어·구독을 우선하고 슬롯이 찬 가져온 대화는 읽기 전용으로 보존해요. 이전 완료 뒤 옛 게스트 JWT는 삭제 tombstone으로 차단해요.
+아직 사용되지 않은 Google·Apple 신원은 익명 Supabase 사용자에 연결해 같은 ID와 데이터를 유지해요. 기존 신원 충돌은 게스트 JWT로 `POST /api/auth/guest-transfer/receipt`를 호출해 10분짜리 일회용 이전 영수증을 만들고, 정식 회원 JWT로 `POST /api/auth/guest-transfer/claim`을 호출해 대화·동의·사용 기록을 원자적으로 이전해요. 회원 프로필·언어·잔액을 우선하고 가져온 대화는 슬롯 초과 여부와 무관하게 보존해요. 이전 완료 뒤 옛 게스트 JWT는 삭제 tombstone으로 차단해요.
 
 삭제에 필요한 서버 전용 Supabase 관리자 키가 설정되지 않았으면 요청을 영속화하기 전에 HTTP 503을 반환해요.
 첫 설정 팝업은 기기의 우선 시스템 언어가 한국어면 영어, 영어를 포함한 그 밖의 언어면 한국어 닉네임을 기기에서 생성해 입력 칸에 미리 채워요. 사용자는 수정할 수 있으며 저장 전에는 서버에 전송하지 않아요. 내 정보의 닉네임 수정 팝업은 현재 값을 유지해요.
@@ -555,25 +557,34 @@ NDJSON 각 줄에는 `event`, 0부터 증가하는 `seq`, `turn_id`, `attempt_id
 
 홈은 발행된 주제가 있으면 최근 대화 로딩 상태와 저장된 대화 수에 관계없이 추천 주제를 보여줘요. 이전 주의 발행 주제도 보관되지 않았다면 시작할 수 있어요. 탭 시 검색·사실 확인·Topic Prep은 실행하지 않아요.
 
-### 구독과 대화 접근 정책 v2.3 (기본 비활성화)
+### 대화 슬롯과 소비성 답변 권한 v3 (2026-11-25)
 
-`CONVERSATION_ACCESS_ENABLED=false`가 코드 기본값이에요. 개발 환경 미리보기에서는 `true`로 설정해 회원 슬롯·15턴 제한과 모바일 잠금을 함께 확인할 수 있어요. `false`인 회원에게 `GET /access/`는 `enabled=false`, `can_create=true`, `slot_limit=null`, `remaining_slots=null`을 반환하고, 대화별 `GET /{id}/access/`는 `enabled=false`, `can_send=true`, `turn_limit=null`을 반환해요. 회원의 기존 생성·발화 API는 한도를 적용하지 않아요. 게스트에게는 플래그 값과 무관하게 `enabled=true`와 1개·누적 5회 정책을 반환하고 모든 생성·발화 경로에서 집행해요.
+회원은 기본 보관 대화 1개와 계정당 한 번 발급되는 체험 10턴을 받아요. 게스트의 활성 대화 1개·누적 5회는 별도 원장이며 회원 전환 시 사용량을 합산하지 않아요. 관리자는 무제한이에요. 회원 제한 rollout은 `CONVERSATION_ACCESS_ENABLED=false`가 기본이며 게스트 제한은 항상 적용해요.
 
-활성화하면 무료 계정은 활성 대화 1개와 대화당 사용자 발화 15회를 사용할 수 있어요. Advance는 활성 대화 5개, Plus는 10개이고 두 구독 모두 발화 수 제한이 없어요. 저장된 대화 수는 제한하지 않아요. 비활성 대화는 앱에서 열 수 없고 삭제할 수 있으며 발화할 수 없어요. 서버의 메시지 조회 API는 기존 읽기 권한을 유지해요. 구독 만료·환불·철회 또는 하위 플랜 전환 시 최근 사용한 활성 대화만 현재 한도까지 남겨요. 기존 다중 대화 계정은 마지막 사용자 발화가 가장 최근인 대화 1개를 활성화하고 나머지를 잠가요. 활성 대화를 삭제해 빈 슬롯이 생겨도 잠긴 대화는 그대로예요. 플랜의 슬롯 한도가 늘어나면 잠긴 대화를 최근 사용 순서대로 남은 슬롯 수만큼 활성화해요. 사용자가 대화를 직접 활성화하거나 해제할 수는 없어요. 기존 `legacy_conversation_slots`와 `conversation_slot_grants`는 보존하지만 구독 권한에 반영하지 않아요.
+슬롯은 보관 대화와 진행 중 역할극 시작 예약을 합쳐 새 생성에만 검사해요. 기존 회원 대화는 잠그지 않아요. 환불로 한도를 초과해도 기존 대화는 계속 이용하고 새 생성만 차단해요. 삭제는 슬롯만 비우며 사용한 턴을 반환하지 않아요. 진행 중 스트림 삭제는 409 `TURN_IN_PROGRESS`예요.
 
-게스트는 활성 대화 1개와 계정 전체 누적 사용자 발화 5회를 사용해요. 멱등 요청 키별 원장이 committed 발화만 계산하므로 대화 삭제로 한도가 복구되지 않아요. 다섯 번째 usable AI 응답 뒤에는 기록·오디오를 읽을 수 있지만 새 시작과 작성기는 잠기고 API는 409 `GUEST_TURNS_FULL`, `limit_action=login`, `remaining_turns=0`을 반환해요. 추천 주제의 저장된 첫 assistant 질문과 TTS 다시 듣기는 발화 수를 올리지 않아요.
+한 턴은 사용자 메시지 1개와 저장된 AI 텍스트 답변 1개예요. 체험 lot을 먼저, 이후 구매·수동 lot을 생성 순서대로 사용해요. profile 잠금 안에서 예약하고 AI 텍스트와 같은 트랜잭션에서 확정해요. 실패·5분 만료는 반환하고, 텍스트 저장 뒤 TTS 실패는 차감을 유지해요. 환불된 lot은 새 예약을 막으며 기존 예약은 성공하면 확정, 실패하면 무효화해요. 고정 역할극 인사·저장된 추천 첫 질문·다시 듣기는 차감하지 않아요. 음성은 STT 전 사전 검사와 저장 전 최종 검사를 거쳐요.
 
-자유 대화의 첫 발화는 1회이며 역할극의 AI 첫 인사는 세지 않아요. 기존에 15회를 넘긴 무료 대화는 열람할 수 있으나 새 발화는 막아요. 생성 API는 한도 초과 시 HTTP 409 `CONVERSATION_SLOTS_FULL`, 잠긴 대화의 `/message/`·`/turn/`은 `CONVERSATION_LOCKED`, 무료 발화 초과는 `CONVERSATION_TURNS_FULL`을 반환해요. 음성 요청은 STT 전에 한도를 미리 확인하고 저장 시 다시 검사해요.
+| Product ID | 유형 | 지급 |
+|---|---|---|
+| `com.morethanhuman.curitalk.slots.plus.1` | CONSUMABLE | 추가 대화 +1 |
+| `com.morethanhuman.curitalk.slots.plus.3` | CONSUMABLE | 추가 대화 +3 |
+| `com.morethanhuman.curitalk.turns.5` | CONSUMABLE | 답변 5회 |
+| `com.morethanhuman.curitalk.turns.10` | CONSUMABLE | 답변 10회 |
+| `com.morethanhuman.curitalk.turns.20` | CONSUMABLE | 답변 20회 |
 
-`GET /api/conversations/access/`는 `used_slots`(활성 대화와 진행 중인 역할극 시작 예약의 합계), `slot_limit`, `remaining_slots`, `locked_count`, `plan`을 반환해요. 활성 대화 ID 목록은 반환하지 않아요. 목록 항목에는 `locked`가 포함되고 `GET /api/conversations/{id}/access/`에는 `can_send`, `locked`, `user_turns`, `turn_limit`이 포함돼요. 대화 활성화·해제 API는 제공하지 않아요.
+- `GET /api/billing/entitlement/`: `plan=member|guest|admin`, `status`, `slot_limit`, `additional_slots`, `remaining_turns`, `trial_turns`, `paid_turns`, `unlimited`, `is_admin`, `source`, `turn_scope=account`, `limit_action`를 반환해요. 회원의 기존 호환 필드 `turn_limit`, `expires_at`은 null이에요. 게스트는 `turn_limit=5`예요.
+- `GET /api/conversations/access/`: `enabled, can_create, used_slots, slot_limit, remaining_slots, locked_count, plan, turn_scope, remaining_turns, trial_turns, paid_turns, limit_action`을 반환해요. 회원의 `locked_count`는 0이에요.
+- `GET /api/conversations/{id}/access/`: `enabled, user_turns, turn_limit, can_send, locked, turn_scope, remaining_turns, limit_action`을 반환해요. 회원의 `locked`는 false이며 `user_turns`는 해당 대화 메시지 수로 잔액이 아니에요.
+- 부족 오류는 HTTP 409 `CONVERSATION_SLOTS_FULL`+`limit_action=buy_slots` 또는 `CONVERSATION_TURNS_FULL`+`buy_turns`예요. 게스트는 `GUEST_TURNS_FULL`+`login`이에요.
+- `POST /api/billing/apple/verify/`: 회원 Bearer와 `{signed_transaction: JWS}`. 앱·환경·상품·소비성 유형·수량·계정 토큰을 검증하고 거래 ID별 한 번만 지급해요. 응답은 권한과 `delivery_status`, `terminal=true`예요. 삭제·환불 tombstone은 잔액 없는 terminal 응답을 반환할 수 있어요.
+- `POST /api/billing/apple/terminalize/`: Bearer 없이 JWS를 제출해요. 삭제된 account token과 일치할 때만 `{delivery_status: deleted, terminal: true}`를 반환해요. 활성 계정에는 지급·종료하지 않아요.
+- 다른 계정은 409 `PURCHASE_ACCOUNT_CONFLICT`, 잘못된 거래는 400 `INVALID_APPLE_PURCHASE`예요. 앱은 재시도 가능한 오류에서는 StoreKit 거래를 완료하지 않아요. 서버의 terminal 결과를 보존한 뒤에만 완료해요.
+- `POST /api/billing/apple/notifications/`: `{signedPayload}`의 서명과 UUID를 검증해요. REFUND는 해당 거래의 슬롯 또는 lot 미사용분만 회수해요. 먼저 도착한 환불은 `refund-before-delivery`로 보존해요. CONSUMPTION_REQUEST는 감사 기록만 저장하며 소비 정보는 전송하지 않아요.
 
-접근 제어가 활성화된 상태에서도 관리자의 `slot_limit`과 `remaining_slots`는 모두 null이고, 저장된 모든 대화를 활성화해요.
+소비성 구매 복원 API·UI는 제공하지 않아요. 같은 tomatalk 계정의 재설치·기기 변경은 서버 잔액을 조회해요. 계정 삭제·재가입·다른 계정에는 과거 구매를 복원하거나 이전하지 않아요. 삭제 후 원문 구매·계정 ID 대신 버전형 HMAC tombstone을 보존해 재지급을 차단해요.
 
-대화 목록의 `locked`는 저장된 `slot_active`를 반영해요. 목록 조회는 구독 상태를 갱신하거나 슬롯을 재조정하지 않아요. 구독 갱신 작업이 지연되면 표시가 잠시 이전 상태일 수 있으나 생성·발화 요청은 현재 권한을 다시 검사해요.
-
-`GET /api/billing/entitlement/`는 인증 계정의 검증된 `plan`, `status`, `expires_at`, `slot_limit`, `turn_limit`을 반환해요. iOS 앱은 App Store 제품 ID `Advance`·`Plus`의 표시 가격을 직접 불러와요. `POST /api/billing/apple/verify/`는 인증 계정의 `{ "signed_transaction": "Apple StoreKit 2 JWS" }`를 받아 Apple 서명 및 App Store Server API의 현재 상태를 검증하고 권한을 반환해요. 다른 계정에 묶인 구매는 HTTP 409 `PURCHASE_ACCOUNT_CONFLICT`, 잘못된 거래는 HTTP 400 `INVALID_APPLE_PURCHASE`예요. `POST /api/billing/apple/notifications/`는 Apple Server Notifications V2의 `{ "signedPayload": "..." }`를 받아 서명을 검증하고 Apple의 현재 상태를 다시 조회해요. 알림 ID로 중복 처리를 막아요.
-
-`POST /api/billing/apple/restore/`는 사용자가 명시적으로 구매 복원을 누른 뒤 받은 StoreKit 2 서명 거래를 받아요. Apple의 현재 상태를 조회해 유효한 구독만 연결하고, 구독이 삭제된 계정에 연결돼 있으면 App Store Server API의 App Account Token을 새 계정 ID로 갱신해요. 다른 활성 계정의 구매는 HTTP 409로 거부해요. 복원되는 것은 남은 구독 이용 권한뿐이며 학습 자료는 복구하지 않아요. 계정 삭제 자체는 Apple 자동 갱신을 중단하지 않으므로 앱에서 Apple 구독 관리 경로를 안내해요.
+자체 지원 환불 검토는 턴 lot의 확정 사용이 0회이거나 슬롯 거래의 `first_used_at`이 없을 때만 가능해요. 첫 정상 사용자 답변 저장 시 그 전에 지급된 모든 미사용 슬롯 거래에 사용 시각을 기록하며 삭제로 되돌리지 않아요. Apple의 환불 심사는 별개이며 확정 환불은 사용 여부와 무관하게 반영해요.
 
 멀티모달 대화 API는 아래 다섯 가지 요청 형태를 기본 계약으로 사용해요.
 
@@ -599,17 +610,16 @@ AudioContinue  = POST /api/conversations/{id}/turn/        multipart { audio_fil
 
 SSE는 `/api/conversations/messages/{id}/grammar-feedback/stream?token=<access_token>`으로 인증해요. URL에 토큰이 포함되므로 로그·공유에 주의하고 모바일에서는 기존 polling 경로를 우선 사용해요.
 
-### 관리자와 수동 구독 권한
+### 관리자와 수동 자원 지급 v2
 
-관리자·수동 권한의 상세 계약은 [관리자 권한 계약](../.agent/_contracts/ADMIN_ENTITLEMENTS.md)에 있어요. `profiles.is_admin`은 기본 false이며 첫 관리자는 운영자가 DB에서 직접 지정해요. 관리자 API로 관리자 여부를 바꾸지 않아요. 관리자는 구독 기능을 모두 이용하고 대화 슬롯·발화 및 스낵 반복 한도가 없어요. 일반 사용자는 유효한 Apple 구독과 수동 부여 중 높은 플랜을 적용해요. 예약 철회 시각에 도달하거나 즉시 철회하면 Apple 구독 또는 Free로 돌아가요.
+관리자는 앱의 슬롯·턴을 무제한으로 이용해요. 관리자 웹의 코드·세션·CSRF 계약은 유지해요. 일반 회원에게만 슬롯과 턴을 독립적으로 지급할 수 있어요.
 
-`GET /api/admin/users/`는 `q`(이메일·닉네임 부분 일치 또는 정확한 사용자 UUID), `plan=free|advance|plus`, `source=free|apple|manual|admin`, `is_admin`, `limit=50`(1..100), `offset=0`으로 계정을 조회해요. 응답은 `{results, total_count, limit, offset}`이며 결과마다 ID·이메일·이름·닉네임·활성·관리자 여부·가입일·최종 권한을 담아요. `GET /api/admin/users/{user_id}/`는 같은 계정 정보와 권한을, `GET /api/admin/users/{user_id}/entitlement/`는 `{user_id, is_admin, apple, manual, effective}`를 반환해요. `GET /api/admin/users/{user_id}/manual-entitlement/history/`는 부여 기록을 최신순으로 `{results, total_count, limit, offset}`에 담아요. 공유 코드로 수행한 부여·철회의 `granted_by`·`revoked_by`는 null이며 개인별 실행자를 식별하지 못해요.
+`GET /api/admin/users/`는 `q, is_admin, limit, offset`으로 계정을 조회해요. 상세 `/{user_id}/entitlement/`는 현재 `effective`, 출처별 `credits`, 상품별 `purchases`와 `support_refund_eligible`을 반환해요. 지원 담당자가 거래를 구별할 수 있도록 인증된 관리자 응답에만 `transaction_id`와 `created_at`을 포함해요.
 
-`PUT /api/admin/users/{user_id}/manual-entitlement/`는 `{ "plan": "advance"|"plus", "revoke_at": ISO8601|null }`로 수동 권한을 설정해요. `revoke_at`은 시간대가 명시된 미래 시각만 허용하며 null·생략은 예약 철회가 없다는 뜻이에요. 같은 값의 반복 요청은 이력을 늘리지 않아요. 같은 경로의 `DELETE`는 수동 권한을 즉시 철회하고, 이미 없으면 현재 상태를 반환해요. 두 변경 응답은 위 권한 상세 형식이에요. 없는 대상은 404, 잘못된 값은 422예요.
+`PUT /api/admin/users/{user_id}/manual-entitlement/`는 `{request_id: UUID, resource_kind: slots|turns, quantity: positive integer}`를 받아요. 같은 ID·내용은 중복 지급하지 않고 다른 내용은 409예요. `DELETE /api/admin/users/{user_id}/manual-entitlement/{grant_id}/`는 해당 수동 지급의 미사용분을 회수해요. `/manual-entitlement/history/`는 지급 수량·종류·생성·회수 시각을 페이지 조회해요. 회수로 기존 대화를 잠그거나 확정 턴을 돌려주지 않아요.
 
-관리자 웹 `/admin`은 공유 코드만으로 로그인해요. 코드는 서버의 `ADMIN_ACCESS_CODE` 환경변수에만 두고 DB에 저장하지 않아요. 코드 변경 후 API를 재시작하면 기존 확인 세션은 조회되지 않아요. 입장 코드에는 길이 제한이 없으며 빈 환경변수 값은 미설정으로 처리하고 앞뒤 공백은 허용하지 않아요. `POST /api/admin/access/verify/`는 인증 없이 `{ "code": "..." }`를 받고 확인 세션 쿠키와 `csrf_token`을 발급해요. 코드 미설정은 503, 오류는 403, 요청 IP의 5회 오류 잠금은 429예요. `GET /api/admin/access/status/`는 `{verified, csrf_token, expires_at}`을, `POST /api/admin/access/logout/`은 세션 종료를 처리해요. 기존 관리자 사용자 API 6개는 모두 유효한 관리자 세션 쿠키가 필요하고, PUT·DELETE는 `X-CSRF-Token`을 요구해요. 세션은 30분 비활동 또는 8시간 후 만료해요. `profiles.is_admin`은 사용자 앱의 무제한 구독 기능에만 적용해요.
+관리자 웹 `/admin`은 공유 코드만으로 로그인해요. 코드는 서버의 `ADMIN_ACCESS_CODE` 환경변수에만 두고 DB에 저장하지 않아요. 코드 변경 후 API를 재시작하면 기존 확인 세션은 조회되지 않아요. 입장 코드에는 길이 제한이 없으며 빈 환경변수 값은 미설정으로 처리하고 앞뒤 공백은 허용하지 않아요. `POST /api/admin/access/verify/`는 인증 없이 `{ "code": "..." }`를 받고 확인 세션 쿠키와 `csrf_token`을 발급해요. 코드 미설정은 503, 오류는 403, 요청 IP의 5회 오류 잠금은 429예요. `GET /api/admin/access/status/`는 `{verified, csrf_token, expires_at}`을, `POST /api/admin/access/logout/`은 세션 종료를 처리해요. 기존 관리자 사용자 API 6개는 모두 유효한 관리자 세션 쿠키가 필요하고, PUT·DELETE는 `X-CSRF-Token`을 요구해요. 세션은 30분 비활동 또는 8시간 후 만료해요. `profiles.is_admin`은 사용자 앱의 무제한 대화 이용에만 적용해요.
 
-기존 `/api/auth/me`와 `/api/auth/bootstrap`의 프로필에는 `is_admin`을 추가해요. `GET /api/billing/entitlement/`는 기존 필드와 함께 `is_admin`, `source`, `unlimited`를 반환해요. 관리자에게는 `plan=plus`, `source=admin`, `slot_limit=null`, `turn_limit=null`을 반환해요.
 
 ## 7. Grammar 모듈
 

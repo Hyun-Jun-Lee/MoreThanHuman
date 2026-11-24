@@ -43,12 +43,9 @@ function formatTime(value) {
 }
 
 function planName(plan) {
-  return { free: 'Free', advance: 'Advance', plus: 'Plus' }[plan] ?? '—';
+  return { member: '회원', guest: '게스트', admin: '관리자' }[plan] ?? '—';
 }
 
-function sourceName(source) {
-  return { free: '무료', apple: 'Apple', manual: '수동 부여', admin: '관리자' }[source] ?? source;
-}
 
 async function initializeSession() {
   const state = await request('/api/admin/access/status/');
@@ -112,7 +109,7 @@ if (page === 'dashboard') {
   let detailRequestId = 0;
   let historyRequestId = 0;
   let mutationInFlight = false;
-  let manualAvailable = false;
+  let pendingGrant = null;
   const limit = 20;
 
   function addText(parent, tag, value, className) {
@@ -156,7 +153,7 @@ if (page === 'dashboard') {
     list.replaceChildren();
     addText(list, 'p', '사용자를 불러오는 중이에요.', 'empty');
     const params = new URLSearchParams({ limit: String(limit), offset: String(requestedOffset) });
-    for (const key of ['q', 'plan', 'source', 'is_admin']) {
+    for (const key of ['q', 'is_admin']) {
       const value = filters.elements[key].value.trim();
       if (value) params.set(key, value);
     }
@@ -177,17 +174,12 @@ if (page === 'dashboard') {
   }
 
   function renderEntitlement(data) {
-    manualAvailable = Boolean(data.manual);
-    document.getElementById('effective-plan').textContent = planName(data.effective.plan);
-    document.getElementById('effective-detail').textContent = data.effective.source === 'admin'
-      ? '관리자 · 구독 기능 무제한' : `${sourceName(data.effective.source)} · ${formatTime(data.effective.expires_at)}`;
-    document.getElementById('apple-plan').textContent = planName(data.apple.plan);
-    document.getElementById('apple-detail').textContent = data.apple.plan === 'free'
-      ? '유효한 구독 없음' : `${data.apple.status} · ${formatTime(data.apple.expires_at)}`;
-    document.getElementById('manual-plan').textContent = data.manual ? planName(data.manual.plan) : '없음';
-    document.getElementById('manual-detail').textContent = data.manual
-      ? `예약 철회: ${formatTime(data.manual.revoke_at)}` : '현재 수동 부여 없음';
-    document.getElementById('revoke-button').disabled = mutationInFlight || !manualAvailable;
+    document.getElementById('effective-plan').textContent = data.effective.unlimited ? '무제한' : '대화 ' + data.effective.slot_limit + '개';
+    document.getElementById('effective-detail').textContent = 'AI 답변 ' + (data.effective.remaining_turns ?? '∞') + '회';
+    document.getElementById('apple-plan').textContent = data.purchases.length + '건';
+    document.getElementById('apple-detail').textContent = data.purchases.map(p => p.transaction_id + ' · ' + p.product_id + ' · ' + p.status + ' · 지원 환불 검토 ' + (p.support_refund_eligible ? '가능' : '불가')).join('\n');
+    document.getElementById('manual-plan').textContent = '체험 ' + (data.effective.trial_turns ?? 0) + '회';
+    document.getElementById('manual-detail').textContent = '구매·수동 잔액 ' + (data.effective.paid_turns ?? 0) + '회';
   }
 
   function renderHistory(data) {
@@ -198,11 +190,25 @@ if (page === 'dashboard') {
       const row = document.createElement('div');
       row.className = 'history-row';
       const main = document.createElement('div');
-      addText(main, 'strong', planName(grant.plan));
+      addText(main, 'strong', (grant.resource_kind === 'slots' ? '추가 대화 ' : 'AI 답변 ') + grant.quantity);
       addText(main, 'small', `부여 ${formatTime(grant.created_at)}`);
       row.appendChild(main);
-      addText(row, 'span', grant.revoked_at ? `철회 ${formatTime(grant.revoked_at)}` :
-        grant.revoke_at ? `예약 ${formatTime(grant.revoke_at)}` : '기한 없음');
+      addText(row, 'span', grant.revoked_at ? '회수 ' + formatTime(grant.revoked_at) : '지급됨');
+      if (!grant.revoked_at) {
+        const button = addText(row, 'button', '미사용분 회수');
+        button.type = 'button';
+        button.disabled = mutationInFlight;
+        button.addEventListener('click', async () => {
+          if (mutationInFlight || !window.confirm('이 지급의 미사용분을 회수할까요?')) return;
+          const target = selectedId;
+          setMutationBusy(true);
+          try {
+            await write('/api/admin/users/' + target + '/manual-entitlement/' + grant.id + '/', 'DELETE');
+            await Promise.all([loadDetail(), loadUsers()]);
+          } catch (cause) { showError(detailError, cause); }
+          finally { setMutationBusy(false); }
+        });
+      }
       history.appendChild(row);
     }
     document.getElementById('history-page').textContent = data.total_count
@@ -265,39 +271,24 @@ if (page === 'dashboard') {
   function setMutationBusy(busy) {
     mutationInFlight = busy;
     grantForm.querySelector('button[type=submit]').disabled = busy;
-    document.getElementById('revoke-button').disabled = busy || !manualAvailable;
+
   }
 
   grantForm.addEventListener('submit', async (event) => {
     event.preventDefault();
     if (!selectedId || mutationInFlight) return;
     clearError(detailError);
-    const localTime = grantForm.elements.revoke_at.value;
-    const revokeAt = localTime ? new Date(localTime) : null;
-    if (revokeAt && (Number.isNaN(revokeAt.getTime()) || revokeAt <= new Date())) {
-      showError(detailError, new Error('예약 철회 시각은 미래여야 해요.'));
-      return;
-    }
+    const quantity = Number(grantForm.elements.quantity.value);
+    const resource = grantForm.elements.resource_kind.value;
+    const key = selectedId + ':' + resource + ':' + quantity;
+    if (!pendingGrant || pendingGrant.key !== key) pendingGrant = {key, id: crypto.randomUUID()};
+    const requestId = pendingGrant.id;
     setMutationBusy(true);
     try {
       await write(`/api/admin/users/${selectedId}/manual-entitlement/`, 'PUT', {
-        plan: grantForm.elements.plan.value,
-        revoke_at: revokeAt ? revokeAt.toISOString() : null,
+        request_id: requestId, resource_kind: resource, quantity,
       });
-      await Promise.all([loadDetail(), loadUsers()]);
-    } catch (cause) {
-      showError(detailError, cause);
-    } finally {
-      setMutationBusy(false);
-    }
-  });
-
-  document.getElementById('revoke-button').addEventListener('click', async () => {
-    if (!selectedId || mutationInFlight || !window.confirm('이 사용자의 수동 구독 권한을 즉시 철회할까요?')) return;
-    setMutationBusy(true);
-    clearError(detailError);
-    try {
-      await write(`/api/admin/users/${selectedId}/manual-entitlement/`, 'DELETE');
+      pendingGrant = null;
       await Promise.all([loadDetail(), loadUsers()]);
     } catch (cause) {
       showError(detailError, cause);

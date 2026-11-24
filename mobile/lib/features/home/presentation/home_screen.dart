@@ -157,12 +157,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     setState(() => _checkingAccess = true);
     bool isLocked;
     bool guestLimit = false;
+    String purpose = 'buy_slots';
     try {
       if (!await ensureAIConsent(context, ref)) return false;
       final access = await ref.refresh(conversationAccessProvider.future);
       if (!mounted) return false;
       isLocked = access.isLocked;
       guestLimit = access.limitAction == 'login';
+      purpose = access.limitAction;
     } on Object {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -176,7 +178,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       if (mounted) setState(() => _checkingAccess = false);
     }
     if (isLocked) {
-      await showConversationAccessDialog(context, guestLimit: guestLimit);
+      await showConversationAccessDialog(
+        context,
+        guestLimit: guestLimit,
+        purpose: purpose,
+      );
       return false;
     }
     return true;
@@ -228,11 +234,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       return;
     }
     final failure = ref.read(startConversationControllerProvider).failureReason;
-    if (failure == StartConversationFailureReason.slotsFull) {
+    if (failure == StartConversationFailureReason.slotsFull ||
+        failure == StartConversationFailureReason.creditsFull) {
       final access = ref.read(conversationAccessProvider).value;
       await showConversationAccessDialog(
         context,
         guestLimit: access?.limitAction == 'login',
+        purpose: failure == StartConversationFailureReason.creditsFull
+            ? 'buy_turns'
+            : 'buy_slots',
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(

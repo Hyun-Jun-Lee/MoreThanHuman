@@ -40,6 +40,8 @@ class FailingAppleGateway:
 
 
 class EmptyDeletionQuery:
+    def filter(self, *_args):
+        return self
     def filter_by(self, **_kwargs):
         return self
 
@@ -122,6 +124,8 @@ async def test_deletion_check_runs_outside_event_loop(token_source):
     query_thread = None
 
     class BlockingQuery:
+        def filter(self, *_args):
+            return self
         def filter_by(self, **_kwargs):
             return self
 

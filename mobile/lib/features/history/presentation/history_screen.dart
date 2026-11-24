@@ -162,6 +162,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
       await showConversationAccessDialog(
         context,
         guestLimit: access?.limitAction == 'login',
+        purpose: access?.limitAction ?? 'buy_slots',
       );
       return;
     }

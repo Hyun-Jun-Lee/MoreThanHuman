@@ -165,58 +165,31 @@ def test_pending_turn_blocks_another_message_and_retry_reuses_user_message(strea
         assert db.query(StreamTurnModel).count() == 1
 
 
-def test_locked_conversation_creates_no_turn_or_message(stream_db):
+def test_member_legacy_locked_conversation_can_continue(stream_db):
     _engine, sessions, user_id, conversation_id = stream_db
     with sessions() as db:
         db.get(ConversationModel, conversation_id).slot_active = False
         db.commit()
+    _prepare(user_id, conversation_id)
+    with sessions() as db:
+        assert db.query(StreamTurnModel).count() == 1
 
-    with pytest.raises(ConversationLocked):
+
+def test_turn_limit_creates_no_turn_or_message(stream_db):
+    from shared.credit_ledger import CreditLedger, CreditsExhausted
+    _engine, sessions, user_id, conversation_id = stream_db
+    with sessions() as db:
+        ledger = CreditLedger(db)
+        profile = ledger.lock(user_id)
+        for index in range(10):
+            ledger.reserve(profile, str(index))
+            ledger.commit(user_id, str(index))
+        db.commit()
+    with pytest.raises(CreditsExhausted):
         _prepare(user_id, conversation_id)
     with sessions() as db:
         assert db.query(StreamTurnModel).count() == 0
         assert db.query(MessageModel).count() == 2
-
-
-def test_denied_turn_persists_subscription_slot_reconciliation(stream_db):
-    _engine, sessions, user_id, conversation_id = stream_db
-    newer_conversation_id = str(uuid4())
-    with sessions() as db:
-        db.get(ProfileModel, user_id).slot_limit_snapshot = 2
-        db.add(ConversationModel(
-            id=newer_conversation_id, user_id=user_id,
-            conversation_type=ConversationType.FREE_CHAT, slot_active=True,
-        ))
-        db.add(MessageModel(
-            id=str(uuid4()), conversation_id=newer_conversation_id,
-            role=MessageRole.USER, content="Newer turn",
-        ))
-        db.commit()
-
-    with pytest.raises(ConversationLocked):
-        _prepare(user_id, conversation_id)
-    with sessions() as db:
-        assert db.get(ProfileModel, user_id).slot_limit_snapshot == 1
-        assert db.get(ConversationModel, conversation_id).slot_active is False
-        assert db.get(ConversationModel, newer_conversation_id).slot_active is True
-        assert db.query(StreamTurnModel).count() == 0
-
-
-def test_turn_limit_creates_no_turn_or_message(stream_db):
-    _engine, sessions, user_id, conversation_id = stream_db
-    with sessions() as db:
-        db.add_all([
-            MessageModel(id=str(uuid4()), conversation_id=conversation_id,
-                         role=MessageRole.USER, content=f"turn {index}")
-            for index in range(14)
-        ])
-        db.commit()
-
-    with pytest.raises(ConversationTurnsFull):
-        _prepare(user_id, conversation_id)
-    with sessions() as db:
-        assert db.query(StreamTurnModel).count() == 0
-        assert db.query(MessageModel).filter_by(role=MessageRole.USER).count() == 15
 
 
 def test_other_users_conversation_creates_no_turn(stream_db):
@@ -253,3 +226,53 @@ def test_completed_request_key_cannot_create_another_message(stream_db):
     with sessions() as db:
         assert db.query(StreamTurnModel).count() == 1
         assert db.query(MessageModel).filter_by(role=MessageRole.USER).count() == 2
+
+def test_assistant_storage_failure_does_not_commit_credit(stream_db):
+    from shared.billing_models import TurnReservationModel
+    _engine, sessions, user_id, conversation_id = stream_db
+    prepared = _prepare(user_id, conversation_id)
+    def fail_assistant(_connection, _cursor, statement, _parameters, _context, _many):
+        if statement.lower().lstrip().startswith("insert into messages"):
+            raise RuntimeError("assistant storage failed")
+    event.listen(_engine, "before_cursor_execute", fail_assistant)
+    try:
+        with pytest.raises(RuntimeError, match="assistant storage failed"):
+            complete_generated_text(user_id, prepared, "A usable reply")
+    finally:
+        event.remove(_engine, "before_cursor_execute", fail_assistant)
+    with sessions() as db:
+        assert db.query(TurnReservationModel).one().status == "reserved"
+        assert db.query(MessageModel).filter_by(role=MessageRole.ASSISTANT).count() == 1
+        StreamTurnStore(db).fail(prepared.turn_id, "STORE_FAILED")
+        assert db.query(TurnReservationModel).one().status == "released"
+
+
+def test_empty_text_cannot_commit_and_pending_turn_blocks_delete(stream_db):
+    from domains.conversation.repository import ConversationRepository
+    from shared.billing_models import TurnReservationModel
+    _engine, sessions, user_id, conversation_id = stream_db
+    prepared = _prepare(user_id, conversation_id)
+    with pytest.raises(ValueError, match="Empty assistant"):
+        complete_generated_text(user_id, prepared, "  ")
+    with sessions() as db:
+        assert db.query(TurnReservationModel).one().status == "reserved"
+        with pytest.raises(StreamTurnConflict) as error:
+            ConversationRepository(db).delete_by_id(conversation_id, user_id)
+        assert error.value.code == "TURN_IN_PROGRESS"
+        db.rollback()
+        StreamTurnStore(db).fail(prepared.turn_id, "CANCELED")
+        ConversationRepository(db).delete_by_id(conversation_id, user_id)
+        assert db.get(ConversationModel, conversation_id) is None
+        assert db.query(TurnReservationModel).one().status == "released"
+
+
+def test_successful_text_credit_survives_conversation_deletion(stream_db):
+    from domains.conversation.repository import ConversationRepository
+    from shared.credit_ledger import CreditLedger
+    _engine, sessions, user_id, conversation_id = stream_db
+    prepared = _prepare(user_id, conversation_id)
+    complete_generated_text(user_id, prepared, "A usable reply")
+    with sessions() as db:
+        ConversationRepository(db).delete_by_id(conversation_id, user_id)
+        ledger = CreditLedger(db)
+        assert ledger.balance(ledger.lock(user_id))["remaining_turns"] == 9

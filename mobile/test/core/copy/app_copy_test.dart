@@ -4,27 +4,16 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('AppCopy', () {
-    test('shows plan slot benefits in the paywall locale', () {
+    test('explains account balances and permanent loss in both locales', () {
       final korean = AppCopy.forLocale(const Locale('ko'));
       final english = AppCopy.forLocale(const Locale('en'));
-
-      expect(korean.planBenefits(false), <String>['동시 대화 5개', '발화 무제한']);
-      expect(korean.planBenefits(true), <String>['동시 대화 10개', '발화 무제한']);
-      expect(english.planBenefits(false), <String>[
-        '5 active conversations',
-        'Unlimited turns',
-      ]);
-      expect(english.planBenefits(true), <String>[
-        '10 active conversations',
-        'Unlimited turns',
-      ]);
-      expect(korean.plusBusinessConversationBenefit, '비즈니스 대화 모드');
+      expect(korean.subscriptionTitle, '대화 상점');
+      expect(english.subscriptionDialogActionLabel, 'Open store');
+      expect(korean.deleteAccountSubscriptionWarning, contains('영구'));
       expect(
-        english.plusBusinessConversationBenefit,
-        'Business Conversation Mode',
+        english.deleteAccountSubscriptionWarning,
+        contains('cannot be restored'),
       );
-      expect(korean.subscriptionUpdating, '구독 정보를 업데이트하는 중이에요.');
-      expect(english.subscriptionUpdating, 'Updating your subscription.');
     });
 
     test('labels the profile language section', () {

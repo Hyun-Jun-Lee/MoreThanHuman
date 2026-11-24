@@ -7,9 +7,9 @@ class ConversationAccess {
     this.remainingSlots,
     this.lockedCount = 0,
     this.plan = 'free',
-    this.turnScope = 'conversation',
+    this.turnScope = 'account',
     this.remainingTurns,
-    this.limitAction = 'upgrade',
+    this.limitAction = 'buy_slots',
   });
 
   const ConversationAccess.disabled()
@@ -20,9 +20,9 @@ class ConversationAccess {
       remainingSlots = null,
       lockedCount = 0,
       plan = 'free',
-      turnScope = 'conversation',
+      turnScope = 'account',
       remainingTurns = null,
-      limitAction = 'upgrade';
+      limitAction = 'buy_slots';
 
   factory ConversationAccess.fromJson(Object? value) {
     if (value is! Map<String, dynamic> ||
@@ -39,9 +39,9 @@ class ConversationAccess {
       remainingSlots: value['remaining_slots'] as int?,
       lockedCount: value['locked_count'] as int? ?? 0,
       plan: value['plan'] as String? ?? 'free',
-      turnScope: value['turn_scope'] as String? ?? 'conversation',
+      turnScope: value['turn_scope'] as String? ?? 'account',
       remainingTurns: value['remaining_turns'] as int?,
-      limitAction: value['limit_action'] as String? ?? 'upgrade',
+      limitAction: value['limit_action'] as String? ?? 'buy_slots',
     );
   }
 
@@ -66,9 +66,9 @@ class ConversationTurnAccess {
     required this.canSend,
     this.turnLimit,
     this.locked = false,
-    this.turnScope = 'conversation',
+    this.turnScope = 'account',
     this.remainingTurns,
-    this.limitAction = 'upgrade',
+    this.limitAction = 'buy_turns',
   });
 
   const ConversationTurnAccess.disabled()
@@ -77,9 +77,9 @@ class ConversationTurnAccess {
       canSend = true,
       turnLimit = null,
       locked = false,
-      turnScope = 'conversation',
+      turnScope = 'account',
       remainingTurns = null,
-      limitAction = 'upgrade';
+      limitAction = 'buy_turns';
 
   factory ConversationTurnAccess.fromJson(Object? value) {
     if (value is! Map<String, dynamic> ||
@@ -96,9 +96,9 @@ class ConversationTurnAccess {
       canSend: value['can_send'] as bool,
       turnLimit: value['turn_limit'] as int?,
       locked: value['locked'] as bool? ?? false,
-      turnScope: value['turn_scope'] as String? ?? 'conversation',
+      turnScope: value['turn_scope'] as String? ?? 'account',
       remainingTurns: value['remaining_turns'] as int?,
-      limitAction: value['limit_action'] as String? ?? 'upgrade',
+      limitAction: value['limit_action'] as String? ?? 'buy_turns',
     );
   }
 

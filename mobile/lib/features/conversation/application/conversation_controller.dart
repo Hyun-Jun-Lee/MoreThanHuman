@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:collection';
+import 'package:curitalk/features/billing/billing_repository.dart';
 
 import 'package:curitalk/core/diagnostics/latency_trace.dart';
 import 'package:curitalk/features/conversation/application/conversation_audio_services.dart';
@@ -25,7 +26,8 @@ enum AssistantAudioStatus { unavailable }
 
 bool _isTurnLimitError(Object error) =>
     error is ApiException &&
-    (error.code == 'CONVERSATION_TURNS_FULL' ||
+    (error.code == 'CREDITS_EXHAUSTED' ||
+        error.code == 'CONVERSATION_TURNS_FULL' ||
         error.code == 'GUEST_TURNS_FULL');
 
 class ConversationState {
@@ -565,12 +567,16 @@ class ConversationController extends AsyncNotifier<ConversationState> {
         ),
       );
       ref.invalidate(conversationTurnAccessProvider(conversationId));
+      ref.invalidate(conversationAccessProvider);
+      ref.invalidate(billingEntitlementProvider);
     } on Object catch (error) {
       final bool limitReached = _isTurnLimitError(error);
       final bool locked =
           error is ApiException && error.code == 'CONVERSATION_LOCKED';
       if (limitReached || locked) {
         ref.invalidate(conversationTurnAccessProvider(conversationId));
+        ref.invalidate(conversationAccessProvider);
+        ref.invalidate(billingEntitlementProvider);
       }
       state = AsyncData<ConversationState>(
         previous.copyWith(
@@ -663,12 +669,16 @@ class ConversationController extends AsyncNotifier<ConversationState> {
         ),
       );
       ref.invalidate(conversationTurnAccessProvider(conversationId));
+      ref.invalidate(conversationAccessProvider);
+      ref.invalidate(billingEntitlementProvider);
     } on Object catch (error) {
       final bool limitReached = _isTurnLimitError(error);
       final bool locked =
           error is ApiException && error.code == 'CONVERSATION_LOCKED';
       if (limitReached || locked) {
         ref.invalidate(conversationTurnAccessProvider(conversationId));
+        ref.invalidate(conversationAccessProvider);
+        ref.invalidate(billingEntitlementProvider);
       }
       state = AsyncData<ConversationState>(
         previous.copyWith(
@@ -932,6 +942,8 @@ class ConversationController extends AsyncNotifier<ConversationState> {
               _finishAssistantReveal();
             }
             ref.invalidate(conversationTurnAccessProvider(conversationId));
+            ref.invalidate(conversationAccessProvider);
+            ref.invalidate(billingEntitlementProvider);
             break;
           case 'turn_error':
             terminal = true;
@@ -981,6 +993,8 @@ class ConversationController extends AsyncNotifier<ConversationState> {
           ),
         );
         ref.invalidate(conversationTurnAccessProvider(conversationId));
+        ref.invalidate(conversationAccessProvider);
+        ref.invalidate(billingEntitlementProvider);
         return;
       }
       if (sendError is ApiException &&

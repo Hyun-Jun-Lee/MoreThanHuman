@@ -86,6 +86,8 @@ class ConversationAccess(BaseModel):
     plan: str = "free"
     turn_scope: str = "conversation"
     remaining_turns: int | None = None
+    trial_turns: int = 0
+    paid_turns: int = 0
     limit_action: str = "upgrade"
 
 

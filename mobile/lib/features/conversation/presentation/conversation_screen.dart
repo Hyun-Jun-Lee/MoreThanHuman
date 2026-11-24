@@ -109,7 +109,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
               canLoadOlder: false,
               turnLimitReached: false,
               locked: false,
-              limitAction: 'upgrade',
+              limitAction: 'buy_turns',
               suggestedAudioFailed: false,
             ),
       error: (_, _) => AppAsyncStateView.error(
@@ -129,7 +129,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
         canLoadOlder: !_voiceInput.isRecordingActive && !_voiceInput.isBusy,
         turnLimitReached: turnLimitReached,
         locked: access?.locked == true,
-        limitAction: access?.limitAction ?? 'upgrade',
+        limitAction: access?.limitAction ?? 'buy_turns',
         suggestedAudioFailed: suggestedAudioFailed,
       ),
     );
@@ -630,7 +630,8 @@ class _ConversationMessageListState
                 )
               else if (Platform.isIOS)
                 TextButton(
-                  onPressed: () => context.push(AppRoute.paywall),
+                  onPressed: () =>
+                      context.push('${AppRoute.paywall}?purpose=buy_turns'),
                   child: Text(copy.subscriptionTitle),
                 ),
             ],

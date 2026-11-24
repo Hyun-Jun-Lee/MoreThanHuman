@@ -1,4 +1,4 @@
-"""tomatalk 구독 상태와 Apple 서버 알림 API."""
+"""tomatalk 구매 상태와 Apple 서버 알림 API."""
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -11,6 +11,7 @@ from domains.billing.apple import AppleConfigurationError, AppleGateway, AppleUn
 from domains.billing.service import BillingService, PurchaseOwnedByAnotherAccount
 from shared.logging_config import log_exception
 from shared.types import SuccessResponse
+from shared.billing_tombstones import keyring, TombstoneKeysMissing
 
 router = APIRouter(prefix="/api/billing", tags=["billing"])
 
@@ -25,8 +26,9 @@ class NotificationRequest(BaseModel):
 
 def get_billing_service(db: Session = Depends(get_db)) -> BillingService:
     try:
+        keyring()
         return BillingService(db, AppleGateway(get_settings()))
-    except AppleConfigurationError as exc:
+    except (AppleConfigurationError, TombstoneKeysMissing) as exc:
         log_exception(exc, status_code=503, error_code="APPLE_NOT_CONFIGURED")
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Apple 결제가 아직 준비되지 않았어요")
 
@@ -34,7 +36,9 @@ def get_billing_service(db: Session = Depends(get_db)) -> BillingService:
 @router.get("/entitlement/")
 def get_entitlement(current_user: AuthenticatedUser = Depends(get_current_user), db: Session = Depends(get_db)):
     from shared.subscription import entitlement_for_user
-    return SuccessResponse(data=entitlement_for_user(db, current_user.id))
+    result = entitlement_for_user(db, current_user.id)
+    db.commit()
+    return SuccessResponse(data=result)
 
 
 @router.post("/apple/verify/")
@@ -53,23 +57,22 @@ def verify_purchase(
         raise HTTPException(status_code=400, detail={"code": "INVALID_APPLE_PURCHASE", "message": str(exc)})
     except AppleUnavailableError as exc:
         log_exception(exc, status_code=503, error_code="APPLE_UNAVAILABLE")
-        raise HTTPException(status_code=503, detail={"code": "APPLE_UNAVAILABLE", "message": "Apple 구독 확인을 다시 시도해 주세요"})
+        raise HTTPException(status_code=503, detail={"code": "APPLE_UNAVAILABLE", "message": "Apple 구매 확인을 다시 시도해 주세요"})
 
 
-@router.post("/apple/restore/")
-def restore_purchase(
+@router.post("/apple/terminalize/")
+def terminalize_purchase(
     payload: VerifyPurchaseRequest,
-    current_user: ProfileModel = Depends(get_current_member_profile),
     service: BillingService = Depends(get_billing_service),
 ):
     try:
-        return SuccessResponse(data=service.restore_purchase(current_user.id, payload.signed_transaction))
+        return SuccessResponse(data=service.terminalize_purchase(payload.signed_transaction))
     except PurchaseOwnedByAnotherAccount as exc:
         raise HTTPException(status_code=409, detail={"code": "PURCHASE_ACCOUNT_CONFLICT", "message": str(exc)}) from exc
     except AppleVerificationError as exc:
         raise HTTPException(status_code=400, detail={"code": "INVALID_APPLE_PURCHASE", "message": str(exc)}) from exc
     except AppleUnavailableError as exc:
-        raise HTTPException(status_code=503, detail={"code": "APPLE_UNAVAILABLE", "message": "Apple 구독 확인을 다시 시도해 주세요"}) from exc
+        raise HTTPException(status_code=503, detail={"code": "APPLE_UNAVAILABLE", "message": "Apple 구매 확인을 다시 시도해 주세요"}) from exc
 
 
 @router.post("/apple/notifications/")

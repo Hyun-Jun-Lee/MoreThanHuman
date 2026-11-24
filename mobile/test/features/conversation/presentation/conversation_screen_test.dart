@@ -308,7 +308,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Hello!'), findsOneWidget);
-    expect(find.textContaining('15 free turns'), findsOneWidget);
+    expect(find.textContaining('No AI reply credits'), findsOneWidget);
     expect(tester.widget<TextField>(find.byType(TextField)).enabled, isFalse);
     expect(repository.sentTextTurns, isEmpty);
   });

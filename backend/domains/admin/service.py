@@ -1,36 +1,17 @@
-from datetime import datetime, timezone
-from uuid import uuid4
-
+"""관리자의 계정 조회와 추가 슬롯·턴 지급 및 미사용분 회수."""
+from datetime import datetime
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from config import get_settings
 from domains.auth.models import ProfileModel
-from domains.conversation.repository import ConversationRepository
-from shared.subscription import (
-    AppleSubscriptionModel,
-    ManualEntitlementGrantModel,
-    active_manual_grant,
-    apple_entitlement_from_records,
-    apple_entitlement_for_user,
-    effective_entitlement,
-    entitlement_for_user,
-)
+from shared.billing_models import CreditLotModel, ManualResourceGrantModel, PurchaseDeliveryModel, TurnReservationModel
+from shared.credit_ledger import CreditLedger
+from shared.subscription import entitlement_for_user
 
 
-def grant_data(grant: ManualEntitlementGrantModel) -> dict:
-    def utc(value: datetime | None) -> datetime | None:
-        return value.replace(tzinfo=timezone.utc) if value is not None else None
-
-    return {
-        "id": grant.id,
-        "plan": grant.plan,
-        "revoke_at": utc(grant.revoke_at),
-        "revoked_at": utc(grant.revoked_at),
-        "granted_by": grant.granted_by,
-        "revoked_by": grant.revoked_by,
-        "created_at": utc(grant.created_at),
-    }
+def grant_data(grant: ManualResourceGrantModel) -> dict:
+    return {key: getattr(grant, key) for key in
+            ('id', 'resource_kind', 'quantity', 'created_at', 'revoked_at')}
 
 
 class AdminEntitlementService:
@@ -39,145 +20,96 @@ class AdminEntitlementService:
 
     def user(self, user_id: str, *, lock: bool = False) -> ProfileModel | None:
         query = self.db.query(ProfileModel).filter_by(id=user_id)
-        return (query.with_for_update() if lock else query).one_or_none()
+        return (query.populate_existing().with_for_update() if lock else query).one_or_none()
 
     def user_data(self, profile: ProfileModel, *, effective: dict | None = None) -> dict:
-        return {
-            "id": profile.id,
-            "email": profile.email,
-            "name": profile.name,
-            "nickname": profile.nickname,
-            "is_active": profile.is_active,
-            "is_admin": profile.is_admin,
-            "created_at": profile.created_at,
-            "effective": effective or entitlement_for_user(self.db, profile.id, profile=profile),
-        }
+        return {'id': profile.id, 'email': profile.email, 'name': profile.name,
+                'nickname': profile.nickname, 'is_active': profile.is_active,
+                'is_admin': profile.is_admin, 'created_at': profile.created_at,
+                'effective': effective or entitlement_for_user(self.db, profile.id)}
 
-    def user_data_batch(self, profiles: list[ProfileModel]) -> list[dict]:
-        now = datetime.utcnow()
-        user_ids = [profile.id for profile in profiles if not profile.is_admin]
-        apple_by_user: dict[str, list[AppleSubscriptionModel]] = {}
-        manual_by_user: dict[str, ManualEntitlementGrantModel] = {}
-        if user_ids:
-            for record in self.db.query(AppleSubscriptionModel).filter(
-                AppleSubscriptionModel.user_id.in_(user_ids)
-            ).all():
-                apple_by_user.setdefault(record.user_id, []).append(record)
-            grants = (self.db.query(ManualEntitlementGrantModel)
-                      .filter(ManualEntitlementGrantModel.user_id.in_(user_ids),
-                              ManualEntitlementGrantModel.revoked_at.is_(None),
-                              (ManualEntitlementGrantModel.revoke_at.is_(None)
-                               | (ManualEntitlementGrantModel.revoke_at > now)))
-                      .order_by(ManualEntitlementGrantModel.created_at.desc(),
-                                ManualEntitlementGrantModel.id.desc()).all())
-            for grant in grants:
-                manual_by_user.setdefault(grant.user_id, grant)
-        results = []
-        for profile in profiles:
-            apple = (None if profile.is_admin else
-                     apple_entitlement_from_records(apple_by_user.get(profile.id, []), now=now))
-            effective = effective_entitlement(profile, apple, manual_by_user.get(profile.id))
-            results.append(self.user_data(profile, effective=effective))
-        return results
-
-    def list_users(
-        self, *, q: str | None, plan: str | None, source: str | None,
-        is_admin: bool | None, limit: int, offset: int,
-    ) -> dict:
+    def list_users(self, *, q: str | None, is_admin: bool | None, limit: int, offset: int) -> dict:
         query = self.db.query(ProfileModel)
         if q:
             term = q.strip()
-            query = query.filter(or_(ProfileModel.id == term,
-                                     ProfileModel.email.ilike(f"%{term}%"),
-                                     ProfileModel.nickname.ilike(f"%{term}%")))
+            query = query.filter(or_(ProfileModel.id == term, ProfileModel.email.ilike(f'%{term}%'),
+                                     ProfileModel.nickname.ilike(f'%{term}%')))
         if is_admin is not None:
-            query = query.filter(ProfileModel.is_admin == is_admin)
-        if plan is None and source is None:
-            total_count = query.count()
-            profiles = (query.order_by(ProfileModel.created_at.desc(), ProfileModel.id.desc())
-                        .offset(offset).limit(limit).all())
-            return {"results": self.user_data_batch(profiles),
-                    "total_count": total_count, "limit": limit, "offset": offset}
-        ordered = query.order_by(ProfileModel.created_at.desc(), ProfileModel.id.desc())
-        results = []
-        matched = 0
-        batch_offset = 0
-        while True:
-            profiles = ordered.offset(batch_offset).limit(200).all()
-            if not profiles:
-                break
-            for data in self.user_data_batch(profiles):
-                effective = data["effective"]
-                if plan is not None and effective["plan"] != plan:
-                    continue
-                if source is not None and effective["source"] != source:
-                    continue
-                if offset <= matched < offset + limit:
-                    results.append(data)
-                matched += 1
-            batch_offset += len(profiles)
-        return {"results": results, "total_count": matched,
-                "limit": limit, "offset": offset}
+            query = query.filter_by(is_admin=is_admin)
+        count = query.count()
+        profiles = query.order_by(ProfileModel.created_at.desc(), ProfileModel.id).offset(offset).limit(limit).all()
+        results = [self.user_data(profile) for profile in profiles]
+        self.db.commit()
+        return {'results': results, 'total_count': count, 'limit': limit, 'offset': offset}
 
     def entitlement_detail(self, profile: ProfileModel) -> dict:
-        now = datetime.utcnow()
-        grant = active_manual_grant(self.db, profile.id, now=now)
-        apple = apple_entitlement_for_user(self.db, profile.id, now=now)
-        return {
-            "user_id": profile.id,
-            "is_admin": profile.is_admin,
-            "apple": apple,
-            "manual": grant_data(grant) if grant else None,
-            "effective": effective_entitlement(profile, apple, grant),
-        }
+        effective = entitlement_for_user(self.db, profile.id)
+        lots = self.db.query(CreditLotModel).filter_by(user_id=profile.id).all()
+        purchases = self.db.query(PurchaseDeliveryModel).filter_by(user_id=profile.id).all()
+        result = {'user_id': profile.id, 'is_admin': profile.is_admin, 'effective': effective,
+                  'credits': [{'source': lot.source, 'quantity': lot.quantity,
+                               'available': CreditLedger(self.db).available(lot),
+                               'revoked_at': lot.revoked_at} for lot in lots],
+                  'purchases': [{'transaction_id': purchase.transaction_id, 'created_at': purchase.created_at,
+                                 'product_id': purchase.product_id, 'status': purchase.status,
+                                 'resource_kind': purchase.resource_kind, 'quantity': purchase.quantity,
+                                 'first_used_at': purchase.first_used_at,
+                                 'support_refund_eligible': self._refund_eligible(purchase)}
+                                for purchase in purchases]}
+        self.db.commit()
+        return result
+
+    def _refund_eligible(self, purchase: PurchaseDeliveryModel) -> bool:
+        if purchase.status != 'granted':
+            return False
+        if purchase.resource_kind == 'slots':
+            return purchase.first_used_at is None
+        lot = self.db.query(CreditLotModel).filter_by(user_id=purchase.user_id, source='apple',
+                                                    source_key=purchase.transaction_id).one()
+        return not self.db.query(TurnReservationModel).filter_by(lot_id=lot.id, status='committed').first()
 
     def history(self, user_id: str, *, limit: int, offset: int) -> dict:
-        query = self.db.query(ManualEntitlementGrantModel).filter_by(user_id=user_id)
-        count = query.count()
-        grants = (query.order_by(ManualEntitlementGrantModel.created_at.desc(),
-                                 ManualEntitlementGrantModel.id.desc())
-                  .offset(offset).limit(limit).all())
-        return {"results": [grant_data(grant) for grant in grants],
-                "total_count": count, "limit": limit, "offset": offset}
+        query = self.db.query(ManualResourceGrantModel).filter_by(user_id=user_id)
+        return {'results': [grant_data(grant) for grant in query.order_by(
+            ManualResourceGrantModel.created_at.desc(), ManualResourceGrantModel.id).offset(offset).limit(limit)],
+            'total_count': query.count(), 'limit': limit, 'offset': offset}
 
-    def put_manual(self, user_id: str, actor_id: str | None, plan: str, revoke_at: datetime | None) -> dict | None:
+    def put_manual(self, user_id: str, request_id: str, resource_kind: str, quantity: int) -> dict | None:
         try:
             profile = self.user(user_id, lock=True)
             if profile is None:
                 return None
-            now = datetime.utcnow()
-            current = active_manual_grant(self.db, user_id, now=now)
-            if current is not None and current.plan == plan and current.revoke_at == revoke_at:
-                self.db.commit()
-                return self.entitlement_detail(profile)
-            if current is not None:
-                current.revoked_at = now
-                current.revoked_by = actor_id
-            self.db.add(ManualEntitlementGrantModel(
-                id=str(uuid4()), user_id=user_id, plan=plan, revoke_at=revoke_at,
-                granted_by=actor_id, created_at=now,
-            ))
-            self.db.flush()
-            if get_settings().conversation_access_enabled:
-                ConversationRepository(self.db)._reconcile_slots_locked(profile)
+            if profile.is_guest or profile.is_admin or resource_kind not in {'slots', 'turns'} or quantity <= 0:
+                raise ValueError('일반 회원에게 양수의 슬롯 또는 턴을 지급해 주세요')
+            grant = self.db.get(ManualResourceGrantModel, request_id)
+            if grant:
+                if (grant.user_id, grant.resource_kind, grant.quantity) != (user_id, resource_kind, quantity):
+                    raise ValueError('이미 다른 지급에 사용한 요청 ID예요')
+            else:
+                grant = ManualResourceGrantModel(id=request_id, user_id=user_id,
+                                                resource_kind=resource_kind, quantity=quantity)
+                self.db.add(grant)
+                self.db.flush()
+                if resource_kind == 'turns':
+                    CreditLedger(self.db).grant_turns(profile, quantity, source='manual', source_key=request_id)
             self.db.commit()
             return self.entitlement_detail(profile)
         except Exception:
             self.db.rollback()
             raise
 
-    def delete_manual(self, user_id: str, actor_id: str | None) -> dict | None:
+    def delete_manual(self, user_id: str, grant_id: str) -> dict | None:
         try:
             profile = self.user(user_id, lock=True)
             if profile is None:
                 return None
-            current = active_manual_grant(self.db, user_id, now=datetime.utcnow())
-            if current is not None:
-                current.revoked_at = datetime.utcnow()
-                current.revoked_by = actor_id
-                self.db.flush()
-                if get_settings().conversation_access_enabled:
-                    ConversationRepository(self.db)._reconcile_slots_locked(profile)
+            grant = self.db.query(ManualResourceGrantModel).filter_by(id=grant_id, user_id=user_id).one_or_none()
+            if grant is None:
+                return None
+            grant.revoked_at = grant.revoked_at or datetime.utcnow()
+            if grant.resource_kind == 'turns':
+                lot = self.db.query(CreditLotModel).filter_by(user_id=user_id, source='manual', source_key=grant_id).one()
+                CreditLedger(self.db).revoke_lot(profile, lot)
             self.db.commit()
             return self.entitlement_detail(profile)
         except Exception:

@@ -102,7 +102,8 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
       ),
       GoRoute(
         path: AppRoute.paywall,
-        builder: (context, state) => const PaywallScreen(),
+        builder: (context, state) =>
+            PaywallScreen(purpose: state.uri.queryParameters['purpose']),
       ),
       StatefulShellRoute.indexedStack(
         pageBuilder: (context, state, shell) =>

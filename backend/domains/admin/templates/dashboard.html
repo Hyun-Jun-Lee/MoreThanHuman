@@ -4,7 +4,7 @@
 {% block header_actions %}<button class="text-button" id="logout">로그아웃</button>{% endblock %}
 {% block content %}
 <div class="dashboard-heading">
-  <div><div class="eyebrow">ADMIN CONSOLE</div><h1>사용자 권한 관리</h1><p>계정과 적용 중인 구독 권한을 확인하고 수동 권한을 관리해요.</p></div>
+  <div><div class="eyebrow">ADMIN CONSOLE</div><h1>사용자 권한 관리</h1><p>계정의 대화 수와 AI 답변 잔액을 확인하고 지급·미사용분 회수를 처리해요.</p></div>
 </div>
 <div class="workspace">
   <section class="panel users-panel" aria-labelledby="users-title">
@@ -13,8 +13,6 @@
       <label class="search-label" for="user-query">이메일·닉네임·사용자 ID</label>
       <div class="search-row"><input id="user-query" name="q" type="search" placeholder="사용자 검색"><button class="button button-primary" type="submit">검색</button></div>
       <div class="filter-row">
-        <label>플랜<select name="plan"><option value="">전체</option><option value="free">Free</option><option value="advance">Advance</option><option value="plus">Plus</option></select></label>
-        <label>출처<select name="source"><option value="">전체</option><option value="free">Free</option><option value="apple">Apple</option><option value="manual">수동</option><option value="admin">관리자</option></select></label>
         <label>계정<select name="is_admin"><option value="">전체</option><option value="false">일반</option><option value="true">관리자</option></select></label>
       </div>
     </form>
@@ -31,14 +29,14 @@
       <p id="detail-id" class="mono muted"></p>
       <div class="entitlement-grid">
         <div class="entitlement-card effective"><span>현재 적용 권한</span><strong id="effective-plan">—</strong><small id="effective-detail"></small></div>
-        <div class="entitlement-card"><span>Apple 구독</span><strong id="apple-plan">—</strong><small id="apple-detail"></small></div>
-        <div class="entitlement-card"><span>수동 부여</span><strong id="manual-plan">—</strong><small id="manual-detail"></small></div>
+        <div class="entitlement-card"><span>Apple 구매</span><strong id="apple-plan">—</strong><small id="apple-detail"></small></div>
+        <div class="entitlement-card"><span>답변 잔액</span><strong id="manual-plan">—</strong><small id="manual-detail"></small></div>
       </div>
       <div class="section-heading"><h3>수동 권한 설정</h3><p>Apple 구매 기록은 변경되지 않아요.</p></div>
       <form id="grant-form" class="grant-form">
-        <label>부여 플랜<select name="plan" required><option value="advance">Advance</option><option value="plus">Plus</option></select></label>
-        <label>예약 철회 시각 <small>선택 사항 · 기기 현지 시각</small><input name="revoke_at" type="datetime-local"></label>
-        <div class="form-actions"><button class="button button-primary" type="submit">권한 저장</button><button class="button button-danger" id="revoke-button" type="button">수동 권한 철회</button></div>
+        <label>지급 종류<select name="resource_kind" required><option value="slots">추가 대화 수</option><option value="turns">AI 답변 횟수</option></select></label>
+        <label>수량<input name="quantity" type="number" min="1" step="1" value="1" required></label>
+        <div class="form-actions"><button class="button button-primary" type="submit">권한 저장</button></div>
       </form>
       <div class="section-heading"><h3>부여 이력</h3></div>
       <div id="history-list" class="history-list"></div>

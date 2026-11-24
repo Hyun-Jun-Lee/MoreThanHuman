@@ -22,8 +22,7 @@ from domains.conversation.repository import (
 )
 from domains.conversation.service import ConversationService
 from domains.conversation.stream_turns import StreamTurnStore
-from scripts import initialize_conversation_slots
-from shared.subscription import AppleSubscriptionModel
+from shared.credit_ledger import CreditLedger, CreditsExhausted
 
 
 def _setup():
@@ -72,105 +71,7 @@ def test_free_slot_reopens_after_deletion_and_completed_conversations_count():
     assert repository.access_summary(user_id, enabled=True)["used_slots"] == 1
 
 
-def test_expired_subscription_relocks_conversations_on_access_without_notification():
-    repository, user_id = _setup()
-    conversations = [repository.save(_conversation(user_id)) for _ in range(3)]
-    for conversation in conversations:
-        conversation.slot_active = True
-    repository.db.get(ProfileModel, user_id).slot_limit_snapshot = 5
-    subscription = AppleSubscriptionModel(
-        original_transaction_id="sandbox-expiry-test",
-        user_id=user_id,
-        last_transaction_id="sandbox-expiry-test",
-        product_id="Advance",
-        environment="Sandbox",
-        status="active",
-        expires_at=datetime.utcnow() + timedelta(minutes=5),
-    )
-    repository.db.add(subscription)
-    repository.db.commit()
 
-    assert repository.access_summary(user_id, enabled=True)["locked_count"] == 0
-    subscription.expires_at = datetime.utcnow() - timedelta(seconds=1)
-    repository.db.commit()
-
-    access = repository.access_summary(user_id, enabled=True)
-    assert access["plan"] == "free"
-    assert access["slot_limit"] == 1
-    assert access["locked_count"] == 2
-    assert repository.db.get(ProfileModel, user_id).slot_limit_snapshot == 1
-
-
-def test_legacy_allowance_and_permanent_grant_do_not_change_subscription_slots():
-    repository, user_id = _setup()
-    profile = repository.db.query(ProfileModel).filter_by(id=user_id).one()
-    profile.legacy_conversation_slots = 3
-    repository.db.commit()
-    conversations = [repository.save(_conversation(user_id)) for _ in range(3)]
-    assert repository.access_summary(user_id, enabled=True)["used_slots"] == 1
-    with pytest.raises(ConversationSlotsFull):
-        repository.create_with_access(_conversation(user_id), enabled=True)
-    repository.db.add(
-        ConversationSlotGrantModel(
-            id=str(uuid4()), user_id=user_id, purchase_key="verified-store-purchase"
-        )
-    )
-    repository.db.commit()
-    assert repository.access_summary(user_id, enabled=True)["slot_limit"] == 1
-    assert repository.access_summary(user_id, enabled=True)["locked_count"] == 2
-    selected = repository.db.query(ConversationModel).filter_by(user_id=user_id, slot_active=True).one()
-    locked = next(item for item in conversations if item.id != selected.id)
-    repository.delete_by_id(selected.id, user_id)
-    assert repository.access_summary(user_id, enabled=True)["can_create"] is True
-    assert repository.turn_access(locked.id, user_id, enabled=True)["locked"] is True
-    repository.create_with_access(_conversation(user_id), enabled=True)
-    assert repository.turn_access(locked.id, user_id, enabled=True)["locked"] is True
-
-
-def test_each_conversation_stops_at_fifteen_user_turns():
-    repository, user_id = _setup()
-    first = repository.create_with_access(_conversation(user_id), enabled=True)
-    second = repository.save(_conversation(user_id))
-    for index in range(15):
-        repository.save_user_turn(
-            MessageModel(
-                id=str(uuid4()),
-                conversation_id=first.id,
-                role=MessageRole.USER,
-                content=f"turn {index}",
-            ),
-            user_id,
-            enabled=True,
-        )
-    repository.save_message(
-        MessageModel(
-            id=str(uuid4()), conversation_id=first.id, role=MessageRole.ASSISTANT, content="Hello"
-        )
-    )
-    assert repository.turn_access(first.id, user_id, enabled=True) == {
-        "enabled": True,
-        "user_turns": 15,
-        "turn_limit": 15,
-        "can_send": False,
-        "locked": False,
-        "turn_scope": "conversation",
-        "remaining_turns": 0,
-        "limit_action": "upgrade",
-    }
-    with pytest.raises(ConversationTurnsFull):
-        repository.save_user_turn(
-            MessageModel(
-                id=str(uuid4()), conversation_id=first.id, role=MessageRole.USER, content="extra"
-            ),
-            user_id,
-            enabled=True,
-        )
-    assert repository.turn_access(second.id, user_id, enabled=True)["locked"] is True
-    with pytest.raises(ConversationLocked):
-        repository.save_user_turn(
-            MessageModel(id=str(uuid4()), conversation_id=second.id, role=MessageRole.USER, content="locked"),
-            user_id, enabled=True,
-        )
 
 
 def test_failed_turn_release_restores_allowance():
@@ -320,102 +221,8 @@ async def test_turn_preparation_failure_does_not_consume_free_turn(monkeypatch):
     assert repository.turn_access(conversation.id, user_id, enabled=True)["user_turns"] == 0
 
 
-def test_initialization_selects_one_existing_conversation(monkeypatch):
-    repository, user_id = _setup()
-    first = repository.save(_conversation(user_id))
-    repository.save(_conversation(user_id))
-    monkeypatch.setattr(
-        initialize_conversation_slots,
-        "SessionLocal",
-        sessionmaker(bind=repository.db.get_bind()),
-    )
-
-    assert initialize_conversation_slots.initialize() == 1
-    repository.db.expire_all()
-    profile = repository.db.query(ProfileModel).filter_by(id=user_id).one()
-    assert profile.slot_limit_snapshot == 1
-    assert repository.count_active_conversations(user_id) == 1
-
-    repository.delete_by_id(first.id, user_id)
-    assert initialize_conversation_slots.initialize() == 1
-    repository.db.expire_all()
-    assert repository.db.query(ProfileModel).filter_by(id=user_id).one().slot_limit_snapshot == 1
 
 
-def test_conversation_list_only_queries_rows_and_count(monkeypatch):
-    service_module = importlib.import_module("domains.conversation.service")
-    repository, user_id = _setup()
-    active = repository.save(_conversation(user_id))
-    inactive = repository.save(_conversation(user_id))
-    active.slot_active = True
-    repository.db.get(ProfileModel, user_id).slot_limit_snapshot = 1
-    repository.db.commit()
-    active_id, inactive_id = active.id, inactive.id
-    monkeypatch.setattr(service_module.settings, "conversation_access_enabled", True)
-    statements = []
-
-    def capture(_connection, _cursor, statement, _parameters, _context, _many):
-        statements.append(statement)
-
-    engine = repository.db.get_bind()
-    event.listen(engine, "before_cursor_execute", capture)
-    try:
-        page = ConversationService(repository).get_conversations(user_id)
-    finally:
-        event.remove(engine, "before_cursor_execute", capture)
-
-    assert page.pagination.total_count == 2
-    assert {str(item.id): item.locked for item in page.results} == {
-        active_id: False, inactive_id: True,
-    }
-    assert len(statements) == 2  # 목록·페이지 전체 개수
-    assert not any("stream_turns" in statement for statement in statements)
-
-
-def test_conversation_list_reads_persisted_lock_state_until_reconciled(monkeypatch):
-    service_module = importlib.import_module("domains.conversation.service")
-    repository, user_id = _setup()
-    first = repository.save(_conversation(user_id))
-    second = repository.save(_conversation(user_id))
-    first.slot_active = True
-    second.slot_active = True
-    repository.db.get(ProfileModel, user_id).slot_limit_snapshot = 5
-    repository.db.commit()
-    monkeypatch.setattr(service_module.settings, "conversation_access_enabled", True)
-
-    page = ConversationService(repository).get_conversations(user_id)
-
-    assert page.pagination.total_count == 2
-    assert [item.locked for item in page.results] == [False, False]
-    assert repository.db.get(ProfileModel, user_id).slot_limit_snapshot == 5
-    assert repository.count_active_conversations(user_id) == 2
-
-    repository.reconcile_slots_for_list(user_id)
-    updated_page = ConversationService(repository).get_conversations(user_id)
-    assert sorted(item.locked for item in updated_page.results) == [False, True]
-    assert repository.db.get(ProfileModel, user_id).slot_limit_snapshot == 1
-    assert repository.count_active_conversations(user_id) == 1
-
-
-def test_create_precheck_only_queries_slot_capacity_and_releases_lock():
-    repository, user_id = _setup()
-    repository.db.get(ProfileModel, user_id).slot_limit_snapshot = 1
-    repository.db.commit()
-    statements = []
-    engine = repository.db.get_bind()
-
-    def capture(_connection, _cursor, statement, _parameters, _context, _many):
-        statements.append(statement)
-
-    event.listen(engine, "before_cursor_execute", capture)
-    try:
-        repository.assert_can_create(user_id, enabled=True)
-    finally:
-        event.remove(engine, "before_cursor_execute", capture)
-
-    assert len(statements) == 5  # 프로필 잠금·Apple·수동 부여·활성 대화 수·진행 중 시작 수
-    assert sum("count" in statement.lower() for statement in statements) == 2
-    assert not repository.db.in_transaction()
 
 
 def test_create_precheck_counts_pending_roleplay_and_closes_transaction():
@@ -432,75 +239,34 @@ def test_create_precheck_counts_pending_roleplay_and_closes_transaction():
     assert not repository.db.in_transaction()
 
 
-def test_create_precheck_persists_slot_reconciliation_when_full():
-    repository, user_id = _setup()
-    first = repository.save(_conversation(user_id))
-    second = repository.save(_conversation(user_id))
-    first.slot_active = True
-    second.slot_active = True
-    repository.db.get(ProfileModel, user_id).slot_limit_snapshot = 5
-    repository.db.commit()
 
+
+def test_member_trial_is_account_wide_and_deletion_does_not_restore():
+    repository, user_id = _setup()
+    conversation = repository.create_with_access(_conversation(user_id), enabled=True)
+    for index in range(10):
+        message = MessageModel(id=str(uuid4()), conversation_id=conversation.id,
+                               role=MessageRole.USER, content=str(index))
+        repository.save_user_turn(message, user_id, enabled=True)
+        repository.save_assistant_turn(MessageModel(id=str(uuid4()), conversation_id=conversation.id,
+            role=MessageRole.ASSISTANT, content='reply'), user_id=user_id, user_message_id=message.id)
+    assert repository.turn_access(conversation.id, user_id, enabled=True)['remaining_turns'] == 0
+    repository.delete_by_id(conversation.id, user_id)
+    access = repository.access_summary(user_id, enabled=True)
+    assert access['remaining_slots'] == 1
+    assert access['remaining_turns'] == 0
+    with pytest.raises(CreditsExhausted):
+        repository.create_with_access(_conversation(user_id), enabled=True)
+
+
+def test_existing_over_capacity_member_conversations_remain_sendable():
+    repository, user_id = _setup()
+    conversations = [repository.save(_conversation(user_id)) for _ in range(3)]
+    access = repository.access_summary(user_id, enabled=True)
+    assert access['used_slots'] == 3
+    assert access['locked_count'] == 0
+    assert not access['can_create']
+    for conversation in conversations:
+        assert repository.turn_access(conversation.id, user_id, enabled=True)['can_send']
     with pytest.raises(ConversationSlotsFull):
         repository.assert_can_create(user_id, enabled=True)
-
-    assert not repository.db.in_transaction()
-    assert repository.db.get(ProfileModel, user_id).slot_limit_snapshot == 1
-    assert repository.count_active_conversations(user_id) == 1
-
-
-def test_api_returns_machine_readable_limit_conflicts(monkeypatch):
-    router_module = importlib.import_module("domains.conversation.router")
-    engine = create_engine(
-        "sqlite://",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(engine)
-    db = sessionmaker(bind=engine)()
-    user_id = str(uuid4())
-    profile = ProfileModel(id=user_id, email=f"{user_id}@example.com", name="Learner")
-    db.add(profile)
-    db.commit()
-    repository = ConversationRepository(db)
-    conversation = repository.save(_conversation(user_id))
-    for index in range(15):
-        repository.save_message(
-            MessageModel(
-                id=str(uuid4()),
-                conversation_id=conversation.id,
-                role=MessageRole.USER,
-                content=f"turn {index}",
-            )
-        )
-    monkeypatch.setattr(router_module.settings, "conversation_access_enabled", True)
-    app = FastAPI()
-    app.include_router(router_module.router)
-    app.dependency_overrides[router_module.get_current_user] = lambda: profile
-    app.dependency_overrides[router_module.get_current_profile] = lambda: profile
-    app.dependency_overrides[router_module.get_conversation_service] = (
-        lambda: ConversationService(repository)
-    )
-    app.dependency_overrides[router_module.get_voice_service] = lambda: object()
-    client = TestClient(app)
-
-    access = client.get("/api/conversations/access/")
-    assert access.status_code == 200
-    assert access.json()["data"]["can_create"] is False
-    assert access.json()["data"]["slot_limit"] == 1
-    assert "active_conversations" not in access.json()["data"]
-
-    assert client.post(f"/api/conversations/{conversation.id}/activate/", json={}).status_code == 404
-    assert client.post(f"/api/conversations/{conversation.id}/deactivate/", json={}).status_code == 404
-
-    start = client.post(
-        "/api/conversations/start/roleplay/", json={"role_character": "A barista"}
-    )
-    assert start.status_code == 409
-    assert start.json()["detail"]["code"] == "CONVERSATION_SLOTS_FULL"
-
-    turn = client.post(
-        f"/api/conversations/{conversation.id}/turn/", json={"text": "one more"}
-    )
-    assert turn.status_code == 409
-    assert turn.json()["detail"]["code"] == "CONVERSATION_TURNS_FULL"

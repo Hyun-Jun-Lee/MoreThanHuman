@@ -75,7 +75,7 @@ class Settings(BaseSettings):
     auto_create_tables: bool = False
 
     # Versioned privacy / AI processing notice
-    privacy_policy_version: str = "2026-11-23"
+    privacy_policy_version: str = "2026-11-25"
     ai_data_processing_version: str = "2026-11-23"
     privacy_policy_url: str = "https://www.curitalk.app/privacy"
     privacy_policy_url_en: str = "https://www.curitalk.app/en/privacy"
@@ -146,9 +146,12 @@ class Settings(BaseSettings):
     apple_iap_environment: Literal["sandbox", "production"] | None = None
     apple_iap_bundle_id: str | None = None
     apple_iap_app_id: int | None = None
-    apple_iap_issuer_id: str | None = None
-    apple_iap_key_id: str | None = None
-    apple_iap_private_key: str | None = None
+    # Accepted during deployment transition; consumable verification does not use these.
+    apple_iap_issuer_id: str | None = Field(default=None, repr=False)
+    apple_iap_key_id: str | None = Field(default=None, repr=False)
+    apple_iap_private_key: str | None = Field(default=None, repr=False)
+    billing_hmac_keys: dict[str, str] = Field(default_factory=dict, repr=False)
+    billing_hmac_current_key: str | None = None
 
     # Voice Settings
     stt_provider: str = "openrouter"

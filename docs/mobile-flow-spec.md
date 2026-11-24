@@ -1,7 +1,7 @@
 # 모바일 화면별 UX Flow / Wireframe
 
 > 기준일: 2026-06-11  
-> 최종 갱신: 2026-11-24
+> 최종 갱신: 2026-11-25
 > 대상: Flutter v1 모바일 앱  
 > 범위: 화면 구조, 사용자 흐름, API 연결 지점, low-fi wireframe
 
@@ -34,7 +34,7 @@
 | Free Chat Start | 첫 질문 선택 후 답변 | `POST /api/conversations/start/free-chat/` |
 | Roleplay Setup | 롤플레이 상황 선택 | 없음 |
 | Conversation | 채팅, 문법 피드백 polling | `POST /api/conversations/{id}/message/`, `GET /api/grammar/message/{message_id}/` |
-| Profile | 닉네임·구독·학습 언어·계정 관리 | `GET /api/auth/me`, `PUT /api/auth/me/nickname`, `PUT /api/auth/me/language-preferences` |
+| Profile | 닉네임·계정 잔액·학습 언어·계정 관리 | `GET /api/auth/me`, `PUT /api/auth/me/nickname`, `PUT /api/auth/me/language-preferences` |
 
 ## 3. 글로벌 UX Flow
 
@@ -566,7 +566,7 @@ Timeout:
 - WebSocket/SSE 기반 실시간 피드백
 - 결제/구독
 
-회원용 대화 권한 v2는 코드 기본값과 운영에서 비활성화이고 Sandbox 검증 뒤 활성화해요. 게스트의 활성 대화 1개·계정 누적 5회 제한은 이 rollout과 무관하게 항상 적용해요. 무료 회원은 활성 대화 1개와 대화별 사용자 발화 15회를 사용해요. Advance·Plus 구독자는 각각 활성 대화 5개·10개와 무제한 발화를 사용해요. 한도를 넘는 실제 기록은 잠긴 상태로 표시하며 열거나 발화할 수 없고 삭제할 수 있어요. 슬롯 한도가 늘어나면 잠긴 대화가 최근 사용 순서대로 활성화돼요. iOS 내 정보에서 paywall을 열어 App Store 현지 가격, 구매·복원, 약관·개인정보처리방침을 확인해요. Android 구매 UI는 숨겨요. 세부 계약은 [대화 권한 계약](../.agent/_contracts/CONVERSATION_ACCESS.md)을 따라요.
+회원용 대화 권한 v3 (2026-11-25): 일반 회원은 기본 보관 대화 1개·계정 최초 AI 답변 10회를 받아요. 상점은 잔액/보관 현황과 슬롯 +1/+3·답변 5/10/20 두 섹션으로 구성해요. 슬롯 부족은 `purpose=buy_slots`, 답변 부족은 `purpose=buy_turns`로 이동해 해당 섹션을 스크롤·포커스해요. 회원 기존 대화는 잠그지 않아요. StoreKit terminal 후에만 finish하고 구매·답변 완료·앱 복귀 때 잔액을 갱신해요. 계정 삭제는 구매 자원 영구 소멸·재가입 복원 및 계정 이전 불가를 확인받아요. 운영 검증은 [운영 가이드](OPERATIONS.md#대화-이용-권한-활성화)를 참고해요.
 
 ## 9. 구현 순서
 

@@ -42,14 +42,10 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      final displayPlan = '${plan[0].toUpperCase()}${plan.substring(1)}';
-      expect(find.text(displayPlan), findsOneWidget);
-      expect(
-        find.text(plan == 'free' ? '무료 플랜' : '$displayPlan 플랜'),
-        findsOneWidget,
-      );
-      expect(find.text('현재 이용 중인 플랜'), findsOneWidget);
-      expect(find.text('플랜 살펴보기'), findsOneWidget);
+      expect(find.text('10'), findsOneWidget);
+      expect(find.text('AI 답변 10회 · 대화 1개'), findsOneWidget);
+      expect(find.text('현재 계정 잔액'), findsOneWidget);
+      expect(find.text('잔액과 상품 보기'), findsOneWidget);
       expect(
         tester
             .getSize(find.byKey(const ValueKey('profile-plan-action')))
@@ -71,10 +67,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Free'), findsOneWidget);
-    expect(find.text('Free plan'), findsOneWidget);
-    expect(find.text('Current plan'), findsOneWidget);
-    expect(find.text('View plans'), findsOneWidget);
+    expect(find.text('10'), findsOneWidget);
+    expect(find.text('10 replies · 1 conversations'), findsOneWidget);
+    expect(find.text('Account balance'), findsOneWidget);
+    expect(find.text('Balance and products'), findsOneWidget);
     expect(find.text('Learn English in Korean'), findsOneWidget);
     expect(find.text('Learn Korean in English'), findsOneWidget);
     expect(find.text('SHOW MORE'), findsNothing);
@@ -94,7 +90,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Checking your subscription.'), findsOneWidget);
+    expect(find.text('Checking your balance.'), findsOneWidget);
     final loadingImage = tester.widget<Image>(
       find.byKey(const ValueKey('profile-subscription-loading')),
     );
@@ -103,15 +99,20 @@ void main() {
       'assets/images/loading/profile_subscription_tomato.gif',
     );
     expect(find.text('Please wait a moment.'), findsOneWidget);
-    expect(find.text('Free'), findsNothing);
-    expect(find.text('Free plan'), findsNothing);
+    expect(find.text('10'), findsNothing);
+    expect(find.text('10 replies · 1 conversations'), findsNothing);
 
     entitlement.complete(
-      const BillingEntitlement(plan: 'advance', status: 'active'),
+      const BillingEntitlement(
+        plan: 'member',
+        status: 'active',
+        remainingTurns: 15,
+        slotLimit: 2,
+      ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Advance plan'), findsOneWidget);
-    expect(find.text('Checking your subscription.'), findsNothing);
+    expect(find.text('15 replies · 2 conversations'), findsOneWidget);
+    expect(find.text('Checking your balance.'), findsNothing);
     expect(
       find.byKey(const ValueKey('profile-subscription-loading')),
       findsNothing,
@@ -139,14 +140,14 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Could not check your subscription.'), findsOneWidget);
+    expect(find.text('Could not check your balance.'), findsOneWidget);
     expect(find.text('Pull down to try again.'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('profile-subscription-loading')),
       findsNothing,
     );
-    expect(find.text('Free'), findsNothing);
-    expect(find.text('Free plan'), findsNothing);
+    expect(find.text('10'), findsNothing);
+    expect(find.text('10 replies · 1 conversations'), findsNothing);
 
     final container = ProviderScope.containerOf(
       tester.element(find.byType(ProfileScreen)),
@@ -155,66 +156,79 @@ void main() {
     container.invalidate(billingEntitlementProvider);
     await tester.pump();
     await tester.pump();
-    expect(find.text('Checking your subscription.'), findsOneWidget);
+    expect(find.text('Checking your balance.'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('profile-subscription-loading')),
       findsOneWidget,
     );
 
-    retry.complete(const BillingEntitlement(plan: 'free', status: 'free'));
-    await tester.pumpAndSettle();
-    expect(find.text('Free plan'), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('profile-subscription-loading')),
-      findsNothing,
-    );
-  });
-
-  testWidgets('profile hides an old Free plan during a failed recheck', (
-    WidgetTester tester,
-  ) async {
-    final nextEntitlement = Completer<BillingEntitlement>();
-    var reads = 0;
-    await tester.pumpWidget(
-      _homeApp(
-        profile: true,
-        platform: TargetPlatform.iOS,
-        billingGetter: () {
-          reads += 1;
-          return reads == 1
-              ? const BillingEntitlement(plan: 'free', status: 'free')
-              : nextEntitlement.future;
-        },
+    retry.complete(
+      const BillingEntitlement(
+        plan: 'member',
+        status: 'active',
+        remainingTurns: 10,
+        slotLimit: 1,
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Free plan'), findsOneWidget);
-
-    final container = ProviderScope.containerOf(
-      tester.element(find.byType(ProfileScreen)),
-      listen: false,
-    );
-    container.invalidate(billingEntitlementProvider);
-    await tester.pump();
-    await tester.pump();
-    expect(reads, 2);
-    expect(container.read(billingEntitlementProvider).isLoading, isTrue);
-    expect(find.text('Checking your subscription.'), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('profile-subscription-loading')),
-      findsOneWidget,
-    );
-    expect(find.text('Free plan'), findsNothing);
-
-    nextEntitlement.completeError(StateError('Subscription unavailable'));
-    await tester.pumpAndSettle();
-    expect(find.text('Could not check your subscription.'), findsOneWidget);
-    expect(find.text('Free plan'), findsNothing);
+    expect(find.text('10 replies · 1 conversations'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('profile-subscription-loading')),
       findsNothing,
     );
   });
+
+  testWidgets(
+    'profile hides an old 10 replies · 1 conversations during a failed recheck',
+    (WidgetTester tester) async {
+      final nextEntitlement = Completer<BillingEntitlement>();
+      var reads = 0;
+      await tester.pumpWidget(
+        _homeApp(
+          profile: true,
+          platform: TargetPlatform.iOS,
+          billingGetter: () {
+            reads += 1;
+            return reads == 1
+                ? const BillingEntitlement(
+                    plan: 'member',
+                    status: 'active',
+                    remainingTurns: 10,
+                    slotLimit: 1,
+                  )
+                : nextEntitlement.future;
+          },
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('10 replies · 1 conversations'), findsOneWidget);
+
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(ProfileScreen)),
+        listen: false,
+      );
+      container.invalidate(billingEntitlementProvider);
+      await tester.pump();
+      await tester.pump();
+      expect(reads, 2);
+      expect(container.read(billingEntitlementProvider).isLoading, isTrue);
+      expect(find.text('Checking your balance.'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('profile-subscription-loading')),
+        findsOneWidget,
+      );
+      expect(find.text('10 replies · 1 conversations'), findsNothing);
+
+      nextEntitlement.completeError(StateError('Subscription unavailable'));
+      await tester.pumpAndSettle();
+      expect(find.text('Could not check your balance.'), findsOneWidget);
+      expect(find.text('10 replies · 1 conversations'), findsNothing);
+      expect(
+        find.byKey(const ValueKey('profile-subscription-loading')),
+        findsNothing,
+      );
+    },
+  );
 
   testWidgets('pulling down profile reloads account and subscription', (
     WidgetTester tester,
@@ -232,13 +246,18 @@ void main() {
         authRepository: authRepository,
         billingGetter: () {
           entitlementReads += 1;
-          return BillingEntitlement(plan: plan, status: 'active');
+          return BillingEntitlement(
+            plan: 'member',
+            status: 'active',
+            remainingTurns: plan == 'free' ? 10 : 15,
+            slotLimit: plan == 'free' ? 1 : 2,
+          );
         },
       ),
     );
     await tester.pumpAndSettle();
     expect(find.text('Learner Kim'), findsOneWidget);
-    expect(find.text('Free plan'), findsOneWidget);
+    expect(find.text('10 replies · 1 conversations'), findsOneWidget);
 
     authRepository.nickname = 'Updated Learner';
     plan = 'advance';
@@ -249,7 +268,7 @@ void main() {
     expect(authRepository.bootstrapReads, 1);
     expect(entitlementReads, 2);
     expect(find.text('Updated Learner'), findsOneWidget);
-    expect(find.text('Advance plan'), findsOneWidget);
+    expect(find.text('15 replies · 2 conversations'), findsOneWidget);
   });
 
   testWidgets('home delegates navigation to the shared shell', (tester) async {
@@ -313,11 +332,11 @@ void main() {
       await tester.pumpAndSettle();
       expect(
         find.text(
-          'All active conversation slots are in use. Delete an active conversation or upgrade your plan.',
+          'Your saved conversations have reached the limit. Delete a conversation or buy extra slots. Deleting does not return used reply credits.',
         ),
         findsWidgets,
       );
-      expect(find.widgetWithText(FilledButton, 'SUBSCRIPT'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, 'Open store'), findsOneWidget);
       expect(find.text('Subscription'), findsNothing);
       expect(find.text('FreeChat'), findsNothing);
     },
@@ -675,7 +694,7 @@ void main() {
     expect(find.text('Start a conversation?'), findsNothing);
     expect(
       find.text(
-        'All active conversation slots are in use. Delete an active conversation or upgrade your plan.',
+        'Your saved conversations have reached the limit. Delete a conversation or buy extra slots. Deleting does not return used reply credits.',
       ),
       findsOneWidget,
     );
@@ -1360,7 +1379,12 @@ Widget _homeApp({
         billingEntitlementProvider.overrideWith(
           (ref) async =>
               billingGetter?.call() ??
-              BillingEntitlement(plan: billingPlan!, status: 'active'),
+              BillingEntitlement(
+                plan: 'member',
+                status: 'active',
+                remainingTurns: 10,
+                slotLimit: 1,
+              ),
         ),
       weeklyTopicsControllerProvider.overrideWith(
         () => _FixedWeeklyTopicsController(weeklyTopics),

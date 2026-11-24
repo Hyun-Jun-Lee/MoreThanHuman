@@ -1,272 +1,111 @@
-from datetime import datetime, timedelta
-from dataclasses import replace
-from uuid import uuid4
 from types import SimpleNamespace
+from uuid import uuid4
 
 import pytest
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session
 
 from database import Base
-from domains.auth.models import AccountDeletionModel, ProfileModel
-from domains.conversation.enums import ConversationType
-from domains.conversation.models import ConversationModel
-from domains.billing.apple import VerifiedSubscription
+from domains.auth.models import ProfileModel
+from domains.conversation import models
+from domains.grammar import models as grammar_models
 from domains.billing.service import BillingService, PurchaseOwnedByAnotherAccount
-from shared.subscription import AppleSubscriptionModel, ManualEntitlementGrantModel, entitlement_for_user
-
-
-class FakeGateway:
-    def __init__(self, purchase):
-        self.purchase = purchase
-        self.calls = 0
-        self.supplied_original = None
-        self.rebindings = []
-
-    def set_app_account_token(self, original, user_id):
-        self.rebindings.append((original, user_id))
-
-    def decode_transaction(self, _signed):
-        return SimpleNamespace(
-            originalTransactionId=self.supplied_original or self.purchase.original_transaction_id,
-            appAccountToken=self.purchase.app_account_token,
-        )
-
-    def current_subscription(self, _original):
-        self.calls += 1
-        return self.purchase
-
-    def decode_notification(self, _signed):
-        return SimpleNamespace(
-            notificationUUID="one-notification",
-            data=SimpleNamespace(signedTransactionInfo="signed-transaction"),
-        )
-
-
-def _db():
-    engine = create_engine("sqlite:///:memory:")
-    Base.metadata.create_all(engine)
-    db = sessionmaker(bind=engine)()
-    ids = [str(uuid4()), str(uuid4())]
-    db.add_all(ProfileModel(id=value, email=f"{value}@example.com", name="Learner") for value in ids)
-    db.commit()
-    return db, ids
-
-
-def _purchase(user_id, product="Advance", status="active", expiry=None):
-    return VerifiedSubscription(
-        original_transaction_id="100000001",
-        transaction_id="100000002",
-        app_account_token=user_id,
-        product_id=product,
-        environment="Sandbox",
-        status=status,
-        expires_at=expiry or datetime.utcnow() + timedelta(days=20),
-        grace_expires_at=None,
-    )
+from domains.billing.apple import PRODUCTS
+from shared.billing_models import CreditLotModel, PurchaseDeliveryModel, PurchaseNotificationModel
+from shared.billing_tombstones import remember, find_tombstone
+from shared.credit_ledger import CreditLedger
 
 
 @pytest.fixture
-def enabled_access(monkeypatch):
-    monkeypatch.setattr("domains.billing.service.get_settings", lambda: SimpleNamespace(
-        conversation_access_enabled=True,
-    ))
+def setup():
+    engine = create_engine('sqlite://')
+    Base.metadata.create_all(engine)
+    with Session(engine) as db:
+        user = ProfileModel(id=str(uuid4()), name='Member')
+        db.add(user)
+        db.commit()
+        tx = SimpleNamespace(transactionId='one', appAccountToken=user.id, quantity=1,
+            productId='com.morethanhuman.curitalk.turns.5', environment='Sandbox', revocationDate=None)
+        notification = SimpleNamespace(notificationUUID='notice', notificationType='REFUND',
+                                       data=SimpleNamespace(signedTransactionInfo='jws'))
+        gateway = SimpleNamespace(decode_transaction=lambda _: tx, decode_notification=lambda _: notification)
+        yield db, user, tx, notification, BillingService(db, gateway)
+    engine.dispose()
 
 
-def _add_conversations(db, user_id, count):
-    conversations = [ConversationModel(
-        id=str(uuid4()), user_id=user_id, conversation_type=ConversationType.FREE_CHAT,
-        slot_active=index == 0,
-    ) for index in range(count)]
-    db.add_all(conversations)
-    db.get(ProfileModel, user_id).slot_limit_snapshot = 1
+@pytest.mark.parametrize('sku,expected', list(PRODUCTS.items()))
+def test_repeat_and_duplicate_delivery(setup, sku, expected):
+    db, user, tx, _, service = setup
+    tx.productId = sku
+    first = service.verify_purchase(user.id, 'jws')
+    second = service.verify_purchase(user.id, 'jws')
+    assert first == second
+    tx.transactionId = 'two'
+    result = service.verify_purchase(user.id, 'jws')
+    resource, amount = expected
+    assert result['slot_limit'] == (1 + 2 * amount if resource == 'slots' else 1)
+    assert result['remaining_turns'] == (10 + 2 * amount if resource == 'turns' else 10)
+    assert db.query(PurchaseDeliveryModel).count() == 2
+
+
+def test_refund_before_delivery_and_duplicate_notification(setup):
+    db, user, tx, notice, service = setup
+    service.process_notification('notice')
+    service.process_notification('notice')
+    assert service.verify_purchase(user.id, 'jws')['remaining_turns'] == 10
+    assert db.query(PurchaseDeliveryModel).one().status == 'refund-before-delivery'
+    assert db.query(PurchaseNotificationModel).count() == 1
+
+
+def test_refund_revokes_only_remaining_credit(setup):
+    db, user, tx, _, service = setup
+    service.verify_purchase(user.id, 'jws')
+    ledger = CreditLedger(db)
+    ledger.ensure_trial(user).revoked_at = __import__('datetime').datetime.utcnow()
+    ledger.reserve(user, 'first')
+    ledger.commit(user.id, 'first')
     db.commit()
-    return conversations
+    service.process_notification('notice')
+    assert service.entitlement(user.id)['remaining_turns'] == 0
+    assert db.query(PurchaseDeliveryModel).one().status == 'revoked'
 
 
-def _active_count(db, user_id):
-    return db.query(ConversationModel).filter_by(user_id=user_id, slot_active=True).count()
-
-
-def test_purchase_grants_only_verified_current_plan_and_is_idempotent():
-    db, (owner, _) = _db()
-    gateway = FakeGateway(_purchase(owner))
-    service = BillingService(db, gateway)
-    assert service.verify_purchase(owner, "signed")["slot_limit"] == 5
-    gateway.purchase = _purchase(owner, product="Plus")
-    assert service.verify_purchase(owner, "signed")["slot_limit"] == 10
-    assert db.query(AppleSubscriptionModel).count() == 1
-    assert db.get(ProfileModel, owner).slot_limit_snapshot is None
-
-
-def test_purchase_reconciles_slots_on_upgrade_and_revocation(enabled_access):
-    db, (owner, _) = _db()
-    _add_conversations(db, owner, 3)
-    gateway = FakeGateway(_purchase(owner))
-    service = BillingService(db, gateway)
-
-    service.verify_purchase(owner, "signed")
-    assert _active_count(db, owner) == 3
-    assert db.get(ProfileModel, owner).slot_limit_snapshot == 5
-
-    gateway.purchase = replace(gateway.purchase, status="revoked")
-    service.verify_purchase(owner, "signed")
-    assert _active_count(db, owner) == 1
-    assert db.get(ProfileModel, owner).slot_limit_snapshot == 1
-
-
-def test_notification_reconciles_slots_using_effective_manual_plan(enabled_access):
-    db, (owner, _) = _db()
-    _add_conversations(db, owner, 6)
-    gateway = FakeGateway(_purchase(owner, product="Plus"))
-    service = BillingService(db, gateway)
-    service.verify_purchase(owner, "signed")
-    assert _active_count(db, owner) == 6
-
-    db.add(ManualEntitlementGrantModel(id=str(uuid4()), user_id=owner, plan="advance"))
-    db.commit()
-    gateway.purchase = replace(gateway.purchase, status="revoked")
-    service.process_notification("signed-notification")
-    assert _active_count(db, owner) == 5
-    assert db.get(ProfileModel, owner).slot_limit_snapshot == 5
-    assert db.query(AppleSubscriptionModel).one().status == "revoked"
-
-
-def test_purchase_and_slot_changes_roll_back_together(enabled_access, monkeypatch):
-    db, (owner, _) = _db()
-    _add_conversations(db, owner, 2)
-    service = BillingService(db, FakeGateway(_purchase(owner)))
-
-    def fail_reconciliation(_repository, _profile):
-        raise RuntimeError("slot reconciliation failed")
-
-    monkeypatch.setattr("domains.conversation.repository.ConversationRepository._reconcile_slots_locked",
-                        fail_reconciliation)
-    with pytest.raises(RuntimeError, match="slot reconciliation failed"):
-        service.verify_purchase(owner, "signed")
-    assert db.query(AppleSubscriptionModel).count() == 0
-    assert _active_count(db, owner) == 1
-    assert db.get(ProfileModel, owner).slot_limit_snapshot == 1
-
-
-def test_existing_purchase_cannot_be_restored_to_another_account():
-    db, (owner, other) = _db()
-    gateway = FakeGateway(_purchase(None))
-    service = BillingService(db, gateway)
-    service.verify_purchase(owner, "signed")
-    with pytest.raises(PurchaseOwnedByAnotherAccount):
-        service.verify_purchase(other, "signed")
-    assert db.query(AppleSubscriptionModel).one().user_id == owner
-
-
-def test_explicit_restore_rebinds_only_deleted_owner_entitlement():
-    db, (old_owner, new_owner) = _db()
-    gateway = FakeGateway(_purchase(old_owner))
-    service = BillingService(db, gateway)
-    service.verify_purchase(old_owner, "signed")
-    db.add(AccountDeletionModel(user_id=old_owner, receipt_hash="a" * 64,
-                                status="completed"))
-    db.query(AppleSubscriptionModel).filter_by(user_id=old_owner).delete()
-    db.query(ProfileModel).filter_by(id=old_owner).delete()
-    db.commit()
-    assert service.restore_purchase(new_owner, "signed")["plan"] == "advance"
-    assert db.query(AppleSubscriptionModel).one().user_id == new_owner
-    assert gateway.rebindings == [("100000001", new_owner)]
-    service.process_notification("signed-notification")
-    assert db.query(AppleSubscriptionModel).one().user_id == new_owner
-
-
-def test_restore_reconciles_new_owner_slots(enabled_access):
-    db, (old_owner, new_owner) = _db()
-    _add_conversations(db, new_owner, 2)
-    db.add(AccountDeletionModel(user_id=old_owner, receipt_hash="c" * 64,
-                                status="completed"))
-    db.commit()
-    service = BillingService(db, FakeGateway(_purchase(old_owner)))
-
-    assert service.restore_purchase(new_owner, "signed")["slot_limit"] == 5
-    assert _active_count(db, new_owner) == 2
-    assert db.get(ProfileModel, new_owner).slot_limit_snapshot == 5
-
-
-def test_restore_does_not_rebind_if_slot_reconciliation_fails(enabled_access, monkeypatch):
-    db, (old_owner, new_owner) = _db()
-    _add_conversations(db, new_owner, 2)
-    db.add(AccountDeletionModel(user_id=old_owner, receipt_hash="d" * 64,
-                                status="completed"))
-    db.commit()
-    gateway = FakeGateway(_purchase(old_owner))
-
-    def fail_reconciliation(_repository, _profile):
-        raise RuntimeError("slot reconciliation failed")
-
-    monkeypatch.setattr("domains.conversation.repository.ConversationRepository._reconcile_slots_locked",
-                        fail_reconciliation)
-    with pytest.raises(RuntimeError, match="slot reconciliation failed"):
-        BillingService(db, gateway).restore_purchase(new_owner, "signed")
-    assert db.query(AppleSubscriptionModel).count() == 0
-    assert gateway.rebindings == []
-    assert _active_count(db, new_owner) == 1
-
-
-def test_explicit_restore_rejects_active_owner_and_expired_purchase():
-    db, (owner, other) = _db()
-    gateway = FakeGateway(_purchase(owner))
-    service = BillingService(db, gateway)
-    with pytest.raises(PurchaseOwnedByAnotherAccount):
-        service.restore_purchase(other, "signed")
-    db.add(AccountDeletionModel(user_id=owner, receipt_hash="b" * 64,
-                                status="processing"))
+def test_account_conflict_keeps_original_owner(setup):
+    db, user, tx, _, service = setup
+    other = ProfileModel(id=str(uuid4()), name='Other')
+    db.add(other)
     db.commit()
     with pytest.raises(PurchaseOwnedByAnotherAccount):
-        service.restore_purchase(other, "signed")
-    gateway.purchase = _purchase(None, expiry=datetime.utcnow() - timedelta(days=1))
-    with pytest.raises(ValueError):
-        service.restore_purchase(other, "signed")
+        service.verify_purchase(other.id, 'jws')
+    assert db.query(PurchaseDeliveryModel).count() == 0
+    assert service.verify_purchase(user.id, 'jws')['remaining_turns'] == 15
 
 
-def test_expired_or_revoked_purchase_does_not_grant_slots():
-    db, (owner, _) = _db()
-    gateway = FakeGateway(_purchase(owner, expiry=datetime.utcnow() - timedelta(seconds=1)))
-    service = BillingService(db, gateway)
-    assert service.verify_purchase(owner, "signed")["plan"] == "free"
-    gateway.purchase = _purchase(owner, status="revoked")
-    service.verify_purchase(owner, "signed")
-    assert entitlement_for_user(db, owner)["turn_limit"] == 15
+def test_deleted_account_terminal_without_bearer_and_replay_after_rotation(setup, monkeypatch):
+    db, user, tx, _, service = setup
+    remember(db, 'account', user.id, 'deleted')
+    db.commit()
+    assert service.terminalize_purchase('jws') == {'delivery_status': 'deleted', 'terminal': True}
+    assert service.verify_purchase(str(uuid4()), 'jws')['terminal']
+    assert db.query(PurchaseDeliveryModel).count() == 0
+    from config import get_settings
+    settings = get_settings()
+    monkeypatch.setattr(settings, 'billing_hmac_keys', {**settings.billing_hmac_keys, 'next': 'n' * 32})
+    monkeypatch.setattr(settings, 'billing_hmac_current_key', 'next')
+    assert find_tombstone(db, 'transaction', tx.transactionId)
+    assert service.terminalize_purchase('jws')['terminal']
 
 
-def test_notification_requery_is_idempotent_and_keeps_account_binding():
-    db, (owner, _) = _db()
-    gateway = FakeGateway(_purchase(owner))
-    service = BillingService(db, gateway)
-    service.process_notification("signed-notification")
-    service.process_notification("signed-notification")
-    assert gateway.calls == 1
-    assert db.query(AppleSubscriptionModel).one().user_id == owner
-
-
-def test_group_plan_change_replaces_old_original_transaction_without_double_entitlement(enabled_access):
-    db, (owner, other) = _db()
-    _add_conversations(db, owner, 6)
-    gateway = FakeGateway(_purchase(owner, product="Plus"))
-    service = BillingService(db, gateway)
-    assert service.verify_purchase(owner, "signed")["slot_limit"] == 10
-    assert _active_count(db, owner) == 6
-    gateway.supplied_original = "100000001"
-    gateway.purchase = VerifiedSubscription(
-        original_transaction_id="100000003",
-        transaction_id="100000004",
-        app_account_token=owner,
-        product_id="Advance",
-        environment="Sandbox",
-        status="active",
-        expires_at=datetime.utcnow() + timedelta(days=20),
-        grace_expires_at=None,
-    )
-    assert service.verify_purchase(owner, "signed")["slot_limit"] == 5
-    assert _active_count(db, owner) == 5
-    assert db.get(ProfileModel, owner).slot_limit_snapshot == 5
-    assert db.query(AppleSubscriptionModel).filter_by(original_transaction_id="100000001").one().status == "expired"
-    gateway.purchase = replace(gateway.purchase, app_account_token=None)
+def test_active_account_cannot_terminalize(setup):
+    _, _, _, _, service = setup
     with pytest.raises(PurchaseOwnedByAnotherAccount):
-        service.verify_purchase(other, "signed")
+        service.terminalize_purchase('jws')
+
+
+def test_consumption_request_is_audit_only(setup):
+    db, user, _, notice, service = setup
+    notice.notificationType = 'CONSUMPTION_REQUEST'
+    service.process_notification('notice')
+    assert db.query(PurchaseDeliveryModel).count() == 0
+    assert db.query(CreditLotModel).count() == 0
+    assert db.query(PurchaseNotificationModel).one().notification_type == 'CONSUMPTION_REQUEST'

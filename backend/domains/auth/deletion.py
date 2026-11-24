@@ -22,7 +22,8 @@ from domains.conversation.models import (
     SuggestedStartModel,
 )
 from domains.language_snacks.models import LanguageSnackBasketResetModel
-from shared.subscription import AppleSubscriptionModel, ManualEntitlementGrantModel
+from shared.billing_models import CreditLotModel, ManualResourceGrantModel, PurchaseDeliveryModel, TurnReservationModel
+from shared.billing_tombstones import find_tombstone, keyring, remember
 
 
 def _receipt_hash(receipt: str) -> str:
@@ -46,6 +47,8 @@ class AccountDeletionService:
         self.http_client = http_client
 
     def start(self, user_id: str) -> str:
+        keyring()
+        self.db.query(ProfileModel).filter_by(id=user_id).with_for_update().one_or_none()
         if self.db.query(AccountDeletionModel.user_id).filter_by(user_id=user_id).first():
             raise DeletionAlreadyStarted("Account deletion already started")
         receipt = secrets.token_urlsafe(32)
@@ -69,6 +72,8 @@ class AccountDeletionService:
     async def process(self, user_id: str) -> bool:
         row = self.db.query(AccountDeletionModel).filter_by(user_id=user_id).one_or_none()
         if row is None:
+            if find_tombstone(self.db, 'user', user_id):
+                return True
             raise ValueError("Account deletion request is missing")
         if row.status == "completed":
             return True
@@ -76,6 +81,9 @@ class AccountDeletionService:
         await self._delete_auth_user(user_id)
         row.status = "completed"
         row.completed_at = datetime.utcnow()
+        marker = remember(self.db, 'user', user_id, 'deleted')
+        row.user_id = marker.digest
+        row.key_version = marker.key_version
         self.db.commit()
         return True
 
@@ -83,6 +91,12 @@ class AccountDeletionService:
         profile = self.db.query(ProfileModel).filter_by(id=user_id).with_for_update().one_or_none()
         if profile is None:
             return
+        remember(self.db, 'account', user_id, 'deleted')
+        remember(self.db, 'user', user_id, 'deleted')
+        for delivery in self.db.query(PurchaseDeliveryModel).filter_by(user_id=user_id).all():
+            remember(self.db, 'transaction', delivery.transaction_id, 'deleted')
+        for model in (TurnReservationModel, CreditLotModel, PurchaseDeliveryModel, ManualResourceGrantModel):
+            self.db.query(model).filter_by(user_id=user_id).delete(synchronize_session=False)
         message_ids = [item[0] for item in self.db.query(MessageModel.id)
                        .join(ConversationModel, MessageModel.conversation_id == ConversationModel.id)
                        .filter(ConversationModel.user_id == user_id).all()]
@@ -99,14 +113,6 @@ class AccountDeletionService:
             ).delete(synchronize_session=False)
         self.db.query(ConversationSlotGrantModel).filter_by(user_id=user_id).delete(synchronize_session=False)
         self.db.query(LanguageSnackBasketResetModel).filter_by(user_id=user_id).delete(synchronize_session=False)
-        self.db.query(AppleSubscriptionModel).filter_by(user_id=user_id).delete(synchronize_session=False)
-        self.db.query(ManualEntitlementGrantModel).filter_by(user_id=user_id).delete(synchronize_session=False)
-        self.db.query(ManualEntitlementGrantModel).filter_by(granted_by=user_id).update(
-            {ManualEntitlementGrantModel.granted_by: None}, synchronize_session=False
-        )
-        self.db.query(ManualEntitlementGrantModel).filter_by(revoked_by=user_id).update(
-            {ManualEntitlementGrantModel.revoked_by: None}, synchronize_session=False
-        )
         self.db.delete(profile)  # 대화 → 메시지 → 문법 피드백은 ORM 관계로 삭제해요.
         self.db.commit()
 
