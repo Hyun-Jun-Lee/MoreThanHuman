@@ -12,17 +12,39 @@ class OnboardingController extends AsyncNotifier<bool> {
     return _storage.isCompleted();
   }
 
-  Future<void> complete(
+  Future<bool> recordChoice(
     LearningLanguageContext languageContext,
     String appLocale,
-  ) async {
+    AIConsentStatus notice, {
+    required bool acceptAI,
+  }) async {
     await Future.wait(<Future<void>>[
       _storage.writePendingLanguageContext(languageContext),
       _storage.writePendingAppLocale(appLocale),
     ]);
+    if (ref.read(authControllerProvider).value?.isAuthenticated != true) {
+      await ref.read(authControllerProvider.notifier).continueAsGuest();
+    } else {
+      await ref.read(authControllerProvider.notifier).restoreSession();
+    }
+    final session = ref.read(authControllerProvider).requireValue;
+    if (!session.isAuthenticated) {
+      throw StateError('Guest initialization failed.');
+    }
+    final userId = session.user!.id;
+    final result = await ref
+        .read(aiConsentControllerProvider.notifier)
+        .recordChoice(notice, acceptAI: acceptAI);
+    if (ref.read(authControllerProvider).value?.user?.id != userId) {
+      throw StateError('The account changed before consent was saved.');
+    }
+    ref.read(handledAINoticeProvider.notifier).mark(userId);
+    return result.accepted;
+  }
+
+  Future<void> complete() async {
     await _storage.markCompleted();
     state = const AsyncData<bool>(true);
-    await ref.read(authControllerProvider.notifier).continueAsGuest();
   }
 }
 

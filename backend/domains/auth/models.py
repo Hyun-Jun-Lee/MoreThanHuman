@@ -73,7 +73,7 @@ class AccountDeletionModel(Base):
 
 
 class UserConsentModel(Base):
-    """AI 처리와 개인정보 고지의 버전별 명시 동의를 보관해요."""
+    """버전별 AI 처리 동의와 개인정보 안내 확인·기존 수락 기록을 보관해요."""
 
     __tablename__ = "user_consents"
     __table_args__ = (
@@ -81,7 +81,7 @@ class UserConsentModel(Base):
             "user_id", "consent_kind", "version", name="uq_user_consent_kind_version"
         ),
         CheckConstraint(
-            "consent_kind IN ('privacy_policy', 'ai_data_processing')",
+            "consent_kind IN ('privacy_policy', 'ai_data_processing', 'privacy_notice')",
             name="ck_user_consent_kind",
         ),
     )

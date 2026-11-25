@@ -38,10 +38,11 @@ void main() {
 
     expect(find.text('Consent for AI conversations'), findsOneWidget);
     expect(find.text('Privacy policy'), findsOneWidget);
-    await tester.tap(find.text('CANCEL'));
+    await tester.tap(find.text('Decide later'));
     await tester.pumpAndSettle();
     expect(find.text('result:false'), findsOneWidget);
     expect(repository.acceptCalls, 0);
+    expect(repository.choices, [false]);
 
     await tester.tap(find.text('Open AI'));
     await tester.pumpAndSettle();
@@ -50,6 +51,86 @@ void main() {
 
     expect(find.text('result:true'), findsOneWidget);
     expect(repository.acceptCalls, 1);
+  });
+  testWidgets(
+    'save failure keeps the notice open and retries without granting access',
+    (tester) async {
+      final repository = _ConsentRepository()..failSave = true;
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [authRepositoryProvider.overrideWithValue(repository)],
+          child: const MaterialApp(home: _ConsentHarness()),
+        ),
+      );
+      await tester.tap(find.text('Open AI'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Agree and continue'));
+      await tester.pumpAndSettle();
+      expect(find.text('result:null'), findsOneWidget);
+      expect(repository.accepted, isFalse);
+      expect(find.text('Retry'), findsOneWidget);
+      repository.failSave = false;
+      await tester.tap(find.text('Retry'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Agree and continue'));
+      await tester.pumpAndSettle();
+      expect(find.text('result:true'), findsOneWidget);
+      expect(repository.acceptCalls, 1);
+    },
+  );
+
+  testWidgets('valid existing consent opens AI without another prompt', (
+    tester,
+  ) async {
+    final repository = _ConsentRepository()..accepted = true;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [authRepositoryProvider.overrideWithValue(repository)],
+        child: const MaterialApp(home: _ConsentHarness()),
+      ),
+    );
+    await tester.tap(find.text('Open AI'));
+    await tester.pumpAndSettle();
+    expect(find.text('result:true'), findsOneWidget);
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(repository.choices, isEmpty);
+  });
+  testWidgets('privacy-only version change does not ask for AI consent again', (
+    tester,
+  ) async {
+    final repository = _ConsentRepository()..accepted = true;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [authRepositoryProvider.overrideWithValue(repository)],
+        child: MaterialApp(
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: TextButton(
+                child: const Text('Notice'),
+                onPressed: () => showAIConsentNotice(
+                  context,
+                  load: repository.getAIConsentStatus,
+                  onChoice: (notice, acceptAI) async =>
+                      (await repository.recordAIConsentChoice(
+                        notice,
+                        acceptAI: acceptAI,
+                      )).accepted,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Notice'));
+    await tester.pumpAndSettle();
+    expect(find.text('Agree and continue'), findsNothing);
+    expect(find.text('Decide later'), findsNothing);
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+    expect(repository.choices, [false]);
+    expect(repository.acceptCalls, 0);
+    expect(repository.accepted, isTrue);
   });
 }
 
@@ -84,14 +165,28 @@ class _ConsentHarnessState extends ConsumerState<_ConsentHarness> {
 
 class _ConsentRepository implements AuthRepository, AIConsentRepository {
   int acceptCalls = 0;
+  final List<bool> choices = [];
+  bool failSave = false;
+  bool accepted = false;
 
   @override
-  Future<AIConsentStatus> getAIConsentStatus() async => _status(false);
+  Future<AIConsentStatus> getAINotice() async => _status(false);
 
   @override
-  Future<AIConsentStatus> acceptAIConsent() async {
-    acceptCalls += 1;
-    return _status(true);
+  Future<AIConsentStatus> getAIConsentStatus() async => _status(accepted);
+
+  @override
+  Future<AIConsentStatus> recordAIConsentChoice(
+    AIConsentStatus notice, {
+    required bool acceptAI,
+  }) async {
+    if (failSave) throw StateError("offline");
+    choices.add(acceptAI);
+    if (acceptAI) {
+      acceptCalls += 1;
+      accepted = true;
+    }
+    return _status(accepted);
   }
 
   @override
@@ -109,6 +204,7 @@ class _ConsentRepository implements AuthRepository, AIConsentRepository {
 
   AIConsentStatus _status(bool accepted) => AIConsentStatus(
     accepted: accepted,
+    noticeAcknowledged: accepted,
     requiredVersions: const {
       'privacy_policy': '2026-11-23',
       'ai_data_processing': '2026-11-23',

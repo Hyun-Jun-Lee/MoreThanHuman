@@ -419,8 +419,16 @@ class AppCopy {
   String get aiConsentTitle =>
       isKorean ? 'AI 대화를 위한 동의' : 'Consent for AI conversations';
   String get aiConsentDescription => isKorean
-      ? '대화 내용이 AI 응답 생성과 학습 피드백 제공을 위해 처리돼요. 개인정보 처리방침과 AI 데이터 처리 고지를 확인하고 동의해 주세요.'
-      : 'Your conversation is processed to generate AI responses and learning feedback. Review and accept the privacy and AI data notices to continue.';
+      ? '대화 내용과 음성 입력은 AI 답변, 음성 변환과 학습 피드백을 위해 외부 AI 서비스에 전달돼요. 자세한 처리 내용은 개인정보 처리방침에서 확인할 수 있어요. AI 데이터 처리에 동의할지 선택해 주세요. 나중에 선택해도 홈을 이용할 수 있어요.'
+      : 'Conversation content and voice input are sent to external AI services for replies, speech processing and learning feedback. See the privacy policy for details. Choose whether to accept AI data processing. You can decide later and still use Home.';
+  String get privacyNoticeDescription => isKorean
+      ? '업데이트된 개인정보 처리방침을 확인할 수 있어요. 기존 AI 데이터 처리 동의는 유지돼요.'
+      : 'You can review the updated privacy policy. Your existing AI data processing consent remains valid.';
+  String get aiConsentLaterLabel => isKorean ? '나중에 선택' : 'Decide later';
+  String get privacyNoticeContinueLabel => isKorean ? '확인하고 계속' : 'Continue';
+  String get aiConsentSaveFailed => isKorean
+      ? '안내를 열거나 선택을 저장하지 못했어요. 다시 시도해 주세요.'
+      : 'Could not open the notice or save your choice. Please try again.';
   String get privacyPolicyLabel => isKorean ? '개인정보 처리방침' : 'Privacy policy';
   String get agreeAndContinueLabel =>
       isKorean ? '동의하고 계속' : 'Agree and continue';

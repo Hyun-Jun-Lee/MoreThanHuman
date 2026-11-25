@@ -153,7 +153,7 @@ flowchart TD
 
 **동작**
 
-- `Skip` 또는 마지막 `시작`을 누르면 선택 언어를 pending으로 저장하고 익명 bootstrap 뒤 Home으로 이동해요.
+- `Skip` 또는 마지막 `시작`을 누르면 개인정보처리방침 링크와 AI 처리 선택을 보여줘요. 선택 언어를 pending으로 저장하고 익명 bootstrap·선택 기록 저장이 성공하면 Home으로 이동해요.
 - onboarding 완료 여부는 local storage에 저장해요.
 
 ### 5.3 Login
@@ -559,7 +559,7 @@ Timeout:
 |------------|-----|---------|
 | 앱 첫 진입·재실행 | Supabase 익명 로그인, `POST /api/auth/bootstrap` | 게스트 또는 회원 Home 이동 |
 | Google·Apple 회원 전환 | Supabase identity link 또는 `POST /api/auth/guest-transfer/*` | 데이터가 유지된 회원 Home 이동 |
-| AI 동의 | `GET/POST /api/auth/me/ai-consent` | 첫 AI action 계속 |
+| AI 안내·선택 | `GET /api/auth/ai-notice`, `GET/POST /api/auth/me/ai-consent` | 온보딩 종료·Skip → 선택 → 게스트 초기화 → 선택 저장 → 홈. 기존 계정은 홈에서 필요한 안내를 제공하고 첫 AI action의 동의 검사는 유지 |
 | 최근 대화 보기 | `GET /api/conversations/` | Home 최근 목록 표시 |
 | 대화 시작 선택 | 없음 | 자유 대화 또는 롤플레이로 분기 |
 | 주제 준비 | `POST /api/search/topic-prep/` | Topic Prep 표시 |
@@ -585,3 +585,12 @@ Timeout:
 3. Roleplay Setup을 연결해요.
 4. Free Chat Start와 Conversation 생성 흐름을 연결해요.
 5. Conversation 메시지와 grammar feedback polling을 연결해요.
+
+
+### 개인정보 안내와 AI 처리 선택 v2 (2026-11-26)
+
+- 신규 설치는 온보딩 마지막 버튼 또는 Skip에서 공개 고지 버전·링크를 조회하고 AI 처리 수락/나중에 선택을 제시해요. 개인정보처리방침 링크 자체는 수락 버튼이 아니에요.
+- 선택 후 게스트 초기화와 서버 기록 저장이 모두 성공해야 온보딩 완료를 저장하고 홈으로 이동해요. 보류해도 홈을 사용할 수 있지만 AI 동의가 생기지는 않아요. 초기화·저장 실패 시 안내 화면에서 재시도하며 버전이 바뀌었으면 최신 안내를 다시 보여줘요.
+- 기존 계정은 첫 홈 진입에서 필요한 안내만 받아요. 유효한 AI 동의와 현재 방침 안내 확인이 있으면 팝업을 생략해요. 방침만 변경됐으면 안내 확인만 받고 AI 동의를 다시 묻지 않아요. 같은 홈 세션에서 보류한 안내는 탭 전환마다 반복하지 않으며 기존 AI 사용 진입의 동의 검사는 유지해요.
+- 개인정보 안내 후 회원의 필수 닉네임 팝업을 순서대로 표시해요. 프로필에서도 앱 언어에 맞는 처리방침 링크를 열 수 있어요.
+- 이 단계는 개인정보·AI 선택만 제공해요. 회원 배지 선택, OS 권한, 읽음·아이콘 갱신은 후속 구현이며 어떤 배지 의사표시도 AI 처리 동의로 저장하지 않아요.

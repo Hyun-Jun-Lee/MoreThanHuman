@@ -32,11 +32,11 @@
 | `SUPABASE_PUBLISHABLE_KEY` | 예 | 없음 | 원격 Supabase Auth `/user` 검증에 사용하는 publishable key |
 | `SUPABASE_AUTH_VERIFY_MODE` | 아니오 | `auto` | ES256 token을 JWKS 공개 키로 검증하고 그 외 token은 `/user`로 검증해요. `remote`는 모든 token을 `/user`로 검증해요 |
 | `SUPABASE_AUTH_TIMEOUT_SECONDS` | 아니오 | `5` | Supabase Auth `/user`와 JWKS 조회 timeout |
-| `PRIVACY_POLICY_VERSION` | 아니오 | `2026-11-25` | 현재 개인정보처리방침 동의 버전. 값을 바꾸면 게스트와 회원 모두 새 버전에 다시 동의해야 해요 |
+| `PRIVACY_POLICY_VERSION` | 아니오 | `2026-11-25` | 현재 개인정보처리방침 안내 버전. 변경 시 홈에서 안내를 다시 제공하며 기존 AI 처리 동의는 유지해요 |
 | `AI_DATA_PROCESSING_VERSION` | 아니오 | `2026-11-23` | 현재 AI 데이터 처리 고지 동의 버전. 값을 바꾸면 AI 기능 전에 다시 동의해야 해요 |
 | `PRIVACY_POLICY_URL` | 아니오 | `https://www.curitalk.app/privacy` | 한국어 앱의 동의·상점 화면에서 여는 공개 개인정보처리방침 URL |
 | `PRIVACY_POLICY_URL_EN` | 아니오 | `https://www.curitalk.app/en/privacy` | 영어 앱의 동의·상점 화면에서 여는 공개 개인정보처리방침 URL |
-| `AI_CONSENT_REQUIRED` | 아니오 | `true` | `true`이면 현재 두 고지에 동의하기 전 AI 요청을 HTTP 403으로 차단해요. 테스트 외 운영 비활성화를 권장하지 않아요 |
+| `AI_CONSENT_REQUIRED` | 아니오 | `true` | `true`이면 현재 AI 데이터 처리 버전에 동의하기 전 AI 요청을 HTTP 403으로 차단해요. 테스트 외 운영 비활성화를 권장하지 않아요 |
 | `GUEST_TRANSFER_RECEIPT_TTL_MINUTES` | 아니오 | `10` | 기존 회원 계정으로 게스트 데이터를 이전하는 일회용 영수증 유효 시간(분) |
 | `GUEST_RETENTION_DAYS` | 아니오 | `30` | 회원으로 전환하지 않은 게스트를 마지막 bootstrap 또는 AI 활동 뒤 삭제 후보로 삼는 기간(일) |
 | `ADMIN_PUBLIC_ORIGIN` | 아니오 | `https://api.curitalk.app` | 관리자 웹 쓰기 요청의 Origin 검사 기준. 로컬에서는 `http://localhost:8010`으로 설정해요 |

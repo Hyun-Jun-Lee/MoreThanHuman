@@ -98,3 +98,47 @@ def test_old_version_is_rejected_by_common_ai_guard(monkeypatch):
 
     assert error.value.status_code == 403
     assert error.value.detail["code"] == "CONSENT_REQUIRED"
+
+
+def test_notice_acknowledgement_does_not_grant_ai_access():
+    db = _session()
+    db.add(ProfileModel(id="guest", name="Guest", is_guest=True))
+    db.commit()
+    service = AIConsentService(db, _settings())
+    result = service.record_choice("guest", privacy_version="privacy-v1", ai_version="ai-v1", accept_ai=False)
+    assert result["accepted"] is False
+    assert result["missing"] == ["ai_data_processing"]
+    assert db.query(UserConsentModel).filter_by(consent_kind="privacy_notice").count() == 1
+    assert db.query(UserConsentModel).filter_by(consent_kind="ai_data_processing").count() == 0
+
+
+def test_existing_ai_consent_survives_privacy_notice_version_change():
+    db = _session()
+    db.add(ProfileModel(id="member", name="Member"))
+    db.commit()
+    service = AIConsentService(db, _settings())
+    service.accept_current("member")
+    service.settings.privacy_policy_version = "privacy-v2"
+    assert service.status("member")["accepted"] is True
+    assert service.status("member")["notice_acknowledged"] is False
+
+
+def test_choice_rejects_stale_versions_without_writing():
+    db = _session()
+    db.add(ProfileModel(id="guest", name="Guest", is_guest=True))
+    db.commit()
+    service = AIConsentService(db, _settings())
+    with pytest.raises(ValueError):
+        service.record_choice("guest", privacy_version="old", ai_version="ai-v1", accept_ai=True)
+    assert db.query(UserConsentModel).count() == 0
+
+
+def test_explicit_choice_is_idempotent_and_deferral_does_not_revoke():
+    db = _session()
+    db.add(ProfileModel(id="guest", name="Guest", is_guest=True))
+    db.commit()
+    service = AIConsentService(db, _settings())
+    for accept in (True, True, False):
+        result = service.record_choice("guest", privacy_version="privacy-v1", ai_version="ai-v1", accept_ai=accept)
+        assert result["accepted"] is True
+    assert db.query(UserConsentModel).count() == 2

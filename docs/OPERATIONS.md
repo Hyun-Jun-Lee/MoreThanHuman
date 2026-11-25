@@ -300,3 +300,8 @@ uv run python -m scripts.archive_weekly_topic TOPIC_UUID
 - 2026-09-19: 바구니 리셋 API·추가 테이블 마이그레이션·앱 복귀 확인·구버전/오프라인 제한을 추가했어요.
 
 - 2026-09-13: README의 Swagger·스낵 배포/복구 절차를 이관하고 Docker의 DB·포트·초기 nginx 전제를 명시했어요.
+
+
+### 개인정보 안내·AI 처리 선택 배포 (2026-11-26)
+
+새 모바일 배포 전에 서버 migration `20261126_0001`을 적용해 `user_consents.consent_kind`에 `privacy_notice`를 허용해요. 기존 동의 행은 변경하지 않아요. 새 앱은 공개 고지 조회와 버전이 명시된 선택 API를 사용하며, 구버전 앱의 본문 없는 동의 요청도 계속 지원해요. migration을 되돌리면 새 안내 확인 행만 제거하고 기존 명시 동의는 보존해요. 처리방침 안내 버전 변경은 AI 동의를 무효화하지 않으며 AI 처리 조건을 바꿀 때는 `AI_DATA_PROCESSING_VERSION`을 갱신해요.

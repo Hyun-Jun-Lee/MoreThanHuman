@@ -2,6 +2,7 @@ import 'package:curitalk/app/theme/tokens/tokens.dart';
 import 'package:curitalk/core/copy/copy.dart';
 import 'package:curitalk/core/widgets/widgets.dart';
 import 'package:curitalk/features/language/language.dart';
+import 'package:curitalk/features/auth/auth.dart';
 import 'package:curitalk/features/onboarding/application/onboarding_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -50,9 +51,26 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       final String selectedAppLocale =
           ref.read(onboardingAppLocaleControllerProvider).value ??
           AppCopy.resolveLocaleCode(Localizations.localeOf(context));
-      await ref
-          .read(onboardingControllerProvider.notifier)
-          .complete(_selectedLanguage, selectedAppLocale);
+      final repository =
+          ref.read(authRepositoryProvider) as AIConsentRepository;
+      final controller = ref.read(onboardingControllerProvider.notifier);
+      final result = await showAIConsentNotice(
+        context,
+        load: repository.getAINotice,
+        onChoice: (notice, acceptAI) => controller.recordChoice(
+          _selectedLanguage,
+          selectedAppLocale,
+          notice,
+          acceptAI: acceptAI,
+        ),
+      );
+      if (result != null) await controller.complete();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppCopy.of(context).aiConsentSaveFailed)),
+        );
+      }
     } finally {
       if (mounted) {
         setState(() => _isCompleting = false);

@@ -1,3 +1,4 @@
+import 'package:url_launcher/url_launcher.dart';
 import 'package:curitalk/app/theme/tokens/tokens.dart';
 import 'package:curitalk/app/router/app_router.dart';
 import 'package:curitalk/features/billing/billing_repository.dart';
@@ -284,6 +285,37 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         ),
                       ),
                       const SizedBox(height: AppSpacing.lg),
+                      TextButton(
+                        onPressed: () async {
+                          try {
+                            final repository =
+                                ref.read(authRepositoryProvider)
+                                    as AIConsentRepository;
+                            final notice = await repository.getAINotice();
+                            if (!context.mounted) return;
+                            final opened = await launchUrl(
+                              Uri.parse(
+                                notice.privacyPolicyUrlFor(
+                                  isKorean: copy.isKorean,
+                                ),
+                              ),
+                              mode: LaunchMode.externalApplication,
+                            );
+                            if (!opened) {
+                              throw StateError('Cannot open privacy policy.');
+                            }
+                          } catch (_) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(copy.aiConsentSaveFailed),
+                                ),
+                              );
+                            }
+                          }
+                        },
+                        child: Text(copy.privacyPolicyLabel),
+                      ),
                       _ProfileSectionLabel(copy.accountLabel),
                       const SizedBox(height: AppSpacing.xs),
                       _ProfileSurface(

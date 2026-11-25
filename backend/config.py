@@ -74,7 +74,7 @@ class Settings(BaseSettings):
     swagger_token_issuer_secret: str | None = None
     auto_create_tables: bool = False
 
-    # Versioned privacy / AI processing notice
+    # 처리방침 버전은 안내 재확인에, AI 처리 버전은 AI 접근 동의에 사용해요.
     privacy_policy_version: str = "2026-11-25"
     ai_data_processing_version: str = "2026-11-23"
     privacy_policy_url: str = "https://www.curitalk.app/privacy"

@@ -225,7 +225,15 @@ module Auth {
 
 `DELETE /api/auth/me`는 현재 계정의 삭제 요청을 영속화해 기존 Supabase JWT 접근을 즉시 차단해요. 응답의 `data`는 `status: completed|processing`, 서버가 생성한 고엔트로피 `receipt`, `apple_disconnect_required`를 담아요. Apple 로그인 사용자는 새 Apple 승인 코드와 ID 토큰을 선택적으로 body의 `apple_authorization_code`, `apple_identity_token`으로 보내 연결 해제를 시도할 수 있어요. 연결 해제 실패는 데이터 삭제를 막지 않으며 앱이 Apple 계정 설정에서 수동 해제를 안내해요. 데이터 삭제와 Supabase Auth 삭제 중 외부 오류가 나면 `processing`과 HTTP 202를 반환하고 운영 재시도 작업이 완료해요. `GET /api/auth/deletion-status/{receipt}`는 인증 없이 해당 영수증의 `processing|completed`만 반환해요. 삭제된 프로필·대화·학습 기록은 재가입 시 복구되지 않아요.
 
-게스트와 회원은 현재 개인정보처리방침 및 AI 데이터 처리 고지 버전에 모두 동의하기 전 AI API를 사용할 수 없어요. `GET /api/auth/me/ai-consent`는 현재 버전과 각 고지의 수락 여부, 한국어·영어 개인정보처리방침 URL을 반환하고, `POST /api/auth/me/ai-consent`는 두 현재 버전을 함께 수락해요. 앱은 표시 언어가 한국어이면 `https://www.curitalk.app/privacy`, 영어이면 `https://www.curitalk.app/en/privacy`를 열어요. 미동의 AI 요청은 provider 호출 전에 HTTP 403 `CONSENT_REQUIRED`로 거절해요. 읽기와 계정 삭제는 동의가 없어도 가능해요.
+개인정보 안내·AI 처리 선택 v2 (2026-11-26): 게스트와 회원의 AI API 사용 조건은 현재 `ai_data_processing` 버전의 유효한 명시 동의예요. 개인정보처리방침 안내 확인은 `privacy_notice`로 별도 기록하며 그 자체로 AI 사용을 허용하지 않아요. 기존 `privacy_policy`와 `ai_data_processing` 수락 기록은 보존하고, 현재 버전의 기존 `privacy_policy` 수락은 안내 확인으로도 인정해요. 처리방침 버전만 바뀌면 안내만 다시 제공하고 기존 AI 동의는 유지해요. AI 처리 버전이 바뀌면 다시 동의해야 해요.
+
+| API | 계약 |
+|---|---|
+| `GET /api/auth/ai-notice` | 인증 없이 온보딩에 표시할 현재 `required_versions`, 한국어·영어 처리방침 URL을 반환해요. 사용자 정보를 포함하지 않으며 `accepted=false`, `notice_acknowledged=false`예요. |
+| `GET /api/auth/me/ai-consent` | 본인 Bearer 인증. `accepted`, `required_versions`, `accepted_versions`, `missing`, `notice_acknowledged`, `privacy_policy_url`, `privacy_policy_url_en`을 반환해요. `accepted`와 `missing`은 AI 처리 동의만 판단해요. |
+| `POST /api/auth/me/ai-consent` | 본인 Bearer 인증. `{privacy_policy_version, ai_data_processing_version, accept_ai}`를 제출해요. 두 버전이 서버 현재 버전과 다르면 HTTP 409 `CONSENT_VERSION_CHANGED`로 거절하고 아무 기록도 바꾸지 않아요. 안내 확인은 항상 기록하며 `accept_ai=true`일 때만 AI 처리 수락을 기록해요. `false`는 보류이며 기존 동의를 철회하지 않아요. 응답은 갱신된 동의 상태예요. |
+
+새 모바일은 안내에 표시했던 버전과 명시적 선택을 제출해요. 처리방침 링크를 여는 것만으로는 어떤 기록도 저장하지 않아요. 안내 화면의 계속/나중에 선택으로 남기는 `privacy_notice`는 안내 확인 기록이며 방침 전체에 대한 동의나 실제 링크 열람 증명이 아니에요. 구버전 모바일의 본문 없는 POST는 기존의 명시적 일괄 수락 의미를 유지해 두 항목을 함께 저장해요. 앱 표시 언어별 처리방침 URL을 사용해요. 미동의 AI 요청은 provider 호출 전에 HTTP 403 `CONSENT_REQUIRED`로 거절하며 읽기 API와 계정 삭제는 동의가 없어도 가능해요. 배지 선택은 이 API에 포함하지 않아요.
 
 아직 사용되지 않은 Google·Apple 신원은 익명 Supabase 사용자에 연결해 같은 ID와 데이터를 유지해요. 기존 신원 충돌은 게스트 JWT로 `POST /api/auth/guest-transfer/receipt`를 호출해 10분짜리 일회용 이전 영수증을 만들고, 정식 회원 JWT로 `POST /api/auth/guest-transfer/claim`을 호출해 대화·동의·사용 기록을 원자적으로 이전해요. 회원 프로필·언어·잔액을 우선하고 가져온 대화는 슬롯 초과 여부와 무관하게 보존해요. 이전 완료 뒤 옛 게스트 JWT는 삭제 tombstone으로 차단해요.
 

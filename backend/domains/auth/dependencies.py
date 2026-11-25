@@ -113,7 +113,7 @@ def get_current_ai_profile(
     profile: ProfileModel = Depends(get_current_profile),
     db: Session = Depends(get_db),
 ) -> ProfileModel:
-    """현재 버전 개인정보·AI 처리 동의가 있는 AI 요청만 허용해요."""
+    """현재 버전 AI 처리 동의가 있는 AI 요청만 허용해요."""
     if getattr(profile, "is_guest", False):
         profile.last_active_at = datetime.utcnow()
         db.commit()
@@ -125,7 +125,7 @@ def get_current_ai_profile(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
                 "code": "CONSENT_REQUIRED",
-                "message": "AI 기능을 사용하려면 현재 개인정보 및 AI 처리 고지에 동의해야 해요.",
+                "message": "AI 기능을 사용하려면 현재 AI 데이터 처리 고지에 동의해야 해요.",
                 **consent,
             },
         )
