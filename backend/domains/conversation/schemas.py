@@ -19,6 +19,14 @@ from shared.language import LearningLanguageContext
 SchemaType = TypeVar("SchemaType")
 
 
+class ReadRepliesRequest(BaseModel):
+    message_ids: list[UUID] = Field(min_length=1, max_length=100)
+
+
+class UnreadReplies(BaseModel):
+    has_unread: bool
+
+
 class StartFreeChatRequest(BaseModel):
     """자유 대화 시작 요청"""
 

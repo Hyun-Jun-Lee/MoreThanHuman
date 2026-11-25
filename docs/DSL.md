@@ -887,3 +887,17 @@ module LLM {
 - 2026-10-24: Topic Prep 첫 질문의 영어·한국어 반대 언어 번역 필드를 추가했어요. 카드·방향 재생성·직접 입력 질문 응답에 적용해요.
 - 2026-10-04: 주간 추천의 첫 질문 선생성과 동일 주차 재발행 계약을 추가했어요.
 - 2026-09-13: README의 상세 API 안내를 통합하고 환경변수 상세는 ENVIRONMENT.md로 분리했어요. API 동작 자체는 변경하지 않았어요.
+
+
+### 미확인 AI 답변·읽음 API v1 (2026-11-26)
+
+`messages.read_at`은 nullable UTC 읽음 시각이에요. 기존 assistant 메시지는 배포 migration에서 읽음으로 이관하며 새 답변은 미확인으로 저장해요.
+
+| 메서드·경로 | 입력 | 성공 응답 data |
+|---|---|---|
+| `GET /api/conversations/unread/` | Bearer | `{has_unread: boolean}` |
+| `POST /api/conversations/{id}/read/` | Bearer, `{message_ids: UUID[]}` (1–100개) | `{has_unread: boolean}` |
+
+회원·관리자는 슬롯·대화권 잔액과 무관하게 모든 소유 대화를 집계하고 게스트는 배지용 존재값이 항상 false예요. 읽음은 해당 소유 대화의 명시한 assistant ID에만 적용하며 반복 요청은 읽음 시각을 바꾸지 않아요. 타 계정 대화는 404, 잠긴 게스트 대화는 409, 입력 오류는 422예요. 타 대화 ID·사용자 메시지는 무시해요. 새로 도착한 다른 답변은 미확인으로 남아요. AI 처리 동의는 조회·읽음의 선행 조건이 아니에요.
+
+화면·권한·동시성 계약은 [iOS 미확인 배지](../.agent/_contracts/IOS_UNREAD_BADGE.md)를 따라요.

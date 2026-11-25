@@ -46,6 +46,8 @@ from domains.conversation.schemas import (
     StartSuggestedFreeChatRequest,
     SuggestedFreeChatResponse,
     UpdateTitleRequest,
+    ReadRepliesRequest,
+    UnreadReplies,
 )
 from domains.conversation.service import ConversationService
 from domains.conversation.audio_cache_flow import cache_files, new_writer, persist_writer
@@ -1178,6 +1180,31 @@ async def send_multimodal_turn(
     except Exception as e:
         log_exception(e, status_code=500, error_code="UNHANDLED_EXCEPTION")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.get("/unread/", response_model=SuccessResponse[UnreadReplies])
+def get_unread_replies(
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    service: ConversationService = Depends(get_conversation_service),
+):
+    return SuccessResponse(data=service.get_unread_replies(current_user.id))
+
+
+@router.post("/{conversation_id}/read/", response_model=SuccessResponse[UnreadReplies])
+def read_replies(
+    conversation_id: UUID,
+    body: ReadRepliesRequest,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    service: ConversationService = Depends(get_conversation_service),
+):
+    try:
+        return SuccessResponse(data=service.mark_replies_read(
+            str(conversation_id), current_user.id, [str(value) for value in body.message_ids],
+        ))
+    except NotFoundException as error:
+        raise HTTPException(status_code=404, detail=error.message)
+    except ConversationLocked as error:
+        raise _access_conflict("CONVERSATION_LOCKED", error.message)
 
 
 @router.get("/access/", response_model=SuccessResponse[ConversationAccess])

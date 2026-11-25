@@ -9,10 +9,34 @@ class ApiConversationRepository
         ConversationRepository,
         CustomFocusConversationRepository,
         ConversationDeletionRepository,
+        UnreadConversationRepository,
         SuggestedConversationRepository {
   const ApiConversationRepository(this.apiClient);
 
   final ApiClient apiClient;
+
+  @override
+  Future<bool> hasUnreadReplies() async => (await apiClient.get<bool>(
+    'conversations/unread/',
+    decodeData: _decodeUnread,
+  )).data;
+
+  @override
+  Future<bool> markRepliesRead(
+    String conversationId,
+    List<String> messageIds,
+  ) async => (await apiClient.post<bool>(
+    'conversations/$conversationId/read/',
+    data: {'message_ids': messageIds},
+    decodeData: _decodeUnread,
+  )).data;
+
+  static bool _decodeUnread(Object? value) {
+    if (value is! Map || value['has_unread'] is! bool) {
+      throw const FormatException('Invalid unread reply state.');
+    }
+    return value['has_unread'] as bool;
+  }
 
   @override
   Future<SuggestedConversationResponse> startSuggestedFreeChat({

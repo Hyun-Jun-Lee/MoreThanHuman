@@ -8,6 +8,24 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('unread read API sends explicit IDs and decodes global state', () async {
+    final adapter = _ConversationHttpClientAdapter();
+    final repository = _repository(adapter);
+    expect(await repository.hasUnreadReplies(), true);
+    expect(adapter.lastRequest?.uri.path, '/api/conversations/unread/');
+    expect(
+      await repository.markRepliesRead('conversation-id', ['reply-id']),
+      false,
+    );
+    expect(
+      adapter.lastRequest?.uri.path,
+      '/api/conversations/conversation-id/read/',
+    );
+    expect(adapter.lastRequest?.data, {
+      'message_ids': ['reply-id'],
+    });
+  });
+
   test('posts suggested start ID and decodes assistant message ID', () async {
     final adapter = _ConversationHttpClientAdapter();
     final repository = _repository(adapter);
@@ -202,6 +220,8 @@ class _ConversationHttpClientAdapter implements HttpClientAdapter {
     requests.add(options);
     final String path = options.uri.path;
     final Map<String, dynamic> data = switch (path) {
+      '/api/conversations/unread/' => {'has_unread': true},
+      '/api/conversations/conversation-id/read/' => {'has_unread': false},
       '/api/conversations/start/free-chat/suggested/' => <String, dynamic>{
         'conversation_id': 'conversation-id',
         'assistant_message_id': 'assistant-message-id',

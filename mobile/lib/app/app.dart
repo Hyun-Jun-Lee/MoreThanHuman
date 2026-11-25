@@ -9,6 +9,7 @@ import 'package:curitalk/features/billing/billing_repository.dart';
 import 'package:curitalk/features/conversation/data/conversation_access_repository.dart';
 import 'package:curitalk/features/onboarding/application/onboarding_controller.dart';
 import 'package:flutter/foundation.dart';
+import 'package:curitalk/core/notifications/badge_sync_controller.dart';
 
 class CuritalkApp extends ConsumerStatefulWidget {
   const CuritalkApp({super.key});
@@ -35,6 +36,7 @@ class _CuritalkAppState extends ConsumerState<CuritalkApp>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      ref.read(badgeSyncControllerProvider).refresh();
       if (defaultTargetPlatform == TargetPlatform.iOS) {
         ref.read(billingControllerProvider.notifier).retryPendingPurchases();
       }
@@ -46,6 +48,7 @@ class _CuritalkAppState extends ConsumerState<CuritalkApp>
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(badgeSyncControllerProvider);
     if (defaultTargetPlatform == TargetPlatform.iOS) {
       ref.watch(billingControllerProvider);
     }

@@ -1,3 +1,4 @@
+import 'package:curitalk/core/notifications/badge_choice_dialog.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:curitalk/app/theme/tokens/tokens.dart';
 import 'package:curitalk/app/router/app_router.dart';
@@ -285,6 +286,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         ),
                       ),
                       const SizedBox(height: AppSpacing.lg),
+                      const BadgeSettingsButton(),
                       TextButton(
                         onPressed: () async {
                           try {

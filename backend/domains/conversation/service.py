@@ -525,6 +525,13 @@ class ConversationService:
         with latency_span("access_summary"):
             return self.repository.access_summary(user_id, enabled=settings.conversation_access_enabled)
 
+    def get_unread_replies(self, user_id: str) -> dict:
+        return {"has_unread": self.repository.has_unread_replies(user_id)}
+
+    def mark_replies_read(self, conversation_id: str, user_id: str, message_ids: list[str]) -> dict:
+        self.repository.mark_replies_read(conversation_id, user_id, message_ids)
+        return self.get_unread_replies(user_id)
+
     def get_turn_access(self, conversation_id: str, user_id: str) -> dict:
         with latency_span("turn_access"):
             return self.repository.turn_access(

@@ -1,3 +1,4 @@
+import 'package:curitalk/core/notifications/badge_sync_controller.dart';
 import 'package:curitalk/app/theme/tokens/tokens.dart';
 import 'package:curitalk/core/copy/copy.dart';
 import 'package:curitalk/core/widgets/widgets.dart';
@@ -273,8 +274,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       await ref
           .read(recentConversationsControllerProvider.notifier)
           .refreshAfterMutation(
-            () => (repository as ConversationDeletionRepository)
-                .deleteConversation(conversation.id),
+            () => ref
+                .read(badgeSyncControllerProvider)
+                .mutation(
+                  () => (repository as ConversationDeletionRepository)
+                      .deleteConversation(conversation.id),
+                ),
           );
       ref.invalidate(conversationHistoryControllerProvider);
     } on Object {

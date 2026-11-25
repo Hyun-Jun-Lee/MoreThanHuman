@@ -66,6 +66,29 @@ class ConversationRepository:
             return True
         return self.db.query(ProfileModel.is_guest).filter_by(id=user_id).scalar() is True
 
+    def has_unread_replies(self, user_id: str) -> bool:
+        """회원의 전체 소유 대화를 집계하며 잔액·슬롯은 검사하지 않아요."""
+        query = self.db.query(MessageModel.id).join(
+            ConversationModel, MessageModel.conversation_id == ConversationModel.id,
+        ).join(ProfileModel, ConversationModel.user_id == ProfileModel.id).filter(
+            ProfileModel.id == user_id, ProfileModel.is_guest.is_(False),
+            MessageModel.role == MessageRole.ASSISTANT, MessageModel.read_at.is_(None),
+        )
+        return self.db.query(query.exists()).scalar()
+
+    def mark_replies_read(self, conversation_id: str, user_id: str, message_ids: list[str]) -> None:
+        conversation = self.find_by_id(conversation_id, user_id)
+        profile = self.db.get(ProfileModel, user_id)
+        if profile.is_guest and not conversation.slot_active:
+            raise ConversationLocked("Conversation is locked")
+        self.db.query(MessageModel).filter(
+            MessageModel.conversation_id == conversation.id,
+            MessageModel.id.in_(message_ids),
+            MessageModel.role == MessageRole.ASSISTANT,
+            MessageModel.read_at.is_(None),
+        ).update({MessageModel.read_at: datetime.utcnow()}, synchronize_session=False)
+        self.db.commit()
+
     def completed_suggested_start(self, user_id: str, request_id: str, topic_id: str) -> SuggestedStartModel | None:
         """완료된 요청은 주제 보관 후에도 같은 결과로 재조회해요."""
         existing = self.db.query(SuggestedStartModel).filter_by(

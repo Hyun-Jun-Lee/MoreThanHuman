@@ -50,6 +50,19 @@ class AppCopy {
     return '${languageName(nativeCode)} -> ${languageName(targetCode)}';
   }
 
+  String get badgeTitle => isKorean ? '미확인 답변 배지' : 'Unread reply badge';
+  String get badgeExplanation => isKorean
+      ? '확인하지 않은 AI 답변이 있으면 앱 아이콘에 1을 표시해요. 배너나 소리는 보내지 않아요. 앱 실행·복귀 시 갱신하며, 나중에 내 정보에서 변경할 수 있어요.'
+      : 'Show 1 on the app icon when an AI reply is unread. No banners or sounds. Updates while using or reopening the app. You can change this in your profile.';
+  String get badgeEnable => isKorean ? '배지 사용' : 'Use badge';
+  String get badgeSkip => isKorean ? '사용하지 않기' : 'Not now / turn off';
+  String get badgeSettings => isKorean ? '설정 열기' : 'Open settings';
+  String get badgeSettingsMessage =>
+      isKorean ? 'iOS 설정에서 배지를 허용해주세요.' : 'Allow badges in iOS Settings.';
+  String get badgeSaveFailed => isKorean
+      ? '배지 설정을 저장하지 못했어요. 다시 시도해주세요.'
+      : 'Could not save badge settings. Please try again.';
+
   String get comingSoonLabel => isKorean ? '준비 중' : 'Coming soon';
 
   String firstAnswerHint(String targetCode) {

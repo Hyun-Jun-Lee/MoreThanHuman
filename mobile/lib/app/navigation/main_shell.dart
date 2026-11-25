@@ -1,3 +1,5 @@
+import 'package:curitalk/core/notifications/badge_sync_controller.dart';
+import 'package:curitalk/core/notifications/badge_choice_dialog.dart';
 import 'package:curitalk/core/copy/copy.dart';
 import 'package:curitalk/features/auth/auth.dart';
 import 'package:curitalk/features/profile/presentation/nickname_dialog.dart';
@@ -78,6 +80,19 @@ class _MainShellState extends ConsumerState<MainShell> {
         if (!mounted || _account != account || !_homeVisible) return;
         _handledAccount = account;
         await _showRequiredNickname(account);
+        if (!mounted || _account != account || !_homeVisible) return;
+        final eligible = ref.read(authControllerProvider).value;
+        if (eligible?.isMember == true &&
+            eligible?.user?.nickname != null &&
+            await ref.read(badgeSyncControllerProvider).needsChoice()) {
+          if (!mounted || _account != account || !_homeVisible) return;
+          _dialogOpen = true;
+          try {
+            await showBadgeChoice(context, ref);
+          } finally {
+            _dialogOpen = false;
+          }
+        }
       } catch (_) {
         if (mounted && _account == account) {
           _handledAccount = account;
