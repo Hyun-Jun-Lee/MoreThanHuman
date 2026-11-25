@@ -1,5 +1,7 @@
 # tomatalk Mobile
 
+> 문서 갱신: 2026-11-25 · 일회성 상품명·서버 잔액 조회·이용약관 설정 반영
+
 관심사 기반 AI 다국어 회화 앱 tomatalk의 Flutter iOS·Android 클라이언트예요.
 
 ## 확인
@@ -57,7 +59,7 @@ lib/
 │   └── widgets/             # 화면 공통 레이아웃과 상호작용 위젯
 └── features/
     ├── auth/                # 인증 API, 세션 모델, Riverpod controller
-    ├── billing/             # iOS paywall, StoreKit 구매·복원, 서버 권한
+    ├── billing/             # 대화 상점, StoreKit 일회성 구매, 서버 잔액 조회
     ├── language/            # 언어쌍 모델, preference API, selector UI
     ├── onboarding/          # 완료 상태, pending 앱·학습 언어, 5장 onboarding 화면
     ├── conversation/
@@ -179,7 +181,7 @@ Splash → Onboarding(최초 1회) → 익명 게스트 Home
 - 테스트용 로컬 리셋 v1 (2026-09-20): 기본 `flutter run` 디버그 빌드에서는 열람 수 왼쪽의 restart 아이콘으로 같은 카드 묶음을 유지한 채 토마토 3개·0/12로 초기화해요. 서버 호출·운영 키 없이 기기에 저장되며 다른 기기에는 영향을 주지 않아요. 팝업·모션 중에는 비활성화하고 `--release`/`--profile` 빌드에서는 표시하지 않아요.
 - 설명은 영어 학습자에게 한국어, 한국어 학습자에게 영어로 제공하며 앱 chrome locale과 분리해요. 미지원 유형·버전은 건너뛰고 알려진 유형의 손상된 응답은 캐시로 복원해요. 운영 키나 생성 기능은 앱에 포함하지 않아요.
 - Home Navigation v2 (2026-09-22, 2026-11-10 갱신): 홈은 언어 스낵 → `오늘의 토마토` 제목과 대화 카드(기본 5개, 더 보기·접기)를 스크롤해요. `＋ 새 대화` 버튼은 하단 탭 위 중앙에 너비 240px로 고정하고 마지막 대화가 버튼에 가리지 않도록 아래 여백을 둬요. 제목은 16px 글자 크기·좌우 8px 여백을 사용하고 가운데 정렬해요.
-- 대화 권한 v3 (2026-11-25): 회원은 보관 기본 1개·계정 최초 AI 답변 10회예요. 일회성 상점에서 슬롯 +1/+3과 답변 5/10/20을 반복 구매해요. 서버 terminal 이후에만 StoreKit 거래를 완료해요. 부족 종류에 따라 해당 상품 섹션에 스크롤·포커스를 이동하고, 구매·답변 완료·앱 복귀 때 잔액을 갱신해요. 기존 회원 대화는 잠그지 않아요. 계정 삭제 시 구매 자원은 영구 소멸하며 복원·이전할 수 없어요. Android에서는 구매 버튼을 숨겨요. 실기기 검증은 [운영 체크리스트](../docs/OPERATIONS.md#수동-검증-체크리스트--아직-실행하지-않음)를 참고해요.
+- 대화 권한 v3 (2026-11-25): 회원은 기본 대화창 슬롯 1개·계정 최초 체험 대화권 10회를 받아요. 일회성 상점에서 `대화창 슬롯 +1개`·`대화창 슬롯 +3개`와 `대화권 5회 충전`·`대화권 10회 충전`·`대화권 20회 충전`을 반복 구매해요. 서버 terminal 이후에만 StoreKit 거래를 완료해요. 부족 종류에 따라 해당 상품 구역에 스크롤·포커스를 이동하고, 구매·답변 완료·앱 복귀 때 잔액을 갱신해요. 회원 제한 활성화 시 슬롯 부족은 새 생성, 대화권 소진은 새 발화를 막으며 기존 대화 열람은 유지해요. 같은 계정 재로그인으로 서버 잔액을 조회하고 별도 구매 복원 버튼은 제공하지 않아요. 계정 삭제 시 추가 대화창 슬롯과 남은 대화권은 영구 소멸하며 복원·이전할 수 없어요. Android에서는 구매 버튼을 숨겨요. 실기기 검증은 [운영 체크리스트](../docs/OPERATIONS.md#수동-검증-체크리스트--아직-실행하지-않음)를 참고해요.
 - Account (2026-11-23 UI 갱신): 하단 `내 정보` 탭은 중립 배경 위에 프로필·대화 상점·학습 언어·계정 그룹을 카드로 구분해요. 프로필 행에서 닉네임을 관리하고, iOS 상점 행은 현재 잔액과 `잔액과 상품 보기`를 함께 표시해요. 앱 언어 설정은 온보딩으로 이동해 내 정보에 표시하지 않아요. 학습 언어는 최소 44pt 버튼에 한국어 UI 기준 `한국어로 영어 공부하기`, `영어로 한국어 공부하기`를 표시하고 언어 이름만 굵게 강조해요. 언어쌍 변경은 새 대화부터 적용되고 기존 대화는 시작 시점 언어쌍을 유지해요. 저장 후 현재 탭을 유지하며 profile과 Home의 활성 언어쌍을 갱신해요. 회원 로그아웃은 Supabase·Google sign-out과 계정별 로컬 상태 정리를 best-effort로 처리한 뒤 새 익명 게스트를 준비해요.
 - Free Chat: 홈·전체 대화 화면의 공통 시작 sheet에서 Topic Input → Topic Prep으로 이동한 뒤 첫 답변으로 대화를 시작
 - Roleplay: 홈·전체 대화 화면의 공통 시작 sheet에서 Roleplay Setup으로 이동한 뒤 상황을 골라 롤플레이 대화를 시작
@@ -305,7 +307,7 @@ flutter run --dart-define-from-file=.env.local.json
 }
 ```
 
-iOS 앱의 개인정보처리방침은 한국어 `https://www.curitalk.app/privacy`, 영어 `https://www.curitalk.app/en/privacy`를 기본값으로 사용해요. 배포별로 바꿀 때는 `--dart-define=PRIVACY_POLICY_URL=...`와 `--dart-define=PRIVACY_POLICY_URL_EN=...`을 함께 전달해요. 별도 이용약관을 사용하면 `--dart-define=SUBSCRIPTION_TERMS_URL=https://...`도 전달해요. 기본 이용약관 링크는 Apple 표준 EULA예요. 앱은 제품 가격을 App Store에서 직접 조회하므로 가격용 `dart-define`은 없어요.
+iOS 앱의 개인정보처리방침은 한국어 `https://www.curitalk.app/privacy`, 영어 `https://www.curitalk.app/en/privacy`를 기본값으로 사용해요. 배포별로 바꿀 때는 `--dart-define=PRIVACY_POLICY_URL=...`와 `--dart-define=PRIVACY_POLICY_URL_EN=...`을 함께 전달해요. 별도 이용약관을 사용하면 `--dart-define=TERMS_OF_USE_URL=https://...`도 전달해요. 기본 이용약관 링크는 Apple 표준 EULA예요. 앱은 제품 가격을 App Store에서 직접 조회하므로 가격용 `dart-define`은 없어요.
 
 Android에서 `google-services.json`을 사용하지 않으면 `GOOGLE_SERVER_CLIENT_ID`가 필요해요. iOS는 `GOOGLE_CLIENT_ID`와 별개로 OAuth 설정의 `REVERSED_CLIENT_ID` URL scheme을 `Info.plist`에 등록해야 실제 로그인이 동작해요. `GOOGLE_SERVER_CLIENT_ID`는 Supabase Google Provider에 등록한 Web OAuth client ID와 같아야 해요.
 

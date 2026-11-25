@@ -163,11 +163,11 @@ def prepare_generation(
                         raise GuestTurnsFull("게스트 체험 5회를 모두 사용했어요")
                     if not profile.is_guest and entitlement.get("remaining_turns") == 0:
                         from shared.credit_ledger import CreditsExhausted
-                        raise CreditsExhausted("남은 AI 답변 횟수가 없어요")
+                        raise CreditsExhausted("남은 대화권이 없어요")
                     reserved = (repository.count_active_conversations(user_id)
                                 + repository.count_pending_roleplay_starts(user_id))
                     if entitlement["slot_limit"] is not None and reserved >= entitlement["slot_limit"]:
-                        raise ConversationSlotsFull("추가 대화 이용권이 필요해요")
+                        raise ConversationSlotsFull("대화창 슬롯이 부족해요")
                 if previous_turn.user_message_id and access_enabled:
                     repository.reserve_guest_turn(
                         user_id,
@@ -207,11 +207,11 @@ def prepare_generation(
                         raise GuestTurnsFull("게스트 체험 5회를 모두 사용했어요")
                     if not profile.is_guest and entitlement.get("remaining_turns") == 0:
                         from shared.credit_ledger import CreditsExhausted
-                        raise CreditsExhausted("남은 AI 답변 횟수가 없어요")
+                        raise CreditsExhausted("남은 대화권이 없어요")
                     reserved = (repository.count_active_conversations(user_id)
                                 + repository.count_pending_roleplay_starts(user_id))
                     if entitlement["slot_limit"] is not None and reserved >= entitlement["slot_limit"]:
-                        raise ConversationSlotsFull("추가 대화 이용권이 필요해요")
+                        raise ConversationSlotsFull("대화창 슬롯이 부족해요")
             with latency_span("stream_reserve", operation=operation):
                 turn = store.reserve(user_id=user_id, request_id=request_id, kind=kind, input_data=input_data)
 
@@ -357,11 +357,11 @@ def complete_generated_text(user_id: str, prepared: PreparedGeneration, answer: 
                 ):
                     raise GuestTurnsFull("게스트 체험 5회를 모두 사용했어요")
                 if not profile.is_guest and entitlement.get("remaining_turns") == 0:
-                    raise CreditsExhausted("남은 AI 답변 횟수가 없어요")
+                    raise CreditsExhausted("남은 대화권이 없어요")
                 if (entitlement["slot_limit"] is not None
                         and repository.count_active_conversations(user_id)
                         + repository.count_pending_roleplay_starts(user_id) > entitlement["slot_limit"]):
-                    raise ConversationSlotsFull("추가 대화 이용권이 필요해요")
+                    raise ConversationSlotsFull("대화창 슬롯이 부족해요")
             conversation = ConversationModel(
                 id=str(uuid4()), user_id=user_id, title=role[:200],
                 conversation_type=ConversationType.ROLE_PLAYING, role_character=role,

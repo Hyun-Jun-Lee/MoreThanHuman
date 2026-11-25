@@ -91,7 +91,7 @@ class CreditLedger:
             return existing
         lot = next((lot for lot in lots if self.available(lot) > 0), None)
         if lot is None:
-            raise CreditsExhausted('남은 AI 답변 횟수가 없어요')
+            raise CreditsExhausted('남은 대화권이 없어요')
         if existing is None:
             existing = TurnReservationModel(user_id=profile.id, request_key=request_key)
             self.db.add(existing)

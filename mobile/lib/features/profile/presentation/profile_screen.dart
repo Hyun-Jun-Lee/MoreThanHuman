@@ -52,8 +52,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         : entitlement.isAdmin
         ? copy.adminUnlimitedAccess
         : (copy.isKorean
-              ? 'AI 답변 ${entitlement.remainingTurns ?? '—'}회 · 대화 ${entitlement.slotLimit ?? '—'}개'
-              : '${entitlement.remainingTurns ?? '—'} replies · ${entitlement.slotLimit ?? '—'} conversations');
+              ? '대화권 ${entitlement.remainingTurns ?? '—'}회 · 대화창 슬롯 ${entitlement.slotLimit ?? '—'}개'
+              : '${entitlement.remainingTurns ?? '—'} conversation credits · ${entitlement.slotLimit ?? '—'} conversation slot${entitlement.slotLimit == 1 ? '' : 's'}');
     final ColorScheme colors = Theme.of(context).colorScheme;
     final bool actionsDisabled =
         isLoggingOut || isDeletingAccount || isSavingLanguage;

@@ -26,8 +26,8 @@ abstract final class AppConfig {
     'PRIVACY_POLICY_URL_EN',
     defaultValue: 'https://www.curitalk.app/en/privacy',
   );
-  static const String subscriptionTermsUrl = String.fromEnvironment(
-    'SUBSCRIPTION_TERMS_URL',
+  static const String termsOfUseUrl = String.fromEnvironment(
+    'TERMS_OF_USE_URL',
     defaultValue:
         'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/',
   );

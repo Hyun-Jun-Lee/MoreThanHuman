@@ -1,7 +1,7 @@
 # 모바일 화면별 UX Flow / Wireframe
 
 > 기준일: 2026-06-11  
-> 최종 갱신: 2026-11-25
+> 최종 갱신: 2026-11-25 · 대화 상점 흐름과 상품명 반영
 > 대상: Flutter v1 모바일 앱  
 > 범위: 화면 구조, 사용자 흐름, API 연결 지점, low-fi wireframe
 
@@ -34,7 +34,8 @@
 | Free Chat Start | 첫 질문 선택 후 답변 | `POST /api/conversations/start/free-chat/` |
 | Roleplay Setup | 롤플레이 상황 선택 | 없음 |
 | Conversation | 채팅, 문법 피드백 polling | `POST /api/conversations/{id}/message/`, `GET /api/grammar/message/{message_id}/` |
-| Profile | 닉네임·계정 잔액·학습 언어·계정 관리 | `GET /api/auth/me`, `PUT /api/auth/me/nickname`, `PUT /api/auth/me/language-preferences` |
+| Profile | 닉네임·계정 잔액·학습 언어·계정 관리 | `GET /api/auth/me`, `GET /api/billing/entitlement/`, `PUT /api/auth/me/nickname`, `PUT /api/auth/me/language-preferences` |
+| Conversation Store | 대화창 슬롯 추가·대화권 충전 | `GET /api/billing/entitlement/`, `GET /api/conversations/access/`, `POST /api/billing/apple/verify/` |
 
 ## 3. 글로벌 UX Flow
 
@@ -529,6 +530,16 @@ Timeout:
 - 회원은 `GET /api/auth/me`로 사용자 정보를 보여줘요.
 - 회원 로그아웃은 Supabase 세션과 회원 전용 로컬 상태를 정리한 뒤 새 익명 게스트를 초기화해 Home으로 이동해요.
 
+### 5.12 Conversation Store — 일회성 대화 상점
+
+- 일반 회원은 기본 대화창 슬롯 1개와 계정 최초 체험 대화권 10회를 받아요. 상단에 사용 중인 대화창 슬롯과 남은 대화권·체험/추가 잔액을 표시해요.
+- `대화창 슬롯 추가` 구역에는 `대화창 슬롯 +1개`·`대화창 슬롯 +3개`, `대화권 충전` 구역에는 `대화권 5회 충전`·`대화권 10회 충전`·`대화권 20회 충전` 카드와 App Store 가격을 표시해요. 같은 상품을 반복 구매할 수 있어요.
+- 슬롯 부족은 `purpose=buy_slots`, 대화권 부족은 `purpose=buy_turns`로 이동해 해당 구역을 스크롤·포커스해요. 게스트는 로그인으로 안내하고, Android에서는 구매 버튼을 숨겨요.
+- 회원 제한 활성화 시 슬롯 부족은 새 대화 생성을, 대화권 소진은 새 발화를 막아요. 기존 회원 대화는 잠그지 않으며 기록은 계속 열람할 수 있어요. 대화를 삭제하면 슬롯만 비워지고 사용한 대화권은 돌아오지 않아요.
+- 구매 처리와 구매 검증 후 잔액 재조회 중에는 로딩 표시와 함께 중복 구매·뒤로가기를 막아요. 서버 terminal 결과를 확인한 뒤에만 StoreKit 거래를 완료하고, 구매·답변 완료·앱 복귀 때 잔액을 갱신해요.
+- 별도 구매 복원 버튼은 제공하지 않아요. 같은 tomatalk 계정으로 로그인하면 서버 잔액을 조회해요. 계정 삭제 시 추가 대화창 슬롯·남은 대화권의 영구 소멸과 재가입 복원·다른 계정 이전 불가를 확인받아요.
+- 이용약관·개인정보처리방침 링크와 대화권 사용 단위·실패 시 반환·환불 검토 조건을 안내해요. 상세 정책은 [대화 이용 계약](../.agent/_contracts/CONVERSATION_ACCESS.md), 운영 검증은 [운영 가이드](OPERATIONS.md#대화-이용-권한-활성화)를 참고해요.
+
 ## 6. 핵심 상태 모델
 
 | 상태 | 설명 |
@@ -556,6 +567,8 @@ Timeout:
 | 롤플레이 시작 | `POST /api/conversations/start/roleplay/` | Conversation 이동 |
 | 메시지 전송 | `POST /api/conversations/{conversation_id}/message/` | 메시지 추가, grammar polling 시작 |
 | 문법 피드백 확인 | `GET /api/grammar/message/{message_id}/` | 메시지 아래 피드백 표시 |
+| 대화 상점 열기 | `GET /api/billing/entitlement/`, `GET /api/conversations/access/` | 대화창 슬롯 사용량·대화권 잔액 표시 |
+| 일회성 상품 구매 | StoreKit, `POST /api/billing/apple/verify/` | terminal 확인 후 거래 완료·잔액 갱신 |
 | 로그아웃 | Supabase sign-out, 익명 bootstrap | 게스트 Home 이동 |
 
 ## 8. v1에서 의도적으로 제외
@@ -564,9 +577,6 @@ Timeout:
 - 친구/커뮤니티 기능
 - push notification
 - WebSocket/SSE 기반 실시간 피드백
-- 결제/구독
-
-회원용 대화 권한 v3 (2026-11-25): 일반 회원은 기본 보관 대화 1개·계정 최초 AI 답변 10회를 받아요. 상점은 잔액/보관 현황과 슬롯 +1/+3·답변 5/10/20 두 섹션으로 구성해요. 슬롯 부족은 `purpose=buy_slots`, 답변 부족은 `purpose=buy_turns`로 이동해 해당 섹션을 스크롤·포커스해요. 회원 기존 대화는 잠그지 않아요. StoreKit terminal 후에만 finish하고 구매·답변 완료·앱 복귀 때 잔액을 갱신해요. 계정 삭제는 구매 자원 영구 소멸·재가입 복원 및 계정 이전 불가를 확인받아요. 운영 검증은 [운영 가이드](OPERATIONS.md#대화-이용-권한-활성화)를 참고해요.
 
 ## 9. 구현 순서
 

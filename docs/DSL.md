@@ -557,21 +557,21 @@ NDJSON 각 줄에는 `event`, 0부터 증가하는 `seq`, `turn_id`, `attempt_id
 
 홈은 발행된 주제가 있으면 최근 대화 로딩 상태와 저장된 대화 수에 관계없이 추천 주제를 보여줘요. 이전 주의 발행 주제도 보관되지 않았다면 시작할 수 있어요. 탭 시 검색·사실 확인·Topic Prep은 실행하지 않아요.
 
-### 대화 슬롯과 소비성 답변 권한 v3 (2026-11-25)
+### 대화창 슬롯과 소비성 대화권 v3 (2026-11-25)
 
-회원은 기본 보관 대화 1개와 계정당 한 번 발급되는 체험 10턴을 받아요. 게스트의 활성 대화 1개·누적 5회는 별도 원장이며 회원 전환 시 사용량을 합산하지 않아요. 관리자는 무제한이에요. 회원 제한 rollout은 `CONVERSATION_ACCESS_ENABLED=false`가 기본이며 게스트 제한은 항상 적용해요.
+회원은 기본 대화창 슬롯 1개와 계정당 한 번 발급되는 체험 대화권 10회를 받아요. 게스트의 활성 대화 1개·누적 5회는 별도 원장이며 회원 전환 시 사용량을 합산하지 않아요. 관리자는 무제한이에요. 회원 제한 rollout은 `CONVERSATION_ACCESS_ENABLED=false`가 기본이며 게스트 제한은 항상 적용해요.
 
-슬롯은 보관 대화와 진행 중 역할극 시작 예약을 합쳐 새 생성에만 검사해요. 기존 회원 대화는 잠그지 않아요. 환불로 한도를 초과해도 기존 대화는 계속 이용하고 새 생성만 차단해요. 삭제는 슬롯만 비우며 사용한 턴을 반환하지 않아요. 진행 중 스트림 삭제는 409 `TURN_IN_PROGRESS`예요.
+슬롯은 보관 대화와 진행 중 역할극 시작 예약을 합쳐 새 생성에만 검사해요. 기존 회원 대화는 잠그지 않아요. 회원 제한 활성화 시 환불로 슬롯 한도를 초과하면 새 생성만 차단하고 기존 기록은 계속 열람할 수 있어요. 기존 대화의 새 발화에는 남은 대화권이 필요해요. 삭제는 대화창 슬롯만 비우며 사용한 대화권을 반환하지 않아요. 진행 중 스트림 삭제는 409 `TURN_IN_PROGRESS`예요.
 
-한 턴은 사용자 메시지 1개와 저장된 AI 텍스트 답변 1개예요. 체험 lot을 먼저, 이후 구매·수동 lot을 생성 순서대로 사용해요. profile 잠금 안에서 예약하고 AI 텍스트와 같은 트랜잭션에서 확정해요. 실패·5분 만료는 반환하고, 텍스트 저장 뒤 TTS 실패는 차감을 유지해요. 환불된 lot은 새 예약을 막으며 기존 예약은 성공하면 확정, 실패하면 무효화해요. 고정 역할극 인사·저장된 추천 첫 질문·다시 듣기는 차감하지 않아요. 음성은 STT 전 사전 검사와 저장 전 최종 검사를 거쳐요.
+대화권 1회는 사용자 메시지 1개와 저장된 AI 텍스트 답변 1개예요. API의 `remaining_turns`·`trial_turns`·`paid_turns`는 이 단위로 나타낸 대화권 잔액이에요. 체험 lot을 먼저, 이후 구매·수동 lot을 생성 순서대로 사용해요. profile 잠금 안에서 예약하고 AI 텍스트와 같은 트랜잭션에서 확정해요. 실패·5분 만료는 반환하고, 텍스트 저장 뒤 TTS 실패는 차감을 유지해요. 환불된 lot은 새 예약을 막으며 기존 예약은 성공하면 확정, 실패하면 무효화해요. 고정 역할극 인사·저장된 추천 첫 질문·다시 듣기는 차감하지 않아요. 음성은 STT 전 사전 검사와 저장 전 최종 검사를 거쳐요.
 
 | Product ID | 유형 | 지급 |
 |---|---|---|
-| `com.morethanhuman.curitalk.slots.plus.1` | CONSUMABLE | 추가 대화 +1 |
-| `com.morethanhuman.curitalk.slots.plus.3` | CONSUMABLE | 추가 대화 +3 |
-| `com.morethanhuman.curitalk.turns.5` | CONSUMABLE | 답변 5회 |
-| `com.morethanhuman.curitalk.turns.10` | CONSUMABLE | 답변 10회 |
-| `com.morethanhuman.curitalk.turns.20` | CONSUMABLE | 답변 20회 |
+| `com.morethanhuman.curitalk.slots.plus.1` | CONSUMABLE | 대화창 슬롯 +1개 |
+| `com.morethanhuman.curitalk.slots.plus.3` | CONSUMABLE | 대화창 슬롯 +3개 |
+| `com.morethanhuman.curitalk.turns.5` | CONSUMABLE | 대화권 5회 충전 |
+| `com.morethanhuman.curitalk.turns.10` | CONSUMABLE | 대화권 10회 충전 |
+| `com.morethanhuman.curitalk.turns.20` | CONSUMABLE | 대화권 20회 충전 |
 
 - `GET /api/billing/entitlement/`: `plan=member|guest|admin`, `status`, `slot_limit`, `additional_slots`, `remaining_turns`, `trial_turns`, `paid_turns`, `unlimited`, `is_admin`, `source`, `turn_scope=account`, `limit_action`를 반환해요. 회원의 기존 호환 필드 `turn_limit`, `expires_at`은 null이에요. 게스트는 `turn_limit=5`예요.
 - `GET /api/conversations/access/`: `enabled, can_create, used_slots, slot_limit, remaining_slots, locked_count, plan, turn_scope, remaining_turns, trial_turns, paid_turns, limit_action`을 반환해요. 회원의 `locked_count`는 0이에요.
@@ -584,7 +584,7 @@ NDJSON 각 줄에는 `event`, 0부터 증가하는 `seq`, `turn_id`, `attempt_id
 
 소비성 구매 복원 API·UI는 제공하지 않아요. 같은 tomatalk 계정의 재설치·기기 변경은 서버 잔액을 조회해요. 계정 삭제·재가입·다른 계정에는 과거 구매를 복원하거나 이전하지 않아요. 삭제 후 원문 구매·계정 ID 대신 버전형 HMAC tombstone을 보존해 재지급을 차단해요.
 
-자체 지원 환불 검토는 턴 lot의 확정 사용이 0회이거나 슬롯 거래의 `first_used_at`이 없을 때만 가능해요. 첫 정상 사용자 답변 저장 시 그 전에 지급된 모든 미사용 슬롯 거래에 사용 시각을 기록하며 삭제로 되돌리지 않아요. Apple의 환불 심사는 별개이며 확정 환불은 사용 여부와 무관하게 반영해요.
+자체 지원 환불 검토는 대화권 lot의 확정 사용이 0회이거나 대화창 슬롯 거래의 `first_used_at`이 없을 때만 가능해요. 첫 정상 사용자 답변 저장 시 그 전에 지급된 모든 미사용 슬롯 거래에 사용 시각을 기록하며 삭제로 되돌리지 않아요. Apple의 환불 심사는 별개이며 확정 환불은 사용 여부와 무관하게 반영해요.
 
 멀티모달 대화 API는 아래 다섯 가지 요청 형태를 기본 계약으로 사용해요.
 
@@ -612,11 +612,11 @@ SSE는 `/api/conversations/messages/{id}/grammar-feedback/stream?token=<access_t
 
 ### 관리자와 수동 자원 지급 v2
 
-관리자는 앱의 슬롯·턴을 무제한으로 이용해요. 관리자 웹의 코드·세션·CSRF 계약은 유지해요. 일반 회원에게만 슬롯과 턴을 독립적으로 지급할 수 있어요.
+관리자는 앱의 대화창 슬롯·대화권을 무제한으로 이용해요. 관리자 웹의 코드·세션·CSRF 계약은 유지해요. 일반 회원에게만 대화창 슬롯과 대화권을 독립적으로 지급할 수 있어요. API의 `resource_kind=slots|turns`는 각각 대화창 슬롯·대화권을 뜻해요.
 
 `GET /api/admin/users/`는 `q, is_admin, limit, offset`으로 계정을 조회해요. 상세 `/{user_id}/entitlement/`는 현재 `effective`, 출처별 `credits`, 상품별 `purchases`와 `support_refund_eligible`을 반환해요. 지원 담당자가 거래를 구별할 수 있도록 인증된 관리자 응답에만 `transaction_id`와 `created_at`을 포함해요.
 
-`PUT /api/admin/users/{user_id}/manual-entitlement/`는 `{request_id: UUID, resource_kind: slots|turns, quantity: positive integer}`를 받아요. 같은 ID·내용은 중복 지급하지 않고 다른 내용은 409예요. `DELETE /api/admin/users/{user_id}/manual-entitlement/{grant_id}/`는 해당 수동 지급의 미사용분을 회수해요. `/manual-entitlement/history/`는 지급 수량·종류·생성·회수 시각을 페이지 조회해요. 회수로 기존 대화를 잠그거나 확정 턴을 돌려주지 않아요.
+`PUT /api/admin/users/{user_id}/manual-entitlement/`는 `{request_id: UUID, resource_kind: slots|turns, quantity: positive integer}`를 받아요. 같은 ID·내용은 중복 지급하지 않고 다른 내용은 409예요. `DELETE /api/admin/users/{user_id}/manual-entitlement/{grant_id}/`는 해당 수동 지급의 미사용분을 회수해요. `/manual-entitlement/history/`는 지급 수량·종류·생성·회수 시각을 페이지 조회해요. 회수로 기존 대화를 잠그거나 사용이 확정된 대화권을 돌려주지 않아요.
 
 관리자 웹 `/admin`은 공유 코드만으로 로그인해요. 코드는 서버의 `ADMIN_ACCESS_CODE` 환경변수에만 두고 DB에 저장하지 않아요. 코드 변경 후 API를 재시작하면 기존 확인 세션은 조회되지 않아요. 입장 코드에는 길이 제한이 없으며 빈 환경변수 값은 미설정으로 처리하고 앞뒤 공백은 허용하지 않아요. `POST /api/admin/access/verify/`는 인증 없이 `{ "code": "..." }`를 받고 확인 세션 쿠키와 `csrf_token`을 발급해요. 코드 미설정은 503, 오류는 403, 요청 IP의 5회 오류 잠금은 429예요. `GET /api/admin/access/status/`는 `{verified, csrf_token, expires_at}`을, `POST /api/admin/access/logout/`은 세션 종료를 처리해요. 기존 관리자 사용자 API 6개는 모두 유효한 관리자 세션 쿠키가 필요하고, PUT·DELETE는 `X-CSRF-Token`을 요구해요. 세션은 30분 비활동 또는 8시간 후 만료해요. `profiles.is_admin`은 사용자 앱의 무제한 대화 이용에만 적용해요.
 
@@ -869,6 +869,8 @@ module LLM {
 ```
 
 ## 문서 변경 기록
+
+- 2026-11-25: 일회성 상품·관리자 지급 명칭을 대화창 슬롯·대화권으로 통일하고 잔액 필드와 이용 제한의 의미를 명시했어요.
 
 - 2026-11-23: 익명 게스트 bootstrap, 버전형 동의, 계정 누적 5회, 계정 이전·30일 삭제 계약을 추가했어요.
 - 2026-11-15: 관리자 입장 코드를 DB에서 서버 환경변수로 옮기고 세션 검증 방식을 갱신했어요.

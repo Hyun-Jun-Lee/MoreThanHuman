@@ -174,12 +174,12 @@ if (page === 'dashboard') {
   }
 
   function renderEntitlement(data) {
-    document.getElementById('effective-plan').textContent = data.effective.unlimited ? '무제한' : '대화 ' + data.effective.slot_limit + '개';
-    document.getElementById('effective-detail').textContent = 'AI 답변 ' + (data.effective.remaining_turns ?? '∞') + '회';
+    document.getElementById('effective-plan').textContent = data.effective.unlimited ? '무제한' : '대화창 슬롯 ' + data.effective.slot_limit + '개';
+    document.getElementById('effective-detail').textContent = '대화권 ' + (data.effective.remaining_turns ?? '∞') + '회';
     document.getElementById('apple-plan').textContent = data.purchases.length + '건';
     document.getElementById('apple-detail').textContent = data.purchases.map(p => p.transaction_id + ' · ' + p.product_id + ' · ' + p.status + ' · 지원 환불 검토 ' + (p.support_refund_eligible ? '가능' : '불가')).join('\n');
-    document.getElementById('manual-plan').textContent = '체험 ' + (data.effective.trial_turns ?? 0) + '회';
-    document.getElementById('manual-detail').textContent = '구매·수동 잔액 ' + (data.effective.paid_turns ?? 0) + '회';
+    document.getElementById('manual-plan').textContent = '체험 대화권 ' + (data.effective.trial_turns ?? 0) + '회';
+    document.getElementById('manual-detail').textContent = '구매·수동 대화권 ' + (data.effective.paid_turns ?? 0) + '회';
   }
 
   function renderHistory(data) {
@@ -190,7 +190,7 @@ if (page === 'dashboard') {
       const row = document.createElement('div');
       row.className = 'history-row';
       const main = document.createElement('div');
-      addText(main, 'strong', (grant.resource_kind === 'slots' ? '추가 대화 ' : 'AI 답변 ') + grant.quantity);
+      addText(main, 'strong', (grant.resource_kind === 'slots' ? '대화창 슬롯 ' + grant.quantity + '개' : '대화권 ' + grant.quantity + '회'));
       addText(main, 'small', `부여 ${formatTime(grant.created_at)}`);
       row.appendChild(main);
       addText(row, 'span', grant.revoked_at ? '회수 ' + formatTime(grant.revoked_at) : '지급됨');

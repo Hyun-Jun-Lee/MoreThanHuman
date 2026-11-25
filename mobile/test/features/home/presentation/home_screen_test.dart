@@ -43,7 +43,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('10'), findsOneWidget);
-      expect(find.text('AI 답변 10회 · 대화 1개'), findsOneWidget);
+      expect(find.text('대화권 10회 · 대화창 슬롯 1개'), findsOneWidget);
       expect(find.text('현재 계정 잔액'), findsOneWidget);
       expect(find.text('잔액과 상품 보기'), findsOneWidget);
       expect(
@@ -68,7 +68,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('10'), findsOneWidget);
-    expect(find.text('10 replies · 1 conversations'), findsOneWidget);
+    expect(find.text('10 conversation credits · 1 conversation slot'), findsOneWidget);
     expect(find.text('Account balance'), findsOneWidget);
     expect(find.text('Balance and products'), findsOneWidget);
     expect(find.text('Learn English in Korean'), findsOneWidget);
@@ -100,7 +100,7 @@ void main() {
     );
     expect(find.text('Please wait a moment.'), findsOneWidget);
     expect(find.text('10'), findsNothing);
-    expect(find.text('10 replies · 1 conversations'), findsNothing);
+    expect(find.text('10 conversation credits · 1 conversation slot'), findsNothing);
 
     entitlement.complete(
       const BillingEntitlement(
@@ -111,7 +111,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('15 replies · 2 conversations'), findsOneWidget);
+    expect(find.text('15 conversation credits · 2 conversation slots'), findsOneWidget);
     expect(find.text('Checking your balance.'), findsNothing);
     expect(
       find.byKey(const ValueKey('profile-subscription-loading')),
@@ -147,7 +147,7 @@ void main() {
       findsNothing,
     );
     expect(find.text('10'), findsNothing);
-    expect(find.text('10 replies · 1 conversations'), findsNothing);
+    expect(find.text('10 conversation credits · 1 conversation slot'), findsNothing);
 
     final container = ProviderScope.containerOf(
       tester.element(find.byType(ProfileScreen)),
@@ -171,7 +171,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('10 replies · 1 conversations'), findsOneWidget);
+    expect(find.text('10 conversation credits · 1 conversation slot'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('profile-subscription-loading')),
       findsNothing,
@@ -179,7 +179,7 @@ void main() {
   });
 
   testWidgets(
-    'profile hides an old 10 replies · 1 conversations during a failed recheck',
+    'profile hides an old 10 conversation credits · 1 conversation slot during a failed recheck',
     (WidgetTester tester) async {
       final nextEntitlement = Completer<BillingEntitlement>();
       var reads = 0;
@@ -201,7 +201,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('10 replies · 1 conversations'), findsOneWidget);
+      expect(find.text('10 conversation credits · 1 conversation slot'), findsOneWidget);
 
       final container = ProviderScope.containerOf(
         tester.element(find.byType(ProfileScreen)),
@@ -217,12 +217,12 @@ void main() {
         find.byKey(const ValueKey('profile-subscription-loading')),
         findsOneWidget,
       );
-      expect(find.text('10 replies · 1 conversations'), findsNothing);
+      expect(find.text('10 conversation credits · 1 conversation slot'), findsNothing);
 
       nextEntitlement.completeError(StateError('Subscription unavailable'));
       await tester.pumpAndSettle();
       expect(find.text('Could not check your balance.'), findsOneWidget);
-      expect(find.text('10 replies · 1 conversations'), findsNothing);
+      expect(find.text('10 conversation credits · 1 conversation slot'), findsNothing);
       expect(
         find.byKey(const ValueKey('profile-subscription-loading')),
         findsNothing,
@@ -257,7 +257,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Learner Kim'), findsOneWidget);
-    expect(find.text('10 replies · 1 conversations'), findsOneWidget);
+    expect(find.text('10 conversation credits · 1 conversation slot'), findsOneWidget);
 
     authRepository.nickname = 'Updated Learner';
     plan = 'advance';
@@ -268,7 +268,7 @@ void main() {
     expect(authRepository.bootstrapReads, 1);
     expect(entitlementReads, 2);
     expect(find.text('Updated Learner'), findsOneWidget);
-    expect(find.text('15 replies · 2 conversations'), findsOneWidget);
+    expect(find.text('15 conversation credits · 2 conversation slots'), findsOneWidget);
   });
 
   testWidgets('home delegates navigation to the shared shell', (tester) async {
@@ -332,7 +332,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(
         find.text(
-          'Your saved conversations have reached the limit. Delete a conversation or buy extra slots. Deleting does not return used reply credits.',
+          'All conversation slots are in use. Delete a conversation or add slots. Deleting does not return used conversation credits.',
         ),
         findsWidgets,
       );
@@ -694,7 +694,7 @@ void main() {
     expect(find.text('Start a conversation?'), findsNothing);
     expect(
       find.text(
-        'Your saved conversations have reached the limit. Delete a conversation or buy extra slots. Deleting does not return used reply credits.',
+        'All conversation slots are in use. Delete a conversation or add slots. Deleting does not return used conversation credits.',
       ),
       findsOneWidget,
     );

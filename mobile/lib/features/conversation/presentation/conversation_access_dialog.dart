@@ -17,7 +17,7 @@ Future<void> showConversationAccessDialog(
         guestLimit
             ? copy.signInToContinueLabel
             : purpose == 'buy_turns'
-            ? (copy.isKorean ? 'AI 답변 충전' : 'AI reply credits')
+            ? (copy.isKorean ? '대화권 충전' : 'Conversation credits')
             : copy.additionalConversationLabel,
       ),
       content: Text(

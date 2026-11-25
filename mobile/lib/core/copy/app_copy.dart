@@ -167,8 +167,8 @@ class AppCopy {
   String get adminUnlimitedAccess =>
       isKorean ? '관리자 무제한 이용' : 'Unlimited admin access';
   String get adminUnlimitedDescription => isKorean
-      ? '구독 없이 모든 기능을 이용할 수 있어요.'
-      : 'All features are available without a subscription.';
+      ? '대화창 슬롯과 대화권 제한 없이 이용할 수 있어요.'
+      : 'Use conversation slots and credits without limits.';
   String get manuallyGrantedPlan =>
       isKorean ? '관리자가 부여한 이용 권한이에요.' : 'This access was granted by an admin.';
   String get purchaseIosOnly => isKorean
@@ -203,19 +203,19 @@ class AppCopy {
   String get backToHomeLabel => isKorean ? '홈으로 돌아가기' : 'Back to home';
   String get conversationTitle => isKorean ? '대화' : 'Conversation';
   String get additionalConversationLabel =>
-      isKorean ? '추가 대화' : 'Additional conversation';
+      isKorean ? '대화창 슬롯 추가' : 'Add conversation slots';
   String get additionalConversationLocked => isKorean
-      ? '보관 가능한 대화 수가 가득 찼어요. 대화를 삭제하거나 추가 대화 수를 구매해 주세요. 삭제해도 사용한 답변 횟수는 돌아오지 않아요.'
-      : 'Your saved conversations have reached the limit. Delete a conversation or buy extra slots. Deleting does not return used reply credits.';
+      ? '대화창 슬롯을 모두 사용 중이에요. 대화를 삭제하거나 대화창 슬롯을 추가해 주세요. 삭제해도 사용한 대화권은 돌아오지 않아요.'
+      : 'All conversation slots are in use. Delete a conversation or add slots. Deleting does not return used conversation credits.';
   String get additionalConversationLockedSemantic =>
       isKorean ? '잠긴 대화' : 'Locked conversation';
   String get accessDialogConfirm => isKorean ? '확인' : 'OK';
   String get conversationTurnLimitReached => isKorean
-      ? '남은 AI 답변 횟수가 없어요. 답변을 충전하면 계속할 수 있고, 이전 대화는 그대로 볼 수 있어요.'
-      : 'No AI reply credits remain. Buy a reply pack to continue. Your conversation history stays available.';
+      ? '남은 대화권이 없어요. 대화권을 충전하면 계속할 수 있고, 이전 대화는 그대로 볼 수 있어요.'
+      : 'No conversation credits remain. Add credits to continue. Your conversation history stays available.';
   String get guestTurnLimitReached => isKorean
-      ? '게스트 체험 5회를 모두 사용했어요. 로그인하면 대화를 보존하고 회원 체험 10회를 계정당 한 번 받아요. 게스트 사용량은 회원 체험에서 차감하지 않아요.'
-      : 'You have used all 5 guest turns. Sign in to keep your conversations and receive a one-time 10-reply member trial. Guest usage does not reduce that trial.';
+      ? '게스트 체험 대화권 5회를 모두 사용했어요. 로그인하면 대화를 보존하고 회원 체험 대화권 10회를 계정당 한 번 받아요. 게스트 사용량은 회원 체험에서 차감하지 않아요.'
+      : 'You have used all 5 guest trial credits. Sign in to keep your conversations and receive 10 member trial credits once per account. Guest usage does not reduce that trial.';
   String get signInToContinueLabel =>
       isKorean ? '로그인하고 계속하기' : 'Sign in to continue';
   String get deleteConversationTooltip =>
@@ -382,8 +382,8 @@ class AppCopy {
       ? '계정과 대화·학습 기록이 영구적으로 삭제돼요. 재가입해도 이 기록은 복구되지 않아요.'
       : 'Your account and learning history will be permanently deleted. Rejoining will not restore this history.';
   String get deleteAccountSubscriptionWarning => isKorean
-      ? '구매한 추가 대화 수와 모든 남은 답변 횟수가 영구 소멸해요. 재가입하거나 다른 계정으로 로그인해도 복원·이전할 수 없어요.'
-      : 'All purchased extra slots and remaining reply credits are permanently lost. They cannot be restored after re-registration or transferred to another account.';
+      ? '구매한 추가 대화창 슬롯과 남은 대화권이 영구 소멸해요. 재가입하거나 다른 계정으로 로그인해도 복원·이전할 수 없어요.'
+      : 'Purchased extra conversation slots and remaining conversation credits are permanently lost. They cannot be restored after re-registration or transferred to another account.';
   String get deleteAccountAppleWarning => isKorean
       ? 'Apple 로그인을 다시 요청할 수 있어요. 연결 해제에 실패해도 계정 삭제는 계속되며, Apple 계정 설정에서 앱 연결을 직접 해제할 수 있어요.'
       : 'You may be asked to sign in with Apple again. If disconnection fails, account deletion continues and you can remove the app in Apple Account settings.';

@@ -9,6 +9,8 @@ void main() {
       final english = AppCopy.forLocale(const Locale('en'));
       expect(korean.subscriptionTitle, '대화 상점');
       expect(english.subscriptionDialogActionLabel, 'Open store');
+      expect(korean.additionalConversationLocked, contains('대화창 슬롯'));
+      expect(korean.conversationTurnLimitReached, contains('대화권'));
       expect(korean.deleteAccountSubscriptionWarning, contains('영구'));
       expect(
         english.deleteAccountSubscriptionWarning,

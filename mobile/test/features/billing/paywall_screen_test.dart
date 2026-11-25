@@ -82,10 +82,10 @@ void main() {
     (tester) async {
       final controller = _TestBillingController();
       await showStore(tester, controller);
-      expect(find.text('남은 AI 답변 17회'), findsOneWidget);
-      expect(find.text('보관 대화 2 / 4개'), findsOneWidget);
+      expect(find.text('남은 대화권 17회'), findsOneWidget);
+      expect(find.text('대화창 슬롯 2 / 4개 사용 중'), findsOneWidget);
       expect(find.text('구매 복원'), findsNothing);
-      await tester.scrollUntilVisible(find.text('대화 +1개'), 250);
+      await tester.scrollUntilVisible(find.text('대화창 슬롯 +1개'), 250);
       await tester.tap(find.widgetWithText(FilledButton, '구매').first);
       await tester.pump();
       expect(
@@ -94,20 +94,20 @@ void main() {
       );
       await tester.tap(find.widgetWithText(FilledButton, '구매').first);
       expect(controller.purchases.length, 2);
-      await tester.scrollUntilVisible(find.text('답변 20회'), 250);
-      expect(find.text('답변 5회'), findsOneWidget);
-      expect(find.text('답변 10회'), findsOneWidget);
+      await tester.scrollUntilVisible(find.text('대화권 20회 충전'), 250);
+      expect(find.text('대화권 5회 충전'), findsOneWidget);
+      expect(find.text('대화권 10회 충전'), findsOneWidget);
     },
   );
 
   testWidgets('turn shortage focuses reply section', (tester) async {
     await showStore(tester, _TestBillingController(), purpose: 'buy_turns');
-    expect(find.text('AI 답변 충전').hitTestable(), findsOneWidget);
+    expect(find.text('대화권 충전').hitTestable(), findsOneWidget);
   });
 
   testWidgets('admins cannot purchase', (tester) async {
     await showStore(tester, _TestBillingController(), admin: true);
-    await tester.scrollUntilVisible(find.text('대화 +1개'), 250);
+    await tester.scrollUntilVisible(find.text('대화창 슬롯 +1개'), 250);
     expect(
       tester
           .widget<FilledButton>(find.widgetWithText(FilledButton, '구매').first)

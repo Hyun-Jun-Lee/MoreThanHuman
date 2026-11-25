@@ -2,6 +2,7 @@
 title: iOS Unread AI Reply Badge - Plan
 type: feat
 date: 2026-11-24
+updated: 2026-11-25
 artifact_contract: ce-unified-plan/v1
 artifact_readiness: implementation-ready
 product_contract_source: ce-plan-bootstrap
@@ -10,12 +11,14 @@ execution: code
 
 # iOS Unread AI Reply Badge - Plan
 
+> 2026-11-25 개정: 회원의 슬롯 초과·대화권 소진과 게스트 잠금을 구분해 배지 집계·검증 기준을 갱신했어요.
+
 ## Goal Capsule
 
 - **Objective:** iPhone 사용자는 열 수 있는 대화에 확인하지 않은 AI 답변이 있으면 앱 사용·복귀 시 아이콘에서 `1`을 확인하고, 마지막 미확인 답변을 보면 숫자가 사라져요.
 - **Means:** 서버가 완료된 AI 메시지의 읽음 상태를 보관하고, 실행 중인 iOS 앱이 배지 값을 동기화해요(KTD1, KTD2, KTD3).
 - **Authority:** 사용자와 합의한 범위 → `AGENTS.md`와 `.agent/rules.md` → 이 계획의 제품 요구사항 → 기술 결정과 구현 단위 순서예요.
-- **Stop conditions:** 읽음의 소유권 검증, 잠긴 대화의 배지 집계, iOS 권한 흐름이 검증되지 않으면 출시 준비가 끝난 것으로 보지 않아요.
+- **Stop conditions:** 읽음의 소유권 검증, 회원 잔액 소진·게스트 잠금의 배지 집계, iOS 권한 흐름이 검증되지 않으면 출시 준비가 끝난 것으로 보지 않아요.
 
 ---
 
@@ -41,7 +44,7 @@ execution: code
 **배지와 읽음**
 
 - R1. iOS 16 이상에서만 앱 아이콘 배지를 갱신해요.
-- R2. 열 수 있는 대화의 미확인 완료 AI 답변이 하나 이상이면 배지는 항상 `1`, 없으면 `0`이에요.
+- R2. 열 수 있는 대화의 미확인 완료 AI 답변이 하나 이상이면 배지는 항상 `1`, 없으면 `0`이에요. 회원은 대화창 슬롯 초과·대화권 소진과 무관하게 모든 소유 대화를 집계해요. 게스트 체험 소진도 열람 가능한 기록의 집계를 막지 않아요.
 - R3. AI 답변은 서버 저장과 정식 메시지 ID 확정 후, 전체 답변이 공개된 말풍선을 앱 전경의 해당 대화 화면에서 실제로 보여줬을 때 읽음 처리해요.
 - R4. 읽음 상태는 앱 재실행과 계정 전환 뒤에도 계정별로 보존하고, 기존 저장 답변은 출시 시 읽은 것으로 간주해요.
 
@@ -56,7 +59,7 @@ execution: code
 - AE1. 사용자가 AI 답변 완료 전에 다른 화면으로 이동했고 답변이 서버에 저장되면, 다음 앱 실행 또는 복귀에서 배지가 `1`이에요. Covers R2, R3, R6.
 - AE2. 사용자가 마지막 미확인 AI 답변을 실제 화면에서 확인하면 배지가 `0`이에요. 다른 미확인 답변이 남아 있으면 `1`을 유지해요. 답변 말풍선 밖을 보고 있거나 앱이 배경에 있으면 읽음 처리하지 않아요. Covers R2, R3.
 - AE3. 사용자가 권한을 거부하면 대화 기능은 계속 동작하고, 권한 창은 반복되지 않아요. Covers R5.
-- AE4. 미확인 답변이 잠긴 대화에만 있으면 배지는 `0`이에요. 대화가 다시 열리면 미확인 상태를 다시 집계해요. Covers R2.
+- AE4. 회원의 미확인 답변은 대화창 슬롯 초과나 대화권 소진 후에도 배지 `1`을 유지해요. 게스트 정책으로 잠긴 대화에만 미확인 답변이 있으면 `0`이며, 회원 전환으로 열 수 있게 되면 다시 집계해요. 게스트 체험 5회를 소진해도 열람 가능한 대화의 미확인은 계속 집계해요. Covers R2.
 - AE5. 사용자가 답변 생성 중 과거 메시지로 스크롤하고 완료 답변이 화면 밖에 남으면, 앱을 벗어났을 때 아이콘은 `1`이에요. 돌아와 그 답변을 화면에 표시하면 `0`이에요. Covers R2, R3, R6.
 - AE6. 새 사용자는 온보딩 완료 후 개인정보처리방침 링크와 AI 대화 데이터 처리 설명을 보고 AI 처리를 수락하거나 보류할 수 있어요. 배지를 건너뛰어도 AI 대화를 사용할 수 있고, AI 처리를 보류해도 배지 선택이 AI 처리 수락으로 기록되지 않아요. Covers R5, R7.
 - AE7. 기존 계정에 현재 버전의 AI 처리 수락 기록이 있으면 중복 동의를 요구하지 않아요. 새 버전에 대한 수락이 필요하면 기존 AI API 차단 규칙을 유지하고 홈에서 별도 안내해요. Covers R7.
@@ -80,7 +83,7 @@ execution: code
 - KTD2. **명시적 메시지 ID로 읽음 처리:** `POST /api/conversations/{id}/read/`는 화면에 표시된 정식 assistant ID 묶음을 받아 소유권 검증 뒤 멱등하게 읽음 처리해요. `GET /api/conversations/unread/`는 접근 가능한 대화의 미확인 존재 여부만 반환해요. 읽음 응답에도 갱신된 전역 존재값을 포함해 중복 조회를 줄여요. 범위 전체를 읽음 처리하면 동시에 도착한 새 답변까지 지울 수 있어요. Governs R2, R3.
 - KTD3. **iOS 배지 브릿지:** Flutter 상태 관리자와 iOS `UNUserNotificationCenter` 사이에 전용 브릿지를 두고, iOS 16 이상에서 권한 상태와 `setBadgeCount` 결과를 다뤄요. Apple은 배지 전용 권한 옵션과 iOS 16 이상 배지 설정 API를 제공해요([권한 API](https://developer.apple.com/documentation/usernotifications/unusernotificationcenter/requestauthorization%28options%3Acompletionhandler%3A%29), [배지 API](https://developer.apple.com/documentation/usernotifications/unusernotificationcenter/setbadgecount%28_%3Awithcompletionhandler%3A%29)). Governs R1, R5, R6.
 - KTD4. **홈 안정화 뒤 선택적 권한 요청:** 온보딩 완료 저장만 보고 요청하지 않아요. 인증된 게스트 또는 회원 홈이 표시되고 개인정보·AI 처리 안내가 끝난 뒤, 사용자가 배지를 선택했고 권한 상태가 미결정일 때만 요청해요. 온보딩 마지막 화면과 Skip 경로에 배지 용도를 설명하고, 온보딩을 건너뛴 기존 설치에는 홈에서 같은 안내와 선택지를 보여줘요. Governs R5, R7.
-- KTD5. **잠긴 대화 제외:** 미확인 조회는 기존 대화 접근 갱신 경로로 현재 슬롯 상태를 먼저 반영해요. 접근 정책이 활성화된 경우 `slot_active`인 대화만 집계하고, 비활성화된 경우 모든 소유 대화를 포함해요. 잠긴 대화의 미확인 기록 자체는 보존해요. Governs R2.
+- KTD5. **계정 유형별 열람 가능 범위:** 회원·관리자는 저장된 전체 소유 대화를 집계하며 `slot_active`·대화권 잔액·`can_send`로 제외하지 않아요. 게스트는 현재 접근 경로로 활성 슬롯 상태를 먼저 반영하고 `slot_active`인 대화만 집계해요. 게스트 제한은 회원 rollout 스위치와 무관하게 항상 적용해요. 잠긴 게스트 대화의 미확인 기록은 보존하고 회원 전환 후 다시 포함해요. Governs R2.
 - KTD6. **화면 노출과 계정 세대:** 답변 전체가 화면 상태에 공개된 뒤, 정식 말풍선 높이의 절반 또는 80 논리 픽셀 중 작은 높이가 200ms 연속 화면에 보이고 앱·경로가 전경일 때 읽음 처리해요. 계정 변경 시 이전 요청 결과를 버리고 아이콘을 `0`으로 지운 뒤 새 계정 값으로 갱신해요. Governs R3, R6.
 - KTD7. **개인정보 안내와 선택 분리:** `개인정보처리방침`은 온보딩과 프로필에서 쉽게 열 수 있는 고지 링크로 제공해요. 처리방침 전체를 일괄적으로 법정 필수 동의라고 표시하지 않아요. 외부 AI 처리에 대한 명시적 선택과 버전 기록은 유지하되, 현재 `POST /api/auth/me/ai-consent`가 `privacy_policy`와 `ai_data_processing`을 한 번에 수락하는 구조를 감사하고, 방침 확인 기록과 AI 처리 동의 기록의 의미를 분리해 UI 의사표시와 서버 기록이 일치하도록 계약을 조정해요. 온보딩 종료 시 방침과 AI 처리 내용을 보여주고, 게스트 초기화 성공 뒤 선택 결과를 서버에 저장해요. 초기화·저장 실패 시 수락 완료로 표시하거나 AI API를 열지 않아요. 배지 시스템 창은 홈이 안정화된 다음 별도 버튼/선택으로 요청해요. Governs R5, R7.
 
@@ -105,11 +108,11 @@ flowchart TB
 ### Risks and Assumptions
 
 - 현재 역방향 `ListView`는 화면 밖 메시지 위젯도 만들 수 있어요. 위젯 생성이나 텍스트 프레임 콜백만으로 읽음을 판정하지 않고 뷰포트와 전경 상태를 확인해요.
-- 구독 상태 변경 직후의 잠금 상태는 마지막 저장값과 다를 수 있어요. 미확인 존재 조회가 접근 권한을 갱신한 뒤 집계하는지 확인해요.
+- 구매·환불·대화권 소진 이후에도 회원의 기존 대화 열람과 배지 집계는 유지돼야 해요. 게스트에서 회원으로 전환할 때는 이전 슬롯 잠금값이 남아 있어도 새 회원 정책으로 집계하는지 확인해요.
 - 읽음 API가 실패하면 미확인 상태를 유지하고 다음 화면 표시·앱 복귀에서 재시도해요. 배지 값을 성공 전 낙관적으로 지우지 않아요.
 - 운영 DB의 기존 메시지 수를 배포 전에 확인해 읽음 시각 백필의 실행 시간을 판단해요.
 - 서버의 스트림 연결이 답변 저장 전에 끊기면 해당 turn은 완료 답변이 아니며 배지 대상이 아니에요.
-- 잠긴 대화의 미확인을 배지에서 제외하는 것은 해당 답변을 열어 확인할 수 없다는 현재 접근 정책에 근거한 제품 가정이에요.
+- 배지 집계는 열람 가능 여부를 기준으로 해요. 작성기 비활성화나 대화권 소진을 열람 불가로 취급하지 않으며, 잠금에 따른 제외는 게스트 정책에만 적용해요.
 - 개인정보보호법은 처리방침 공개를 요구하며 모든 개인정보 처리에 일괄 동의를 요구하지는 않아요. 실제 수집 항목과 처리 근거, 외부 AI 전달의 제3자 제공·위탁 여부 및 국외 이전 경로를 출시 전 법무/개인정보 담당자가 검토해 고지와 별도 동의가 필요한 부분을 확정해요. 이는 배지 선택과 결합하지 않아요([개인정보 보호법 제15조](https://www.law.go.kr/LSW/lsLinkCommonInfo.do?chrClsCd=010202&lsJoLnkSeq=1029334879), [제22조](https://www.law.go.kr/lsLinkCommonInfo.do?chrClsCd=010202&lsJoLnkSeq=1034512973), [제28조의8](https://www.law.go.kr/LSW/lsLinkCommonInfo.do?chrClsCd=010202&lsJoLnkSeq=1029334953), [제30조](https://www.law.go.kr/lsLinkCommonInfo.do?lsJoLnkSeq=1006185717), [개인정보위 안내](https://pipc.go.kr/np/cop/bbs/selectBoardArticle.do?bbsId=BS074&mCode=C020010000&nttId=10566), [Apple 심사 지침 5.1](https://developer.apple.com/app-store/review/guidelines/)).
 
 ---
@@ -151,15 +154,15 @@ flowchart TB
 - **Requirements:** R2, R3, R4; AE1, AE2, AE4.
 - **Dependencies:** U1.
 - **Files:** `backend/domains/conversation/schemas.py`, `backend/domains/conversation/repository.py`, `backend/domains/conversation/service.py`, `backend/domains/conversation/router.py`, `backend/tests/domains/conversation/test_unread_badge.py`, `docs/DSL.md`, `.agent/_contracts/IOS_UNREAD_BADGE.md`.
-- **Approach:** KTD2와 KTD5에 따라 읽음 대상 ID를 소유 대화의 assistant 메시지로 제한해요. 집계 조회는 현재 접근 권한을 먼저 갱신하고 잠긴 대화를 제외한 존재 여부를 반환해요. 고정 `/unread/` 경로는 동적 대화 ID 경로보다 먼저 등록해요. API 계약은 `docs/DSL.md`와 새 계약 문서에 같은 작업 단위로 기록하고 DRAFT → REVIEW → ACTIVE 절차를 거쳐요.
+- **Approach:** KTD2와 KTD5에 따라 읽음 대상 ID를 소유 대화의 assistant 메시지로 제한해요. 집계 조회는 회원의 모든 소유 대화를 포함하고, 게스트에게만 현재 슬롯 상태에 따른 잠금 제외를 적용해요. 고정 `/unread/` 경로는 동적 대화 ID 경로보다 먼저 등록해요. API 계약은 `docs/DSL.md`와 새 계약 문서에 같은 작업 단위로 기록하고 DRAFT → REVIEW → ACTIVE 절차를 거쳐요.
 - **Patterns to follow:** 기존 `GET /api/conversations/`의 소유권 경계와 응답 래퍼.
 - **Test scenarios:**
   - 사용자가 자신의 완료 assistant ID를 제출하면 읽음 상태가 바뀌고 반복 요청도 같은 결과예요.
   - 다른 계정 메시지 ID 또는 사용자 메시지 ID는 읽음 처리되지 않아요.
   - 요청한 ID 이후 새로 저장된 답변은 미확인으로 남아요.
-  - 접근 가능한 대화에 미확인 답변이 있으면 존재 조회가 참이고, 잠긴 대화에만 있으면 거짓이에요.
-  - 잠금이 해제되면 보존된 미확인 답변이 다시 집계돼요.
-  - 구독 변경으로 슬롯이 잠기거나 열리고 앱이 복귀하면 미확인 조회가 갱신된 접근 상태를 반영해요.
+  - 회원은 슬롯 초과·대화권 0회·`can_send=false`여도 소유 대화에 미확인 답변이 있으면 존재 조회가 참이에요.
+  - 게스트는 잠긴 대화에만 미확인이 있으면 거짓이며, 활성 대화는 누적 체험 5회 소진 후에도 집계돼요. 회원 제한 스위치가 꺼져도 게스트 잠금 제외는 유지돼요.
+  - 게스트에서 회원으로 전환하면 보존된 모든 소유 대화의 미확인이 다시 집계돼요. 구매·환불·대화권 소진 뒤 앱 복귀에서도 회원 배지가 잘못 지워지지 않아요.
 - **Verification:** API 응답, 실제 DB 상태, 문서 계약이 일치하고 계정 간 읽음 변경이 불가능해요.
 
 ### U3. 화면 표시 기준 읽음 처리
@@ -207,7 +210,7 @@ flowchart TB
 
 | 범위 | 실행 기준 | 확인할 결과 |
 |---|---|---|
-| 백엔드 | `backend/`에서 관련 conversation pytest 실행 | 읽음 이관·소유권·잠금 집계·동시 답변 보존 |
+| 백엔드 | `backend/`에서 관련 conversation pytest 실행 | 읽음 이관·소유권·회원 잔액 소진/게스트 잠금 집계·동시 답변 보존 |
 | Flutter | `mobile/`에서 해당 feature/widget 테스트와 `flutter analyze` 실행 | 화면 교차 판정·권한 시점·계정별 배지 동기화 |
 | iOS 실기기 | iOS 16 이상 개발 빌드로 허용/거부 및 앱 복귀 확인 | 과거 메시지 스크롤 중 새 답변 완료 → 아이콘 `1` → 답변 화면 노출 → `0`을 포함해 확인 |
 | 계약 | `docs/DSL.md`, `.agent/_contracts/IOS_UNREAD_BADGE.md`, `docs/mobile-flow-spec.md`, `.agent/architecture.md` 대조 | API·권한·읽음·범위 설명이 구현과 일치 |
@@ -218,5 +221,5 @@ flowchart TB
 
 - U0–U4의 테스트 시나리오가 통과하고 iOS 실기기 확인이 끝나요.
 - 최초 설치와 기존 설치 모두 개인정보 안내와 선택적 배지 요청 순서가 맞고, 배지를 건너뛰거나 거부해도 대화가 정상 동작해요.
-- 읽음 실패, 잠금, 삭제, 계정 전환 후 앱 아이콘에 잘못된 `1`이 지속되지 않아요.
+- 읽음 실패, 대화권 소진, 게스트 잠금, 삭제, 계정 전환 후 앱 아이콘이 실제 열람 가능한 미확인 답변의 존재와 일치해요.
 - API 계약과 관련 기준 문서를 같은 작업 단위로 갱신하고, 구현 중 포기한 임시 코드와 문서를 제거해요. 구현이 끝나면 이 계획의 확정 사항을 기준 문서와 테스트에 흡수한 뒤 계획 파일도 정리해요.

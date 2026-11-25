@@ -81,7 +81,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            ko ? '내 대화와 답변' : 'Your conversations and replies',
+                            ko ? '내 대화창 슬롯과 대화권' : 'Your conversation slots and credits',
                             style: Theme.of(context).textTheme.titleLarge,
                           ),
                           const SizedBox(height: 12),
@@ -89,18 +89,18 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                             value.isUnlimited
                                 ? (ko ? '관리자 · 무제한' : 'Admin · Unlimited')
                                 : (ko
-                                      ? '보관 대화 ${access.asData?.value.usedSlots ?? '—'} / ${value.slotLimit ?? '—'}개'
-                                      : 'Saved conversations ${access.asData?.value.usedSlots ?? '—'} / ${value.slotLimit ?? '—'}'),
+                                      ? '대화창 슬롯 ${access.asData?.value.usedSlots ?? '—'} / ${value.slotLimit ?? '—'}개 사용 중'
+                                      : 'Conversation slots ${access.asData?.value.usedSlots ?? '—'} / ${value.slotLimit ?? '—'} in use'),
                           ),
                           Text(
                             ko
-                                ? '남은 AI 답변 ${value.isUnlimited ? '∞' : (value.remainingTurns ?? '—')}회'
-                                : '${value.isUnlimited ? '∞' : (value.remainingTurns ?? '—')} AI replies remaining',
+                                ? '남은 대화권 ${value.isUnlimited ? '∞' : (value.remainingTurns ?? '—')}회'
+                                : '${value.isUnlimited ? '∞' : (value.remainingTurns ?? '—')} conversation credits remaining',
                           ),
                           Text(
                             ko
-                                ? '무료 체험 ${value.trialTurns}회 · 충전 ${value.paidTurns}회'
-                                : 'Trial ${value.trialTurns} · Purchased / granted ${value.paidTurns}',
+                                ? '체험 대화권 ${value.trialTurns}회 · 추가 대화권 ${value.paidTurns}회'
+                                : 'Trial credits ${value.trialTurns} · Added credits ${value.paidTurns}',
                           ),
                         ],
                       ),
@@ -117,7 +117,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                   children: [
                     TextButton(
                       onPressed: () =>
-                          launchUrl(Uri.parse(AppConfig.subscriptionTermsUrl)),
+                          launchUrl(Uri.parse(AppConfig.termsOfUseUrl)),
                       child: Text(ko ? '이용약관' : 'Terms of Use'),
                     ),
                     TextButton(
@@ -132,19 +132,19 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                 Text(
                   ko
                       ? '대화권 1회는 사용자 메시지 1개와 AI 텍스트 답변 1개예요. 답변 저장 전에 실패하면 반환하고, 텍스트가 저장된 뒤 음성만 실패하면 사용한 것으로 처리해요.'
-                      : 'One reply credit covers one user message and one AI text reply. Failure before saving the reply returns the credit; an audio-only failure after saving text still uses it.',
+                      : 'One conversation credit covers one user message and one AI text reply. Failure before saving the reply returns the credit; an audio-only failure after saving text still uses it.',
                 ),
                 const SizedBox(height: 16),
                 Text(
                   ko
-                      ? '같은 tomatalk 계정으로 로그인하면 잔액을 다시 확인할 수 있어요. 계정 삭제 시 모든 추가 대화 수와 턴이 영구 소멸하며, 재가입·다른 계정에는 복원하거나 이전할 수 없어요.'
-                      : 'Sign in to the same tomatalk account to access your balance. Deleting the account permanently removes all extra slots and credits. They cannot be restored after re-registration or transferred to another account.',
+                      ? '같은 tomatalk 계정으로 로그인하면 잔액을 다시 확인할 수 있어요. 계정 삭제 시 추가 대화창 슬롯과 남은 대화권이 영구 소멸하며, 재가입·다른 계정에는 복원하거나 이전할 수 없어요.'
+                      : 'Sign in to the same tomatalk account to access your balance. Deleting the account permanently removes extra conversation slots and remaining conversation credits. They cannot be restored after re-registration or transferred to another account.',
                 ),
                 const SizedBox(height: 16),
                 Text(
                   ko
-                      ? '자체 지원 환불은 턴 팩의 첫 답변 사용 전, 추가 대화 수 상품의 구매 후 첫 AI 텍스트 답변 저장 전까지만 검토해요. Apple 환불 요청은 Apple이 별도로 심사해요.'
-                      : 'Support refund review is available before the first use of a reply pack, or before the first AI text reply saved after a slot purchase. Apple reviews its refund requests separately.',
+                      ? '자체 지원 환불은 대화권 상품의 첫 사용 전, 대화창 슬롯 상품의 구매 후 첫 AI 텍스트 답변 저장 전까지만 검토해요. Apple 환불 요청은 Apple이 별도로 심사해요.'
+                      : 'Support refund review is available before the first use of a conversation credit pack, or before the first AI text reply saved after a conversation slot purchase. Apple reviews its refund requests separately.',
                 ),
                 if (!_supportsPurchases)
                   Padding(
@@ -171,8 +171,8 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                           const SizedBox(height: 32),
                           Text(
                             kind == 'slots'
-                                ? (ko ? '추가 대화 수' : 'Extra conversation slots')
-                                : (ko ? 'AI 답변 충전' : 'AI reply credits'),
+                                ? (ko ? '대화창 슬롯 추가' : 'Add conversation slots')
+                                : (ko ? '대화권 충전' : 'Conversation credits'),
                             style: Theme.of(context).textTheme.headlineSmall,
                           ),
                           const SizedBox(height: 12),
@@ -184,11 +184,11 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                                 title: Text(
                                   kind == 'slots'
                                       ? (ko
-                                            ? '대화 +${product.id.split('.').last}개'
-                                            : '+${product.id.split('.').last} conversations')
+                                            ? '대화창 슬롯 +${product.id.split('.').last}개'
+                                            : 'Conversation slots +${product.id.split('.').last}')
                                       : (ko
-                                            ? '답변 ${product.id.split('.').last}회'
-                                            : '${product.id.split('.').last} replies'),
+                                            ? '대화권 ${product.id.split('.').last}회 충전'
+                                            : '${product.id.split('.').last} conversation credits'),
                                 ),
                                 subtitle: Text(product.price),
                                 trailing: FilledButton(

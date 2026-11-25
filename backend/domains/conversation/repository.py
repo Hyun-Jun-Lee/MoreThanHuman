@@ -123,7 +123,7 @@ class ConversationRepository:
             if enabled:
                 entitlement = self._reconcile_slots_locked(profile)
                 if not profile.is_guest and entitlement.get('remaining_turns') == 0:
-                    raise CreditsExhausted('남은 AI 답변 횟수가 없어요')
+                    raise CreditsExhausted('남은 대화권이 없어요')
                 if profile.is_guest and (
                     self.count_guest_turns(profile.id, include_reserved=True)
                     >= entitlement["turn_limit"]
@@ -133,7 +133,7 @@ class ConversationRepository:
                 self.count_active_conversations(conversation.user_id)
                 + self.count_pending_roleplay_starts(conversation.user_id)
             ) >= entitlement["slot_limit"]:
-                raise ConversationSlotsFull("추가 대화 이용권이 필요해요")
+                raise ConversationSlotsFull("대화창 슬롯이 부족해요")
             conversation.slot_active = enabled
             self.db.add(conversation)
             self.db.flush()
@@ -382,7 +382,7 @@ class ConversationRepository:
                 can_create = limit is None or used < limit
                 if not profile.is_guest and entitlement.get('remaining_turns') == 0:
                     self.db.commit()
-                    raise CreditsExhausted('남은 AI 답변 횟수가 없어요')
+                    raise CreditsExhausted('남은 대화권이 없어요')
                 if profile.is_guest and (
                     self.count_guest_turns(user_id, include_reserved=True)
                     >= entitlement["turn_limit"]
@@ -395,7 +395,7 @@ class ConversationRepository:
             self.db.rollback()
             raise
         if not can_create:
-            raise ConversationSlotsFull("추가 대화 이용권이 필요해요")
+            raise ConversationSlotsFull("대화창 슬롯이 부족해요")
 
     def create_with_access(self, conversation: ConversationModel, *, enabled: bool) -> ConversationModel:
         """프로필 행 잠금 아래에서 슬롯 검사와 새 대화 INSERT를 직렬화해요."""
@@ -405,7 +405,7 @@ class ConversationRepository:
         try:
             profile, entitlement = self._locked_entitlement(conversation.user_id)
             if not profile.is_guest and entitlement.get('remaining_turns') == 0:
-                raise CreditsExhausted('남은 AI 답변 횟수가 없어요')
+                raise CreditsExhausted('남은 대화권이 없어요')
             if profile.is_guest and (
                 self.count_guest_turns(profile.id, include_reserved=True)
                 >= entitlement["turn_limit"]
@@ -413,7 +413,7 @@ class ConversationRepository:
                 raise GuestTurnsFull("게스트 체험 5회를 모두 사용했어요")
             used = self.count_active_conversations(conversation.user_id) + self.count_pending_roleplay_starts(conversation.user_id)
             if entitlement["slot_limit"] is not None and used >= entitlement["slot_limit"]:
-                raise ConversationSlotsFull("추가 대화 이용권이 필요해요")
+                raise ConversationSlotsFull("대화창 슬롯이 부족해요")
             conversation.slot_active = True
             self.db.add(conversation)
             self.db.commit()
@@ -435,7 +435,7 @@ class ConversationRepository:
                 used = (self.count_active_conversations(conversation.user_id)
                         + self.count_pending_roleplay_starts(conversation.user_id))
                 if entitlement["slot_limit"] is not None and used >= entitlement["slot_limit"]:
-                    raise ConversationSlotsFull("추가 대화 이용권이 필요해요")
+                    raise ConversationSlotsFull("대화창 슬롯이 부족해요")
             turn = self.db.query(StreamTurnModel).filter_by(
                 id=turn_id, user_id=conversation.user_id, status="pending",
             ).with_for_update().one()
@@ -504,7 +504,7 @@ class ConversationRepository:
             if not access["can_send"]:
                 if access['limit_action'] == 'login':
                     raise GuestTurnsFull("게스트 체험 5회를 모두 사용했어요")
-                raise CreditsExhausted('남은 AI 답변 횟수가 없어요')
+                raise CreditsExhausted('남은 대화권이 없어요')
 
     def lock_sendable_conversation(
         self, conversation_id: str, user_id: str, *, enabled: bool, operation: str,
@@ -532,7 +532,7 @@ class ConversationRepository:
                 raise ConversationLocked("읽기 전용 대화예요")
             limit = entitlement["turn_limit"]
             if not profile.is_guest and entitlement.get('remaining_turns') == 0:
-                raise CreditsExhausted('남은 AI 답변 횟수가 없어요')
+                raise CreditsExhausted('남은 대화권이 없어요')
             used = (
                 self.count_guest_turns(user_id, include_reserved=True)
                 if profile.is_guest else self.count_user_turns(conversation.id)
@@ -541,7 +541,7 @@ class ConversationRepository:
                 self.db.commit()
                 if profile.is_guest:
                     raise GuestTurnsFull("게스트 체험 5회를 모두 사용했어요")
-                raise CreditsExhausted("남은 AI 답변 횟수가 없어요")
+                raise CreditsExhausted("남은 대화권이 없어요")
         return conversation
 
     def assert_no_unresolved_turn(
@@ -603,7 +603,7 @@ class ConversationRepository:
             if limit is not None and used >= limit:
                 if profile.is_guest:
                     raise GuestTurnsFull("게스트 체험 5회를 모두 사용했어요")
-                raise CreditsExhausted("남은 AI 답변 횟수가 없어요")
+                raise CreditsExhausted("남은 대화권이 없어요")
             self.reserve_guest_turn_locked(
                 profile,
                 request_key=message.id,

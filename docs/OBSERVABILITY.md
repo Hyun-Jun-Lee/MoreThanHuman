@@ -1,6 +1,6 @@
 # API 로그와 지연 진단
 
-> 갱신: 2026-11-24 · API JSON stdout 계약
+> 갱신: 2026-11-25 · API JSON stdout 계약 · 계정 원장 기준 측정 조건 반영
 
 API는 요청 완료, 처리 단계, 예외를 한 줄짜리 JSON으로 stdout에 기록해요. nginx 접근 로그도 JSON으로 stdout에 기록해요. Docker가 각 컨테이너 로그를 보관하고 회전하며, 향후 Grafana Alloy가 이 출력을 Loki로 보낼 수 있어요. 현재 구성에는 Alloy·Loki 서버가 포함되지 않아요.
 
@@ -76,7 +76,7 @@ API의 `proxy_request_id`로 nginx의 같은 시도를 찾고, `trace_id`로 앱
 
 로컬 FastAPI의 `ENV=dev`와 Supabase 이메일·비밀번호 개발 계정을 준비해요. 테스트 비밀번호는 macOS 로그인 키체인의 `tomatalk-supabase-test-password` 서비스에 계정 이메일로 저장해요. `security add-generic-password -a '<개발 계정 이메일>' -s tomatalk-supabase-test-password -U -w`를 실행하면 비밀번호를 대화형으로 입력할 수 있어 셸 명령 기록에 남지 않아요. 실제 사용자 계정의 비밀번호나 서비스 역할 키를 사용하지 않아요.
 
-`cd backend && .venv/bin/python -m scripts.benchmark_conversation_list --email '<개발 계정 이메일>' --samples 20`을 실행해요. 스크립트는 로컬 `/api/auth/swagger/token`으로 실행마다 새 access token을 한 번 받고, 같은 연결에서 `GET /api/conversations/`를 순차 반복해요. 기본 준비 요청 2회는 통계에서 제외해요. 모든 목록 요청이 성공하면 클라이언트의 중앙값·p95·최댓값을 출력하고, 요청 실패 시 HTTP 코드만 표시하고 측정을 중단해요. 본문·비밀번호·토큰은 출력하지 않아요. `X-Request-ID`를 함께 출력하므로 API 로그에서 같은 요청의 `auth`, `handler`, `db_query_total_ms`를 비교할 수 있어요. 클라이언트 시간에는 로컬 전송 시간이 포함돼 서버 `duration_ms`와 측정 경계가 달라요. 측정용 계정의 대화 개수·구독 상태가 다르면 실제 사용자 요청과 시간값을 직접 비교할 수 없어요.
+`cd backend && .venv/bin/python -m scripts.benchmark_conversation_list --email '<개발 계정 이메일>' --samples 20`을 실행해요. 스크립트는 로컬 `/api/auth/swagger/token`으로 실행마다 새 access token을 한 번 받고, 같은 연결에서 `GET /api/conversations/`를 순차 반복해요. 기본 준비 요청 2회는 통계에서 제외해요. 모든 목록 요청이 성공하면 클라이언트의 중앙값·p95·최댓값을 출력하고, 요청 실패 시 HTTP 코드만 표시하고 측정을 중단해요. 본문·비밀번호·토큰은 출력하지 않아요. `X-Request-ID`를 함께 출력하므로 API 로그에서 같은 요청의 `auth`, `handler`, `db_query_total_ms`를 비교할 수 있어요. 클라이언트 시간에는 로컬 전송 시간이 포함돼 서버 `duration_ms`와 측정 경계가 달라요. 측정용 계정의 대화 개수·회원/게스트 유형·대화창 슬롯 한도·대화권 잔액·회원 제한 활성화 설정이 다르면 실제 사용자 요청과 시간값을 직접 비교할 수 없어요.
 
 토큰 발급 API는 개발 환경에서만 기본 허용돼요. 만약 로컬 `SWAGGER_TOKEN_ISSUER_SECRET`이 설정되어 있으면 이 스크립트는 사용하지 않고 별도 인증 구성을 확인해요. 측정 후 키체인 비밀번호는 `security delete-generic-password -a '<개발 계정 이메일>' -s tomatalk-supabase-test-password`로 삭제할 수 있어요.
 
