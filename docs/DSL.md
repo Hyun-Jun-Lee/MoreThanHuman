@@ -334,9 +334,9 @@ module LanguageSnack {
 }
 ```
 
-GET은 Supabase Bearer 인증 후 profile.target_language와 content_language가 같은 published 카드만 반환해요. `order=latest`(기본)는 `published_at DESC, id DESC`, `order=random`은 해당 언어의 전체 발행 목록에서 중복 없이 무작위 추출해요. limit은 1..30, 기본 12이며 다른 order 값은 422예요. 클라이언트 언어 query로 프로필을 우회하지 않아요. identity·knowledge_key·생성 메타데이터는 공개 응답에서 제외해요.
+GET은 Supabase Bearer 인증 후 profile.target_language와 content_language가 같은 published 카드만 반환해요. `order=latest`(기본)는 `published_at DESC, id DESC`, `order=random`은 해당 언어의 전체 발행 목록에서 중복 없이 무작위 추출해요. `order=category_cycle`은 여섯 유형별 최대 ceil(limit/6)개를 무작위 추출하여 regional_variant → usage_contrast → homonym → register_contrast → collocation → idiomatic_expression 순서로 교차 반환해요. 게시물이 부족하면 응답 수가 limit보다 적을 수 있어요. limit은 1..30, 기본 12이며 다른 order 값은 422예요. 클라이언트 언어 query로 프로필을 우회하지 않아요. identity·knowledge_key·생성 메타데이터는 공개 응답에서 제외해요.
 
-Home 토마토 UI v2(2026-09-18)는 `order=random&limit=12`로 하루 묶음을 구성해요. 토마토 3개에 각각 4개 콘텐츠를 연결하고, 전체 열람 후에는 기기 현지 자정까지 소진 상태를 유지해요. API 자체는 날짜별 결과를 고정하지 않으며 앱이 사용자·언어·기기 로컬 날짜별 스냅샷을 저장해요. API 단일 응답의 서로 다른 ID 추출에는 seed가 필요하지 않아요. 12개 미만일 때의 반복·캐시·진행 복원 정책은 [클라이언트 계약](../.agent/_contracts/LANGUAGE_SNACKS.md#토마토-상호작용-v1-2026-09-18-구현-결정)을 따라요.
+Home 토마토 UI v2(2026-09-18)는 `order=category_cycle&limit=30`으로 후보를 받아 여섯 유형이 두 차례 순환하는 12개 묶음을 구성해요. 후보는 위젯의 오프라인 재추첨에도 공유해요. 앱 리셋·무제한 반복 시에도 새 목록을 조회·추첨해요. 토마토 3개에 각각 4개 콘텐츠를 연결하고, 전체 열람 후에는 기기 현지 자정까지 소진 상태를 유지해요. API 자체는 날짜별 결과를 고정하지 않으며 앱이 사용자·언어·기기 로컬 날짜별 스냅샷을 저장해요. API 단일 응답의 서로 다른 ID 추출에는 seed가 필요하지 않아요. 12개 미만일 때의 반복·캐시·진행 복원 정책은 [클라이언트 계약](../.agent/_contracts/LANGUAGE_SNACKS.md#토마토-상호작용-v1-2026-09-18-구현-결정)을 따라요.
 
 POST/PATCH는 서버 `LANGUAGE_SNACKS_OPERATIONS_KEY`와 일치하는 `X-Operations-Key`가 필요해요. 일반 Bearer는 운영 권한을 대신하지 않아요. 키 미설정·불일치 403, 중복 지식 409, 입력/품질 오류와 불확실 판정 422, LLM 장애·잠금 충돌·호출/이력 한도 초과 503, 없는 항목 보관 404예요. 스낵 생성은 모든 단계에서 strict JSON Schema를 요청하고 서버 도메인 검증을 병행해요. 카테고리 작업은 최대 6개 병렬 실행하며 후보는 유형별로 최대 3개씩 독립 요청해요. 중복 검사·예약은 직렬화하고 본문·품질 검사는 병렬로 진행해요. 해당 유형·언어·관계·필드만 스키마에 포함해요. 후보 입력은 같은 언어의 모든 유형·상태 identity를 포함하고 최종 중복 검사는 ID·identity·요약 전체 이력을 유지해요. 운영 CLI의 `metrics.failures`에 원문을 제외한 검증 오류·출력 잘림·거절·HTTP 실패 진단을 남겨요. `generation_budget_exceeded`는 누적 호출 횟수 초과를 뜻하며 추정 토큰이나 전체 실행 시간으로 생성을 제한하지 않아요.
 

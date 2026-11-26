@@ -8,13 +8,34 @@ struct SnackWidgetSnapshot: Codable {
   var page: Int
   var showingContent: Bool?
   var showingTomato: Bool? = nil
+  var unlimitedReplayEnabled: Bool? = nil
 
   var isValid: Bool {
     !userId.isEmpty &&
       (language == "en" || language == "ko") &&
       (0...12).contains(basket.consumed) &&
       basket.snacks.count == 12 &&
-      basket.snacks.allSatisfy { $0.contentLanguage == language && $0.isValid }
+      basket.snacks.allSatisfy { $0.contentLanguage == language && $0.isValid } &&
+      (basket.candidates == nil || (
+        !(basket.candidates?.isEmpty ?? true) && (basket.candidates?.count ?? 0) <= 30 &&
+        basket.candidates!.allSatisfy { $0.contentLanguage == language && $0.isValid }
+      ))
+  }
+
+  mutating func redraw(day: String? = nil) {
+    basket.redraw()
+    if let day { basket.day = day }
+    page = 0
+    showingContent = false
+    showingTomato = false
+  }
+
+  mutating func closeContent() {
+    showingContent = false
+    page = 0
+    if basket.consumed == 12 && unlimitedReplayEnabled == true {
+      redraw()
+    }
   }
 
   var currentSnack: SnackWidgetContent? {
@@ -136,6 +157,25 @@ struct SnackWidgetBasket: Codable {
   var consumed: Int
   var resetId: String?
   var snacks: [SnackWidgetContent]
+  var candidates: [SnackWidgetContent]? = nil
+
+  static let categoryOrder = [
+    "regional_variant", "usage_contrast", "homonym",
+    "register_contrast", "collocation", "idiomatic_expression",
+  ]
+
+  mutating func redraw() {
+    var seen = Set<String>()
+    let source = (candidates ?? snacks).filter { seen.insert($0.id).inserted }.shuffled()
+    let groups = Dictionary(grouping: source, by: \.contentType)
+    let available = Self.categoryOrder.filter { !(groups[$0]?.isEmpty ?? true) }
+    guard !available.isEmpty else { return }
+    snacks = (0..<12).map { index in
+      let group = groups[available[index % available.count]]!
+      return group[(index / available.count) % group.count]
+    }
+    consumed = 0
+  }
 }
 
 struct SnackWidgetContent: Codable {
@@ -271,11 +311,7 @@ enum SnackWidgetStore {
     guard var snapshot = read() else { return nil }
     let today = dayString(Date())
     if snapshot.basket.day != today {
-      snapshot.basket.day = today
-      snapshot.basket.consumed = 0
-      snapshot.page = 0
-      snapshot.showingContent = false
-      snapshot.showingTomato = false
+      snapshot.redraw(day: today)
       save(snapshot)
     }
     return snapshot

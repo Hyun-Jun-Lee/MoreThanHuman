@@ -3,7 +3,7 @@
 from contextlib import contextmanager
 from uuid import uuid4
 
-from sqlalchemy import desc, func
+from sqlalchemy import case, desc, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -40,6 +40,36 @@ class LanguageSnackRepository:
         return row
 
     def list_published(self, language: str, limit: int = 12, *, order: str = "latest"):
+        if order == "category_cycle":
+            kinds = list(PAYLOAD_MODELS)
+            ranked = (
+                self.db.query(
+                    LanguageSnackModel.id,
+                    func.row_number().over(
+                        partition_by=LanguageSnackModel.content_type,
+                        order_by=func.random(),
+                    ).label("position"),
+                )
+                .filter(
+                    LanguageSnackModel.content_language == language,
+                    LanguageSnackModel.status == "published",
+                )
+                .subquery()
+            )
+            return (
+                self.db.query(LanguageSnackModel)
+                .join(ranked, ranked.c.id == LanguageSnackModel.id)
+                .filter(ranked.c.position <= (limit + len(kinds) - 1) // len(kinds))
+                .order_by(
+                    ranked.c.position,
+                    case(
+                        {kind: i for i, kind in enumerate(kinds)},
+                        value=LanguageSnackModel.content_type,
+                    ),
+                )
+                .limit(limit)
+                .all()
+            )
         ordering = (
             (func.random(),)
             if order == "random"

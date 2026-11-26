@@ -6,16 +6,27 @@ class DailySnackBasket {
   DailySnackBasket({
     required this.day,
     required List<LanguageSnack> snacks,
+    List<LanguageSnack>? candidates,
     this.consumed = 0,
     this.resetId,
-  }) : snacks = List.unmodifiable(snacks);
+  }) : snacks = List.unmodifiable(snacks),
+       candidates = List.unmodifiable(candidates ?? snacks);
 
+  static const categoryOrder = [
+    'regional_variant',
+    'usage_contrast',
+    'homonym',
+    'register_contrast',
+    'collocation',
+    'idiomatic_expression',
+  ];
   static const tomatoCount = 3;
   static const bitesPerTomato = 4;
   static const capacity = tomatoCount * bitesPerTomato;
 
   final String day;
   final List<LanguageSnack> snacks;
+  final List<LanguageSnack> candidates;
   final int consumed;
   final String? resetId;
   bool get isFinished => consumed == capacity;
@@ -32,28 +43,46 @@ class DailySnackBasket {
     final unique = {for (final snack in source) snack.id: snack}.values.toList()
       ..shuffle(random);
     if (unique.isEmpty) return null;
+    final groups = {
+      for (final kind in categoryOrder)
+        kind: unique.where((snack) => snack.contentType == kind).toList(),
+    };
+    final available = categoryOrder
+        .where((kind) => groups[kind]!.isNotEmpty)
+        .toList();
+    if (available.isEmpty) return null;
     return DailySnackBasket(
       day: dayOf(now),
       resetId: resetId,
-      snacks: List.generate(capacity, (i) => unique[i % unique.length]),
+      candidates: unique,
+      snacks: List.generate(capacity, (i) {
+        final group = groups[available[i % available.length]]!;
+        return group[(i ~/ available.length) % group.length];
+      }),
     );
   }
 
   DailySnackBasket withConsumed(int value) => DailySnackBasket(
     day: day,
     snacks: snacks,
+    candidates: candidates,
     consumed: value,
     resetId: resetId,
   );
 
-  DailySnackBasket reset(String id) =>
-      DailySnackBasket(day: day, snacks: snacks, resetId: id);
+  DailySnackBasket reset(String id) => DailySnackBasket(
+    day: day,
+    snacks: snacks,
+    candidates: candidates,
+    resetId: id,
+  );
 
   Map<String, dynamic> toJson() => {
     'day': day,
     'consumed': consumed,
     'reset_id': resetId,
     'snacks': snacks.map((snack) => snack.toJson()).toList(),
+    'candidates': candidates.map((snack) => snack.toJson()).toList(),
   };
 
   factory DailySnackBasket.fromJson(Object? json, String language) {
@@ -61,6 +90,7 @@ class DailySnackBasket {
         json['day'] is! String ||
         json['consumed'] is! int ||
         json['snacks'] is! List ||
+        (json['candidates'] != null && json['candidates'] is! List) ||
         (json['reset_id'] != null && json['reset_id'] is! String)) {
       throw const FormatException('Invalid daily snack basket.');
     }
@@ -68,7 +98,13 @@ class DailySnackBasket {
     final snacks = (json['snacks'] as List)
         .map(LanguageSnack.fromJson)
         .toList();
-    if (consumed < 0 ||
+    final candidates = json['candidates'] == null
+        ? snacks
+        : (json['candidates'] as List).map(LanguageSnack.fromJson).toList();
+    if (candidates.isEmpty ||
+        candidates.length > 30 ||
+        candidates.any((snack) => snack.contentLanguage != language) ||
+        consumed < 0 ||
         consumed > capacity ||
         snacks.length != capacity ||
         snacks.any((snack) => snack.contentLanguage != language)) {
@@ -77,6 +113,7 @@ class DailySnackBasket {
     return DailySnackBasket(
       day: json['day'] as String,
       snacks: snacks,
+      candidates: candidates,
       consumed: consumed,
       resetId: json['reset_id'] as String?,
     );

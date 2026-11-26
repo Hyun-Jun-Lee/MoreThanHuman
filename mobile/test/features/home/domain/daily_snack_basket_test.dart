@@ -5,6 +5,41 @@ import '../snack_test_fixtures.dart';
 
 void main() {
   test(
+    'six categories cycle twice with distinct random content per category',
+    () {
+      final source = [
+        for (var i = 0; i < 30; i++)
+          testSnack(i, type: DailySnackBasket.categoryOrder[i % 6]),
+      ];
+      final basket = DailySnackBasket.create(
+        source,
+        DateTime(2026),
+        random: Random(7),
+      )!;
+      expect(basket.snacks.map((s) => s.contentType), [
+        ...DailySnackBasket.categoryOrder,
+        ...DailySnackBasket.categoryOrder,
+      ]);
+      expect(basket.snacks.map((s) => s.id).toSet(), hasLength(12));
+      final restored = DailySnackBasket.fromJson(
+        basket.withConsumed(4).toJson(),
+        'en',
+      );
+      expect(restored.candidates, hasLength(30));
+      expect(restored.consumed, 4);
+      final other = DailySnackBasket.create(
+        source,
+        DateTime(2026),
+        random: Random(8),
+      )!;
+      expect(
+        other.snacks.map((s) => s.id),
+        isNot(basket.snacks.map((s) => s.id)),
+      );
+    },
+  );
+
+  test(
     'randomly chooses twelve distinct IDs without truncating to latest first',
     () {
       final source = List.generate(30, testSnack);

@@ -105,6 +105,8 @@ def test_random_order_is_validated_and_forwarded(client, repository, monkeypatch
     )
     assert http.get("/api/v2/language-snacks/?order=random&limit=12").status_code == 200
     assert calls == [("en", 12, {"order": "random"})]
+    assert http.get("/api/v2/language-snacks/?order=category_cycle&limit=12").status_code == 200
+    assert calls[-1] == ("en", 12, {"order": "category_cycle"})
     assert http.get("/api/v2/language-snacks/?order=invalid").status_code == 422
 
 

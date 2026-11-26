@@ -5,6 +5,56 @@ import XCTest
 
 class RunnerTests: XCTestCase {
 
+  func testWidgetRedrawCyclesCategoriesAndHonorsReplayPermission() throws {
+    let items = ["one", "two"].map {
+      SnackWidgetExpression(expression: $0, label: "label", meaning: "meaning",
+        usage: "usage", example: "example", exampleTranslation: nil)
+    }
+    let candidates = (0..<30).map { index in
+      let kind = SnackWidgetBasket.categoryOrder[index % 6]
+      return SnackWidgetContent(id: "candidate-\(index)", contentType: kind,
+        schemaVersion: 1, contentLanguage: "en", explanationLanguage: "ko",
+        payload: SnackWidgetPayload(items: kind == "idiomatic_expression" ? nil : items,
+          meaning: "meaning", situation: "situation", headword: "headword",
+          expression: "expression", literalMeaning: "literal", usage: "usage", example: "example"),
+        publishedAt: "2026-11-27", createdAt: "2026-11-27", updatedAt: "2026-11-27")
+    }
+    var snapshot = SnackWidgetSnapshot(userId: "user", language: "en",
+      basket: SnackWidgetBasket(day: "2026-11-27", consumed: 12, resetId: "marker",
+        snacks: Array(candidates.prefix(12)), candidates: candidates), page: 2, showingContent: true)
+    XCTAssertTrue(snapshot.isValid)
+    snapshot.closeContent()
+    XCTAssertEqual(snapshot.basket.consumed, 12)
+    snapshot.unlimitedReplayEnabled = true
+    snapshot.closeContent()
+    XCTAssertEqual(snapshot.basket.consumed, 0)
+    XCTAssertEqual(snapshot.basket.resetId, "marker")
+    XCTAssertEqual(snapshot.page, 0)
+    XCTAssertFalse(snapshot.showingContent!)
+    XCTAssertFalse(snapshot.showingTomato!)
+    let expected = SnackWidgetBasket.categoryOrder + SnackWidgetBasket.categoryOrder
+    var selections = Set<String>()
+    for _ in 0..<10 {
+      snapshot.redraw(day: "2026-11-28")
+      XCTAssertEqual(snapshot.basket.snacks.map(\.contentType), expected)
+      XCTAssertEqual(Set(snapshot.basket.snacks.map(\.id)).count, 12)
+      XCTAssertEqual(snapshot.basket.candidates?.count, 30)
+      selections.insert(snapshot.basket.snacks.map(\.id).joined(separator: ","))
+    }
+    XCTAssertGreaterThan(selections.count, 1)
+    XCTAssertEqual(snapshot.basket.day, "2026-11-28")
+    // 이전 스냅샷은 기존 카드만으로도 순환하며 권한이 없으면 반복하지 않아요.
+    snapshot.basket.candidates = nil
+    snapshot.unlimitedReplayEnabled = nil
+    snapshot.redraw()
+    XCTAssertEqual(snapshot.basket.snacks.map(\.contentType), expected)
+    snapshot.basket.consumed = 12
+    snapshot.closeContent()
+    XCTAssertEqual(snapshot.basket.consumed, 12)
+    snapshot.basket.candidates = []
+    XCTAssertFalse(snapshot.isValid)
+  }
+
   func testWidgetDecodesFlutterBasketSnapshot() throws {
     let snack = """
       {"id":"en-1","content_type":"regional_variant","schema_version":1,

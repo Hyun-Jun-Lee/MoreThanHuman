@@ -62,7 +62,7 @@ def list_language_snacks(
     user: Annotated[ProfileModel, Depends(get_current_profile)],
     db: Annotated[Session, Depends(get_db)],
     limit: int = Query(12, ge=1, le=30),
-    order: Literal["latest", "random"] = Query("latest"),
+    order: Literal["latest", "random", "category_cycle"] = Query("latest"),
 ):
     return SuccessResponse(
         data=get_language_snack_service(db).repository.list_published(

@@ -1256,6 +1256,9 @@ void main() {
     await tester.pumpWidget(
       _homeApp(
         snackStorage: storage,
+        languageSnackRepository: _FakeLanguageSnackRepository(
+          snacks: List.generate(12, testSnack),
+        ),
         basketResetRepository: resets,
         snackClock: () => now,
       ),

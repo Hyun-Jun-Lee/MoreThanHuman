@@ -59,6 +59,46 @@ void main() {
     widgetBridge = _MemoryWidgetBridge();
   });
 
+  test(
+    'reset fetches new content and ignores a late response after account switch',
+    () async {
+      final c = create();
+      addTearDown(c.dispose);
+      await c.read(dailySnackBasketProvider.future);
+      final controller = c.read(dailySnackBasketProvider.notifier);
+      repository.snacks = List.generate(12, (i) => testSnack(i + 100));
+      expect(controller.resetForTesting(), isTrue);
+      expect(controller.resetForTesting(), isFalse);
+      expect(controller.takeBite(), isNull);
+      final refreshed = (await c.read(dailySnackBasketProvider.future))!;
+      expect(
+        refreshed.snacks.every((s) => int.parse(s.id.split('-').last) >= 100),
+        isTrue,
+      );
+      final pending = Completer<List<LanguageSnack>>();
+      repository.pending = pending.future;
+      expect(controller.resetForTesting(), isTrue);
+      await Future<void>.delayed(Duration.zero);
+      user = 'user-2';
+      repository.pending = null;
+      c.invalidate(languageSnacksControllerProvider);
+      c.invalidate(snackAccountScopeProvider);
+      await c.read(dailySnackBasketProvider.future);
+      c.read(dailySnackBasketProvider.notifier).takeBite();
+      pending.complete(List.generate(12, testSnack));
+      await Future<void>.delayed(Duration.zero);
+      expect(c.read(dailySnackBasketProvider).value!.consumed, 1);
+      expect(
+        c
+            .read(dailySnackBasketProvider)
+            .value!
+            .snacks
+            .every((s) => int.parse(s.id.split('-').last) >= 100),
+        isTrue,
+      );
+    },
+  );
+
   test('widget bite appears in app and survives restart', () async {
     final c = create();
     addTearDown(c.dispose);
@@ -67,6 +107,7 @@ void main() {
     final snapshot = jsonDecode(widgetBridge.value!) as Map<String, dynamic>;
     expect(snapshot['user_id'], 'user-1');
     expect(snapshot['language'], 'en');
+    expect(snapshot['unlimited_replay_enabled'], false);
     final basket = snapshot['basket'] as Map<String, dynamic>;
     expect(basket['snacks'], hasLength(12));
     basket['consumed'] = 1;
@@ -129,7 +170,7 @@ void main() {
       expect(c.read(dailySnackBasketProvider).value!.consumed, 0);
       expect(
         c.read(dailySnackBasketProvider).value!.snacks.map((s) => s.id),
-        first.snacks.map((s) => s.id),
+        unorderedEquals(first.snacks.map((s) => s.id)),
       );
       controller.takeBite();
       await controller.refreshReset();
@@ -173,8 +214,10 @@ void main() {
       expect(controller.resetForTesting(), isFalse);
       expect(c.read(dailySnackBasketProvider).value!.consumed, 12);
       controller.setInteractionActive(false);
+      await c.read(dailySnackBasketProvider.future);
       final calls = resets.calls;
       expect(controller.resetForTesting(), isTrue);
+      await c.read(dailySnackBasketProvider.future);
       expect(resets.calls, calls);
       expect(c.read(dailySnackBasketProvider).value!.consumed, 0);
       expect(c.read(dailySnackBasketProvider).value!.resetId, 'server-1');
@@ -196,17 +239,26 @@ void main() {
     final controller = c.read(dailySnackBasketProvider.notifier);
     await controller.refreshReset();
     for (var cycle = 0; cycle < 2; cycle++) {
+      final expected = c.read(dailySnackBasketProvider).value!.snacks;
+      final calls = repository.calls;
       controller.setInteractionActive(true);
       for (var i = 0; i < 12; i++) {
-        expect(controller.takeBite()!.id, first.snacks[i].id);
+        expect(controller.takeBite()!.id, expected[i].id);
       }
       expect(c.read(dailySnackBasketProvider).value!.consumed, 12);
       expect(controller.takeBite(), isNull);
       controller.setInteractionActive(false);
+      await c.read(dailySnackBasketProvider.future);
       final replayed = c.read(dailySnackBasketProvider).value!;
       expect(replayed.consumed, 0);
+      expect(repository.calls, calls + 1);
+      await Future<void>.delayed(Duration.zero);
+      expect(jsonDecode(widgetBridge.value!)['unlimited_replay_enabled'], true);
       expect(replayed.resetId, 'server-1');
-      expect(replayed.snacks.map((s) => s.id), first.snacks.map((s) => s.id));
+      expect(
+        replayed.snacks.map((s) => s.id),
+        unorderedEquals(first.snacks.map((s) => s.id)),
+      );
     }
   });
 
@@ -227,6 +279,7 @@ void main() {
       controller.takeBite();
     }
     controller.setInteractionActive(false);
+    await c.read(dailySnackBasketProvider.future);
     expect(c.read(dailySnackBasketProvider).value!.consumed, 12);
   });
 
@@ -265,6 +318,7 @@ void main() {
       controller.takeBite();
     }
     controller.setInteractionActive(false);
+    await c.read(dailySnackBasketProvider.future);
     expect(c.read(dailySnackBasketProvider).value!.consumed, 12);
   });
 
@@ -288,6 +342,7 @@ void main() {
         controller.takeBite();
       }
       controller.setInteractionActive(false);
+      await c.read(dailySnackBasketProvider.future);
       expect(c.read(dailySnackBasketProvider).value!.consumed, 0);
     },
   );
@@ -312,6 +367,7 @@ void main() {
       await controller.refreshReset();
       expect(c.read(dailySnackBasketProvider).value!.consumed, 1);
       controller.setInteractionActive(false);
+      await c.read(dailySnackBasketProvider.future);
       expect(c.read(dailySnackBasketProvider).value!.consumed, 0);
     },
   );
@@ -457,11 +513,12 @@ class _Repository implements LanguageSnackRepository {
   List<LanguageSnack> snacks = List.generate(12, testSnack);
   int calls = 0;
   bool fail = false;
+  Future<List<LanguageSnack>>? pending;
   @override
   Future<List<LanguageSnack>> listPublished() async {
     calls++;
     if (fail) throw StateError('offline');
-    return snacks;
+    return pending ?? snacks;
   }
 }
 

@@ -45,8 +45,7 @@ struct CloseSnackContentIntent: AppIntent {
 
   func perform() async throws -> some IntentResult {
     guard var snapshot = SnackWidgetStore.current() else { return .result() }
-    snapshot.showingContent = false
-    snapshot.page = 0
+    snapshot.closeContent()
     SnackWidgetStore.save(snapshot, reload: false)
     return .result()
   }
