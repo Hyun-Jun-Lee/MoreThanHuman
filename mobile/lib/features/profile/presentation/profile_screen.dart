@@ -1,3 +1,5 @@
+import 'package:curitalk/core/notifications/badge_choice_dialog.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:curitalk/app/theme/tokens/tokens.dart';
 import 'package:curitalk/app/router/app_router.dart';
 import 'package:curitalk/features/billing/billing_repository.dart';
@@ -10,7 +12,6 @@ import 'package:curitalk/features/profile/presentation/nickname_dialog.dart';
 import 'package:curitalk/features/language/language.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -45,14 +46,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         ? '—'
         : entitlement.isAdmin
         ? 'Admin'
-        : copy.planDisplayName(entitlement.plan);
+        : '${entitlement.remainingTurns ?? '—'}';
     final planTitle = entitlement == null
         ? entitlementState.isLoading
               ? copy.profilePlanLoading
               : copy.profilePlanLoadFailed
         : entitlement.isAdmin
         ? copy.adminUnlimitedAccess
-        : copy.profilePlanTitle(entitlement.plan);
+        : (copy.isKorean
+              ? '대화권 ${entitlement.remainingTurns ?? '—'}회 · 대화창 슬롯 ${entitlement.slotLimit ?? '—'}개'
+              : '${entitlement.remainingTurns ?? '—'} conversation credits · ${entitlement.slotLimit ?? '—'} conversation slot${entitlement.slotLimit == 1 ? '' : 's'}');
     final ColorScheme colors = Theme.of(context).colorScheme;
     final bool actionsDisabled =
         isLoggingOut || isDeletingAccount || isSavingLanguage;
@@ -283,6 +286,42 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         ),
                       ),
                       const SizedBox(height: AppSpacing.lg),
+                      BadgeSettingsButton(
+                        builder: (context, enabled, onChanged) =>
+                            _ProfileSurface(
+                              key: const ValueKey(
+                                'profile-badge-settings-card',
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(AppSpacing.md),
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    _ProfileSettingCopy(
+                                      title: copy.badgeTitle,
+                                      description: copy.badgeExplanation,
+                                    ),
+                                    const SizedBox(height: AppSpacing.sm),
+                                    _ProfileSegmentedControl<bool>(
+                                      values: const [false, true],
+                                      selectedValue: enabled,
+                                      labelBuilder: (value) => TextSpan(
+                                        text: value
+                                            ? (copy.isKorean ? '사용' : 'On')
+                                            : (copy.isKorean
+                                                  ? '사용 안 함'
+                                                  : 'Off'),
+                                      ),
+                                      keyBuilder: (value) =>
+                                          ValueKey('profile-badge-$value'),
+                                      onSelected: onChanged,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                      ),
                       _ProfileSectionLabel(copy.accountLabel),
                       const SizedBox(height: AppSpacing.xs),
                       _ProfileSurface(
@@ -327,6 +366,38 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           ],
                         ),
                       ),
+                      const SizedBox(height: AppSpacing.md),
+                      TextButton(
+                        onPressed: () async {
+                          try {
+                            final repository =
+                                ref.read(authRepositoryProvider)
+                                    as AIConsentRepository;
+                            final notice = await repository.getAINotice();
+                            if (!context.mounted) return;
+                            final opened = await launchUrl(
+                              Uri.parse(
+                                notice.privacyPolicyUrlFor(
+                                  isKorean: copy.isKorean,
+                                ),
+                              ),
+                              mode: LaunchMode.externalApplication,
+                            );
+                            if (!opened) {
+                              throw StateError('Cannot open privacy policy.');
+                            }
+                          } catch (_) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(copy.aiConsentSaveFailed),
+                                ),
+                              );
+                            }
+                          }
+                        },
+                        child: Text(copy.privacyPolicyLabel),
+                      ),
                     ],
                   ),
                 ),
@@ -368,7 +439,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final user = ref.read(authControllerProvider).value?.user;
     if (user == null) return;
     final copy = AppCopy.of(context);
-    final isIos = Theme.of(context).platform == TargetPlatform.iOS;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -379,20 +449,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(copy.deleteAccountWarning),
-              if (isIos) ...[
-                const SizedBox(height: AppSpacing.md),
-                Text(copy.deleteAccountSubscriptionWarning),
-                Align(
-                  alignment: Alignment.center,
-                  child: OutlinedButton(
-                    onPressed: () => launchUrl(
-                      Uri.parse('https://apps.apple.com/account/subscriptions'),
-                      mode: LaunchMode.externalApplication,
-                    ),
-                    child: Text(copy.manageSubscription),
-                  ),
-                ),
-              ],
+              const SizedBox(height: AppSpacing.md),
+              Text(copy.deleteAccountSubscriptionWarning),
               if (user.oauthProvider == 'apple') ...[
                 const SizedBox(height: AppSpacing.md),
                 Text(copy.deleteAccountAppleWarning),

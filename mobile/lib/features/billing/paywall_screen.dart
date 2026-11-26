@@ -1,31 +1,26 @@
 import 'package:curitalk/app/theme/tokens/tokens.dart';
-import 'package:curitalk/app/theme/app_component_themes.dart';
-import 'package:curitalk/core/config/app_config.dart';
 import 'package:curitalk/core/copy/copy.dart';
-import 'package:curitalk/core/widgets/app_loading_indicator.dart';
+import 'package:curitalk/core/config/app_config.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:curitalk/features/billing/billing_controller.dart';
 import 'package:curitalk/features/billing/billing_repository.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter/services.dart';
-import 'package:in_app_purchase/in_app_purchase.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 class PaywallScreen extends ConsumerStatefulWidget {
-  const PaywallScreen({super.key});
+  const PaywallScreen({super.key, this.purpose});
+  final String? purpose;
 
   @override
   ConsumerState<PaywallScreen> createState() => _PaywallScreenState();
 }
 
 class _PaywallScreenState extends ConsumerState<PaywallScreen> {
-  String? _selectedPlanId;
-  bool _hasInitializedPlanSelection = false;
-  bool _hasUserSelectedPlan = false;
-  bool _restoring = false;
-  bool _restoreMessageOwned = false;
-  String? _dismissedRestoreStatus;
+  final _slotsKey = GlobalKey();
+  final _turnsKey = GlobalKey();
+  bool _focused = false;
+  String _selectedProductId = 'com.morethanhuman.curitalk.slots.plus.1';
 
   bool get _supportsPurchases =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
@@ -33,518 +28,291 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
   @override
   void initState() {
     super.initState();
-    ref.listenManual(billingEntitlementProvider, (_, next) {
-      final BillingEntitlement? entitlement = next.asData?.value;
-      if (entitlement == null ||
-          _hasInitializedPlanSelection ||
-          _hasUserSelectedPlan) {
-        return;
-      }
-
-      final String? planId = _planIdFor(entitlement.plan);
-      if (planId == null) return;
-      setState(() {
-        _selectedPlanId = planId;
-        _hasInitializedPlanSelection = true;
-      });
-    }, fireImmediately: true);
-    if (!_supportsPurchases) return;
-    Future<void>.microtask(
-      () => ref.read(billingControllerProvider.notifier).loadProducts(),
-    );
-  }
-
-  String? _planIdFor(String plan) {
-    return switch (plan.toLowerCase()) {
-      'free' => 'Free',
-      'advance' => 'Advance',
-      'plus' => 'Plus',
-      _ => null,
-    };
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final copy = AppCopy.of(context);
-    final privacyPolicyUrl = AppConfig.privacyPolicyUrlFor(
-      isKorean: copy.isKorean,
-    );
-    if (!_supportsPurchases) {
-      return Scaffold(
-        appBar: AppBar(title: Text(copy.subscriptionTitle)),
-        body: Center(child: Text(copy.purchaseIosOnly)),
+    if (_supportsPurchases) {
+      Future<void>.microtask(
+        () => ref.read(billingControllerProvider.notifier).loadProducts(),
       );
     }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ko = AppCopy.of(context).isKorean;
     final state = ref.watch(billingControllerProvider);
-    final entitlement = ref.watch(billingEntitlementProvider);
-    final currentEntitlement = entitlement.asData?.value;
-    final isAdmin = currentEntitlement?.isAdmin == true;
-    bool isCurrentPlan(String? planId) =>
-        !isAdmin &&
-        planId?.toLowerCase() == currentEntitlement?.plan.toLowerCase();
-    final restoreStatus =
-        state.message == null ||
-            state.message == 'restore_requested' ||
-            (state.message == 'verified' && entitlement.isLoading)
-        ? 'checking'
-        : state.message!;
-    final showRestoreDialog =
-        _restoring && _dismissedRestoreStatus != restoreStatus;
-    final bool isUpdatingSubscription =
-        !_restoring &&
-        (state.isProcessing ||
-            (state.message == 'verified' && entitlement.isLoading));
-    final ProductDetails? selectedProduct = state.products
-        .where((ProductDetails product) => product.id == _selectedPlanId)
+    final balance = ref.watch(billingEntitlementProvider);
+    final products = [...state.products]
+      ..sort(
+        (a, b) => int.parse(
+          a.id.split('.').last,
+        ).compareTo(int.parse(b.id.split('.').last)),
+      );
+    final busy =
+        state.isProcessing ||
+        (state.message == 'verified' && balance.isLoading);
+    final selected = state.products
+        .where((p) => p.id == _selectedProductId)
         .firstOrNull;
-    final bool isSelectedCurrentPlan = isCurrentPlan(_selectedPlanId);
+    final canPurchase =
+        _supportsPurchases &&
+        !busy &&
+        !balance.isLoading &&
+        !balance.hasError &&
+        balance.asData?.value != null &&
+        balance.asData?.value.isUnlimited != true;
+    if (!_focused && state.products.isNotEmpty && widget.purpose != null) {
+      _focused = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final target = (widget.purpose == 'buy_slots' ? _slotsKey : _turnsKey)
+            .currentContext;
+        if (target != null) Scrollable.ensureVisible(target);
+      });
+    }
     return PopScope(
-      canPop: !isUpdatingSubscription && !showRestoreDialog,
+      canPop: !busy,
       child: Scaffold(
-        appBar: AppBar(title: Text(copy.subscriptionTitle)),
-        body: SafeArea(
-          child: Stack(
-            children: <Widget>[
-              ListView(
-                padding: const EdgeInsets.all(AppSpacing.screenPadding),
-                children: [
-                  if (isAdmin)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                      child: Text(copy.adminUnlimitedAccess),
-                    )
-                  else if (currentEntitlement?.source == 'manual')
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                      child: Text(copy.manuallyGrantedPlan),
-                    ),
-                  if (state.isLoading && state.products.isEmpty)
-                    const Center(child: AppLoadingIndicator(width: 180)),
-                  for (final id in const ['Free', 'Advance', 'Plus'])
-                    _PlanCard(
-                      id: id,
-                      isCurrentPlan: isCurrentPlan(id),
-                      isSelected: id == _selectedPlanId,
-                      product: state.products
-                          .where((item) => item.id == id)
-                          .firstOrNull,
-                      onSelected: () {
-                        if (id == 'Free' || id == _selectedPlanId) return;
-                        HapticFeedback.selectionClick();
-                        setState(() {
-                          _selectedPlanId = id;
-                          _hasUserSelectedPlan = true;
-                        });
-                      },
-                    ),
-                  if (state.message != null && !_restoreMessageOwned) ...[
-                    const SizedBox(height: AppSpacing.md),
-                    Text(
-                      copy.billingMessage(state.message!),
-                      style: AppTypography.bodySm,
-                    ),
-                  ],
-                  if (state.products.isEmpty && !state.isLoading)
-                    TextButton(
-                      onPressed: () => ref
-                          .read(billingControllerProvider.notifier)
-                          .loadProducts(),
-                      child: Text(copy.retryLabel),
-                    ),
-                  const SizedBox(height: AppSpacing.sm),
-                  FilledButton(
-                    key: const ValueKey<String>('paywall-subscribe'),
-                    onPressed:
-                        isAdmin ||
-                            state.isProcessing ||
-                            isSelectedCurrentPlan ||
-                            selectedProduct == null
-                        ? null
-                        : () {
-                            setState(() {
-                              _restoring = false;
-                              _restoreMessageOwned = false;
-                              _dismissedRestoreStatus = null;
-                            });
-                            ref
+        appBar: AppBar(title: Text(ko ? '대화 상점' : 'Conversation store')),
+        bottomNavigationBar: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 12, 24, 8),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_supportsPurchases)
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      key: const ValueKey('store-purchase'),
+                      onPressed: canPurchase && selected != null
+                          ? () => ref
                                 .read(billingControllerProvider.notifier)
-                                .purchase(selectedProduct);
-                          },
-                    child: Text(copy.subscribeLabel),
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  Wrap(
-                    alignment: WrapAlignment.center,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: <Widget>[
-                      Text(
-                        copy.previousPurchasePrompt,
-                        style: AppTypography.bodySm,
+                                .purchase(selected)
+                          : null,
+                      child: Text(
+                        selected == null
+                            ? (ko ? '상품을 선택해 주세요' : 'Select a product')
+                            : (ko
+                                  ? '${selected.price} 구매'
+                                  : 'Buy · ${selected.price}'),
                       ),
-                      TextButton(
-                        onPressed: state.isProcessing
-                            ? null
-                            : () {
-                                setState(() {
-                                  _restoring = true;
-                                  _restoreMessageOwned = true;
-                                  _dismissedRestoreStatus = null;
-                                });
-                                ref
-                                    .read(billingControllerProvider.notifier)
-                                    .restore();
-                              },
-                        child: Text(copy.restorePurchases),
-                      ),
-                    ],
-                  ),
-                  Center(
-                    child: OutlinedButton(
-                      onPressed: () => launchUrl(
-                        Uri.parse(
-                          'https://apps.apple.com/account/subscriptions',
-                        ),
-                        mode: LaunchMode.externalApplication,
-                      ),
-                      child: Text(copy.manageSubscription),
                     ),
                   ),
-                  const SizedBox(height: AppSpacing.md),
-                  Wrap(
-                    alignment: WrapAlignment.center,
-                    children: [
-                      TextButton(
-                        style: AppComponentThemes.mutedTextButton,
-                        onPressed: () => launchUrl(
-                          Uri.parse(AppConfig.subscriptionTermsUrl),
-                          mode: LaunchMode.externalApplication,
-                        ),
-                        child: Text(copy.termsOfUse),
-                      ),
-                      TextButton(
-                        style: AppComponentThemes.mutedTextButton,
-                        onPressed: privacyPolicyUrl.isEmpty
-                            ? null
-                            : () => launchUrl(
-                                Uri.parse(privacyPolicyUrl),
-                                mode: LaunchMode.externalApplication,
-                              ),
-                        child: Text(copy.privacyPolicy),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              if (isUpdatingSubscription)
-                _SubscriptionUpdatingOverlay(
-                  message: copy.subscriptionUpdating,
-                ),
-              if (showRestoreDialog)
-                _RestoreStatusDialog(
-                  title: copy.restorePurchases,
-                  message: restoreStatus == 'checking'
-                      ? copy.billingMessage('restore_requested')
-                      : copy.billingMessage(restoreStatus),
-                  isChecking: restoreStatus == 'checking',
-                  confirmLabel: copy.accessDialogConfirm,
-                  onDismissed: () => setState(() {
-                    _dismissedRestoreStatus = restoreStatus;
-                    if (restoreStatus != 'checking') _restoring = false;
-                  }),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _RestoreStatusDialog extends StatelessWidget {
-  const _RestoreStatusDialog({
-    required this.title,
-    required this.message,
-    required this.isChecking,
-    required this.confirmLabel,
-    required this.onDismissed,
-  });
-
-  final String title;
-  final String message;
-  final bool isChecking;
-  final String confirmLabel;
-  final VoidCallback onDismissed;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Positioned.fill(
-      key: const ValueKey<String>('paywall-restore-dialog'),
-      child: BlockSemantics(
-        child: Semantics(
-          liveRegion: true,
-          scopesRoute: true,
-          explicitChildNodes: true,
-          child: Stack(
-            children: <Widget>[
-              ModalBarrier(
-                dismissible: false,
-                color: colors.scrim.withValues(alpha: 0.4),
-              ),
-              Center(
-                child: AlertDialog(
-                  title: Text(title),
-                  content: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: <Widget>[
-                      if (isChecking) ...[
-                        const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                        const SizedBox(width: AppSpacing.sm),
-                      ],
-                      Flexible(child: Text(message)),
-                    ],
-                  ),
-                  actions: <Widget>[
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  children: [
                     TextButton(
-                      onPressed: onDismissed,
-                      child: Text(confirmLabel),
+                      onPressed: busy
+                          ? null
+                          : () => launchUrl(Uri.parse(AppConfig.termsOfUseUrl)),
+                      child: Text(ko ? '이용약관' : 'Terms of Use'),
+                    ),
+                    TextButton(
+                      onPressed: busy
+                          ? null
+                          : () => launchUrl(
+                              Uri.parse(
+                                AppConfig.privacyPolicyUrlFor(isKorean: ko),
+                              ),
+                            ),
+                      child: Text(ko ? '개인정보처리방침' : 'Privacy Policy'),
                     ),
                   ],
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _SubscriptionUpdatingOverlay extends StatelessWidget {
-  const _SubscriptionUpdatingOverlay({required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    final ColorScheme colors = Theme.of(context).colorScheme;
-    return Positioned.fill(
-      key: const ValueKey<String>('paywall-purchase-loading'),
-      child: BlockSemantics(
-        child: Semantics(
-          liveRegion: true,
-          scopesRoute: true,
-          explicitChildNodes: true,
-          label: message,
-          child: ExcludeSemantics(
-            child: Stack(
-              children: <Widget>[
-                ModalBarrier(
-                  dismissible: false,
-                  color: colors.scrim.withValues(alpha: 0.4),
-                ),
-                Center(
-                  child: Material(
-                    color: colors.surface,
-                    borderRadius: BorderRadius.circular(AppRadius.lg),
+        body: Stack(
+          children: [
+            ListView(
+              padding: const EdgeInsets.all(24),
+              children: [
+                balance.when(
+                  data: (value) => Card(
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.xl,
-                        vertical: AppSpacing.lg,
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: <Widget>[
-                          AppLoadingIndicator(
-                            width: 140,
-                            semanticLabel: message,
+                      padding: const EdgeInsets.all(20),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  ko ? '대화창 슬롯' : 'Conversation slots',
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.titleMedium,
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  '${value.isUnlimited ? '∞' : (value.slotLimit ?? '—')}${ko ? '개' : ''}',
+                                  key: const ValueKey('store-slot-balance'),
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .headlineMedium
+                                      ?.copyWith(fontWeight: FontWeight.w700),
+                                ),
+                              ],
+                            ),
                           ),
-                          const SizedBox(height: AppSpacing.md),
-                          Text(
-                            message,
-                            style: AppTypography.bodySm,
-                            textAlign: TextAlign.center,
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  ko ? '남은 대화권' : 'Credits remaining',
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.titleMedium,
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  '${value.isUnlimited ? '∞' : (value.remainingTurns ?? '—')}${ko ? '회' : ''}',
+                                  key: const ValueKey('store-turn-balance'),
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .headlineMedium
+                                      ?.copyWith(fontWeight: FontWeight.w700),
+                                ),
+                              ],
+                            ),
                           ),
                         ],
                       ),
                     ),
                   ),
+                  loading: () =>
+                      const Center(child: CircularProgressIndicator()),
+                  error: (_, _) => TextButton(
+                    onPressed: () => ref.invalidate(billingEntitlementProvider),
+                    child: Text(ko ? '잔액 다시 확인' : 'Retry balance'),
+                  ),
                 ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PlanCard extends StatelessWidget {
-  const _PlanCard({
-    required this.id,
-    required this.isCurrentPlan,
-    required this.isSelected,
-    required this.product,
-    required this.onSelected,
-  });
-  final String id;
-  final bool isCurrentPlan;
-  final bool isSelected;
-  final ProductDetails? product;
-  final VoidCallback onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    final copy = AppCopy.of(context);
-    final isFree = id == 'Free';
-    final isPlus = id == 'Plus';
-    final ColorScheme colorScheme = Theme.of(context).colorScheme;
-    return Card(
-      key: ValueKey<String>('paywall-plan-$id'),
-      color: isSelected
-          ? AppPalette.subscriptionSelected
-          : colorScheme.surfaceContainerLow,
-      margin: const EdgeInsets.only(bottom: AppSpacing.md),
-      clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(
-        borderRadius: const BorderRadius.all(Radius.circular(AppRadius.lg)),
-        side: isSelected
-            ? BorderSide.none
-            : BorderSide(
-                color: colorScheme.outlineVariant,
-                width: AppBorderWidth.hairline,
-              ),
-      ),
-      child: Semantics(
-        selected: isSelected,
-        button: !isFree,
-        child: InkWell(
-          onTap: isFree ? null : onSelected,
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  children: <Widget>[
-                    Text(id, style: AppTypography.headlineMd),
-                    if (isCurrentPlan) ...[
-                      const SizedBox(width: AppSpacing.xs),
-                      _CurrentPlanIndicator(label: copy.currentPlanIndicator),
-                    ],
-                  ],
-                ),
-                if (!isFree) ...[
-                  const SizedBox(height: AppSpacing.xs),
-                  for (final String benefit in copy.planBenefits(isPlus)) ...[
-                    Text('• $benefit', style: AppTypography.bodySm),
-                    const SizedBox(height: AppSpacing.xxs),
-                  ],
-                  if (isPlus) ...[
-                    Text(
-                      '• ${copy.plusBusinessConversationBenefit}',
-                      style: AppTypography.bodySm,
+                if (!_supportsPurchases)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 24),
+                    child: Text(
+                      ko
+                          ? '구매는 iOS 앱에서 이용할 수 있어요.'
+                          : 'Purchases are available on iOS.',
                     ),
-                    const SizedBox(height: AppSpacing.xxs),
-                  ],
-                  const SizedBox(height: AppSpacing.sm),
-                  if (product == null)
-                    Text(copy.priceUnavailable, style: AppTypography.bodySm)
-                  else
-                    Semantics(
-                      label: copy.monthlyPrice(product!.price),
-                      child: ExcludeSemantics(
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.baseline,
-                          textBaseline: TextBaseline.alphabetic,
-                          children: <Widget>[
-                            Text(
-                              product!.price,
-                              style: AppTypography.headlineMd.copyWith(
-                                fontFeatures: const <FontFeature>[
-                                  FontFeature.tabularFigures(),
-                                ],
+                  ),
+                if (_supportsPurchases) ...[
+                  if (state.isLoading)
+                    const Padding(
+                      padding: EdgeInsets.all(24),
+                      child: Center(child: CircularProgressIndicator()),
+                    ),
+                  for (final kind in ['slots', 'turns'])
+                    Column(
+                      key: kind == 'slots' ? _slotsKey : _turnsKey,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 32),
+                        Text(
+                          kind == 'slots'
+                              ? (ko ? '대화창 슬롯 추가' : 'Add conversation slots')
+                              : (ko ? '대화권 충전' : 'Conversation credits'),
+                          style: Theme.of(context).textTheme.headlineSmall,
+                        ),
+                        const SizedBox(height: 12),
+                        for (final product in products.where(
+                          (p) => p.id.contains('.$kind.'),
+                        ))
+                          Semantics(
+                            selected: product.id == _selectedProductId,
+                            child: Card(
+                              key: ValueKey('store-product-${product.id}'),
+                              color: product.id == _selectedProductId
+                                  ? AppPalette.subscriptionSelected
+                                  : null,
+                              child: ListTile(
+                                enabled: canPurchase,
+                                onTap: canPurchase
+                                    ? () => setState(
+                                        () => _selectedProductId = product.id,
+                                      )
+                                    : null,
+                                title: Text(
+                                  kind == 'slots'
+                                      ? (ko
+                                            ? '대화창 슬롯 +${product.id.split('.').last}개'
+                                            : 'Conversation slots +${product.id.split('.').last}')
+                                      : (ko
+                                            ? '대화권 ${product.id.split('.').last}회 충전'
+                                            : '${product.id.split('.').last} conversation credits'),
+                                ),
+                                subtitle: Text(product.price),
+                                trailing: product.id == _selectedProductId
+                                    ? Image.asset(
+                                        'assets/images/snack_tomato/origin_tomato.png',
+                                        key: const ValueKey(
+                                          'store-selected-tomato',
+                                        ),
+                                        width: 36,
+                                        height: 36,
+                                        excludeFromSemantics: true,
+                                      )
+                                    : null,
                               ),
                             ),
-                            const SizedBox(width: AppSpacing.xxs),
+                          ),
+                      ],
+                    ),
+                  if (state.message != null && state.message != 'verified')
+                    Padding(
+                      padding: const EdgeInsets.only(top: 24),
+                      child: Text(
+                        state.message == 'account_conflict'
+                            ? (ko
+                                  ? '원래 구매한 계정으로 로그인해서 다시 시도해 주세요.'
+                                  : 'Sign in to the original purchasing account and try again.')
+                            : (ko
+                                  ? '구매가 완료되지 않았어요. 잔액을 확인하고 다시 시도해 주세요.'
+                                  : 'Purchase not completed. Check your balance and try again.'),
+                      ),
+                    ),
+                  if (state.products.isEmpty && !state.isLoading)
+                    TextButton(
+                      onPressed: () => ref
+                          .read(billingControllerProvider.notifier)
+                          .loadProducts(),
+                      child: Text(ko ? '상품 다시 불러오기' : 'Reload products'),
+                    ),
+                ],
+              ],
+            ),
+            if (busy)
+              Positioned.fill(
+                child: ColoredBox(
+                  color: Colors.black54,
+                  child: Center(
+                    child: Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const CircularProgressIndicator(),
+                            const SizedBox(height: 16),
                             Text(
-                              copy.monthlyPeriodLabel,
-                              style: AppTypography.bodySm.copyWith(
-                                color: colorScheme.onSurfaceVariant,
-                              ),
+                              ko
+                                  ? '구매와 잔액을 확인하고 있어요'
+                                  : 'Verifying purchase and balance',
                             ),
                           ],
                         ),
                       ),
                     ),
-                ],
-              ],
-            ),
-          ),
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );
   }
-}
-
-class _CurrentPlanIndicator extends StatefulWidget {
-  const _CurrentPlanIndicator({required this.label});
-
-  final String label;
-
-  @override
-  State<_CurrentPlanIndicator> createState() => _CurrentPlanIndicatorState();
-}
-
-class _CurrentPlanIndicatorState extends State<_CurrentPlanIndicator>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 700),
-  );
-  late final Animation<double> _opacity = Tween<double>(
-    begin: 0.25,
-    end: 1,
-  ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
-  bool? _animationsDisabled;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final bool animationsDisabled = MediaQuery.disableAnimationsOf(context);
-    if (_animationsDisabled == animationsDisabled) return;
-    _animationsDisabled = animationsDisabled;
-    if (animationsDisabled) {
-      _controller
-        ..stop()
-        ..value = 1;
-    } else {
-      _controller.repeat(reverse: true);
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => Semantics(
-    label: widget.label,
-    child: ExcludeSemantics(
-      child: FadeTransition(
-        opacity: _opacity,
-        child: Icon(
-          Icons.arrow_left,
-          key: const ValueKey<String>('paywall-current-plan-indicator'),
-          size: 34,
-        ),
-      ),
-    ),
-  );
 }

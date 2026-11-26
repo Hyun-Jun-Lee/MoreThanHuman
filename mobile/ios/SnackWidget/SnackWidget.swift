@@ -45,8 +45,7 @@ struct CloseSnackContentIntent: AppIntent {
 
   func perform() async throws -> some IntentResult {
     guard var snapshot = SnackWidgetStore.current() else { return .result() }
-    snapshot.showingContent = false
-    snapshot.page = 0
+    snapshot.closeContent()
     SnackWidgetStore.save(snapshot, reload: false)
     return .result()
   }
@@ -188,7 +187,7 @@ struct SnackWidgetView: View {
     let page = min(max(snapshot.page, 0), pages.count - 1)
     return VStack(alignment: .leading, spacing: isLarge ? 8 : 2) {
       HStack {
-        Text(typeLabel(snack.contentType))
+        Text(typeLabel(snack.contentType, language: snack.explanationLanguage))
           .font(.system(size: isLarge ? 15 : 12, weight: .semibold))
         Spacer()
         Text("\(snapshot.basket.consumed) / 12")
@@ -204,8 +203,8 @@ struct SnackWidgetView: View {
       }
 
       HStack(alignment: .top, spacing: isLarge ? 8 : 6) {
-        ForEach(snack.payload.items.indices, id: \.self) { index in
-          expressionCard(snack.payload.items[index])
+        ForEach(snack.payload.displayItems.indices, id: \.self) { index in
+          expressionCard(snack.payload.displayItems[index])
         }
       }
 
@@ -318,14 +317,17 @@ struct SnackWidgetView: View {
 
   private func backgroundColor(_ type: String) -> Color {
     switch type {
-    case "usage_contrast": return Color(red: 0xDB / 255, green: 0xEA / 255, blue: 0xFE / 255)
-    case "homonym": return Color(red: 0xE5 / 255, green: 0xF5 / 255, blue: 0xD3 / 255)
+    case "usage_contrast", "register_contrast": return Color(red: 0xDB / 255, green: 0xEA / 255, blue: 0xFE / 255)
+    case "homonym", "collocation": return Color(red: 0xE5 / 255, green: 0xF5 / 255, blue: 0xD3 / 255)
     default: return Color(red: 0xE8 / 255, green: 0xE4 / 255, blue: 0xF4 / 255)
     }
   }
 
-  private func typeLabel(_ type: String) -> String {
+  private func typeLabel(_ type: String, language: String) -> String {
     switch type {
+    case "register_contrast": return language == "ko" ? "상황에 맞는 말투" : "The right tone"
+    case "collocation": return language == "ko" ? "함께 쓰면 자연스러운 말" : "Words that go together"
+    case "idiomatic_expression": return language == "ko" ? "직역하면 놓치는 뜻" : "Beyond literal meaning"
     case "regional_variant": return "지역별 표현"
     case "usage_contrast": return "표현의 차이"
     default: return "동음이의어"

@@ -127,6 +127,15 @@ class AIConsentStatus(BaseModel):
     missing: list[str]
     privacy_policy_url: str
     privacy_policy_url_en: str
+    notice_acknowledged: bool = False
+
+
+class AIConsentChoice(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    privacy_policy_version: str = Field(min_length=1, max_length=64)
+    ai_data_processing_version: str = Field(min_length=1, max_length=64)
+    accept_ai: bool = Field(strict=True)
 
 
 class GuestTransferReceiptResponse(BaseModel):

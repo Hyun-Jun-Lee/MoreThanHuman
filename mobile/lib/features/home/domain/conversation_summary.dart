@@ -8,6 +8,7 @@ class ConversationSummary {
     required this.messageCount,
     required this.isActive,
     this.locked = false,
+    this.hasUnreadReply = false,
     required this.updatedAt,
   });
 
@@ -59,6 +60,7 @@ class ConversationSummary {
       messageCount: messageCount,
       isActive: status == 'ACTIVE',
       locked: json['locked'] as bool? ?? false,
+      hasUnreadReply: json['has_unread_reply'] as bool? ?? false,
       updatedAt: updatedAt,
     );
   }
@@ -69,6 +71,7 @@ class ConversationSummary {
   final int messageCount;
   final bool isActive;
   final bool locked;
+  final bool hasUnreadReply;
   final DateTime updatedAt;
 
   String get category =>

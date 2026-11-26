@@ -83,9 +83,9 @@ docker compose up -d --build --force-recreate --no-deps api
 | `uv run alembic heads` | 코드의 최신 revision 확인 |
 | `uv run alembic upgrade head` | 미적용 마이그레이션 반영 |
 
-관리자 웹 `/admin`은 공유 입장 코드만으로 열어요. 처음 사용하기 전 [관리자 운영 절차](docs/OPERATIONS.md#관리자-계정과-수동-구독-권한)에 따라 `alembic upgrade head`를 실행하고 서버의 `ADMIN_ACCESS_CODE` 환경변수를 설정해요.
+관리자 웹 `/admin`은 공유 입장 코드만으로 열어요. 처음 사용하기 전 [관리자 운영 절차](docs/OPERATIONS.md#관리자-계정과-수동-자원-권한)에 따라 `alembic upgrade head`를 실행하고 서버의 `ADMIN_ACCESS_CODE` 환경변수를 설정해요.
 
-구독·대화 권한을 활성화하려면 [운영 가이드의 기존 대화 슬롯 초기화](docs/OPERATIONS.md#대화-이용-권한-활성화)와 Apple Sandbox 검증을 먼저 마쳐요. 운영 환경의 `CONVERSATION_ACCESS_ENABLED`는 검증 전 `false`로 유지해요.
+일회성 대화 상점을 활성화하려면 [운영 가이드](docs/OPERATIONS.md#대화-이용-권한-활성화)의 migration·Apple Sandbox 검증을 먼저 마쳐요. 서버 시작에는 `BILLING_HMAC_KEYS`·`BILLING_HMAC_CURRENT_KEY`가 필수예요. 운영 `CONVERSATION_ACCESS_ENABLED`는 검증 전 `false`로 유지해요.
 
 계정 삭제 중 외부 장애로 남은 작업은 `backend/`에서 `uv run python -m scripts.retry_account_deletions`로 재시도해요. 서버 키와 정기 실행 절차는 [계정 삭제 운영 가이드](docs/OPERATIONS.md#계정-삭제-처리)를 참고해요.
 
@@ -99,17 +99,19 @@ uv run python -m scripts.generate_language_snacks \
   --language en --per-type 3 --run-key initial-v2
 ```
 
-위 명령은 영어 콘텐츠를 지역별 표현·용법 차이·동음이의어 **각 3개씩, 총 9개** 목표로 생성해요. 검증 통과 시 즉시 발행하며 실패·중복·예산 제한으로 목표보다 적을 수 있어요.
+카테고리별 생성 작업을 최대 6개 병렬로 실행해요. 후보 요청당 최대 3개를 받고 본문 작성·품질 검사는 각 작업에서 진행하며, 중복 검사·예약은 순서대로 처리해요. 영어와 한국어 실행은 순차예요.
+
+위 명령은 영어 콘텐츠를 지역별 표현·용법 차이·동음이의어·상황별 말투·자연스러운 조합·관용 표현 **각 3개씩, 총 18개** 목표로 생성해요. 검증 통과 시 즉시 발행하며 실패·중복·호출 제한으로 목표보다 적을 수 있어요.
 
 | 옵션 | 설명 |
 |------|------|
-| `--language en\|ko\|all` | 생성 언어. 기본 all은 두 언어 합계 18개 목표 |
+| `--language en\|ko\|all` | 생성 언어. 기본 all은 두 언어 합계 36개 목표 |
 | `--per-type 3` | 언어별 유형별 목표 수량, 1..6. 생략하면 환경 설정 사용 |
 | `--run-key initial-v2` | 같은 키·언어·수량은 기존 작업을 재개하고 완료된 작업은 추가 생성하지 않아요 |
-| `--dry-run` | 후보만 미리 생성하고 DB에는 저장하지 않아요 |
+| `--dry-run` | 카테고리별 최대 3개 후보를 미리 생성하고 DB에는 저장하지 않아요 |
 | `--help` | 전체 옵션 확인 |
 
-실행 키를 생략하면 현재 주간 슬롯을 사용해요. **실제 생성과 dry-run 모두 LLM 사용량이 발생해요.** 스낵 전용 설정이 없으면 기본 LLM provider·model을 사용해요.
+2026-11-26 여섯 유형 확장: 새 run은 여섯 유형을 생성하고 기존 run은 시작 당시 세 유형을 유지해요. 새 유형 초기 발행에는 새 실행 키를 사용해요. 실행 키를 생략하면 현재 주간 슬롯을 사용해요. **실제 생성과 dry-run 모두 LLM 사용량이 발생해요.** 스낵 전용 설정이 없으면 기본 LLM provider·model을 사용해요.
 
 Docker에서는 이미지 빌드와 DB 마이그레이션을 완료한 뒤 저장소 루트에서 실행해요.
 

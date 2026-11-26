@@ -133,3 +133,26 @@ def test_homonym_allows_same_spelling():
             },
         }
     )
+
+
+def test_category_cycle_selects_two_per_type_in_order(repository, sample):
+    from domains.language_snacks.models import LanguageSnackModel
+    from domains.language_snacks.schemas import PAYLOAD_MODELS
+
+    kinds = list(PAYLOAD_MODELS)
+    for i in range(30):
+        repository.save(LanguageSnackModel(
+            id=f"cycle-{i}", content_type=kinds[i % 6], content_language="en",
+            explanation_language="ko", identity=sample["identity"],
+            knowledge_key=f"{i:064x}", knowledge_summary="sample",
+            payload=sample["payload"], origin="manual", status="published",
+            published_at=utcnow(),
+        ))
+    rows = repository.list_published("en", 12, order="category_cycle")
+    assert [r.content_type for r in rows] == kinds * 2
+    assert len({r.id for r in rows}) == 12
+    assert repository.list_published("ko", 12, order="category_cycle") == []
+    assert len(repository.list_published("en", 7, order="category_cycle")) == 7
+    # 다른 추첨에서 카테고리 내부의 선택도 달라져요.
+    samples = {tuple(r.id for r in repository.list_published("en", 12, order="category_cycle")) for _ in range(5)}
+    assert len(samples) > 1

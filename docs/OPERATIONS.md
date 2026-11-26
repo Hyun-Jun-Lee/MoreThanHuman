@@ -1,6 +1,6 @@
 # 운영 가이드
 
-> 최종 갱신: 2026-11-23 · 배포·주간 생성·복구 절차
+> 최종 갱신: 2026-11-26 · 배포·주간 생성·복구 절차
 
 ## 계정 삭제 처리
 
@@ -12,7 +12,7 @@
 */5 * * * * cd /path/to/MoreThanHuman && docker compose exec -T api python -m scripts.retry_account_deletions >> /var/log/tomatalk-account-deletion.log 2>&1
 ```
 
-`account_deletions.status='processing'`이 오래 남지 않는지 확인해요. 완료 전에 고객에게 계정 삭제가 끝났다고 안내하지 않아요. 이 테이블은 삭제된 JWT 재사용을 막고 구매 복원 시 이전 계정 상태를 확인하는 최소 기록이므로 운영자가 임의로 지우지 않아요.
+`account_deletions.status='processing'`이 오래 남지 않는지 확인해요. 완료 전에 고객에게 계정 삭제가 끝났다고 안내하지 않아요. 삭제 처리 기록과 `billing_tombstones`의 버전형 HMAC은 삭제된 JWT의 재접근과 과거 구매의 중복 지급을 막는 데 사용해요. 구매 복원용 기록이 아니며 운영자가 임의로 지우지 않아요.
 
 ## 게스트 계정 운영
 
@@ -118,13 +118,13 @@ Flutter App
 → FastAPI API 호출 시 Authorization 헤더 사용
 ```
 
-## 관리자 계정과 수동 구독 권한
+## 관리자 계정과 수동 자원 권한
 
-`20261115_0001` 마이그레이션은 기본 false인 `profiles.is_admin`과 수동 구독 부여 이력 테이블을 추가해요. 첫 관리자는 운영자가 대상 사용자 UUID를 확인한 뒤 DB에서 직접 `is_admin=true`로 설정해요. 앱이나 API에는 관리자 임명 경로가 없어요. 운영 DB에서 변경 전후의 대상 계정을 확인하고, 필요하면 같은 컬럼을 false로 되돌려요.
+`20261115_0001`은 기본 false인 `profiles.is_admin`과 당시의 수동 구독 부여 이력 테이블을 추가한 마이그레이션이에요. 이후 `20261125_0001`에서 구독·수동 구독 표를 제거하고 `manual_resource_grants` 등 일회성 자원 원장으로 전환했어요. 현재 지급·회수는 대화창 슬롯·대화권을 대상으로 해요. 첫 관리자는 운영자가 대상 사용자 UUID를 확인한 뒤 DB에서 직접 `is_admin=true`로 설정해요. 앱이나 API에는 관리자 임명 경로가 없어요. 운영 DB에서 변경 전후의 대상 계정을 확인하고, 필요하면 같은 컬럼을 false로 되돌려요.
 
 이 마이그레이션을 downgrade하면 관리자 플래그와 수동 부여 이력 전체가 삭제돼요. 이전 코드로 되돌리기 전에 해당 값을 별도로 백업하고, 복구 시 다시 반영해요.
 
-관리자는 관리자 웹 또는 코드 확인을 마친 API 세션에서 `/api/admin/users/`를 검색해 대상 UUID를 확인하고, `/api/admin/users/{user_id}/manual-entitlement/`의 `PUT`으로 Advance·Plus와 선택적 `revoke_at`을 부여해요. 시각은 시간대를 포함한 ISO 8601 형식이에요. `DELETE`는 즉시 철회하며 이력은 `/history/`에서 확인해요. 예약 철회는 별도 cron 없이 다음 권한 검사에서 반영해요. Apple 구매 기록은 그대로 유지돼요. 전체 계약은 [관리자 권한](../.agent/_contracts/ADMIN_ENTITLEMENTS.md)과 [API 명세](DSL.md#관리자와-수동-구독-권한)를 참고해요.
+관리자는 `/api/admin/users/`에서 대상 UUID를 확인하고 `PUT /api/admin/users/{user_id}/manual-entitlement/`에 `request_id`(UUID), `resource_kind`(`slots` 또는 `turns`), 양의 정수 `quantity`를 전달해요. 같은 request_id 재시도는 중복 지급하지 않아요. `DELETE /api/admin/users/{user_id}/manual-entitlement/{grant_id}/`는 미사용 자원만 철회해요. 예약 중 답변은 성공 시 차감·실패 시 폐기하며 사용 이력은 보존해요. 계정별 구매 이력의 환불 검토 표시는 실제 환불 실행이 아니에요. [관리자 계약](../.agent/_contracts/ADMIN_ENTITLEMENTS.md)을 참고해요.
 
 관리자 웹 활성화 전 서버의 비밀 환경변수 `ADMIN_ACCESS_CODE`에 공통 입장 코드를 설정하고 API를 재시작해요. `backend/`에서 `alembic upgrade head`를 실행해요. 코드는 DB에 저장하지 않으며 Git 파일에도 넣지 않아요. 코드를 교체하고 API를 재시작하면 기존 관리자 세션은 무효화돼요. `ADMIN_PUBLIC_ORIGIN=https://api.curitalk.app`은 쓰기 요청의 Origin 검사 기준이에요. `/admin`에서 공유 코드만 입력해요. API를 직접 사용할 때도 `POST /api/admin/access/verify/`에서 코드를 확인하고, 세션 쿠키와 `GET /api/admin/access/status/`의 CSRF 토큰을 PUT·DELETE 요청에 함께 전달해요. 개인별 계정 인증이 없으므로 누가 수동 권한을 변경했는지 이력으로 구별할 수 없어요.
 
@@ -142,7 +142,8 @@ SELECT c.relname, c.relrowsecurity AS rls_enabled,
 FROM pg_class AS c
 JOIN pg_namespace AS n ON n.oid = c.relnamespace
 WHERE n.nspname = 'public' AND c.relname IN (
-  'profiles', 'manual_entitlement_grants',
+  'profiles', 'manual_resource_grants', 'purchase_deliveries', 'credit_lots',
+  'turn_reservations', 'billing_tombstones', 'purchase_notifications',
   'admin_access_sessions', 'admin_access_attempts'
 )
 ORDER BY c.relname;
@@ -150,28 +151,66 @@ ORDER BY c.relname;
 
 ## 대화 이용 권한 활성화
 
-`20261004_0002` migration은 Apple 구독·알림 표와 활성 대화 슬롯을 추가해요. `CONVERSATION_ACCESS_ENABLED=false`에서는 회원의 기존 대화 제한을 적용하지 않지만 게스트의 활성 대화 1개·누적 5회 제한은 항상 적용해요. 운영 활성화 전에는 Apple Sandbox의 구매·복원·갱신·만료·환불, PostgreSQL 동시 요청, 앱의 읽기 전용 대화 흐름을 확인해요.
+### 일회성 결제 v3 — 2026-11-25
 
-개발 환경 미리보기와 향후 결제 출시 때는 아래 순서로 활성화해요.
+운영 스위치는 검증 전 `CONVERSATION_ACCESS_ENABLED=false`로 유지해요. 게스트의 활성 대화창 슬롯 1개·누적 체험 5회는 항상 적용하고, 회원 제한을 켜면 기본 대화창 슬롯 1개·계정 최초 체험 대화권 10회와 구매 잔액을 적용해요. 회원의 슬롯 초과는 새 생성만 막고 기존 대화를 잠그지 않아요. 대화권이 남아 있으면 기존 대화에서 계속 발화할 수 있고, 소진돼도 기록은 열람할 수 있어요. 대화 삭제는 대화창 슬롯만 비우고 사용한 대화권은 반환하지 않아요.
 
-1. API에 migration을 적용하고 새 iOS 앱을 배포해요. App Store Connect에서 월간 `Advance`·`Plus`를 같은 구독 그룹에 두고, 앱 내 구입 계약·세금·은행 정보와 상품 심사를 준비해요. 앱 빌드에는 공개 개인정보처리방침 URL을 `--dart-define=PRIVACY_POLICY_URL=...`로 제공해요.
-2. 서버 비밀 저장소에 `APPLE_IAP_*` 설정을 주입해요. App Store Connect에서 Server Notifications V2 URL을 `https://<API 호스트>/api/billing/apple/notifications/`로 지정해요. Sandbox는 `APPLE_IAP_ENVIRONMENT=sandbox`, 운영은 `production`으로 분리해요. `backend/certs/apple/`의 Apple 공식 루트 인증서 3개를 배포물에 포함해요.
-3. 기존 API의 대화 생성·삭제 쓰기를 잠시 중지하고, `backend/`에서 `uv run python -m scripts.initialize_conversation_slots`를 실행해요. 무료 계정은 가장 최근 사용자 발화가 있는 대화 1개만 활성화해요.
-4. 무료 0/1/기존 다중 대화 계정과 Advance·Plus 계정에서 `GET /api/conversations/access/`, 생성·발화, 15회 경계, 슬롯 한도 증가 시 잠긴 대화 활성화, 만료·환불 잠금을 확인해요. 쓰기 중지가 유지되는 동안 `CONVERSATION_ACCESS_ENABLED=true`로 API를 재시작해요. 문제가 있으면 스위치를 `false`로 되돌리고 원인을 분석해요.
+1. DB를 백업하고 구 API·worker 쓰기를 중지해요. 독립적인 `BILLING_HMAC_KEYS`와 `BILLING_HMAC_CURRENT_KEY`를 서버 비밀 저장소에 준비해요. 키는 최소 32바이트이며 토큰 서명 키와 공유하지 않아요.
+2. `backend/`에서 `uv run alembic upgrade head`를 실행해요. `20261125_0001`은 새 원장을 만들고 일반 회원에게 체험 대화권 10회를 한 번 지급하며 기존 구독·수동 구독 표를 제거해요. 실제 유료 구독자가 없다는 출시 전 전제가 달라졌다면 이 migration을 실행하지 말고 별도 이관을 설계해요.
+3. App Store Connect에 [DSL 상품 목록](DSL.md#대화창-슬롯과-소비성-대화권-v3-2026-11-25)의 다섯 상품을 **Consumable**로 등록해요. Bundle ID·상품 ID는 기존 네임스페이스를 유지해요. 서버 알림 V2 URL은 `https://<API>/api/billing/apple/notifications/`예요.
+4. `APPLE_IAP_ENVIRONMENT`, `APPLE_IAP_BUNDLE_ID`, 운영용 `APPLE_IAP_APP_ID`와 Apple 공식 루트 인증서를 준비해요. 서명 검증만 사용하므로 기존 구독 상태 재조회 cron과 IAP API 개인 키는 사용하지 않아요.
+5. 아래 사람 검증을 통과한 뒤 신 API·앱으로 전환하고 스위치를 켜요. 프로덕션 DB 역할이 새 결제 원장 표의 소유자 또는 RLS 우회 역할인지, `anon`·`authenticated`의 직접 읽기·쓰기 권한이 없는지 확인해요.
 
-초기화와 스위치 변경 사이에 대화 생성·삭제가 발생하면 활성 슬롯 선택이 달라질 수 있으므로 쓰기를 중지해요. 이 CLI는 스위치가 이미 켜져 있으면 실행을 거부해요. 테스트용 `.env`에서 스위치를 켜면 무료 계정에 활성 슬롯 1개와 대화당 15회가 적용돼요. 잠긴 대화는 앱에서 열 수 없고 삭제할 수 있어요. 슬롯이 가득 차면 기존 대화를 삭제하거나 상위 플랜을 구독해요. 삭제만으로 잠긴 대화가 활성화되지는 않아요.
+### 수동 검증 체크리스트 — 아직 실행하지 않음
 
-동시 생성·발화 제한은 프로덕션 PostgreSQL의 행 잠금에 의존해요. 개발용 SQLite에서는 동시 요청 경계 검증을 대신할 수 없으므로 활성화 전 PostgreSQL에서 병렬 요청을 확인해요. Apple 알림 누락에 대비해 `backend/`에서 `uv run python -m scripts.reconcile_apple_subscriptions`를 주기적으로 실행하고 종료 코드·실패 건수를 모니터링해요. 이 작업은 Apple 현재 상태를 다시 조회하고 기존 tomatalk 계정 연결을 유지해요.
+실기기·Apple Sandbox 또는 운영 설정 접근이 필요한 항목이에요. 이 목록이 남아 있는 동안 결제를 출시하지 않아요.
 
-`ENV=dev`나 로컬 `.env`라는 파일명만으로 데이터가 운영과 분리되지는 않아요. UI 미리보기 전에 `DATABASE_URL`과 앱의 `SUPABASE_URL`이 별도 테스트 프로젝트를 가리키는지 확인해요. 같은 프로젝트라면 스위치를 켰을 때 실제 계정에도 제한이 적용돼요.
+- [ ] 다섯 Consumable의 심사 상태·현지 가격·상품 설명·실제 기기 노출 확인.
+- [ ] `대화창 슬롯 +1개`·`대화창 슬롯 +3개`, `대화권 5회 충전`·`대화권 10회 충전`·`대화권 20회 충전` 각각 구매 및 같은 상품 반복 구매. 서버 잔액과 실제 가격 표시 확인.
+- [ ] 결제 승인 직후 앱 종료·네트워크 차단·서버 오류 후 재실행: 한 번만 지급되고 terminal 응답 뒤에만 StoreKit finish.
+- [ ] 계정 A 구매를 B에서 처리할 때 안내만 표시하고 finish하지 않음. A로 다시 로그인하면 지급 재시도.
+- [ ] 같은 계정 재설치·다른 기기 로그인에서 서버 잔액 유지. 별도 구매 복원 버튼 없음.
+- [ ] 구매 계정 삭제 후 미완료 거래 재전송: 로그인 없이 deleted terminal 처리, 재가입·다른 계정 재지급 없음.
+- [ ] 미사용/일부 사용 대화권과 대화창 슬롯 환불, 지급 전 REFUND, 환불 당시 진행 중 답변 성공·실패. Apple 알림 중복·역순 전달 확인.
+- [ ] 체험 대화권 10회 안내, 체험 우선 차감, 0회에서 텍스트·음성 요청 전 안내와 대화권 충전 구역 포커스 확인. 기존 대화 기록은 계속 열람 가능.
+- [ ] 대화창 슬롯 초과 상태에서 기존 대화 열람·대화권 잔액 내 발화 유지와 새 생성 차단, 부족 시 대화창 슬롯 추가 구역 포커스 확인.
+- [ ] 한국어·영어, VoiceOver·큰 글씨·좁은 기기에서 상점과 삭제 경고 확인.
+- [ ] 관리자 수동 지급·미사용 철회·사용 이력·환불 검토 표시, 게스트 5회·관리자 무제한 확인.
+- [ ] 공개 지원/개인정보처리방침을 배포하고 법무·정책 담당자가 보관 목적과 삭제 고지를 확인.
+
+### 자동 검증과 복구
+
+PostgreSQL 행 잠금이 직렬화 경계예요. SQLite는 동시성 검증을 대체하지 않아요. 별도 테스트 DB에서
+`BILLING_TEST_POSTGRES_URL=postgresql://... .venv/bin/python -m pytest tests/domains/billing/test_billing_concurrency.py`
+를 실행해요. 기본 테스트는 Apple·LLM 실서비스를 호출하지 않아요.
+
+지급/예약/환불/계정 삭제는 프로필 행을 먼저 잠가요. 만료된 예약은 잔액 조회·다음 작업에서 해제하고 늦은 completion은 거부해요. 텍스트 저장 성공 뒤 TTS만 실패하면 차감을 유지해요. 알림은 UUID로 멱등 처리하고 `CONSUMPTION_REQUEST`는 감사 기록만 남겨요.
+
+문제가 있으면 구매 진입을 중지하고 스위치를 끈 뒤 신 코드와 원장을 유지한 상태에서 원인을 확인해요. 스위치를 끄면 회원 대화 제한도 풀린다는 점에 유의해요. 지급·사용 데이터가 생긴 뒤 구 코드로 단순 rollback하거나 migration을 downgrade하지 않아요. migration 자체도 관련 데이터가 있으면 downgrade를 거부해요.
+
+HMAC 키 교체는 **새 키 추가 → current 버전 변경 → 모든 서버 재시작** 순서예요. 과거 버전은 해당 tombstone을 검증하는 동안 제거하지 않아요. DB와 키를 분리해 암호화 백업하고 복구 시 둘 다 복구해요. 키 누락 시 서버는 시작하지 않으며, 키를 새로 만들어 우회하지 않아요. 삭제 완료 후 원문 user ID·appAccountToken·transaction ID·잔액은 남기지 않고 버전형 HMAC·terminal 상태·시각만 남겨 재지급과 삭제 전 JWT 접근을 막아요. 계정 삭제 처리 중에는 외부 삭제 재시도를 위해 원문 ID가 잠시 남아요.
+
+`ENV=dev`만으로 운영과 분리되지 않아요. 수동 시험 전 DB·Supabase·Apple 환경이 별도 테스트 환경인지 확인해요.
 
 ## 언어 스낵 운영
 
-월요일 05:00 Asia/Seoul에 영어·한국어 각각 유형별 3개, 총 18개를 목표로 생성해요. 실패·중복·예산 초과 시 목표보다 적게 발행할 수 있어요. 모든 상태의 기존 지식 요약을 LLM에 전달하고 동일 identity 해시의 UNIQUE 제약과 의미 중복 검사를 함께 적용해요. 의미상 중복이나 내용 오류가 완전히 사라진다는 보장은 없어요.
+### 여섯 유형 확장 배포 (2026-11-26)
+
+1. 새 여섯 유형을 읽는 Flutter 앱·iOS 위젯을 먼저 배포해요. 기존 세 유형 데이터도 읽을 수 있어요.
+2. 기존 생성 worker·cron을 멈추고 진행 중 작업 종료와 백업을 확인해요. `20261126_0003` migration과 API·worker 이미지를 함께 갱신해요. 이 migration은 기존 카드·해시를 보존하고 기존 실행의 content_types를 세 유형으로 백필해요.
+3. 격리 DB에서 신규 세 유형 × 두 언어 표본의 정확성·앱/위젯 표시를 확인한 뒤 새 run_key로 운영 초기 생성을 실행해요. 실제 생성은 검증 후 즉시 발행하며 LLM 비용이 발생해요. dry-run은 DB를 쓰지 않고 카테고리별 한 번씩 최대 3개 후보를 병렬로 요청해요(언어별 6회, 최대 18개). 후보가 부족하면 더 적게 반환할 수 있고 목표 전량은 보장하지 않아요.
+4. 새 run의 목표는 언어별 18개예요. 저장된 대상 목록으로 재개하며 기존 성공 run 키는 추가 생성하지 않아요. 호출 횟수 기본 한도는 유지하므로 partial 상태와 비용을 확인한 뒤 cron을 재개해요.
+5. 문제가 있으면 생성 작업을 멈추고 문제 콘텐츠를 archived 처리한 뒤 호환 서버에서 수정해요. 새 유형 행·새 대상 run이 있으면 downgrade는 데이터 변경 전에 거절돼요. 구버전 서버로 바로 되돌리지 말고 forward fix를 기본으로 해요. 오프라인 당일 스냅샷은 즉시 회수되지 않아요.
+
+구버전 v2 앱은 새 유형을 건너뛰므로 조회한 12개 중 실제 표시 가능한 수가 줄어들 수 있어요. 신규 앱도 이미 정한 당일 묶음은 교체하지 않고 다음 묶음에서 새 콘텐츠를 보여줘요.
+
+### 정기 생성과 v2 최초 도입
+
+월요일 05:00 Asia/Seoul에 영어·한국어 각각 여섯 유형별 3개, 총 36개를 목표로 생성해요. 실패·중복·호출 한도 초과 시 목표보다 적게 발행할 수 있어요. 모든 상태의 기존 지식 요약을 LLM에 전달하고 동일 identity 해시의 UNIQUE 제약과 의미 중복 검사를 함께 적용해요. 의미상 중복이나 내용 오류가 완전히 사라진다는 보장은 없어요.
 
 1. 기존 스낵 쓰기·cron을 중지하고 필요한 백업을 확보해요. API 이미지를 빌드해 재시작하면 기존 compose command가 Alembic을 실행해요. **revision `20260912_0001`은 기존 스낵을 모두 삭제하고 테이블을 교체해요.** 다른 도메인 데이터는 보존해요.
 2. `LANGUAGE_SNACKS_LOCK_DATABASE_URL`은 API와 **같은 DB**의 direct 또는 session pooling URL로 설정해요. `DATABASE_URL` 자체가 direct/session 연결이면 생략할 수 있어요. transaction pooling URL로 session advisory lock을 사용하면 안 돼요. API와 job에 같은 설정을 사용해요.
-3. 배포 후 아래 후보 미리보기·초기 생성을 수동 확인해요. **dry-run도 LLM을 호출하지만 DB에는 저장하지 않아요.** 실제 발행 표본에서 세 유형·두 언어의 정확성을 확인해요.
+3. 배포 후 아래 후보 미리보기·초기 생성을 수동 확인해요. **dry-run도 LLM을 호출하지만 DB에는 저장하지 않아요.** 실제 발행 표본에서 여섯 유형·두 언어의 정확성을 확인해요.
 4. [cron 예시](../deploy/cron/language-snacks.cron.example)의 저장소·로그 경로, Docker PATH, cron 데몬 시간대를 확인한 뒤 서버 사용자 crontab에 등록해요. 예시는 UTC 일요일 20시이며 KST 데몬에서는 월요일 05시를 사용해요. 이 저장소 변경만으로 cron이 설치되지는 않아요.
 
 ```bash
@@ -184,13 +223,16 @@ docker compose up -d --build --force-recreate --no-deps api
 
 - 실행 키를 생략하면 가장 최근 월요일 05시 슬롯의 `weekly:YYYY-MM-DD:{en|ko}`를 사용해요. 같은 키·언어·수량 재실행은 같은 run을 재개하고 성공한 run에는 추가 생성하지 않아요. 수동 키에도 언어 suffix가 자동으로 붙어요.
 - `--language en|ko|all`, `--per-type 1..6`을 지원해요. 같은 실행 키에서 목표 수량을 바꾸면 409에 해당하는 오류로 종료해요. 지난 주 누락분을 다음 주에 자동 누적하지 않아요.
-- 예약을 먼저 재개하고 후보 라운드는 run당 최대 3회, 본문 생성은 예약당 최대 2회예요. API 일시 오류는 호출당 한 번 재시도해요. 호출·보수적 토큰 예산은 재실행에도 누적하고 시간 제한은 언어별 실행 시도에 적용해요. 예산을 다 쓴 run은 같은 설정에서 계속 재시도해도 진행하지 않아요.
+- 예약을 먼저 재개하고 후보 라운드는 기존 세 유형 run에서 최대 3회, 새 여섯 유형 run에서 최대 6회예요. 한 라운드는 미완료 카테고리 작업을 최대 6개 병렬 실행하며 요청당 최대 3개 후보를 받아요. 기존 rounds는 재개 시 보존해요. 한 유형의 후보 응답 실패는 candidate_errors에 남기고 다른 유형은 계속 진행하지만 호출 한도·이력 한도·잠금 실패는 실행을 중단해요. 본문 생성은 예약당 최대 2회예요. API 일시 오류는 호출당 한 번 재시도해요. 호출 횟수는 재실행에도 누적해요. 추정 토큰·전체 실행 시간 한도는 없으며 각 요청은 최대 65초예요. 호출 한도를 다 쓴 run은 같은 설정에서 계속 재시도해도 진행하지 않아요. 과거 토큰 한도로 중단한 run은 호출·라운드 여유가 있으면 같은 키로 재개할 수 있어요.
+- 2026-11-26 병렬 실행: 후보·본문·품질 요청은 카테고리별로 겹쳐 실행하지만 의미 중복 검사부터 예약 저장까지는 asyncio 잠금으로 직렬화해 다른 작업의 reserved 지식도 검사해요. 동기 DB 작업과 metrics 갱신은 단일 이벤트 루프에서 await 없이 끝내요. 호출 횟수는 요청 시작 전에 예약하고 실패 진단에는 해당 호출 번호를 기록해요. 한도·잠금 실패나 취소 시 모든 자식 작업을 회수한 뒤 외부 DB 쓰기 잠금을 해제하고, 취소된 예약은 본문 재시도 기회를 보존해요. 영어·한국어 run은 순차 실행해요.
+- 2026-11-26 후보 분리: 후보 strict 스키마는 요청한 유형·언어·relation과 관련 필드만 허용해요. 후보 이력에는 같은 언어의 모든 유형·상태 identity만 전달하고 ID·요약은 제외해요. 최종 의미 중복 검사는 ID·identity·요약 전체를 사용해 범위를 줄이지 않아요. 스키마는 API 옵션으로 전달하고 프롬프트에는 중복 삽입하지 않아요. 카테고리 분리로 호출 수가 늘 수 있으므로 전체 입력 토큰 감소를 보장하지는 않아요.
+- 2026-11-26 생성 진단([OpenRouter 명세](https://openrouter.ai/docs/guides/features/structured-outputs), [Ollama 호환 API](https://docs.ollama.com/api/openai-compatibility)): 모든 스낵 LLM 단계는 strict JSON Schema를 요청하고 OpenRouter는 `require_parameters=true`로 지원 endpoint만 사용해요. 미지원 시 일반 텍스트로 폴백하지 않아요. `metrics.failures`에 최근 20건의 schema·call·code·finish_reason·HTTP status_code 및 최대 10개 검증 오류(type·loc·허용된 도메인 reason)를 저장하고 CLI JSON으로 출력해요. 원문·입력값·거절 사유 원문·provider 오류 본문은 저장하지 않아요. `llm_length`는 출력 잘림, `llm_refusal`은 거절, `schema_validation`은 JSON/필드/도메인 검증 실패예요. 실제 reported_tokens는 관측용이에요.
 - stdout JSON에서 언어별 상태·발행 수·중복/불확실 판정 수·호출/토큰 사용량·오류 코드를 확인해요. `partial`/`failed`는 exit 1, 실행 중 잠금 충돌은 `skipped`예요. 로그 회전과 실패 알림은 서버 운영 도구에서 설정해요.
 - `history_budget_exceeded`는 이력을 자르지 않고 중단해요. 모델 컨텍스트·비용을 검토해 상한을 조정하거나 후속 검색 기반 설계를 적용해요.
 - 잘못된 발행은 PATCH로 보관해요. archived identity는 재생성하지 않으며 오프라인 캐시를 즉시 회수하지는 못해요. 수동 POST의 검증 실패도 identity를 보관하므로 같은 지식을 다시 등록할 수 없어요.
-- 롤백은 생성 작업을 중지하고 API를 정지한 뒤 **새 이미지로** `alembic downgrade 20260906_0002`를 실행하고 v1 이미지를 복원해요. downgrade도 모든 v2 스낵·생성 이력을 삭제하며 예전 스낵은 복원하지 않아요. 필요하면 사전 백업을 별도로 복원해요.
+- 아래 v1 복구는 여섯 유형 확장 이전 데이터에만 해당해요. 새 유형·대상 run이 있으면 먼저 위 확장 복구 절차를 따라요. v1 롤백은 생성 작업을 중지하고 API를 정지한 뒤 **새 이미지로** `alembic downgrade 20260906_0002`를 실행하고 v1 이미지를 복원해요. downgrade도 모든 v2 스낵·생성 이력을 삭제하며 예전 스낵은 복원하지 않아요. 필요하면 사전 백업을 별도로 복원해요.
 
-구버전 앱은 정상 온라인 조회 후 스낵이 숨겨지고, 새 앱은 언어별 v2 캐시를 사용해요. 구버전 앱의 이미 저장된 오프라인 카드는 원격 삭제할 수 없어요.
+v1 구버전 앱은 정상 온라인 조회 후 스낵이 숨겨지고, 새 앱은 언어별 v2 캐시를 사용해요. 구버전 앱의 이미 저장된 오프라인 카드는 원격 삭제할 수 없어요.
 
 ### 테스트용 바구니 리셋
 
@@ -207,7 +249,7 @@ docker compose up -d --build --force-recreate --no-deps api
 }
 ```
 
-4. 200 응답의 `reset_id`를 확인하고 앱을 백그라운드로 보냈다가 Home으로 복귀해요. 앱 시작·Home 재진입에도 확인하며 같은 카드 12개를 유지하고 바구니에 토마토 3개가 복원돼요. 팝업·애니메이션 중이라면 종료 후 적용돼요.
+4. 200 응답의 `reset_id`를 확인하고 앱을 백그라운드로 보냈다가 Home으로 복귀해요. 앱 시작·Home 재진입에도 확인하며 카테고리별 콘텐츠를 다시 조회·추첨한 뒤 바구니에 토마토 3개가 복원돼요. 신규 앱의 category_cycle 조회를 지원하는 API를 먼저 배포해요. 팝업·애니메이션 중이라면 종료 후 적용돼요.
 
 GET은 일반 Bearer로 조회하며 운영 키를 앱에 넣지 않아요. 다른 기기는 각자 다음 조회 성공 때 반영돼요. 오프라인·구 앱에서는 즉시 반영되지 않으며, POST 성공 자체가 앱 리셋 완료를 뜻하지는 않아요. 테스트를 다시 시작하려면 POST를 다시 호출해요. 리셋 ID는 자정 이후에도 로컬에 유지되므로 같은 요청이 다음 날 소비를 초기화하지 않아요. DB 리셋 기록만 롤백할 때는 API 중지 후 `alembic downgrade 20260912_0001`로 새 테이블만 제거할 수 있어요.
 
@@ -222,7 +264,7 @@ WHERE id = '대상 사용자 UUID'
 RETURNING id, snack_unlimited_replay_enabled;
 ```
 
-결과가 0행이면 대상 ID 또는 DB 연결을 확인해요. 권한을 회수할 때는 `false`로 변경해요. 앱 Home 진입·복귀·홈 당겨서 새로고침의 다음 성공 조회부터 권한이 반영되며, 12번째 팝업을 닫으면 같은 당일 카드 묶음이 다시 시작돼요. iOS 홈 화면 위젯은 이 단계에서 무제한 반복을 지원하지 않아요.
+결과가 0행이면 대상 ID 또는 DB 연결을 확인해요. 권한을 회수할 때는 `false`로 변경해요. 앱 Home 진입·복귀·홈 당겨서 새로고침의 다음 성공 조회부터 권한이 반영되며, 12번째 팝업을 닫으면 카테고리별 콘텐츠를 다시 조회·추첨한 새 묶음이 시작돼요. iOS 홈 화면 위젯도 앱이 마지막으로 확인한 권한을 사용해 공유 후보에서 무제한 재추첨해요. 앱이 다시 서버를 조회하기 전까지는 기존 권한이 적용돼요.
 
 `20261113_0001`을 되돌리면 수동으로 먼저 추가한 경우를 포함해 해당 컬럼과 권한 값이 삭제되므로, 롤백 전 권한 설정을 별도로 보관해요.
 
@@ -254,6 +296,10 @@ uv run python -m scripts.archive_weekly_topic TOPIC_UUID
 
 ## 변경 기록
 
+- 2026-11-25: 상품명을 대화창 슬롯·대화권으로 통일하고 삭제 기록·구독 테이블 이관·잔액별 이용 제한 설명을 현행 정책에 맞췄어요.
+
+- 2026-11-25: 소비성 원장 전환·HMAC 키 운영과 Apple Sandbox 수동 검증 체크리스트를 추가했어요.
+
 - 2026-11-23: 익명 게스트 활성화·회원 전환·누적 5회 제한과 30일 미활동 정리 작업을 추가했어요.
 - 2026-11-15: 관리자 웹을 공유 코드 단독 로그인으로 바꾸고 세션·마이그레이션 절차를 갱신했어요.
 - 2026-11-15: 관리자 계정 지정과 수동 구독 권한의 부여·예약 철회·즉시 철회 절차를 추가했어요.
@@ -269,3 +315,34 @@ uv run python -m scripts.archive_weekly_topic TOPIC_UUID
 - 2026-09-19: 바구니 리셋 API·추가 테이블 마이그레이션·앱 복귀 확인·구버전/오프라인 제한을 추가했어요.
 
 - 2026-09-13: README의 Swagger·스낵 배포/복구 절차를 이관하고 Docker의 DB·포트·초기 nginx 전제를 명시했어요.
+
+
+### 개인정보 안내·AI 처리 선택 배포 (2026-11-26)
+
+새 모바일 배포 전에 서버 migration `20261126_0001`을 적용해 `user_consents.consent_kind`에 `privacy_notice`를 허용해요. 기존 동의 행은 변경하지 않아요. 새 앱은 공개 고지 조회와 버전이 명시된 선택 API를 사용하며, 구버전 앱의 본문 없는 동의 요청도 계속 지원해요. migration을 되돌리면 새 안내 확인 행만 제거하고 기존 명시 동의는 보존해요. 처리방침 안내 버전 변경은 AI 동의를 무효화하지 않으며 AI 처리 조건을 바꿀 때는 `AI_DATA_PROCESSING_VERSION`을 갱신해요.
+
+
+### 미확인 답변 배포 (2026-11-26)
+
+`20261126_0002`는 `messages.read_at`과 `(conversation_id, role, read_at)` 인덱스를 추가하고 기존 assistant의 읽음 시각을 생성 시각으로 채워요. 배포 전 대상 DB·백업·assistant 행 수를 확인하고 백필 UPDATE와 인덱스 생성 시간을 감안해요. 서버 migration 적용 후 앱을 배포해요. downgrade는 읽음 시각과 인덱스만 제거하며 메시지는 삭제하지 않아요.
+
+iOS 16 이상 실기기에서 권한 허용·거부·설정 해제, 회원/게스트 전환, 미확인 답변 존재 시 1·모두 공개 후 0을 검증해요. 앱 종료 중 갱신은 지원하지 않아요. 자동 검증과 남은 실기기·대화 지연 검증은 [배지 계약](../.agent/_contracts/IOS_UNREAD_BADGE.md)에 기록해요.
+
+
+읽음 migration 직후, 새 트래픽을 열기 전에 다음 조회의 `unread`가 0인지 확인해요. 배포 후 생성된 AI 답변은 정상적으로 null을 가지므로 트래픽 시작 후에는 0이 아닐 수 있어요.
+
+```sql
+SELECT role, COUNT(*) AS total,
+       SUM(CASE WHEN read_at IS NULL THEN 1 ELSE 0 END) AS unread
+FROM messages
+GROUP BY role;
+```
+
+되돌릴 때는 앱·서버의 읽음 API 사용을 중지하고 이전 서버 버전으로 전환한 다음 `alembic downgrade 20261126_0001`을 수행해요. 되돌림은 읽음 기록을 잃지만 대화·메시지 본문은 유지해요. 다시 올리면 그때 존재하는 답변을 모두 읽음으로 이관해요.
+
+
+수동 출시 검증은 사용자가 수행하고 [배지 계약의 검증 표](../.agent/_contracts/IOS_UNREAD_BADGE.md#남은-출시-검증)에 결과를 기록해요.
+
+- 실기기: 회원 홈에서 안내·닉네임을 마친 뒤 배지를 선택해요. 허용·거부·건너뛰기·프로필 재선택·시스템 설정 해제를 확인하고, 다른 화면에서 답변이 저장되면 아이콘이 1, 대화 UI에 전체 답변이 공개되면 0이 되는지 확인해요. 앱 복귀·재로그인·계정 전환에서도 이전 계정 배지가 남지 않아야 해요. 게스트에는 선택·설정이 없어야 해요.
+- 지연: 같은 기기·네트워크·서버·모델·입력 조건에서 변경 전후를 반복 측정해요. 기존 latency 로그의 `first_text_frame`과 첫 음성 재생 시점을 같은 기준으로 비교하고, 읽음·미확인 API 또는 native 호출을 늦추거나 실패시켜도 답변 공개·재생·다음 전송이 기다리지 않는지 확인해요. 실행 횟수와 각 측정값을 남기고 증가가 반복되면 원인을 확인해요.
+- DB: 위 migration 절차를 직접 수행하고 적용 revision과 기존 assistant 이관 결과를 기록해요. 적용 후 새 답변은 미확인, 해당 답변을 UI에 공개한 뒤에는 읽음으로 바뀌는지도 확인해요.

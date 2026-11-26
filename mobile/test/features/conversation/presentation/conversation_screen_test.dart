@@ -1,3 +1,7 @@
+import 'dart:async';
+import 'package:curitalk/core/notifications/badge_sync_controller.dart';
+import 'package:curitalk/core/notifications/ios_badge_bridge.dart';
+import 'package:curitalk/core/storage/token_storage.dart';
 import 'package:curitalk/app/router/app_router.dart';
 import 'package:curitalk/app/theme/app_theme.dart';
 import 'package:curitalk/features/conversation/conversation.dart';
@@ -7,6 +11,49 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
 void main() {
+  testWidgets(
+    'only foreground published replies are read and a delayed read does not block sending',
+    (tester) async {
+      final repository = _ReadingRepository();
+      final manager = BadgeSyncController(
+        const IOSBadgeBridge(),
+        _BadgeStorage(),
+        () => repository,
+      );
+      manager.accountChanged('guest', false);
+      final container = ProviderContainer(
+        overrides: [
+          conversationRepositoryProvider.overrideWithValue(repository),
+          badgeSyncControllerProvider.overrideWithValue(manager),
+        ],
+      );
+      addTearDown(container.dispose);
+      addTearDown(manager.dispose);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            theme: AppTheme.light,
+            home: const ConversationScreen(conversationId: 'conversation-id'),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(repository.readIds, isEmpty);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+      expect(repository.readIds, ['assistant-message-id']);
+      // 읽음 HTTP 응답이 아직 없어도 다음 발화를 전송할 수 있어요.
+      await container
+          .read(conversationControllerProvider('conversation-id').notifier)
+          .send('Next');
+      expect(repository.sentTextTurns, ['Next']);
+      repository.readResult.complete(false);
+      await tester.pumpAndSettle();
+    },
+  );
+
   testWidgets(
     'pending roleplay renders deltas and opens the saved conversation',
     (WidgetTester tester) async {
@@ -308,7 +355,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Hello!'), findsOneWidget);
-    expect(find.textContaining('15 free turns'), findsOneWidget);
+    expect(find.textContaining('No conversation credits'), findsOneWidget);
     expect(tester.widget<TextField>(find.byType(TextField)).enabled, isFalse);
     expect(repository.sentTextTurns, isEmpty);
   });
@@ -984,5 +1031,27 @@ class _LongConversationRepository extends _FakeConversationRepository {
         hasMore: offset + limit < 120,
       ),
     );
+  }
+}
+
+class _BadgeStorage implements SecureStorageBackend {
+  @override
+  Future<String?> read(String key) async => null;
+  @override
+  Future<void> write(String key, String value) async {}
+  @override
+  Future<void> delete(String key) async {}
+}
+
+class _ReadingRepository extends _FakeConversationRepository
+    implements UnreadConversationRepository {
+  final readIds = <String>[];
+  final readResult = Completer<bool>();
+  @override
+  Future<bool> hasUnreadReplies() async => false;
+  @override
+  Future<bool> markRepliesRead(String id, List<String> ids) {
+    readIds.addAll(ids);
+    return readResult.future;
   }
 }

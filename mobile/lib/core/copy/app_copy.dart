@@ -50,6 +50,19 @@ class AppCopy {
     return '${languageName(nativeCode)} -> ${languageName(targetCode)}';
   }
 
+  String get badgeTitle => isKorean ? '미확인 알림' : 'Unread notifications';
+  String get badgeExplanation => isKorean
+      ? '확인하지 않은 답변이 있으면 앱 아이콘에 알림을 표시해요'
+      : 'Show a notification on the app icon when you have unread replies.';
+  String get badgeEnable => isKorean ? '배지 사용' : 'Use badge';
+  String get badgeSkip => isKorean ? '사용하지 않기' : 'Not now / turn off';
+  String get badgeSettings => isKorean ? '설정 열기' : 'Open settings';
+  String get badgeSettingsMessage =>
+      isKorean ? 'iOS 설정에서 배지를 허용해주세요.' : 'Allow badges in iOS Settings.';
+  String get badgeSaveFailed => isKorean
+      ? '배지 설정을 저장하지 못했어요. 다시 시도해주세요.'
+      : 'Could not save badge settings. Please try again.';
+
   String get comingSoonLabel => isKorean ? '준비 중' : 'Coming soon';
 
   String firstAnswerHint(String targetCode) {
@@ -106,6 +119,7 @@ class AppCopy {
       'turnLimitReached' => conversationTurnLimitReached,
       'conversationLocked' => conversationLockedReadOnly,
       'slotsFull' => additionalConversationLocked,
+      'creditsFull' => conversationTurnLimitReached,
       'freeChatRequestFailed' =>
         isKorean
             ? '대화를 시작하지 못했어요. 다시 시도해 주세요.'
@@ -160,86 +174,61 @@ class AppCopy {
   }
 
   String get retryLabel => isKorean ? '다시 시도' : 'Retry';
-  String get subscriptionTitle => isKorean ? '구독' : 'Subscription';
-  String get subscriptionDialogActionLabel => isKorean ? '구독' : 'SUBSCRIPT';
-  String get currentPlanIndicator => isKorean ? '현재 플랜' : 'Current plan';
+  String get subscriptionTitle => isKorean ? '대화 상점' : 'Conversation store';
+  String get subscriptionDialogActionLabel => isKorean ? '상점 보기' : 'Open store';
+  String get currentPlanIndicator => isKorean ? '현재 플랜' : 'Account balance';
   String get adminUnlimitedAccess =>
       isKorean ? '관리자 무제한 이용' : 'Unlimited admin access';
   String get adminUnlimitedDescription => isKorean
-      ? '구독 없이 모든 기능을 이용할 수 있어요.'
-      : 'All features are available without a subscription.';
+      ? '대화창 슬롯과 대화권 제한 없이 이용할 수 있어요.'
+      : 'Use conversation slots and credits without limits.';
   String get manuallyGrantedPlan =>
       isKorean ? '관리자가 부여한 이용 권한이에요.' : 'This access was granted by an admin.';
   String get purchaseIosOnly => isKorean
-      ? '현재 iOS에서만 구독할 수 있어요.'
-      : 'Subscriptions are currently available on iOS.';
-  List<String> planBenefits(bool plus) => switch ((isKorean, plus)) {
-    (true, true) => const <String>['동시 대화 10개', '발화 무제한'],
-    (true, false) => const <String>['동시 대화 5개', '발화 무제한'],
-    (false, true) => const <String>[
-      '10 active conversations',
-      'Unlimited turns',
-    ],
-    (false, false) => const <String>[
-      '5 active conversations',
-      'Unlimited turns',
-    ],
-  };
-  String get plusBusinessConversationBenefit =>
-      isKorean ? '비즈니스 대화 모드' : 'Business Conversation Mode';
+      ? '현재 iOS에서만 구매할 수 있어요.'
+      : 'Purchases are currently available on iOS.';
   String get priceUnavailable => isKorean ? '가격을 불러오는 중이에요.' : 'Loading price';
-  String get _monthlyUnit => isKorean ? '월' : 'month';
-  String monthlyPrice(String price) => '$price / $_monthlyUnit';
-  String get monthlyPeriodLabel => '/$_monthlyUnit';
-  String get subscribeLabel => isKorean ? '구독하기' : 'SUBSCRIBE';
-  String get subscriptionUpdating =>
-      isKorean ? '구독 정보를 업데이트하는 중이에요.' : 'Updating your subscription.';
-  String get previousPurchasePrompt =>
-      isKorean ? '이전에 구매했었나요?' : 'Purchased before?';
-  String get restorePurchases => isKorean ? '구매 복원' : 'Restore purchases';
-  String get manageSubscription => isKorean ? '구독 관리' : 'Manage subscription';
   String get termsOfUse => isKorean ? '이용약관' : 'Terms of Use';
   String get privacyPolicy => isKorean ? '개인정보처리방침' : 'Privacy Policy';
   String billingMessage(String code) => switch ((isKorean, code)) {
-    (true, 'verified') => '구독이 확인되었어요.',
-    (false, 'verified') => 'Subscription verified.',
+    (true, 'verified') => '구매가 반영되었어요.',
+    (false, 'verified') => 'Purchase delivered.',
     (true, 'account_conflict') => '이 구매는 다른 tomatalk 계정에 연결되어 있어요.',
     (false, 'account_conflict') =>
       'This purchase belongs to another tomatalk account.',
     (true, 'purchase_canceled') => '구매를 취소했어요.',
     (false, 'purchase_canceled') => 'Purchase canceled.',
-    (true, 'restore_requested') => '복원한 구매를 확인하고 있어요.',
-    (false, 'restore_requested') => 'Checking restored purchases.',
     (true, 'products_unavailable') => 'App Store 상품을 불러오지 못했어요.',
     (false, 'products_unavailable') => 'Could not load App Store products.',
-    (true, _) => '결제를 확인하지 못했어요. 다시 시도하거나 구매를 복원해 주세요.',
-    (false, _) => 'Could not verify the purchase. Retry or restore purchases.',
+    (true, _) => '결제를 확인하지 못했어요. 연결을 확인한 뒤 앱을 다시 열어 주세요.',
+    (false, _) =>
+      'Could not verify the purchase. Check your connection and reopen the app.',
   };
   String get conversationLockedReadOnly => isKorean
-      ? '이 대화는 잠겨 있어요. 요금제의 슬롯 한도가 늘어나면 잠긴 대화가 최근 사용 순서대로 열려요.'
-      : 'This conversation is locked. Locked conversations reopen in recent-use order when your plan gains more slots.';
+      ? '이 대화는 잠겨 있어요. 대화 접근 상태를 다시 확인해 주세요.'
+      : 'This conversation is locked. Please refresh conversation access.';
   String get lockedConversationLabel =>
       isKorean ? '잠긴 대화' : 'Locked conversation';
   String get lockedConversationEntryMessage => isKorean
-      ? '요금제의 슬롯 한도가 늘어나면 잠긴 대화가 최근 사용 순서대로 열려요.'
-      : 'Locked conversations reopen in recent-use order when your plan gains more slots.';
+      ? '대화 접근 상태를 다시 확인해 주세요.'
+      : 'Please refresh conversation access.';
   String get backLabel => isKorean ? '뒤로' : 'Back';
   String get backToHomeLabel => isKorean ? '홈으로 돌아가기' : 'Back to home';
   String get conversationTitle => isKorean ? '대화' : 'Conversation';
   String get additionalConversationLabel =>
-      isKorean ? '추가 대화' : 'Additional conversation';
+      isKorean ? '대화창 슬롯 추가' : 'Add conversation slots';
   String get additionalConversationLocked => isKorean
-      ? '활성 대화 슬롯이 모두 사용 중이에요. 활성 대화를 삭제하거나 상위 요금제를 구독해 주세요.'
-      : 'All active conversation slots are in use. Delete an active conversation or upgrade your plan.';
+      ? '대화창 슬롯을 모두 사용 중이에요. 대화를 삭제하거나 대화창 슬롯을 추가해 주세요. 삭제해도 사용한 대화권은 돌아오지 않아요.'
+      : 'All conversation slots are in use. Delete a conversation or add slots. Deleting does not return used conversation credits.';
   String get additionalConversationLockedSemantic =>
       isKorean ? '잠긴 대화' : 'Locked conversation';
   String get accessDialogConfirm => isKorean ? '확인' : 'OK';
   String get conversationTurnLimitReached => isKorean
-      ? '이 대화의 무료 15턴을 모두 사용했어요. 이전 대화는 계속 볼 수 있어요.'
-      : 'You have used all 15 free turns in this conversation. You can still read it.';
+      ? '남은 대화권이 없어요. 대화권을 충전하면 계속할 수 있고, 이전 대화는 그대로 볼 수 있어요.'
+      : 'No conversation credits remain. Add credits to continue. Your conversation history stays available.';
   String get guestTurnLimitReached => isKorean
-      ? '게스트 체험 5회를 모두 사용했어요. 로그인하면 대화를 보존한 채 계속할 수 있어요.'
-      : 'You have used all 5 guest turns. Sign in to keep your conversations and continue.';
+      ? '게스트 체험 대화권 5회를 모두 사용했어요. 로그인하면 대화를 보존하고 회원 체험 대화권 10회를 계정당 한 번 받아요. 게스트 사용량은 회원 체험에서 차감하지 않아요.'
+      : 'You have used all 5 guest trial credits. Sign in to keep your conversations and receive 10 member trial credits once per account. Guest usage does not reduce that trial.';
   String get signInToContinueLabel =>
       isKorean ? '로그인하고 계속하기' : 'Sign in to continue';
   String get deleteConversationTooltip =>
@@ -305,32 +294,18 @@ class AppCopy {
   String get nicknameHint => isKorean ? '닉네임' : 'Nickname';
   String get nicknameSaveLabel => isKorean ? '저장' : 'Save';
   String get nicknameEditLabel => isKorean ? '닉네임 수정' : 'Edit nickname';
-  String planDisplayName(String plan) {
-    final String normalized = plan.trim().toLowerCase();
-    return normalized.isEmpty
-        ? 'Free'
-        : '${normalized[0].toUpperCase()}${normalized.substring(1)}';
-  }
-
-  String profilePlanTitle(String plan) {
-    final String displayPlan = planDisplayName(plan);
-    if (isKorean) {
-      return displayPlan == 'Free' ? '무료 플랜' : '$displayPlan 플랜';
-    }
-    return '$displayPlan plan';
-  }
-
   String get profileCurrentPlanDescription =>
-      isKorean ? '현재 이용 중인 플랜' : 'Current plan';
+      isKorean ? '현재 계정 잔액' : 'Account balance';
   String get profilePlanLoading =>
-      isKorean ? '구독 정보를 확인하는 중이에요.' : 'Checking your subscription.';
+      isKorean ? '잔액을 확인하는 중이에요.' : 'Checking your balance.';
   String get profilePlanLoadingHint =>
       isKorean ? '잠시만 기다려 주세요.' : 'Please wait a moment.';
   String get profilePlanLoadFailed =>
-      isKorean ? '구독 정보를 확인하지 못했어요.' : 'Could not check your subscription.';
+      isKorean ? '잔액을 확인하지 못했어요.' : 'Could not check your balance.';
   String get profilePlanRefreshHint =>
       isKorean ? '아래로 당겨 다시 확인해 주세요.' : 'Pull down to try again.';
-  String get profileViewPlansLabel => isKorean ? '플랜 살펴보기' : 'View plans';
+  String get profileViewPlansLabel =>
+      isKorean ? '잔액과 상품 보기' : 'Balance and products';
   String get nicknameInvalid => isKorean
       ? '닉네임은 1~20자로 입력해 주세요.'
       : 'Enter a nickname of 1–20 characters.';
@@ -370,6 +345,10 @@ class AppCopy {
     'regional_variant' => isKorean ? '지역마다 다른 표현' : 'Regional expressions',
     'usage_contrast' => isKorean ? '비슷하지만 다른 쓰임' : 'Usage differences',
     'homonym' => isKorean ? '같은 소리, 다른 뜻' : 'Same sound, different meanings',
+    'register_contrast' => isKorean ? '상황에 맞는 말투' : 'The right tone',
+    'collocation' => isKorean ? '함께 쓰면 자연스러운 말' : 'Words that go together',
+    'idiomatic_expression' =>
+      isKorean ? '직역하면 놓치는 뜻' : 'Beyond literal meaning',
     _ => languageSnackLabel,
   };
   String get previousLanguageSnackTooltip =>
@@ -420,8 +399,8 @@ class AppCopy {
       ? '계정과 대화·학습 기록이 영구적으로 삭제돼요. 재가입해도 이 기록은 복구되지 않아요.'
       : 'Your account and learning history will be permanently deleted. Rejoining will not restore this history.';
   String get deleteAccountSubscriptionWarning => isKorean
-      ? '계정을 삭제해도 Apple 구독은 자동으로 취소되지 않으며 계속 결제될 수 있어요. Apple 구독 관리에서 직접 해지할 수 있어요. 재가입 후에는 남은 구독 권한만 구매 복원으로 다시 연결할 수 있어요.'
-      : 'Deleting your account does not cancel your Apple subscription. Billing may continue. You can cancel it in Apple subscription settings. If you rejoin, Restore Purchases can reconnect only the remaining subscription access.';
+      ? '구매한 추가 대화창 슬롯과 남은 대화권이 영구 소멸해요. 재가입하거나 다른 계정으로 로그인해도 복원·이전할 수 없어요.'
+      : 'Purchased extra conversation slots and remaining conversation credits are permanently lost. They cannot be restored after re-registration or transferred to another account.';
   String get deleteAccountAppleWarning => isKorean
       ? 'Apple 로그인을 다시 요청할 수 있어요. 연결 해제에 실패해도 계정 삭제는 계속되며, Apple 계정 설정에서 앱 연결을 직접 해제할 수 있어요.'
       : 'You may be asked to sign in with Apple again. If disconnection fails, account deletion continues and you can remove the app in Apple Account settings.';
@@ -456,9 +435,23 @@ class AppCopy {
   String get cancelLabel => isKorean ? '취소' : 'CANCEL';
   String get aiConsentTitle =>
       isKorean ? 'AI 대화를 위한 동의' : 'Consent for AI conversations';
+  String get unreadReplyLabel => isKorean ? '미확인 AI 답변 있음' : 'Unread AI reply';
+  String get aiConsentRequiredLabel =>
+      isKorean ? '[필수] AI 데이터 처리 동의' : '[Required] AI data processing';
+  String get aiConsentRequiredWarning => isKorean
+      ? '동의하지 않으면 AI 대화, 음성 처리 및 학습 피드백 서비스를 이용할 수 없어요.'
+      : 'Without consent, AI conversations, speech processing and learning feedback are unavailable.';
   String get aiConsentDescription => isKorean
-      ? '대화 내용이 AI 응답 생성과 학습 피드백 제공을 위해 처리돼요. 개인정보 처리방침과 AI 데이터 처리 고지를 확인하고 동의해 주세요.'
-      : 'Your conversation is processed to generate AI responses and learning feedback. Review and accept the privacy and AI data notices to continue.';
+      ? '대화 내용과 음성 입력은 AI 답변, 음성 변환과 학습 피드백을 위해 외부 AI 서비스에 전달돼요. 자세한 처리 내용은 개인정보 처리방침에서 확인할 수 있어요. AI 대화 서비스를 이용하려면 데이터 처리 동의가 필요해요. 동의 전에도 홈과 기존 대화 내역은 확인할 수 있어요.'
+      : 'Conversation content and voice input are sent to external AI services for replies, speech processing and learning feedback. See the privacy policy for details. AI data processing consent is required to use AI conversations. You can still view Home and existing conversations before consenting.';
+  String get privacyNoticeDescription => isKorean
+      ? '업데이트된 개인정보 처리방침을 확인할 수 있어요. 기존 AI 데이터 처리 동의는 유지돼요.'
+      : 'You can review the updated privacy policy. Your existing AI data processing consent remains valid.';
+  String get aiConsentLaterLabel => isKorean ? '나중에 선택' : 'Decide later';
+  String get privacyNoticeContinueLabel => isKorean ? '확인하고 계속' : 'Continue';
+  String get aiConsentSaveFailed => isKorean
+      ? '안내를 열거나 선택을 저장하지 못했어요. 다시 시도해 주세요.'
+      : 'Could not open the notice or save your choice. Please try again.';
   String get privacyPolicyLabel => isKorean ? '개인정보 처리방침' : 'Privacy policy';
   String get agreeAndContinueLabel =>
       isKorean ? '동의하고 계속' : 'Agree and continue';

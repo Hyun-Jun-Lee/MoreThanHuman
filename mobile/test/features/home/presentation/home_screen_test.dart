@@ -1,3 +1,5 @@
+import 'package:curitalk/core/notifications/ios_badge_bridge.dart';
+import 'package:curitalk/core/notifications/badge_sync_controller.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:curitalk/features/profile/presentation/profile_screen.dart';
@@ -25,6 +27,94 @@ import '../snack_test_fixtures.dart';
 import 'package:curitalk/features/home/data/snack_basket_reset_repository.dart';
 
 void main() {
+  testWidgets(
+    'profile badge settings use the language card layout and disable persists',
+    (tester) async {
+      final storage = MemorySnackStorage();
+      await storage.write('badge.choice.user-id', 'enabled');
+      await tester.pumpWidget(
+        _homeApp(
+          profile: true,
+          billingPlan: 'member',
+          snackStorage: storage,
+          badgeBridge: _AllowedBadgeBridge(),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('profile-badge-settings-card')),
+        250,
+      );
+      final languageCard = find.byKey(
+        const ValueKey('profile-language-settings-card'),
+      );
+      final badgeCard = find.byKey(
+        const ValueKey('profile-badge-settings-card'),
+      );
+      expect(
+        tester.getSize(badgeCard).width,
+        tester.getSize(languageCard).width,
+      );
+      expect(find.text('On'), findsOneWidget);
+      expect(find.text('Off'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('profile-badge-false')));
+      await tester.pumpAndSettle();
+      expect(await storage.read('badge.choice.user-id'), 'disabled');
+      await tester.tap(find.byKey(const ValueKey('profile-badge-true')));
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(await storage.read('badge.choice.user-id'), 'enabled');
+      await tester.scrollUntilVisible(find.text('Privacy policy'), 250);
+      expect(
+        tester.getTopLeft(find.text('Privacy policy')).dy,
+        greaterThan(
+          tester
+              .getBottomLeft(find.byKey(const ValueKey('profile-account-card')))
+              .dy,
+        ),
+      );
+    },
+  );
+
+  testWidgets('home refreshes unread marker after a reply change', (
+    tester,
+  ) async {
+    final repository = _FakeHomeRepository(
+      conversations: [
+        ConversationSummary(
+          id: 'unread',
+          title: 'Unread conversation',
+          kind: ConversationKind.freeChat,
+          messageCount: 2,
+          isActive: true,
+          hasUnreadReply: true,
+          updatedAt: DateTime(2026),
+        ),
+      ],
+    );
+    await tester.pumpWidget(_homeApp(homeRepository: repository));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('unread-reply-badge')), findsOneWidget);
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(HomeScreen)),
+    );
+    repository.conversations
+      ..clear()
+      ..add(
+        ConversationSummary(
+          id: 'unread',
+          title: 'Unread conversation',
+          kind: ConversationKind.freeChat,
+          messageCount: 2,
+          isActive: true,
+          updatedAt: DateTime(2026),
+        ),
+      );
+    container.read(badgeSyncControllerProvider).refresh();
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('unread-reply-badge')), findsNothing);
+  });
+
   for (final plan in <String>['free', 'advance', 'plus']) {
     testWidgets('iOS profile shows $plan beside subscription details', (
       WidgetTester tester,
@@ -42,14 +132,10 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      final displayPlan = '${plan[0].toUpperCase()}${plan.substring(1)}';
-      expect(find.text(displayPlan), findsOneWidget);
-      expect(
-        find.text(plan == 'free' ? '무료 플랜' : '$displayPlan 플랜'),
-        findsOneWidget,
-      );
-      expect(find.text('현재 이용 중인 플랜'), findsOneWidget);
-      expect(find.text('플랜 살펴보기'), findsOneWidget);
+      expect(find.text('10'), findsOneWidget);
+      expect(find.text('대화권 10회 · 대화창 슬롯 1개'), findsOneWidget);
+      expect(find.text('현재 계정 잔액'), findsOneWidget);
+      expect(find.text('잔액과 상품 보기'), findsOneWidget);
       expect(
         tester
             .getSize(find.byKey(const ValueKey('profile-plan-action')))
@@ -71,10 +157,13 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Free'), findsOneWidget);
-    expect(find.text('Free plan'), findsOneWidget);
-    expect(find.text('Current plan'), findsOneWidget);
-    expect(find.text('View plans'), findsOneWidget);
+    expect(find.text('10'), findsOneWidget);
+    expect(
+      find.text('10 conversation credits · 1 conversation slot'),
+      findsOneWidget,
+    );
+    expect(find.text('Account balance'), findsOneWidget);
+    expect(find.text('Balance and products'), findsOneWidget);
     expect(find.text('Learn English in Korean'), findsOneWidget);
     expect(find.text('Learn Korean in English'), findsOneWidget);
     expect(find.text('SHOW MORE'), findsNothing);
@@ -94,7 +183,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Checking your subscription.'), findsOneWidget);
+    expect(find.text('Checking your balance.'), findsOneWidget);
     final loadingImage = tester.widget<Image>(
       find.byKey(const ValueKey('profile-subscription-loading')),
     );
@@ -103,15 +192,26 @@ void main() {
       'assets/images/loading/profile_subscription_tomato.gif',
     );
     expect(find.text('Please wait a moment.'), findsOneWidget);
-    expect(find.text('Free'), findsNothing);
-    expect(find.text('Free plan'), findsNothing);
+    expect(find.text('10'), findsNothing);
+    expect(
+      find.text('10 conversation credits · 1 conversation slot'),
+      findsNothing,
+    );
 
     entitlement.complete(
-      const BillingEntitlement(plan: 'advance', status: 'active'),
+      const BillingEntitlement(
+        plan: 'member',
+        status: 'active',
+        remainingTurns: 15,
+        slotLimit: 2,
+      ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Advance plan'), findsOneWidget);
-    expect(find.text('Checking your subscription.'), findsNothing);
+    expect(
+      find.text('15 conversation credits · 2 conversation slots'),
+      findsOneWidget,
+    );
+    expect(find.text('Checking your balance.'), findsNothing);
     expect(
       find.byKey(const ValueKey('profile-subscription-loading')),
       findsNothing,
@@ -139,14 +239,17 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Could not check your subscription.'), findsOneWidget);
+    expect(find.text('Could not check your balance.'), findsOneWidget);
     expect(find.text('Pull down to try again.'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('profile-subscription-loading')),
       findsNothing,
     );
-    expect(find.text('Free'), findsNothing);
-    expect(find.text('Free plan'), findsNothing);
+    expect(find.text('10'), findsNothing);
+    expect(
+      find.text('10 conversation credits · 1 conversation slot'),
+      findsNothing,
+    );
 
     final container = ProviderScope.containerOf(
       tester.element(find.byType(ProfileScreen)),
@@ -155,66 +258,91 @@ void main() {
     container.invalidate(billingEntitlementProvider);
     await tester.pump();
     await tester.pump();
-    expect(find.text('Checking your subscription.'), findsOneWidget);
+    expect(find.text('Checking your balance.'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('profile-subscription-loading')),
       findsOneWidget,
     );
 
-    retry.complete(const BillingEntitlement(plan: 'free', status: 'free'));
-    await tester.pumpAndSettle();
-    expect(find.text('Free plan'), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('profile-subscription-loading')),
-      findsNothing,
-    );
-  });
-
-  testWidgets('profile hides an old Free plan during a failed recheck', (
-    WidgetTester tester,
-  ) async {
-    final nextEntitlement = Completer<BillingEntitlement>();
-    var reads = 0;
-    await tester.pumpWidget(
-      _homeApp(
-        profile: true,
-        platform: TargetPlatform.iOS,
-        billingGetter: () {
-          reads += 1;
-          return reads == 1
-              ? const BillingEntitlement(plan: 'free', status: 'free')
-              : nextEntitlement.future;
-        },
+    retry.complete(
+      const BillingEntitlement(
+        plan: 'member',
+        status: 'active',
+        remainingTurns: 10,
+        slotLimit: 1,
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Free plan'), findsOneWidget);
-
-    final container = ProviderScope.containerOf(
-      tester.element(find.byType(ProfileScreen)),
-      listen: false,
-    );
-    container.invalidate(billingEntitlementProvider);
-    await tester.pump();
-    await tester.pump();
-    expect(reads, 2);
-    expect(container.read(billingEntitlementProvider).isLoading, isTrue);
-    expect(find.text('Checking your subscription.'), findsOneWidget);
     expect(
-      find.byKey(const ValueKey('profile-subscription-loading')),
+      find.text('10 conversation credits · 1 conversation slot'),
       findsOneWidget,
     );
-    expect(find.text('Free plan'), findsNothing);
-
-    nextEntitlement.completeError(StateError('Subscription unavailable'));
-    await tester.pumpAndSettle();
-    expect(find.text('Could not check your subscription.'), findsOneWidget);
-    expect(find.text('Free plan'), findsNothing);
     expect(
       find.byKey(const ValueKey('profile-subscription-loading')),
       findsNothing,
     );
   });
+
+  testWidgets(
+    'profile hides an old 10 conversation credits · 1 conversation slot during a failed recheck',
+    (WidgetTester tester) async {
+      final nextEntitlement = Completer<BillingEntitlement>();
+      var reads = 0;
+      await tester.pumpWidget(
+        _homeApp(
+          profile: true,
+          platform: TargetPlatform.iOS,
+          billingGetter: () {
+            reads += 1;
+            return reads == 1
+                ? const BillingEntitlement(
+                    plan: 'member',
+                    status: 'active',
+                    remainingTurns: 10,
+                    slotLimit: 1,
+                  )
+                : nextEntitlement.future;
+          },
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.text('10 conversation credits · 1 conversation slot'),
+        findsOneWidget,
+      );
+
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(ProfileScreen)),
+        listen: false,
+      );
+      container.invalidate(billingEntitlementProvider);
+      await tester.pump();
+      await tester.pump();
+      expect(reads, 2);
+      expect(container.read(billingEntitlementProvider).isLoading, isTrue);
+      expect(find.text('Checking your balance.'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('profile-subscription-loading')),
+        findsOneWidget,
+      );
+      expect(
+        find.text('10 conversation credits · 1 conversation slot'),
+        findsNothing,
+      );
+
+      nextEntitlement.completeError(StateError('Subscription unavailable'));
+      await tester.pumpAndSettle();
+      expect(find.text('Could not check your balance.'), findsOneWidget);
+      expect(
+        find.text('10 conversation credits · 1 conversation slot'),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('profile-subscription-loading')),
+        findsNothing,
+      );
+    },
+  );
 
   testWidgets('pulling down profile reloads account and subscription', (
     WidgetTester tester,
@@ -232,13 +360,21 @@ void main() {
         authRepository: authRepository,
         billingGetter: () {
           entitlementReads += 1;
-          return BillingEntitlement(plan: plan, status: 'active');
+          return BillingEntitlement(
+            plan: 'member',
+            status: 'active',
+            remainingTurns: plan == 'free' ? 10 : 15,
+            slotLimit: plan == 'free' ? 1 : 2,
+          );
         },
       ),
     );
     await tester.pumpAndSettle();
     expect(find.text('Learner Kim'), findsOneWidget);
-    expect(find.text('Free plan'), findsOneWidget);
+    expect(
+      find.text('10 conversation credits · 1 conversation slot'),
+      findsOneWidget,
+    );
 
     authRepository.nickname = 'Updated Learner';
     plan = 'advance';
@@ -249,7 +385,10 @@ void main() {
     expect(authRepository.bootstrapReads, 1);
     expect(entitlementReads, 2);
     expect(find.text('Updated Learner'), findsOneWidget);
-    expect(find.text('Advance plan'), findsOneWidget);
+    expect(
+      find.text('15 conversation credits · 2 conversation slots'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('home delegates navigation to the shared shell', (tester) async {
@@ -313,11 +452,11 @@ void main() {
       await tester.pumpAndSettle();
       expect(
         find.text(
-          'All active conversation slots are in use. Delete an active conversation or upgrade your plan.',
+          'All conversation slots are in use. Delete a conversation or add slots. Deleting does not return used conversation credits.',
         ),
         findsWidgets,
       );
-      expect(find.widgetWithText(FilledButton, 'SUBSCRIPT'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, 'Open store'), findsOneWidget);
       expect(find.text('Subscription'), findsNothing);
       expect(find.text('FreeChat'), findsNothing);
     },
@@ -675,7 +814,7 @@ void main() {
     expect(find.text('Start a conversation?'), findsNothing);
     expect(
       find.text(
-        'All active conversation slots are in use. Delete an active conversation or upgrade your plan.',
+        'All conversation slots are in use. Delete a conversation or add slots. Deleting does not return used conversation credits.',
       ),
       findsOneWidget,
     );
@@ -1117,6 +1256,9 @@ void main() {
     await tester.pumpWidget(
       _homeApp(
         snackStorage: storage,
+        languageSnackRepository: _FakeLanguageSnackRepository(
+          snacks: List.generate(12, testSnack),
+        ),
         basketResetRepository: resets,
         snackClock: () => now,
       ),
@@ -1283,6 +1425,7 @@ const WeeklyTopics _publishedTopics = WeeklyTopics(
 );
 Widget _homeApp({
   bool profile = false,
+  IOSBadgeBridge? badgeBridge,
   Locale locale = const Locale('en'),
   TargetPlatform? platform,
   String? billingPlan,
@@ -1310,6 +1453,8 @@ Widget _homeApp({
       tokenStorage ?? _MemoryTokenStorage(tokens: _tokens, deviceId: _deviceId);
   return ProviderScope(
     overrides: [
+      if (badgeBridge != null)
+        iosBadgeBridgeProvider.overrideWithValue(badgeBridge),
       if (snackClock != null) snackClockProvider.overrideWithValue(snackClock),
       snackBasketResetRepositoryProvider.overrideWithValue(
         basketResetRepository ?? MemoryBasketResetRepository(),
@@ -1360,7 +1505,12 @@ Widget _homeApp({
         billingEntitlementProvider.overrideWith(
           (ref) async =>
               billingGetter?.call() ??
-              BillingEntitlement(plan: billingPlan!, status: 'active'),
+              BillingEntitlement(
+                plan: 'member',
+                status: 'active',
+                remainingTurns: 10,
+                slotLimit: 1,
+              ),
         ),
       weeklyTopicsControllerProvider.overrideWith(
         () => _FixedWeeklyTopicsController(weeklyTopics),
@@ -1867,4 +2017,12 @@ class _MemoryTokenStorage implements TokenStorage {
   Future<void> writeTokens(AuthTokens tokens) async {
     this.tokens = tokens;
   }
+}
+
+class _AllowedBadgeBridge extends IOSBadgeBridge {
+  @override
+  Future<BadgePermission> permission({bool request = false}) async =>
+      BadgePermission.allowed;
+  @override
+  Future<void> setCount(int count) async {}
 }

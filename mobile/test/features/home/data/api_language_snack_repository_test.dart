@@ -94,8 +94,8 @@ void main() {
 
       expect(snacks.single.items[0].expression, 'crisps');
       expect(adapter.lastRequest?.uri.path, '/api/v2/language-snacks/');
-      expect(adapter.lastRequest?.queryParameters['order'], 'random');
-      expect(adapter.lastRequest?.queryParameters['limit'], 12);
+      expect(adapter.lastRequest?.queryParameters['order'], 'category_cycle');
+      expect(adapter.lastRequest?.queryParameters['limit'], 30);
       expect(
         adapter.lastRequest?.headers['Authorization'],
         'Bearer access-token',

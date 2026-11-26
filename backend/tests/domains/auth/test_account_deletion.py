@@ -18,7 +18,7 @@ from domains.auth.models import AccountDeletionModel, ProfileModel
 from domains.auth.repository import AuthRepository
 from domains.conversation.enums import MessageRole
 from domains.conversation.models import ConversationModel, MessageModel
-from shared.subscription import AppleSubscriptionModel, ManualEntitlementGrantModel
+from shared.billing_models import PurchaseDeliveryModel, ManualResourceGrantModel, BillingTombstoneModel
 from shared.exceptions import AuthenticationException
 from database import get_db
 from shared.http_clients import get_auth_http_client
@@ -43,11 +43,9 @@ async def test_delete_blocks_old_jwt_and_removes_learning_data(monkeypatch):
     db.add(ConversationModel(id=conversation_id, user_id=user_id))
     db.add(MessageModel(id=str(uuid4()), conversation_id=conversation_id,
                         role=MessageRole.USER, content="hello"))
-    db.add(AppleSubscriptionModel(original_transaction_id="100", user_id=user_id,
-                                 last_transaction_id="101", product_id="Plus",
-                                 environment="Sandbox", status="active"))
-    db.add(ManualEntitlementGrantModel(id=str(uuid4()), user_id=user_id,
-                                       plan="advance", granted_by=user_id))
+    db.add(PurchaseDeliveryModel(transaction_id='100', user_id=user_id,
+        product_id='slots', resource_kind='slots', quantity=1, environment='Sandbox', status='granted'))
+    db.add(ManualResourceGrantModel(id=str(uuid4()), user_id=user_id, resource_kind='turns', quantity=5))
     db.commit()
     monkeypatch.setattr("domains.auth.deletion.cache_files", lambda: None)
     monkeypatch.setattr("domains.auth.deletion.get_settings", lambda: SimpleNamespace(
@@ -74,8 +72,10 @@ async def test_delete_blocks_old_jwt_and_removes_learning_data(monkeypatch):
         assert db.query(ProfileModel).count() == 0
         assert db.query(ConversationModel).count() == 0
         assert db.query(MessageModel).count() == 0
-        assert db.query(AppleSubscriptionModel).count() == 0
-        assert db.query(ManualEntitlementGrantModel).count() == 0
+        assert db.query(PurchaseDeliveryModel).count() == 0
+        assert db.query(ManualResourceGrantModel).count() == 0
+        assert db.query(AccountDeletionModel).one().user_id != user_id
+        assert db.query(BillingTombstoneModel).count() == 3
         assert db.query(AccountDeletionModel).count() == 1
         with pytest.raises(AuthenticationException):
             AuthRepository(db).get_or_create_profile(

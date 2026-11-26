@@ -1,48 +1,30 @@
-"""공식 Apple 라이브러리와 구독 상태 응답의 연결을 검증해요."""
-from datetime import datetime, timedelta
 from types import SimpleNamespace
-
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import ec
+from uuid import uuid4
+import pytest
 from appstoreserverlibrary.models.Environment import Environment
-from appstoreserverlibrary.models.Status import Status
-
-from domains.billing.apple import AppleGateway
+from domains.billing.apple import AppleGateway, AppleVerificationError, PRODUCTS
 
 
-def test_gateway_accepts_p8_key_and_maps_current_subscription():
-    key = ec.generate_private_key(ec.SECP256R1()).private_bytes(
-        serialization.Encoding.PEM,
-        serialization.PrivateFormat.PKCS8,
-        serialization.NoEncryption(),
-    ).decode()
-    settings = SimpleNamespace(
-        apple_iap_environment="sandbox",
-        apple_iap_bundle_id="com.morethanhuman.curitalk",
-        apple_iap_app_id=None,
-        apple_iap_issuer_id="00000000-0000-0000-0000-000000000000",
-        apple_iap_key_id="ABCDEFGHIJ",
-        apple_iap_private_key=key,
-    )
-    gateway = AppleGateway(settings)
-    expiry = int((datetime.utcnow() + timedelta(days=5)).timestamp() * 1000)
-    gateway.client = SimpleNamespace(get_all_subscription_statuses=lambda _: SimpleNamespace(
-        bundleId=settings.apple_iap_bundle_id,
-        environment=Environment.SANDBOX,
-        data=[SimpleNamespace(subscriptionGroupIdentifier="22439301", lastTransactions=[
-            SimpleNamespace(
-                signedTransactionInfo="signed", signedRenewalInfo=None,
-                originalTransactionId="100", status=Status.ACTIVE,
-            ),
-        ])],
-    ))
-    gateway.decode_transaction = lambda _: SimpleNamespace(
-        originalTransactionId="100", transactionId="101",
-        appAccountToken=None, productId="Advance", expiresDate=expiry,
-        revocationDate=None,
-    )
+def gateway():
+    instance = AppleGateway(SimpleNamespace(apple_iap_environment='sandbox',
+        apple_iap_bundle_id='com.morethanhuman.curitalk', apple_iap_app_id=None))
+    tx = SimpleNamespace(productId=next(iter(PRODUCTS)), type='Consumable',
+        transactionId='100', bundleId=instance.bundle_id, environment=Environment.SANDBOX,
+        quantity=1, appAccountToken=str(uuid4()))
+    instance.verifier = SimpleNamespace(verify_and_decode_signed_transaction=lambda _: tx)
+    return instance, tx
 
-    current = gateway.current_subscription("100")
-    assert current.product_id == "Advance"
-    assert current.status == "active"
-    assert current.expires_at > datetime.utcnow()
+
+def test_consumable_signature_result_is_allowlisted():
+    instance, tx = gateway()
+    assert instance.decode_transaction('signed') is tx
+
+
+@pytest.mark.parametrize('field,value', [('productId', 'Advance'), ('type', 'Non-Consumable'),
+    ('bundleId', 'other'), ('environment', Environment.PRODUCTION), ('appAccountToken', None),
+    ('transactionId', None), ('quantity', 2)])
+def test_wrong_transaction_is_rejected(field, value):
+    instance, tx = gateway()
+    setattr(tx, field, value)
+    with pytest.raises(AppleVerificationError):
+        instance.decode_transaction('signed')

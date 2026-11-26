@@ -74,7 +74,7 @@ def test_code_alone_unlocks_admin_apis_and_writes_require_csrf():
     assert client.put(path, json={"plan": "plus"}, headers={
         "X-CSRF-Token": csrf, "Origin": "https://elsewhere.example",
     }).status_code == 403
-    assert client.put(path, json={"plan": "plus"}, headers={"X-CSRF-Token": csrf}).status_code == 200
+    assert client.put(path, json={'request_id': str(uuid4()), 'resource_kind': 'slots', 'quantity': 3}, headers={"X-CSRF-Token": csrf}).status_code == 200
     assert client.post("/api/admin/access/logout/", headers={"X-CSRF-Token": csrf}).status_code == 200
     assert client.get("/api/admin/users/").status_code == 401
 

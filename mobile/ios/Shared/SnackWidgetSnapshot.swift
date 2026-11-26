@@ -8,13 +8,34 @@ struct SnackWidgetSnapshot: Codable {
   var page: Int
   var showingContent: Bool?
   var showingTomato: Bool? = nil
+  var unlimitedReplayEnabled: Bool? = nil
 
   var isValid: Bool {
     !userId.isEmpty &&
       (language == "en" || language == "ko") &&
       (0...12).contains(basket.consumed) &&
       basket.snacks.count == 12 &&
-      basket.snacks.allSatisfy { $0.contentLanguage == language }
+      basket.snacks.allSatisfy { $0.contentLanguage == language && $0.isValid } &&
+      (basket.candidates == nil || (
+        !(basket.candidates?.isEmpty ?? true) && (basket.candidates?.count ?? 0) <= 30 &&
+        basket.candidates!.allSatisfy { $0.contentLanguage == language && $0.isValid }
+      ))
+  }
+
+  mutating func redraw(day: String? = nil) {
+    basket.redraw()
+    if let day { basket.day = day }
+    page = 0
+    showingContent = false
+    showingTomato = false
+  }
+
+  mutating func closeContent() {
+    showingContent = false
+    page = 0
+    if basket.consumed == 12 && unlimitedReplayEnabled == true {
+      redraw()
+    }
   }
 
   var currentSnack: SnackWidgetContent? {
@@ -37,10 +58,22 @@ struct SnackWidgetSnapshot: Codable {
   var pages: [SnackWidgetPage] {
     guard let snack = currentSnack else { return [] }
     var result: [SnackWidgetPage] = []
+    if snack.contentType == "idiomatic_expression" {
+      let ko = snack.explanationLanguage == "ko"
+      for (title, body) in [(ko ? "직역" : "Literal meaning", snack.payload.literalMeaning),
+                            (ko ? "실제 의미" : "Actual meaning", snack.payload.meaning),
+                            (ko ? "쓰임" : "Usage", snack.payload.usage),
+                            (ko ? "예문" : "Example", snack.payload.example),
+                            (ko ? "번역" : "Translation", snack.payload.exampleTranslation)] {
+        if let body { appendPages(title: title, body: body, to: &result) }
+      }
+      return result
+    }
+    appendContext(snack, to: &result)
     if let meaning = snack.payload.meaning {
       appendPages(title: "공통 의미", body: meaning, to: &result)
     }
-    for item in snack.payload.items {
+    for item in snack.payload.displayItems {
       if let usage = item.usage {
         appendPages(title: "\(item.expression) · 사용 예시", body: usage, to: &result)
       }
@@ -59,19 +92,20 @@ struct SnackWidgetSnapshot: Codable {
 
   var pairedPages: [SnackWidgetPage] {
     guard let snack = currentSnack else { return [] }
-    guard snack.payload.items.count == 2 else { return pages }
+    guard snack.payload.displayItems.count == 2 else { return pages }
     var result: [SnackWidgetPage] = []
+    appendContext(snack, to: &result)
     if let meaning = snack.payload.meaning {
       appendPages(title: "공통 의미", body: meaning, to: &result)
     }
 
-    let first = snack.payload.items[0]
-    let second = snack.payload.items[1]
+    let first = snack.payload.displayItems[0]
+    let second = snack.payload.displayItems[1]
     let fields: [(String, KeyPath<SnackWidgetExpression, String?>)] = [
-      ("사용 예시", \.usage),
-      ("뜻", \.meaning),
-      ("예문", \.example),
-      ("번역", \.exampleTranslation),
+      (snack.explanationLanguage == "ko" ? "사용 예시" : "Usage", \.usage),
+      (snack.explanationLanguage == "ko" ? "뜻" : "Meaning", \.meaning),
+      (snack.explanationLanguage == "ko" ? "예문" : "Example", \.example),
+      (snack.explanationLanguage == "ko" ? "번역" : "Translation", \.exampleTranslation),
     ]
     for (label, field) in fields {
       let firstBody = first[keyPath: field]
@@ -91,6 +125,16 @@ struct SnackWidgetSnapshot: Codable {
       }
     }
     return result
+  }
+
+  private func appendContext(_ snack: SnackWidgetContent, to pages: inout [SnackWidgetPage]) {
+    let ko = snack.explanationLanguage == "ko"
+    if let situation = snack.payload.situation {
+      appendPages(title: ko ? "상황" : "Situation", body: situation, to: &pages)
+    }
+    if let headword = snack.payload.headword {
+      appendPages(title: ko ? "중심 단어" : "Headword", body: headword, to: &pages)
+    }
   }
 
   private func appendPages(title: String, body: String, to pages: inout [SnackWidgetPage]) {
@@ -113,6 +157,25 @@ struct SnackWidgetBasket: Codable {
   var consumed: Int
   var resetId: String?
   var snacks: [SnackWidgetContent]
+  var candidates: [SnackWidgetContent]? = nil
+
+  static let categoryOrder = [
+    "regional_variant", "usage_contrast", "homonym",
+    "register_contrast", "collocation", "idiomatic_expression",
+  ]
+
+  mutating func redraw() {
+    var seen = Set<String>()
+    let source = (candidates ?? snacks).filter { seen.insert($0.id).inserted }.shuffled()
+    let groups = Dictionary(grouping: source, by: \.contentType)
+    let available = Self.categoryOrder.filter { !(groups[$0]?.isEmpty ?? true) }
+    guard !available.isEmpty else { return }
+    snacks = (0..<12).map { index in
+      let group = groups[available[index % available.count]]!
+      return group[(index / available.count) % group.count]
+    }
+    consumed = 0
+  }
 }
 
 struct SnackWidgetContent: Codable {
@@ -125,11 +188,57 @@ struct SnackWidgetContent: Codable {
   var publishedAt: String
   var createdAt: String
   var updatedAt: String
+
+  var isValid: Bool {
+    schemaVersion == 1 &&
+      (contentLanguage == "en" || contentLanguage == "ko") &&
+      explanationLanguage == (contentLanguage == "en" ? "ko" : "en") &&
+      payload.isValid(for: contentType)
+  }
 }
 
 struct SnackWidgetPayload: Codable {
-  var items: [SnackWidgetExpression]
+  var items: [SnackWidgetExpression]?
   var meaning: String?
+  var situation: String? = nil
+  var headword: String? = nil
+  var expression: String? = nil
+  var literalMeaning: String? = nil
+  var usage: String? = nil
+  var example: String? = nil
+  var exampleTranslation: String? = nil
+
+  var displayItems: [SnackWidgetExpression] {
+    if let items { return items }
+    guard let expression else { return [] }
+    return [SnackWidgetExpression(expression: expression, label: nil, meaning: nil,
+                                  usage: nil, example: nil, exampleTranslation: nil)]
+  }
+
+  func isValid(for type: String) -> Bool {
+    func text(_ value: String?, _ max: Int) -> Bool {
+      guard let value else { return false }
+      return !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && value.unicodeScalars.count <= max
+    }
+    if type == "idiomatic_expression" {
+      return items == nil && text(expression, 80) && text(literalMeaning, 160) &&
+        text(meaning, 160) && text(usage, 160) && text(example, 240) &&
+        (exampleTranslation == nil || text(exampleTranslation, 240))
+    }
+    guard ["regional_variant", "usage_contrast", "homonym", "register_contrast", "collocation"].contains(type),
+          let items, items.count == 2 else { return false }
+    if type == "regional_variant" && !text(meaning, 160) { return false }
+    if type == "register_contrast" && !text(situation, 160) { return false }
+    if type == "collocation" && !text(headword, 80) { return false }
+    return items.allSatisfy { item in
+      guard text(item.expression, 80) else { return false }
+      if ["regional_variant", "register_contrast"].contains(type) && !text(item.label, 48) { return false }
+      if type == "regional_variant" { return true }
+      if ["usage_contrast", "register_contrast"].contains(type) && !text(item.usage, 160) { return false }
+      if ["homonym", "collocation"].contains(type) && !text(item.meaning, 160) { return false }
+      return text(item.example, 240) && (item.exampleTranslation == nil || text(item.exampleTranslation, 240))
+    }
+  }
 }
 
 struct SnackWidgetExpression: Codable {
@@ -202,11 +311,7 @@ enum SnackWidgetStore {
     guard var snapshot = read() else { return nil }
     let today = dayString(Date())
     if snapshot.basket.day != today {
-      snapshot.basket.day = today
-      snapshot.basket.consumed = 0
-      snapshot.page = 0
-      snapshot.showingContent = false
-      snapshot.showingTomato = false
+      snapshot.redraw(day: today)
       save(snapshot)
     }
     return snapshot

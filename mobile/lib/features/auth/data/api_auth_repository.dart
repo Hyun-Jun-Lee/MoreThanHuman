@@ -101,10 +101,29 @@ class ApiAuthRepository
   }
 
   @override
-  Future<AIConsentStatus> acceptAIConsent() async {
+  Future<AIConsentStatus> getAINotice() async {
+    final response = await apiClient.get<AIConsentStatus>(
+      'auth/ai-notice',
+      requiresAuth: false,
+      decodeData: AIConsentStatus.fromJson,
+    );
+    return response.data;
+  }
+
+  @override
+  Future<AIConsentStatus> recordAIConsentChoice(
+    AIConsentStatus notice, {
+    required bool acceptAI,
+  }) async {
     final response = await apiClient.request<AIConsentStatus>(
       'auth/me/ai-consent',
       method: 'POST',
+      data: {
+        'privacy_policy_version': notice.requiredVersions['privacy_policy'],
+        'ai_data_processing_version':
+            notice.requiredVersions['ai_data_processing'],
+        'accept_ai': acceptAI,
+      },
       decodeData: AIConsentStatus.fromJson,
     );
     return response.data;

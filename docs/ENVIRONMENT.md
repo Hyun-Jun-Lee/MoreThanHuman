@@ -1,6 +1,6 @@
 # 환경변수
 
-> 최종 갱신: 2026-11-23 · 환경변수 설명의 단일 기준 문서
+> 최종 갱신: 2026-11-25 · 환경변수 설명의 단일 기준 문서
 
 [빠른 시작](../README.md#실행-준비) · [운영 가이드](OPERATIONS.md)
 
@@ -32,11 +32,11 @@
 | `SUPABASE_PUBLISHABLE_KEY` | 예 | 없음 | 원격 Supabase Auth `/user` 검증에 사용하는 publishable key |
 | `SUPABASE_AUTH_VERIFY_MODE` | 아니오 | `auto` | ES256 token을 JWKS 공개 키로 검증하고 그 외 token은 `/user`로 검증해요. `remote`는 모든 token을 `/user`로 검증해요 |
 | `SUPABASE_AUTH_TIMEOUT_SECONDS` | 아니오 | `5` | Supabase Auth `/user`와 JWKS 조회 timeout |
-| `PRIVACY_POLICY_VERSION` | 아니오 | `2026-11-23` | 현재 개인정보처리방침 동의 버전. 값을 바꾸면 게스트와 회원 모두 새 버전에 다시 동의해야 해요 |
+| `PRIVACY_POLICY_VERSION` | 아니오 | `2026-11-25` | 현재 개인정보처리방침 안내 버전. 변경 시 홈에서 안내를 다시 제공하며 기존 AI 처리 동의는 유지해요 |
 | `AI_DATA_PROCESSING_VERSION` | 아니오 | `2026-11-23` | 현재 AI 데이터 처리 고지 동의 버전. 값을 바꾸면 AI 기능 전에 다시 동의해야 해요 |
-| `PRIVACY_POLICY_URL` | 아니오 | `https://www.curitalk.app/privacy` | 한국어 앱의 동의·구독 화면에서 여는 공개 개인정보처리방침 URL |
-| `PRIVACY_POLICY_URL_EN` | 아니오 | `https://www.curitalk.app/en/privacy` | 영어 앱의 동의·구독 화면에서 여는 공개 개인정보처리방침 URL |
-| `AI_CONSENT_REQUIRED` | 아니오 | `true` | `true`이면 현재 두 고지에 동의하기 전 AI 요청을 HTTP 403으로 차단해요. 테스트 외 운영 비활성화를 권장하지 않아요 |
+| `PRIVACY_POLICY_URL` | 아니오 | `https://www.curitalk.app/privacy` | 한국어 앱의 동의·상점 화면에서 여는 공개 개인정보처리방침 URL |
+| `PRIVACY_POLICY_URL_EN` | 아니오 | `https://www.curitalk.app/en/privacy` | 영어 앱의 동의·상점 화면에서 여는 공개 개인정보처리방침 URL |
+| `AI_CONSENT_REQUIRED` | 아니오 | `true` | `true`이면 현재 AI 데이터 처리 버전에 동의하기 전 AI 요청을 HTTP 403으로 차단해요. 테스트 외 운영 비활성화를 권장하지 않아요 |
 | `GUEST_TRANSFER_RECEIPT_TTL_MINUTES` | 아니오 | `10` | 기존 회원 계정으로 게스트 데이터를 이전하는 일회용 영수증 유효 시간(분) |
 | `GUEST_RETENTION_DAYS` | 아니오 | `30` | 회원으로 전환하지 않은 게스트를 마지막 bootstrap 또는 AI 활동 뒤 삭제 후보로 삼는 기간(일) |
 | `ADMIN_PUBLIC_ORIGIN` | 아니오 | `https://api.curitalk.app` | 관리자 웹 쓰기 요청의 Origin 검사 기준. 로컬에서는 `http://localhost:8010`으로 설정해요 |
@@ -49,9 +49,7 @@
 | `LANGUAGE_SNACKS_LOCK_DATABASE_URL` | transaction pooling 사용 시 | DATABASE_URL | 같은 DB의 direct/session 연결. API와 job에서 동일하게 사용 |
 | `LANGUAGE_SNACKS_PER_TYPE` | 아니오 | 3 | 언어별 유형별 목표 수량, 1..6 |
 | `LANGUAGE_SNACKS_MAX_CALLS` | 아니오 | 100 | 언어별 run의 누적 LLM 호출 상한 |
-| `LANGUAGE_SNACKS_MAX_TOKENS` | 아니오 | 250000 | 입력 UTF-8 바이트+출력 최대 토큰을 누적한 보수적 예산, 금액 상한이 아님 |
 | `LANGUAGE_SNACKS_HISTORY_BYTES` | 아니오 | 40000 | 전체 지식 이력 UTF-8 바이트 상한 |
-| `LANGUAGE_SNACKS_RUN_SECONDS` | 아니오 | 600 | 언어별 실행 시도 시간 상한(초), 각 LLM 요청은 최대 65초 |
 | `AUTO_CREATE_TABLES` | 아니오 | `false` | Alembic 대신 SQLAlchemy `create_all`을 실행할지 여부. 로컬 임시 실행 외에는 `false` 권장 |
 | `JWT_SECRET_KEY` | 설정 로드 시 필수 | 없음 | 레거시 JWT용 secret. Supabase 로그인에는 쓰지 않지만 현재 Settings에는 값이 필요해요 |
 | `ENV` | 아니오 | `prod` | 실행 환경. `dev`/`development`/`local`이면 개발 전용 API 활성화 |
@@ -87,8 +85,11 @@
 | `SEARCH_MAX_RESULTS` | 아니오 | `6` | 필터링 전 수집할 검색 결과 수. 최소 관련 출처 2개를 확보하지 못할 수 있어 품질 지표를 함께 확인해요. |
 | `SEARCH_MIN_RELEVANT_RESULTS` | 아니오 | `2` | LLM judge가 accept해야 하는 최소 출처 수 |
 | `MAX_HISTORY_TURNS` | 아니오 | `10` | 대화 기록 최대 턴 |
-| `CONVERSATION_ACCESS_ENABLED` | 아니오 | `false` | 회원의 무료 1개·15회, Advance 5개·무제한, Plus 10개·무제한 정책 rollout을 제어해요. 게스트 1개·누적 5회는 이 값과 무관하게 항상 집행해요. 운영은 Apple Sandbox 검증과 기존 대화 초기화 후 회원 정책을 활성화해요 |
-| `APPLE_IAP_ENVIRONMENT` | Apple 결제 시 필수 | 없음 | `sandbox` 또는 `production`; 서명과 API 환경이 일치해야 함 |
+| `CONVERSATION_ACCESS_ENABLED` | 아니오 | `false` | 회원의 기본 대화창 슬롯 1개·계정 최초 체험 대화권 10회와 일회성 추가 구매 잔액의 제한 적용 여부. 게스트의 활성 슬롯 1개·누적 체험 5회는 항상 집행해요. Sandbox와 PostgreSQL 검증 후 활성화해요 |
+| `APPLE_IAP_ISSUER_ID`, `APPLE_IAP_KEY_ID`, `APPLE_IAP_PRIVATE_KEY` | 아니오 | 없음 | 이전 배포 환경과의 호환을 위해 읽기만 허용해요. 새 검증 경로에서는 사용하지 않아요 |
+| `BILLING_HMAC_KEYS` | 필수 | 없음 | 버전 → 독립 비밀 키 JSON. 각 키 최소 32바이트. 서버 전용 비밀 저장소·백업에 보관하고 기존 tombstone의 버전 키를 유지해요 |
+| `BILLING_HMAC_CURRENT_KEY` | 필수 | 없음 | 새 tombstone에 쓰는 키 버전. 키 누락·보관 중인 버전 누락 시 서버 시작을 거부해요 |
+| `APPLE_IAP_ENVIRONMENT` | Apple 결제 시 필수 | 없음 | `sandbox` 또는 `production`; 거래 서명과 서버 환경이 일치해야 함 |
 | `SUPABASE_SECRET_KEY` | 계정 삭제 시 필수 | 없음 | 서버 전용 Supabase 관리자 키. Auth 사용자 삭제에 사용하며 모바일 환경에 전달하지 않음 |
 | `APPLE_SIGNIN_TEAM_ID` | Apple 로그인 연결 해제 시 필수 | 없음 | Apple Developer Team ID |
 | `APPLE_SIGNIN_KEY_ID` | Apple 로그인 연결 해제 시 필수 | 없음 | Sign in with Apple 키 ID |
@@ -96,9 +97,6 @@
 | `APPLE_SIGNIN_PRIVATE_KEY` | Apple 로그인 연결 해제 시 필수 | 없음 | Sign in with Apple `.p8` 키 본문; 서버 비밀 저장소에서 주입 |
 | `APPLE_IAP_BUNDLE_ID` | Apple 결제 시 필수 | 없음 | App Store Connect 앱의 Bundle ID |
 | `APPLE_IAP_APP_ID` | 운영 결제 시 필수 | 없음 | App Store Connect의 숫자 Apple 앱 ID |
-| `APPLE_IAP_ISSUER_ID` | Apple 결제 시 필수 | 없음 | App Store Connect In-App Purchase 키 발급자 ID |
-| `APPLE_IAP_KEY_ID` | Apple 결제 시 필수 | 없음 | App Store Connect In-App Purchase 키 ID |
-| `APPLE_IAP_PRIVATE_KEY` | Apple 결제 시 필수 | 없음 | `.p8` 비밀 키 본문. 비밀 저장소에서 주입하고 줄바꿈은 `\n`으로 전달 가능 |
 
 ## 외부 HTTP 연결 풀 v1
 
@@ -129,9 +127,15 @@ Compose의 `environment`는 API와 생성 컨테이너에서 ENV=prod, DEBUG=fal
 - model: LANGUAGE_SNACKS_MODEL이 있으면 사용하고, 없으면 선택한 provider의 OPENROUTER_MODEL 또는 OLLAMA_MODEL을 사용해요. 후보·중복·본문·품질 검사는 모두 이 설정을 사용해요.
 - LANGUAGE_SNACKS_LOCK_DATABASE_URL은 DATABASE_URL과 **같은 DB의 direct 또는 session pooling 연결**이어야 해요. transaction pooling 연결로 session advisory lock을 사용하면 안 돼요.
 - PER_TYPE은 1..6, 나머지 스낵 숫자 상한은 양수예요. CLI의 --per-type은 환경변수보다 우선해요.
-- 호출·토큰 상한은 언어별 run에 누적되고 시간 제한은 실행 시도별로 적용돼요. 모델의 실제 금액 한도는 provider에서도 별도로 관리해요.
+- 호출 횟수 상한만 언어별 run에 누적돼요. 토큰 추정·누적 토큰 한도·전체 실행 시간 제한은 없고, 각 LLM 요청에는 65초 타임아웃을 적용해요. 실제 보고 토큰은 관측용으로만 기록해요. 모델의 실제 금액 한도는 provider에서도 별도로 관리해요.
 
 ## 변경 기록
+
+- 2026-11-26: 스낵의 추정 토큰·전체 시간 제한 설정을 제거하고 호출 횟수 제한만 유지해요.
+
+- 2026-11-25: 회원 제한 설정의 자원 명칭을 대화창 슬롯·체험 대화권으로 통일했어요.
+
+- 2026-11-25: 소비성 결제 rollout, HMAC keyring/current 버전과 과거 키 보존 조건을 반영했어요.
 
 - 2026-11-15: 관리자 입장 코드를 DB에서 서버 환경변수로 옮겼어요.
 - 2026-11-15: 관리자 입장 코드의 길이 제한을 제거했어요.

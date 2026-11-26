@@ -39,7 +39,11 @@ class Generator(SnackGenerator):
     async def ask(self, instruction, data, schema):
         self.snapshots.append(deepcopy(data))
         if schema is CandidateBatch:
-            return CandidateBatch(candidates=[as_candidate(self.sample)])
+            return CandidateBatch(
+                candidates=[as_candidate(self.sample)]
+                if data["content_type"] == self.sample["content_type"]
+                else []
+            )
         if schema is DedupeResult:
             return DedupeResult(decision="new")
         if schema is QualityResult:
@@ -62,7 +66,9 @@ async def test_same_run_resumes_reservations_without_republishing(repository, sa
     assert repository.db.query(LanguageSnackModel).count() == 1
     assert row.published_at == published_at
     assert any(
-        x.get("history") and x["history"][0]["id"] == row.id
+        x.get("history")
+        and x["history"][0].get("id") == row.id
+        or (x.get("history") and x["history"][0] == row.identity)
         for x in generator.snapshots
     )
 
@@ -154,7 +160,8 @@ async def test_full_history_budget_and_real_prompt_envelope(repository, sample):
     with pytest.raises(SnackError, match="duplicate_knowledge"):
         await generator.ensure_new(as_candidate(sample))
     assert row.id in provider.request.messages[1].content
-    assert "response_schema" in provider.request.messages[1].content
+    assert "response_schema" not in provider.request.messages[1].content
+    assert provider.request.extra_params["response_format"]["type"] == "json_schema"
     assert generator.metrics["calls"] == 1
     generator.settings = generator.settings.model_copy(
         update={"language_snacks_history_bytes": 1}
@@ -169,12 +176,8 @@ async def test_full_history_budget_and_real_prompt_envelope(repository, sample):
 
 
 def test_weekly_slot_uses_monday_five_am_kst():
-    assert (
-        weekly_slot(datetime(2026, 9, 13, 19, 59, tzinfo=UTC)) == "2026-09-07"
-    )
-    assert (
-        weekly_slot(datetime(2026, 9, 13, 20, 0, tzinfo=UTC)) == "2026-09-14"
-    )
+    assert weekly_slot(datetime(2026, 9, 13, 19, 59, tzinfo=UTC)) == "2026-09-07"
+    assert weekly_slot(datetime(2026, 9, 13, 20, 0, tzinfo=UTC)) == "2026-09-14"
 
 
 @pytest.mark.asyncio
@@ -210,7 +213,13 @@ async def test_complete_three_type_run_and_repeat_are_idempotent(
         async def ask(self, instruction, data, schema):
             self.snapshots.append(deepcopy(data))
             if schema is CandidateBatch:
-                return CandidateBatch(candidates=candidates)
+                return CandidateBatch(
+                    candidates=[
+                        candidate
+                        for candidate in candidates
+                        if candidate.content_type == data["content_type"]
+                    ]
+                )
             if schema is DedupeResult:
                 return DedupeResult(decision="new")
             if schema is QualityResult:
@@ -234,10 +243,13 @@ async def test_complete_three_type_run_and_repeat_are_idempotent(
             )
 
     generator = Complete(repository, sample)
+    run = repository.run("complete:" + language, language, 1)
+    run.content_types = ["regional_variant", "usage_contrast", "homonym"]
+    repository.save(run)
     result = await generator.generate("complete:" + language, language, 1)
     assert result["status"] == "succeeded"
     assert result["metrics"]["published_by_type"] == {
-        kind: 1 for kind in PAYLOAD_MODELS
+        kind: 1 for kind in run.content_types
     }
     assert len(repository.list_published(language)) == 3
     assert repository.list_published("ko" if language == "en" else "en") == []
@@ -262,3 +274,121 @@ async def test_budget_stop_preserves_reserved_attempt_for_resume(repository, sam
     assert row.generation_metadata["attempts"] == 0
     await Generator(repository, sample).generate(run.run_key, "en", 1)
     assert row.status == "published"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("language", ["en", "ko"])
+async def test_new_types_generate_and_old_run_excludes_them(repository, language):
+    from tests.domains.language_snacks.test_language_snack_schemas import new_snack
+
+    kinds = ["register_contrast", "collocation", "idiomatic_expression"]
+    for kind in kinds:
+        sample = new_snack(kind, language)
+        result = await Generator(repository, sample).generate(
+            "new:" + kind, language, 1
+        )
+        assert result["metrics"]["published_by_type"][kind] == 1
+    assert {r.content_type for r in repository.list_published(language)} == set(kinds)
+    old = repository.run("old", language, 1)
+    old.content_types = ["regional_variant", "usage_contrast", "homonym"]
+    repository.save(old)
+    generator = Generator(repository, new_snack("idiomatic_expression", language))
+    await generator.generate("old", language, 1)
+    assert repository.run_snacks(old.id) == []
+    assert generator.author_calls == 0
+    assert old.metrics["rounds"] == 3
+
+
+@pytest.mark.parametrize("kinds", [None, [], ["unknown"], ["homonym", "homonym"]])
+def test_invalid_stored_run_targets_are_not_replaced(repository, kinds):
+    run = repository.run("broken", "en", 1)
+    run.content_types = kinds
+    if kinds is None:
+        with pytest.raises(SnackError):
+            repository.save(run)
+        return
+    repository.save(run)
+    with pytest.raises(SnackError, match="invalid_run_content_types"):
+        repository.run("broken", "en", 1)
+
+
+@pytest.mark.asyncio
+async def test_legacy_token_usage_does_not_block_calls_and_call_limit_persists(
+    repository,
+):
+    class Provider:
+        calls = 0
+
+        def get_provider_name(self):
+            return "fake"
+
+        async def chat_completion(self, request):
+            self.calls += 1
+            return LLMResponse(
+                content='{"valid":true,"reason":"checked"}', usage={"total_tokens": 7}
+            )
+
+    provider = Provider()
+    run = repository.run("legacy-token-limit:en", "en", 3)
+    run.metrics = {"calls": 1, "charged_tokens": 9999999, "reported_tokens": 10}
+    repository.save(run)
+    generator = SnackGenerator(repository, provider=provider)
+    generator.settings = generator.settings.model_copy(
+        update={"language_snacks_max_calls": 2}
+    )
+    generator.run = run
+    generator.metrics = dict(run.metrics)
+    result = await generator.ask("check", {"large_input": "가" * 100000}, QualityResult)
+    assert result.valid
+    assert provider.calls == 1
+    assert run.metrics["calls"] == 2
+    assert run.metrics["charged_tokens"] == 9999999
+    assert run.metrics["reported_tokens"] == 17
+    with pytest.raises(SnackError, match="generation_budget_exceeded"):
+        await generator.ask("check", {}, QualityResult)
+    assert provider.calls == 1
+
+
+@pytest.mark.asyncio
+async def test_candidate_failure_isolated_to_category_and_completed_type_skipped(
+    repository, sample
+):
+    class Failing(Generator):
+        requested = None
+
+        async def ask(self, instruction, data, schema):
+            if schema is CandidateBatch:
+                self.requested.append(data["content_type"])
+                if data["content_type"] == "regional_variant":
+                    raise SnackError("invalid_llm_response")
+            return await super().ask(instruction, data, schema)
+
+    from tests.domains.language_snacks.test_language_snack_schemas import new_snack
+
+    generator = Failing(repository, new_snack("collocation"))
+    generator.requested = []
+    run = repository.run("separate:en", "en", 1)
+    # 이미 4라운드를 쓴 실행도 누적 횟수를 유지해요.
+    run.metrics = {"rounds": 4}
+    repository.save(run)
+    result = await generator.generate(run.run_key, "en", 1)
+    assert result["metrics"]["rounds"] == 6
+    assert result["metrics"]["published_by_type"] == {"collocation": 1}
+    assert generator.requested.count("collocation") == 1
+    assert generator.requested.count("regional_variant") == 2
+    assert "idiomatic_expression" in generator.requested
+    assert (
+        result["metrics"]["candidate_errors"]["regional_variant"]
+        == "invalid_llm_response"
+    )
+
+
+@pytest.mark.asyncio
+async def test_dry_run_makes_one_request_per_category(repository, sample):
+    generator = Generator(repository, sample)
+    await generator.generate("preview", "en", 6, dry_run=True)
+    assert [data["content_type"] for data in generator.snapshots] == list(
+        PAYLOAD_MODELS
+    )
+    assert all(data["count"] == 3 for data in generator.snapshots)
+    assert repository.db.query(LanguageSnackRunModel).count() == 0

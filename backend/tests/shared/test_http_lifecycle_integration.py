@@ -41,6 +41,7 @@ def test_real_conversation_chain_uses_lifespan_clients_and_task_owned_db(monkeyp
             super().close()
 
     factory = sessionmaker(bind=engine, class_=TrackedSession)
+    monkeypatch.setattr(main_module, "SessionLocal", sessionmaker(bind=engine))
     monkeypatch.setattr(conversation_module, "SessionLocal", factory)
 
     def request_db():

@@ -1,6 +1,6 @@
 # API 로그와 지연 진단
 
-> 갱신: 2026-11-24 · API JSON stdout 계약
+> 갱신: 2026-11-26 · API JSON stdout 계약 · 계정 원장 기준 측정 조건 반영
 
 API는 요청 완료, 처리 단계, 예외를 한 줄짜리 JSON으로 stdout에 기록해요. nginx 접근 로그도 JSON으로 stdout에 기록해요. Docker가 각 컨테이너 로그를 보관하고 회전하며, 향후 Grafana Alloy가 이 출력을 Loki로 보낼 수 있어요. 현재 구성에는 Alloy·Loki 서버가 포함되지 않아요.
 
@@ -25,7 +25,9 @@ API는 요청 완료, 처리 단계, 예외를 한 줄짜리 JSON으로 stdout�
 
 대화 스트림 응답 헤더 이전에는 `stream_input`(입력 파싱·전사)과 `stream_prepare`(DB 발화 준비 전체)를 기록해요. 준비 안에서는 `stream_precheck`(최종 검사), `stream_reserve`(요청 ID와 턴 예약)를 나눠요. 일반적인 기존 대화 발화의 검사는 `stream_precheck.access`(프로필 잠금·이용 권한), `stream_precheck.ownership`(대화 소유권), `stream_precheck.unresolved`(미해결 턴)로 세분화해요. `stream_context.conversation`은 소유권 조회와 같은 SQL을 감싸며 별도 재조회가 아니에요. `stream_context.history_before`에서 읽은 최근 메시지는 문법 피드백과 LLM 이력에 함께 사용하고 `stream_context.history_after`는 실행하지 않아요. `stream_context.prompt`는 LLM 입력 구성, `stream_context.user_message`는 사용자 발화와 예약의 단일 커밋을 기록해요. 재시도는 저장된 사용자 발화를 재사용하고 기존 이력 조회 단계를 유지해요. 새 대화는 실행된 `stream_context.user_message`와 `stream_context.prompt`만 기록해요. 각 단계의 `operation`은 내부 요청 종류(`turn`, `message`, `free_chat_start`, `roleplay_start`, `retry`)만 기록해요. 모든 단계는 `duration_ms`와 요청 시작 기준 `start_offset_ms`를 포함하고 실패 시 `status=error`를 남겨요. 상위·하위 단계는 포함 관계이므로 더하지 않아요. `stream_input`은 해당 입력 파싱이 있는 스트림 경로에서만 기록하고, `stt`가 실행되면 그 시간이 포함돼요.
 
-5xx 오류의 `stack_frames`에는 프로젝트 상대 `file`, `function`, `line`만 담아요. `traceback.format_exc()`의 전체 문자열에는 예외 메시지와 SQL 매개변수 등이 포함될 수 있어 기본 로그에 사용하지 않아요. 예외 메시지, 지역 변수, 소스 코드 줄, 요청·응답 본문, 토큰, 검색어, 파일명, provider 응답 본문은 출력하지 않아요. 일반 Python 로거의 자유 형식 메시지도 JSON 출력에는 넣지 않아요. 필요한 진단값은 허용된 구조화 필드로 기록해야 해요.
+구조화된 5xx 오류의 `stack_frames`에는 프로젝트 상대 `file`, `function`, `line`만 담아요. `traceback.format_exc()`의 전체 문자열에는 예외 메시지와 SQL 매개변수 등이 포함될 수 있어 기본 로그에 사용하지 않아요. 운영 환경에서는 예외 메시지, 지역 변수, 소스 코드 줄, 요청·응답 본문, 토큰, 검색어, 파일명, provider 응답 본문은 출력하지 않아요. 운영 환경에서는 일반 Python 로거의 자유 형식 메시지도 JSON 출력에 넣지 않아요. 필요한 진단값은 허용된 구조화 필드로 기록해야 해요.
+
+로컬 개발 환경(`ENV=dev`, `development`, `local`)에서는 일반 Python 로그의 `message`와 `exc_info`가 있는 로그의 `traceback`을 추가로 출력해요. Uvicorn 시작 실패처럼 traceback이 이미 문자열인 경우에는 `message`에 담겨요. JSON 한 줄 형식이므로 줄바꿈은 `\n`으로 표시돼요. 설정에 저장된 키·비밀번호·토큰·DB 연결 문자열(8자 이상)은 `[REDACTED]`로 가리지만, 임의의 요청 본문이나 설정에 없는 비밀값까지 제거하는 것은 아니므로 개발 로그를 공유하기 전에 확인해요. `log_exception()`의 HTTP 예외는 기존의 구조화된 `stack_frames`를 유지해요.
 
 ## 시간 경계
 
@@ -76,7 +78,7 @@ API의 `proxy_request_id`로 nginx의 같은 시도를 찾고, `trace_id`로 앱
 
 로컬 FastAPI의 `ENV=dev`와 Supabase 이메일·비밀번호 개발 계정을 준비해요. 테스트 비밀번호는 macOS 로그인 키체인의 `tomatalk-supabase-test-password` 서비스에 계정 이메일로 저장해요. `security add-generic-password -a '<개발 계정 이메일>' -s tomatalk-supabase-test-password -U -w`를 실행하면 비밀번호를 대화형으로 입력할 수 있어 셸 명령 기록에 남지 않아요. 실제 사용자 계정의 비밀번호나 서비스 역할 키를 사용하지 않아요.
 
-`cd backend && .venv/bin/python -m scripts.benchmark_conversation_list --email '<개발 계정 이메일>' --samples 20`을 실행해요. 스크립트는 로컬 `/api/auth/swagger/token`으로 실행마다 새 access token을 한 번 받고, 같은 연결에서 `GET /api/conversations/`를 순차 반복해요. 기본 준비 요청 2회는 통계에서 제외해요. 모든 목록 요청이 성공하면 클라이언트의 중앙값·p95·최댓값을 출력하고, 요청 실패 시 HTTP 코드만 표시하고 측정을 중단해요. 본문·비밀번호·토큰은 출력하지 않아요. `X-Request-ID`를 함께 출력하므로 API 로그에서 같은 요청의 `auth`, `handler`, `db_query_total_ms`를 비교할 수 있어요. 클라이언트 시간에는 로컬 전송 시간이 포함돼 서버 `duration_ms`와 측정 경계가 달라요. 측정용 계정의 대화 개수·구독 상태가 다르면 실제 사용자 요청과 시간값을 직접 비교할 수 없어요.
+`cd backend && .venv/bin/python -m scripts.benchmark_conversation_list --email '<개발 계정 이메일>' --samples 20`을 실행해요. 스크립트는 로컬 `/api/auth/swagger/token`으로 실행마다 새 access token을 한 번 받고, 같은 연결에서 `GET /api/conversations/`를 순차 반복해요. 기본 준비 요청 2회는 통계에서 제외해요. 모든 목록 요청이 성공하면 클라이언트의 중앙값·p95·최댓값을 출력하고, 요청 실패 시 HTTP 코드만 표시하고 측정을 중단해요. 본문·비밀번호·토큰은 출력하지 않아요. `X-Request-ID`를 함께 출력하므로 API 로그에서 같은 요청의 `auth`, `handler`, `db_query_total_ms`를 비교할 수 있어요. 클라이언트 시간에는 로컬 전송 시간이 포함돼 서버 `duration_ms`와 측정 경계가 달라요. 측정용 계정의 대화 개수·회원/게스트 유형·대화창 슬롯 한도·대화권 잔액·회원 제한 활성화 설정이 다르면 실제 사용자 요청과 시간값을 직접 비교할 수 없어요.
 
 토큰 발급 API는 개발 환경에서만 기본 허용돼요. 만약 로컬 `SWAGGER_TOKEN_ISSUER_SECRET`이 설정되어 있으면 이 스크립트는 사용하지 않고 별도 인증 구성을 확인해요. 측정 후 키체인 비밀번호는 `security delete-generic-password -a '<개발 계정 이메일>' -s tomatalk-supabase-test-password`로 삭제할 수 있어요.
 

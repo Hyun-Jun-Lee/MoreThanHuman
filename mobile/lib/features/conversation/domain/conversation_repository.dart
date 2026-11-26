@@ -88,6 +88,11 @@ abstract interface class ConversationDeletionRepository {
   Future<void> deleteConversation(String conversationId);
 }
 
+abstract interface class UnreadConversationRepository {
+  Future<bool> hasUnreadReplies();
+  Future<bool> markRepliesRead(String conversationId, List<String> messageIds);
+}
+
 abstract interface class SuggestedConversationRepository {
   Future<SuggestedConversationResponse> startSuggestedFreeChat({
     required String topicId,

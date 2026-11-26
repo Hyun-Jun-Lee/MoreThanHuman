@@ -192,7 +192,7 @@ async def test_start_roleplay_stores_role_without_manual_difficulty():
     assert "keeps everyday pacing" not in saved.role_character
     assert not hasattr(saved, "roleplay_difficulty")
     assert not hasattr(response, "roleplay_difficulty")
-    assert "keeps everyday pacing" not in service.generated_prompts[0]["system"]
+    assert not service.generated_prompts  # 사용자 메시지 전에는 고정 인사만 제공해요.
 
 
 @pytest.mark.asyncio

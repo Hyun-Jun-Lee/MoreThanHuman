@@ -10,6 +10,10 @@ class BillingEntitlement {
     this.source = 'free',
     this.isAdmin = false,
     this.isUnlimited = false,
+    this.slotLimit,
+    this.remainingTurns,
+    this.trialTurns = 0,
+    this.paidTurns = 0,
   });
 
   factory BillingEntitlement.fromJson(Object? value) {
@@ -34,6 +38,10 @@ class BillingEntitlement {
           (value['plan'] == 'free' ? 'free' : 'apple'),
       isAdmin: value['is_admin'] as bool? ?? false,
       isUnlimited: value['unlimited'] as bool? ?? false,
+      slotLimit: value['slot_limit'] as int?,
+      remainingTurns: value['remaining_turns'] as int?,
+      trialTurns: value['trial_turns'] as int? ?? 0,
+      paidTurns: value['paid_turns'] as int? ?? 0,
     );
   }
 
@@ -43,6 +51,10 @@ class BillingEntitlement {
   final String source;
   final bool isAdmin;
   final bool isUnlimited;
+  final int? slotLimit;
+  final int? remainingTurns;
+  final int trialTurns;
+  final int paidTurns;
 }
 
 class BillingRepository {
@@ -55,18 +67,21 @@ class BillingRepository {
         decodeData: BillingEntitlement.fromJson,
       )).data;
 
-  Future<BillingEntitlement> verify(String signedTransaction) async =>
-      (await client.post<BillingEntitlement>(
+  Future<bool> verify(String signedTransaction) async =>
+      (await client.post<bool>(
         'billing/apple/verify/',
         data: {'signed_transaction': signedTransaction},
-        decodeData: BillingEntitlement.fromJson,
+        decodeData: (value) =>
+            value is Map<String, dynamic> && value['terminal'] == true,
       )).data;
 
-  Future<BillingEntitlement> restore(String signedTransaction) async =>
-      (await client.post<BillingEntitlement>(
-        'billing/apple/restore/',
+  Future<bool> terminalize(String signedTransaction) async =>
+      (await client.post<bool>(
+        'billing/apple/terminalize/',
+        requiresAuth: false,
         data: {'signed_transaction': signedTransaction},
-        decodeData: BillingEntitlement.fromJson,
+        decodeData: (value) =>
+            value is Map<String, dynamic> && value['terminal'] == true,
       )).data;
 }
 

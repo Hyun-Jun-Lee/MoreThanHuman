@@ -144,6 +144,11 @@ class StreamTurnStore:
             self.db.commit()
 
     def fail(self, turn_id: str, code: str, *, attempt_id: str | None = None) -> None:
+        from shared.credit_ledger import CreditLedger
+        user_id = self.db.query(StreamTurnModel.user_id).filter_by(id=turn_id).scalar()
+        if user_id is None:
+            return  # 계정 삭제가 이미 원장을 제거했어요.
+        CreditLedger(self.db).lock(user_id)
         turn = self.db.query(StreamTurnModel).filter_by(id=turn_id).one()
         if turn.status == "pending" and (attempt_id is None or turn.attempt_id == attempt_id):
             turn.status = "failed"
@@ -157,6 +162,8 @@ class StreamTurnStore:
     def _release_guest_usage(self, user_id: str, request_key: str | None) -> None:
         if request_key is None:
             return
+        from shared.credit_ledger import CreditLedger
+        CreditLedger(self.db).release(user_id, request_key)
         usage = self.db.query(GuestTurnUsageModel).filter_by(
             user_id=user_id,
             request_key=request_key,

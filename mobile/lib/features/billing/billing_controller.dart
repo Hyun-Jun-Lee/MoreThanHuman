@@ -41,7 +41,14 @@ class BillingController extends Notifier<BillingUiState> {
   late BillingRepository _repository;
   StreamSubscription<List<PurchaseDetails>>? _subscription;
   final Set<String> _processing = {};
-  DateTime? _restoreRequestedAt;
+  final Map<String, PurchaseDetails> _pendingVerification = {};
+  static const productIds = {
+    'com.morethanhuman.curitalk.slots.plus.1',
+    'com.morethanhuman.curitalk.slots.plus.3',
+    'com.morethanhuman.curitalk.turns.5',
+    'com.morethanhuman.curitalk.turns.10',
+    'com.morethanhuman.curitalk.turns.20',
+  };
 
   @override
   BillingUiState build() {
@@ -57,8 +64,20 @@ class BillingController extends Notifier<BillingUiState> {
         },
       );
     }
+    ref.listen(authControllerProvider, (previous, next) {
+      if (previous?.value?.user?.id != next.value?.user?.id ||
+          previous?.value?.isGuest != next.value?.isGuest) {
+        Future<void>.microtask(retryPendingPurchases);
+      }
+    });
     ref.onDispose(() => unawaited(_subscription?.cancel()));
     return const BillingUiState();
+  }
+
+  Future<void> retryPendingPurchases() async {
+    for (final purchase in _pendingVerification.values.toList()) {
+      await _verifyPurchase(purchase);
+    }
   }
 
   Future<void> loadProducts() async {
@@ -66,8 +85,9 @@ class BillingController extends Notifier<BillingUiState> {
     state = state.copyWith(isLoading: true);
     try {
       if (!await _store.isAvailable()) throw StateError('Store unavailable');
-      final result = await _store.queryProductDetails({'Advance', 'Plus'});
-      if (result.error != null || result.productDetails.length != 2) {
+      final result = await _store.queryProductDetails(productIds);
+      if (result.error != null ||
+          result.productDetails.length != productIds.length) {
         throw StateError('Products unavailable');
       }
       if (ref.mounted) {
@@ -88,10 +108,15 @@ class BillingController extends Notifier<BillingUiState> {
 
   Future<void> purchase(ProductDetails product) async {
     final userId = ref.read(authControllerProvider).value?.user?.id;
-    if (!Platform.isIOS || userId == null || state.isProcessing) return;
+    if (!Platform.isIOS ||
+        userId == null ||
+        ref.read(authControllerProvider).value?.isMember != true ||
+        state.isProcessing) {
+      return;
+    }
     state = state.copyWith(isProcessing: true);
     try {
-      final started = await _store.buyNonConsumable(
+      final started = await _store.buyConsumable(
         purchaseParam: Sk2PurchaseParam(
           productDetails: product,
           applicationUserName: userId,
@@ -107,29 +132,9 @@ class BillingController extends Notifier<BillingUiState> {
     }
   }
 
-  Future<void> restore() async {
-    if (!Platform.isIOS || state.isProcessing) return;
-    state = state.copyWith(isProcessing: true);
-    _restoreRequestedAt = DateTime.now();
-    try {
-      await _store.restorePurchases();
-      if (ref.mounted && state.message == null) {
-        state = state.copyWith(
-          isProcessing: false,
-          message: 'restore_requested',
-        );
-      }
-    } on Object {
-      _restoreRequestedAt = null;
-      if (ref.mounted && state.message == null) {
-        state = state.copyWith(isProcessing: false, message: 'restore_failed');
-      }
-    }
-  }
-
   void _handlePurchases(List<PurchaseDetails> purchases) {
     for (final purchase in purchases) {
-      if (purchase.productID != 'Advance' && purchase.productID != 'Plus') {
+      if (!productIds.contains(purchase.productID)) {
         continue;
       }
       if (purchase.status == PurchaseStatus.pending) {
@@ -143,40 +148,26 @@ class BillingController extends Notifier<BillingUiState> {
         );
       } else if (purchase.status == PurchaseStatus.purchased ||
           purchase.status == PurchaseStatus.restored) {
-        final requestedAt = _restoreRequestedAt;
-        final explicitRestore =
-            purchase.status == PurchaseStatus.restored &&
-            requestedAt != null &&
-            DateTime.now().difference(requestedAt) < const Duration(minutes: 2);
-        unawaited(_verifyPurchase(purchase, restore: explicitRestore));
+        unawaited(_verifyPurchase(purchase));
       }
     }
   }
 
-  Future<void> _verifyPurchase(
-    PurchaseDetails purchase, {
-    bool restore = false,
-  }) async {
+  Future<void> _verifyPurchase(PurchaseDetails purchase) async {
     final id =
         purchase.purchaseID ?? purchase.verificationData.serverVerificationData;
+    _pendingVerification[id] = purchase;
     if (!_processing.add(id)) return;
     final userId = ref.read(authControllerProvider).value?.user?.id;
     bool canComplete = false;
     try {
-      if (userId == null ||
-          purchase.verificationData.serverVerificationData.isEmpty) {
-        throw StateError('Purchase cannot be verified');
-      }
-      if (restore) {
-        await _repository.restore(
-          purchase.verificationData.serverVerificationData,
-        );
-      } else {
-        await _repository.verify(
-          purchase.verificationData.serverVerificationData,
-        );
-      }
-      canComplete = true;
+      final signed = purchase.verificationData.serverVerificationData;
+      if (signed.isEmpty) throw StateError('Purchase cannot be verified');
+      if (ref.mounted) state = state.copyWith(isProcessing: true);
+      canComplete = ref.read(authControllerProvider).value?.isMember != true
+          ? await _repository.terminalize(signed)
+          : await _repository.verify(signed);
+      if (!canComplete) throw StateError('Delivery not terminal');
       if (ref.mounted &&
           ref.read(authControllerProvider).value?.user?.id == userId) {
         ref.invalidate(billingEntitlementProvider);
@@ -187,9 +178,7 @@ class BillingController extends Notifier<BillingUiState> {
         state = state.copyWith(isProcessing: false, message: 'verified');
       }
     } on ApiException catch (error) {
-      canComplete =
-          error.code == 'PURCHASE_ACCOUNT_CONFLICT' ||
-          error.code == 'INVALID_APPLE_PURCHASE';
+      canComplete = false;
       if (ref.mounted) {
         state = state.copyWith(
           isProcessing: false,
@@ -209,11 +198,18 @@ class BillingController extends Notifier<BillingUiState> {
       if (canComplete && purchase.pendingCompletePurchase) {
         try {
           await _store.completePurchase(purchase);
+          _pendingVerification.remove(id);
         } on Object {
-          /* 다음 스트림·복원에서 재시도해요. */
+          /* 다음 구매 스트림에서 재시도해요. */
         }
       }
+      if (canComplete && !purchase.pendingCompletePurchase) {
+        _pendingVerification.remove(id);
+      }
       _processing.remove(id);
+      if (ref.mounted && _processing.isEmpty) {
+        state = state.copyWith(isProcessing: false, message: state.message);
+      }
     }
   }
 }

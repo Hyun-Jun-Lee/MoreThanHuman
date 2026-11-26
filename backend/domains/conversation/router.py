@@ -46,6 +46,8 @@ from domains.conversation.schemas import (
     StartSuggestedFreeChatRequest,
     SuggestedFreeChatResponse,
     UpdateTitleRequest,
+    ReadRepliesRequest,
+    UnreadReplies,
 )
 from domains.conversation.service import ConversationService
 from domains.conversation.audio_cache_flow import cache_files, new_writer, persist_writer
@@ -65,6 +67,7 @@ from shared.exceptions import (
     RateLimitException,
     ValidationException,
 )
+from shared.credit_ledger import CreditsExhausted
 from shared.types import ErrorResponse, SuccessResponse
 from shared.background_tasks import BackgroundTaskRegistry, get_background_tasks
 from shared.http_clients import get_ai_http_client
@@ -77,9 +80,10 @@ settings = get_settings()
 
 
 def _access_conflict(code: str, message: str) -> HTTPException:
+    action = {'CONVERSATION_SLOTS_FULL': 'buy_slots', 'CONVERSATION_TURNS_FULL': 'buy_turns'}.get(code)
     return HTTPException(
         status_code=status.HTTP_409_CONFLICT,
-        detail={"code": code, "message": message},
+        detail={"code": code, "message": message, **({'limit_action': action} if action else {})},
     )
 
 
@@ -203,6 +207,10 @@ def _prepared_stream_response(
 ) -> StreamingResponse:
     trace_id = current_trace_id()
     deltas = service.stream_response(prepared.system_prompt, prepared.history, prepared.prompt)
+    if prepared.fixed_answer is not None:
+        async def fixed_deltas():
+            yield prepared.fixed_answer
+        deltas = fixed_deltas()
     service.repository.db.close()
 
     def mark_audio(error_code: str | None) -> None:
@@ -250,6 +258,8 @@ def _prepare_stream_or_http_error(**kwargs) -> PreparedGeneration:
         raise _access_conflict("PREVIOUS_TURN_UNRESOLVED", error.message) from error
     except NotFoundException as error:
         raise HTTPException(status_code=404, detail=error.message) from error
+    except CreditsExhausted as error:
+        raise _access_conflict("CONVERSATION_TURNS_FULL", error.message)
     except AppException as error:
         raise HTTPException(status_code=400, detail=error.message) from error
 
@@ -445,6 +455,8 @@ async def _synthesize_optional_audio(
     try:
         audio = await voice_service.synthesize_response(response_text)
         return audio, None
+    except CreditsExhausted as exc:
+        raise _access_conflict("CONVERSATION_TURNS_FULL", exc.message)
     except AppException as exc:
         return None, VoiceAudioError(
             message=exc.message,
@@ -513,6 +525,8 @@ async def start_free_chat_conversation(
     except ExternalAPIException as e:
         log_exception(e, status_code=502, error_code="EXTERNAL_API_FAILED")
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=e.message)
+    except CreditsExhausted as e:
+        raise _access_conflict("CONVERSATION_TURNS_FULL", e.message)
     except AppException as e:
         log_exception(e, status_code=400, error_code=type(e).__name__)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
@@ -556,6 +570,8 @@ async def start_suggested_free_chat(
         raise HTTPException(status_code=429, detail=error.message)
     except ExternalAPIException as error:
         raise HTTPException(status_code=502, detail=error.message)
+    except CreditsExhausted as error:
+        raise _access_conflict("CONVERSATION_TURNS_FULL", error.message)
     except AppException as error:
         raise HTTPException(status_code=400, detail=error.message)
 
@@ -611,6 +627,8 @@ async def start_suggested_free_chat_stream(
             raise _access_conflict("START_IN_PROGRESS", error.message)
         if isinstance(error, NotFoundException):
             raise HTTPException(status_code=404, detail=error.message)
+        if isinstance(error, CreditsExhausted):
+            raise _access_conflict("CONVERSATION_TURNS_FULL", error.message)
         if isinstance(error, AppException):
             raise HTTPException(status_code=400, detail=error.message)
         raise
@@ -691,6 +709,8 @@ async def start_free_chat_stream(
             )
     except ValidationError as error:
         raise _validation_error_response(error) from error
+    except CreditsExhausted as error:
+        raise _access_conflict("CONVERSATION_TURNS_FULL", error.message)
     except AppException as error:
         raise HTTPException(status_code=400, detail=error.message) from error
     prepared = _prepare_stream_or_http_error(
@@ -744,6 +764,8 @@ async def send_turn_stream(
         with latency_span("stream_input", operation="turn"):
             text, _, audio_file = await _parse_turn_input(http_request)
             input_mode, user_text = await voice_service.resolve_input_text(text=text, audio_file=audio_file)
+    except CreditsExhausted as error:
+        raise _access_conflict("CONVERSATION_TURNS_FULL", error.message)
     except AppException as error:
         raise HTTPException(status_code=400, detail=error.message) from error
     prepared = _prepare_stream_or_http_error(
@@ -836,6 +858,8 @@ async def retry_stream_turn(
                 raise _access_conflict("CONVERSATION_SLOTS_FULL", error.message) from error
             if isinstance(error, NotFoundException):
                 raise HTTPException(status_code=404, detail=error.message) from error
+            if isinstance(error, CreditsExhausted):
+                raise _access_conflict("CONVERSATION_TURNS_FULL", error.message) from error
             if isinstance(error, AppException):
                 raise HTTPException(status_code=400, detail=error.message) from error
             raise
@@ -1039,6 +1063,8 @@ async def start_roleplay_conversation(
     except ExternalAPIException as e:
         log_exception(e, status_code=502, error_code="EXTERNAL_API_FAILED")
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=e.message)
+    except CreditsExhausted as e:
+        raise _access_conflict("CONVERSATION_TURNS_FULL", e.message)
     except AppException as e:
         log_exception(e, status_code=400, error_code=type(e).__name__)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
@@ -1075,6 +1101,8 @@ async def send_message(
     except NotFoundException as e:
         log_exception(e, status_code=404, error_code="NOT_FOUND")
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
+    except CreditsExhausted as e:
+        raise _access_conflict("CONVERSATION_TURNS_FULL", e.message)
     except AppException as e:
         log_exception(e, status_code=400, error_code=type(e).__name__)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
@@ -1142,6 +1170,8 @@ async def send_multimodal_turn(
     except NotFoundException as e:
         log_exception(e, status_code=404, error_code="NOT_FOUND")
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
+    except CreditsExhausted as e:
+        raise _access_conflict("CONVERSATION_TURNS_FULL", e.message)
     except AppException as e:
         log_exception(e, status_code=400, error_code=type(e).__name__)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
@@ -1150,6 +1180,31 @@ async def send_multimodal_turn(
     except Exception as e:
         log_exception(e, status_code=500, error_code="UNHANDLED_EXCEPTION")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.get("/unread/", response_model=SuccessResponse[UnreadReplies])
+def get_unread_replies(
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    service: ConversationService = Depends(get_conversation_service),
+):
+    return SuccessResponse(data=service.get_unread_replies(current_user.id))
+
+
+@router.post("/{conversation_id}/read/", response_model=SuccessResponse[UnreadReplies])
+def read_replies(
+    conversation_id: UUID,
+    body: ReadRepliesRequest,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    service: ConversationService = Depends(get_conversation_service),
+):
+    try:
+        return SuccessResponse(data=service.mark_replies_read(
+            str(conversation_id), current_user.id, [str(value) for value in body.message_ids],
+        ))
+    except NotFoundException as error:
+        raise HTTPException(status_code=404, detail=error.message)
+    except ConversationLocked as error:
+        raise _access_conflict("CONVERSATION_LOCKED", error.message)
 
 
 @router.get("/access/", response_model=SuccessResponse[ConversationAccess])
@@ -1190,6 +1245,8 @@ def get_conversations(
         with latency_span("handler", operation="conversation_list"):
             conversations = service.get_conversations(current_user.id, limit, offset)
             return SuccessResponse(data=conversations)
+    except CreditsExhausted as e:
+        raise _access_conflict("CONVERSATION_TURNS_FULL", e.message)
     except AppException as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
 
@@ -1206,6 +1263,8 @@ def get_conversation(
         return SuccessResponse(data=conversation)
     except NotFoundException as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
+    except CreditsExhausted as e:
+        raise _access_conflict("CONVERSATION_TURNS_FULL", e.message)
     except AppException as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
 
@@ -1225,6 +1284,8 @@ def get_messages(
             return SuccessResponse(data=messages)
     except NotFoundException as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
+    except CreditsExhausted as e:
+        raise _access_conflict("CONVERSATION_TURNS_FULL", e.message)
     except AppException as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
 
@@ -1241,6 +1302,8 @@ def end_conversation(
         return SuccessResponse(data={}, message="대화가 종료되었습니다")
     except NotFoundException as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
+    except CreditsExhausted as e:
+        raise _access_conflict("CONVERSATION_TURNS_FULL", e.message)
     except AppException as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
 
@@ -1258,6 +1321,8 @@ def update_conversation_title(
         return SuccessResponse(data={}, message="대화 제목이 수정되었습니다")
     except NotFoundException as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
+    except CreditsExhausted as e:
+        raise _access_conflict("CONVERSATION_TURNS_FULL", e.message)
     except AppException as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
 
@@ -1279,8 +1344,12 @@ def delete_conversation(
                 except (ValueError, OSError):
                     logger.exception("Conversation audio cache deletion failed", extra={"message_id": message_id})
         return SuccessResponse(data={}, message="대화가 삭제되었습니다")
+    except StreamTurnConflict as e:
+        raise _access_conflict(e.code, '답변 생성이 끝난 뒤 삭제해 주세요')
     except NotFoundException as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
+    except CreditsExhausted as e:
+        raise _access_conflict("CONVERSATION_TURNS_FULL", e.message)
     except AppException as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
 

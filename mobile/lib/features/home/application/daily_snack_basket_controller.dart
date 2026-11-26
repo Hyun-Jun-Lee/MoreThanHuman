@@ -201,9 +201,15 @@ class DailySnackBasketController extends AsyncNotifier<DailySnackBasket?> {
       _unlimitedReplayEnabled = marker.unlimitedReplayEnabled;
       if (marker.resetId != null && marker.resetId != state.value?.resetId) {
         _pendingResetId = marker.resetId;
-        _applyPendingReset();
+        await _applyPendingReset();
       }
-      _restartCompletedBasket();
+      await _restartCompletedBasket();
+      if (ref.mounted &&
+          generation == _generation &&
+          !state.isLoading &&
+          state.value != null) {
+        _persist(state.value!);
+      }
     } on Object {
       // 오프라인·구 서버·인증 오류에는 저장된 진행을 그대로 유지해요.
     } finally {
@@ -214,12 +220,12 @@ class DailySnackBasketController extends AsyncNotifier<DailySnackBasket?> {
   void setInteractionActive(bool active) {
     _interacting = active;
     if (!active) {
-      _applyPendingReset();
-      _restartCompletedBasket();
+      unawaited(_applyPendingReset());
+      unawaited(_restartCompletedBasket());
     }
   }
 
-  void _restartCompletedBasket() {
+  Future<void> _restartCompletedBasket() async {
     if (!_unlimitedReplayEnabled || _interacting || state.isLoading) return;
     final basket = state.value;
     if (basket == null ||
@@ -227,9 +233,7 @@ class DailySnackBasketController extends AsyncNotifier<DailySnackBasket?> {
         basket.day != DailySnackBasket.dayOf(ref.read(snackClockProvider)())) {
       return;
     }
-    final next = basket.withConsumed(0);
-    state = AsyncData(next);
-    _persist(next);
+    await _redraw(basket);
   }
 
   bool resetForTesting() {
@@ -240,22 +244,42 @@ class DailySnackBasketController extends AsyncNotifier<DailySnackBasket?> {
       ensureToday();
       return false;
     }
-    final next = basket.withConsumed(0);
-    state = AsyncData(next);
-    _persist(next);
+    unawaited(_redraw(basket));
     return true;
   }
 
-  void _applyPendingReset() {
+  Future<void> _applyPendingReset() async {
     final resetId = _pendingResetId;
     if (_interacting || state.isLoading || resetId == null) return;
     final basket = state.value;
     if (basket == null) return;
     _pendingResetId = null;
     if (resetId == basket.resetId) return;
-    final next = basket.reset(resetId);
-    state = AsyncData(next);
-    _persist(next);
+    await _redraw(basket, resetId: resetId);
+  }
+
+  Future<void> _redraw(DailySnackBasket previous, {String? resetId}) async {
+    final generation = _generation;
+    state = const AsyncLoading();
+    try {
+      ref.invalidate(languageSnacksControllerProvider);
+      final source = await ref.read(languageSnacksControllerProvider.future);
+      if (!ref.mounted || generation != _generation) return;
+      final now = ref.read(snackClockProvider)();
+      if (previous.day != DailySnackBasket.dayOf(now)) {
+        ref.invalidateSelf();
+        return;
+      }
+      final next = DailySnackBasket.create(
+        source.where((snack) => snack.contentLanguage == _language).toList(),
+        now,
+        resetId: resetId ?? previous.resetId,
+      );
+      state = AsyncData(next ?? previous);
+      if (next != null) _persist(next);
+    } on Object {
+      if (ref.mounted && generation == _generation) state = AsyncData(previous);
+    }
   }
 
   LanguageSnack? takeBite() {
@@ -283,6 +307,7 @@ class DailySnackBasketController extends AsyncNotifier<DailySnackBasket?> {
       'language': _language,
       'basket': basket.toJson(),
       'page': 0,
+      'unlimited_replay_enabled': _unlimitedReplayEnabled,
     });
     final widgetBridge = _widgetBridge;
     final userId = _userId;

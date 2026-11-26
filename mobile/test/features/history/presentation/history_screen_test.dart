@@ -144,7 +144,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(
       find.text(
-        'All active conversation slots are in use. Delete an active conversation or upgrade your plan.',
+        'All conversation slots are in use. Delete a conversation or add slots. Deleting does not return used conversation credits.',
       ),
       findsWidgets,
     );

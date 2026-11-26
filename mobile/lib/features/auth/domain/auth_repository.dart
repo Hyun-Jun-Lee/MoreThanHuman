@@ -21,6 +21,7 @@ class AIConsentStatus {
     required this.missing,
     required this.privacyPolicyUrl,
     required this.privacyPolicyUrlEn,
+    this.noticeAcknowledged = false,
   });
 
   factory AIConsentStatus.fromJson(Object? value) {
@@ -45,6 +46,7 @@ class AIConsentStatus {
       privacyPolicyUrlEn:
           value['privacy_policy_url_en'] as String? ??
           value['privacy_policy_url'] as String,
+      noticeAcknowledged: value['notice_acknowledged'] == true,
     );
   }
 
@@ -54,14 +56,19 @@ class AIConsentStatus {
   final List<String> missing;
   final String privacyPolicyUrl;
   final String privacyPolicyUrlEn;
+  final bool noticeAcknowledged;
 
   String privacyPolicyUrlFor({required bool isKorean}) =>
       isKorean ? privacyPolicyUrl : privacyPolicyUrlEn;
 }
 
 abstract interface class AIConsentRepository {
+  Future<AIConsentStatus> getAINotice();
   Future<AIConsentStatus> getAIConsentStatus();
-  Future<AIConsentStatus> acceptAIConsent();
+  Future<AIConsentStatus> recordAIConsentChoice(
+    AIConsentStatus notice, {
+    required bool acceptAI,
+  });
 }
 
 class GuestTransferReceipt {

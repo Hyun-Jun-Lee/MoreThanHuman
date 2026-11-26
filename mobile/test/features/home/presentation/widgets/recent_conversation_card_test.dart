@@ -8,6 +8,33 @@ import 'package:flutter_test/flutter_test.dart';
 const _displayTitle = 'Osaka food\ntrip';
 
 void main() {
+  testWidgets('unread reply shows a badge which disappears after reading', (
+    tester,
+  ) async {
+    Widget card(bool unread) => MaterialApp(
+      home: Scaffold(
+        body: RecentConversationCard(
+          category: 'FreeChat',
+          title: 'Conversation',
+          color: Colors.white,
+          hasUnreadReply: unread,
+          onTap: () {},
+        ),
+      ),
+    );
+    await tester.pumpWidget(card(true));
+    expect(find.byKey(const ValueKey('unread-reply-badge')), findsOneWidget);
+    expect(find.text('1'), findsOneWidget);
+    final badgeRect = tester.getRect(
+      find.byKey(const ValueKey('unread-reply-badge')),
+    );
+    final cardRect = tester.getRect(find.byType(RecentConversationCard));
+    expect(badgeRect.top, cardRect.top + 4);
+    expect(badgeRect.right, cardRect.right - 4);
+    await tester.pumpWidget(card(false));
+    expect(find.byKey(const ValueKey('unread-reply-badge')), findsNothing);
+  });
+
   testWidgets('RecentConversationCard presents conversation metadata', (
     WidgetTester tester,
   ) async {

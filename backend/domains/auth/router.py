@@ -22,6 +22,7 @@ from domains.auth.schemas import (
     LanguagePreferencesResponse,
     AppLocaleRequest,
     AIConsentStatus,
+    AIConsentChoice,
     NicknameRequest,
     SwaggerTokenRequest,
     TokenResponse,
@@ -159,6 +160,23 @@ def bootstrap_profile(
     return SuccessResponse(data=service.bootstrap_profile(claims, request))
 
 
+@router.get("/ai-notice", response_model=SuccessResponse[AIConsentStatus])
+def get_ai_notice():
+    """계정 생성 전에 표시할 공개 고지의 버전과 링크예요."""
+    settings = get_settings()
+    return SuccessResponse(data=AIConsentStatus(
+        accepted=False,
+        required_versions={
+            "privacy_policy": settings.privacy_policy_version,
+            "ai_data_processing": settings.ai_data_processing_version,
+        },
+        accepted_versions={}, missing=["ai_data_processing"],
+        privacy_policy_url=settings.privacy_policy_url,
+        privacy_policy_url_en=settings.privacy_policy_url_en,
+        notice_acknowledged=False,
+    ))
+
+
 @router.get("/me/ai-consent", response_model=SuccessResponse[AIConsentStatus])
 def get_ai_consent_status(
     current_user: ProfileModel = Depends(get_current_profile),
@@ -169,10 +187,24 @@ def get_ai_consent_status(
 
 @router.post("/me/ai-consent", response_model=SuccessResponse[AIConsentStatus])
 def accept_ai_consent(
+    choice: AIConsentChoice | None = None,
     current_user: ProfileModel = Depends(get_current_profile),
     db: Session = Depends(get_db),
 ):
-    return SuccessResponse(data=AIConsentService(db).accept_current(current_user.id))
+    service = AIConsentService(db)
+    if choice is None:
+        # 구버전 앱의 명시적 일괄 수락 요청은 기존 의미로 유지해요.
+        return SuccessResponse(data=service.accept_current(current_user.id))
+    try:
+        result = service.record_choice(
+            current_user.id, privacy_version=choice.privacy_policy_version,
+            ai_version=choice.ai_data_processing_version, accept_ai=choice.accept_ai,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail={
+            "code": "CONSENT_VERSION_CHANGED", "message": str(exc),
+        }) from exc
+    return SuccessResponse(data=result)
 
 
 @router.post(

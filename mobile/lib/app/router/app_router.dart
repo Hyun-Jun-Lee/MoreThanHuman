@@ -48,6 +48,11 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
       );
       final String location = state.matchedLocation;
 
+      // 안내 선택 저장 중 인증이 바뀌어도 온보딩과 재시도 화면을 유지해요.
+      if (location == AppRoute.onboarding && onboarding.value == false) {
+        return null;
+      }
+
       if (auth.isLoading || onboarding.isLoading) {
         final bool isLoginInProgress =
             location == AppRoute.login && onboarding.value == true;
@@ -102,7 +107,8 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
       ),
       GoRoute(
         path: AppRoute.paywall,
-        builder: (context, state) => const PaywallScreen(),
+        builder: (context, state) =>
+            PaywallScreen(purpose: state.uri.queryParameters['purpose']),
       ),
       StatefulShellRoute.indexedStack(
         pageBuilder: (context, state, shell) =>

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:curitalk/core/notifications/badge_sync_controller.dart';
 
 import 'package:curitalk/app/router/app_router.dart';
 import 'package:curitalk/app/theme/tokens/tokens.dart';
@@ -25,7 +26,8 @@ class ConversationScreen extends ConsumerStatefulWidget {
   ConsumerState<ConversationScreen> createState() => _ConversationScreenState();
 }
 
-class _ConversationScreenState extends ConsumerState<ConversationScreen> {
+class _ConversationScreenState extends ConsumerState<ConversationScreen>
+    with WidgetsBindingObserver {
   late final TextEditingController _composerController;
   late final ConversationAudioRecorder _recorder;
   late final StartConversationController _startController;
@@ -37,6 +39,10 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(_conversationController?.recoverUncertainTurn());
+    });
     _composerController = TextEditingController();
     _recorder = ref.read(conversationAudioRecorderProvider);
     _startController = ref.read(startConversationControllerProvider.notifier);
@@ -47,6 +53,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _recordingTimer?.cancel();
     if (_voiceInput.isRecordingActive) {
       unawaited(_recorder.cancel());
@@ -60,6 +67,36 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
     }
     _composerController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) {
+      unawaited(_conversationController?.recoverUncertainTurn());
+      setState(() {});
+    }
+  }
+
+  void _scheduleRead(StartStreamPreview? preview, bool locked) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          locked ||
+          (WidgetsBinding.instance.lifecycleState != null &&
+              WidgetsBinding.instance.lifecycleState !=
+                  AppLifecycleState.resumed) ||
+          ModalRoute.of(context)?.isCurrent != true) {
+        return;
+      }
+      if (preview != null && !preview.isTextFullyDisplayed) return;
+      final ids =
+          _conversationController?.publishedReplyIds.toList() ?? <String>[];
+      final manager = ref.read(badgeSyncControllerProvider);
+      for (var offset = 0; offset < ids.length; offset += 100) {
+        unawaited(
+          manager.markRead(widget.conversationId, ids.skip(offset).take(100)),
+        );
+      }
+    });
   }
 
   @override
@@ -94,6 +131,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
         .watch(conversationTurnAccessProvider(widget.conversationId))
         .value;
     final bool turnLimitReached = access?.canSend == false;
+    _scheduleRead(startPreview, access?.locked == true);
 
     final messageArea = conversation.when(
       loading: () => startPreview == null
@@ -109,7 +147,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
               canLoadOlder: false,
               turnLimitReached: false,
               locked: false,
-              limitAction: 'upgrade',
+              limitAction: 'buy_turns',
               suggestedAudioFailed: false,
             ),
       error: (_, _) => AppAsyncStateView.error(
@@ -129,7 +167,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
         canLoadOlder: !_voiceInput.isRecordingActive && !_voiceInput.isBusy,
         turnLimitReached: turnLimitReached,
         locked: access?.locked == true,
-        limitAction: access?.limitAction ?? 'upgrade',
+        limitAction: access?.limitAction ?? 'buy_turns',
         suggestedAudioFailed: suggestedAudioFailed,
       ),
     );
@@ -630,7 +668,8 @@ class _ConversationMessageListState
                 )
               else if (Platform.isIOS)
                 TextButton(
-                  onPressed: () => context.push(AppRoute.paywall),
+                  onPressed: () =>
+                      context.push('${AppRoute.paywall}?purpose=buy_turns'),
                   child: Text(copy.subscriptionTitle),
                 ),
             ],

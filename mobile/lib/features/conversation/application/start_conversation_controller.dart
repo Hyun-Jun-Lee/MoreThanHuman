@@ -1,3 +1,4 @@
+import 'package:curitalk/core/notifications/badge_sync_controller.dart';
 import 'dart:async';
 import 'dart:collection';
 import 'dart:math';
@@ -112,6 +113,7 @@ enum StartConversationFailureReason {
   freeChatRequestFailed,
   roleplayRequestFailed,
   slotsFull,
+  creditsFull,
 }
 
 class StartConversationState {
@@ -163,6 +165,7 @@ class StartConversationController extends Notifier<StartConversationState> {
   String? _failedGeneratedStartFingerprint;
   String? _pendingGeneratedStartRequestId;
   String? _pendingGeneratedStartFingerprint;
+  String? _activeStartRequestId;
 
   @override
   StartConversationState build() {
@@ -252,7 +255,11 @@ class StartConversationController extends Notifier<StartConversationState> {
     } on Object catch (error) {
       state = StartConversationState(
         failureReason: _isSlotLimit(error)
-            ? StartConversationFailureReason.slotsFull
+            ? (error is ApiException &&
+                      (error.code == 'CREDITS_EXHAUSTED' ||
+                          error.code == 'CONVERSATION_TURNS_FULL')
+                  ? StartConversationFailureReason.creditsFull
+                  : StartConversationFailureReason.slotsFull)
             : StartConversationFailureReason.freeChatRequestFailed,
       );
       return null;
@@ -270,6 +277,7 @@ class StartConversationController extends Notifier<StartConversationState> {
     final CancelToken token = CancelToken();
     final trace = LatencyTrace();
     _suggestedCancelToken = token;
+    _activeStartRequestId = _pendingSuggestedRequestId;
     _suggestedTrace = trace;
     _activeTurnId = null;
     _activeAttemptId = null;
@@ -407,6 +415,8 @@ class StartConversationController extends Notifier<StartConversationState> {
         }
         break;
       case 'turn_completed':
+        _activeStartRequestId = null;
+        ref.read(badgeSyncControllerProvider).refresh();
         _suggestedTerminalSeen = true;
         _completedStartText = event['text'] as String? ?? _bufferedStartText;
         _bufferedStartText = _completedStartText!;
@@ -446,6 +456,7 @@ class StartConversationController extends Notifier<StartConversationState> {
   }
 
   void _handleSuggestedError(Completer<String?> started) {
+    _rememberUncertainStart();
     _suggestedAudioQueue.clear();
     unawaited(_stopSuggestedAudio());
     if (!started.isCompleted) {
@@ -501,7 +512,19 @@ class StartConversationController extends Notifier<StartConversationState> {
     }
   }
 
+  void _rememberUncertainStart() {
+    final conversation = _activeSuggestedConversationId;
+    final request = _activeStartRequestId;
+    if (conversation != null && request != null) {
+      ref
+          .read(conversationControllerProvider(conversation).notifier)
+          .rememberUncertainRequest(request);
+    }
+  }
+
   Future<void> cancelSuggestedStream() async {
+    _rememberUncertainStart();
+    _activeStartRequestId = null;
     _playGeneration++;
     _suggestedAudioQueue.clear();
     _readyConversationId = null;
@@ -687,7 +710,11 @@ class StartConversationController extends Notifier<StartConversationState> {
     } on Object catch (error) {
       state = StartConversationState(
         failureReason: _isSlotLimit(error)
-            ? StartConversationFailureReason.slotsFull
+            ? (error is ApiException &&
+                      (error.code == 'CREDITS_EXHAUSTED' ||
+                          error.code == 'CONVERSATION_TURNS_FULL')
+                  ? StartConversationFailureReason.creditsFull
+                  : StartConversationFailureReason.slotsFull)
             : StartConversationFailureReason.freeChatRequestFailed,
       );
       return null;
@@ -755,7 +782,11 @@ class StartConversationController extends Notifier<StartConversationState> {
     } on Object catch (error) {
       state = StartConversationState(
         failureReason: _isSlotLimit(error)
-            ? StartConversationFailureReason.slotsFull
+            ? (error is ApiException &&
+                      (error.code == 'CREDITS_EXHAUSTED' ||
+                          error.code == 'CONVERSATION_TURNS_FULL')
+                  ? StartConversationFailureReason.creditsFull
+                  : StartConversationFailureReason.slotsFull)
             : StartConversationFailureReason.freeChatRequestFailed,
       );
       return null;
@@ -796,7 +827,11 @@ class StartConversationController extends Notifier<StartConversationState> {
     } on Object catch (error) {
       state = StartConversationState(
         failureReason: _isSlotLimit(error)
-            ? StartConversationFailureReason.slotsFull
+            ? (error is ApiException &&
+                      (error.code == 'CREDITS_EXHAUSTED' ||
+                          error.code == 'CONVERSATION_TURNS_FULL')
+                  ? StartConversationFailureReason.creditsFull
+                  : StartConversationFailureReason.slotsFull)
             : StartConversationFailureReason.roleplayRequestFailed,
       );
       return null;
@@ -901,6 +936,7 @@ class StartConversationController extends Notifier<StartConversationState> {
     _pendingGeneratedStartFingerprint = fingerprint;
     final token = CancelToken();
     _suggestedCancelToken = token;
+    _activeStartRequestId = requestId;
     final requestTrace = trace ?? LatencyTrace();
     _suggestedTrace = requestTrace;
     final retryId = _failedGeneratedStartFingerprint == fingerprint
@@ -1035,6 +1071,8 @@ class StartConversationController extends Notifier<StartConversationState> {
             _failStartAudio();
             break;
           case 'turn_completed':
+            _activeStartRequestId = null;
+            ref.read(badgeSyncControllerProvider).refresh();
             terminal = true;
             conversationId = event['conversation_id'] as String?;
             assistantId = event['assistant_message_id'] as String?;
@@ -1105,6 +1143,7 @@ class StartConversationController extends Notifier<StartConversationState> {
             }
             break;
           case 'turn_error':
+            _activeStartRequestId = null;
             terminal = true;
             _playGeneration++;
             _suggestedAudioQueue.clear();
@@ -1179,6 +1218,7 @@ class StartConversationController extends Notifier<StartConversationState> {
         ref.read(startStreamPreviewProvider(conversationId).notifier).clear();
         ref.invalidate(conversationControllerProvider(conversationId));
       }
+      _rememberUncertainStart();
       StreamTurnStatus? status;
       try {
         status = turnId == null
@@ -1292,7 +1332,9 @@ class StartConversationController extends Notifier<StartConversationState> {
 
   bool _isSlotLimit(Object error) {
     if (error is ApiException &&
-        (error.code == 'CONVERSATION_SLOTS_FULL' ||
+        ((error.code == 'CREDITS_EXHAUSTED' ||
+                error.code == 'CONVERSATION_TURNS_FULL') ||
+            error.code == 'CONVERSATION_SLOTS_FULL' ||
             error.code == 'GUEST_TURNS_FULL')) {
       ref.invalidate(conversationAccessProvider);
       return true;

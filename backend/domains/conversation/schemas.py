@@ -19,6 +19,14 @@ from shared.language import LearningLanguageContext
 SchemaType = TypeVar("SchemaType")
 
 
+class ReadRepliesRequest(BaseModel):
+    message_ids: list[UUID] = Field(min_length=1, max_length=100)
+
+
+class UnreadReplies(BaseModel):
+    has_unread: bool
+
+
 class StartFreeChatRequest(BaseModel):
     """자유 대화 시작 요청"""
 
@@ -86,6 +94,8 @@ class ConversationAccess(BaseModel):
     plan: str = "free"
     turn_scope: str = "conversation"
     remaining_turns: int | None = None
+    trial_turns: int = 0
+    paid_turns: int = 0
     limit_action: str = "upgrade"
 
 
@@ -111,6 +121,7 @@ class Conversation(BaseModel):
     message_count: int
     status: ConversationStatus
     locked: bool = False
+    has_unread_reply: bool = False
     created_at: datetime
     updated_at: datetime
 

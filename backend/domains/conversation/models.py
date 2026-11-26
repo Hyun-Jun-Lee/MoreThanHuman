@@ -55,11 +55,13 @@ class MessageModel(Base):
     """메시지 테이블"""
 
     __tablename__ = "messages"
+    __table_args__ = (Index("ix_messages_conversation_role_read", "conversation_id", "role", "read_at"),)
 
     id = Column(String(36), primary_key=True)  # UUID를 문자열로 저장
     conversation_id = Column(String(36), ForeignKey("conversations.id"), nullable=False)
     role = Column(SQLEnum(MessageRole), nullable=False)
     content = Column(Text, nullable=False)
+    read_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     # Relationships

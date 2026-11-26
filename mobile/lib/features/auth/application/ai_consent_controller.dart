@@ -9,29 +9,31 @@ class AIConsentController extends AsyncNotifier<AIConsentStatus?> {
   Future<AIConsentStatus> load() async {
     final repository = ref.read(authRepositoryProvider);
     if (repository is! AIConsentRepository) return _acceptedForTestDouble;
-    final consentRepository = repository as AIConsentRepository;
-    state = const AsyncLoading<AIConsentStatus?>();
-    final status = await consentRepository.getAIConsentStatus();
-    state = AsyncData<AIConsentStatus?>(status);
+    final status = await (repository as AIConsentRepository)
+        .getAIConsentStatus();
+    if (ref.mounted) state = AsyncData(status);
     return status;
   }
 
-  Future<AIConsentStatus> accept() async {
+  Future<AIConsentStatus> recordChoice(
+    AIConsentStatus notice, {
+    required bool acceptAI,
+  }) async {
     final repository = ref.read(authRepositoryProvider);
     if (repository is! AIConsentRepository) return _acceptedForTestDouble;
-    final consentRepository = repository as AIConsentRepository;
-    state = const AsyncLoading<AIConsentStatus?>();
-    final status = await consentRepository.acceptAIConsent();
-    state = AsyncData<AIConsentStatus?>(status);
+    final status = await (repository as AIConsentRepository)
+        .recordAIConsentChoice(notice, acceptAI: acceptAI);
+    if (ref.mounted) state = AsyncData(status);
     return status;
   }
 }
 
-const AIConsentStatus _acceptedForTestDouble = AIConsentStatus(
+const _acceptedForTestDouble = AIConsentStatus(
   accepted: true,
-  requiredVersions: <String, String>{},
-  acceptedVersions: <String, String>{},
-  missing: <String>[],
+  noticeAcknowledged: true,
+  requiredVersions: {},
+  acceptedVersions: {},
+  missing: [],
   privacyPolicyUrl: '',
   privacyPolicyUrlEn: '',
 );
@@ -40,3 +42,14 @@ final aiConsentControllerProvider =
     AsyncNotifierProvider<AIConsentController, AIConsentStatus?>(
       AIConsentController.new,
     );
+
+/// 온보딩에서 이미 선택한 안내를 같은 홈 진입에 다시 표시하지 않아요.
+class HandledAINotice extends Notifier<String?> {
+  @override
+  String? build() => null;
+  void mark(String userId) => state = userId;
+}
+
+final handledAINoticeProvider = NotifierProvider<HandledAINotice, String?>(
+  HandledAINotice.new,
+);

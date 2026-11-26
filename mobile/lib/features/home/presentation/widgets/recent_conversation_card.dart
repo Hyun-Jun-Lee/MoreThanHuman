@@ -13,6 +13,7 @@ class RecentConversationCard extends StatefulWidget {
     required this.color,
     required this.onTap,
     this.locked = false,
+    this.hasUnreadReply = false,
     this.subtitle,
     this.onDelete,
     super.key,
@@ -23,6 +24,7 @@ class RecentConversationCard extends StatefulWidget {
   final String? subtitle;
   final Color color;
   final bool locked;
+  final bool hasUnreadReply;
   final VoidCallback? onTap;
   final VoidCallback? onDelete;
 
@@ -139,6 +141,7 @@ class _RecentConversationCardState extends State<RecentConversationCard> {
                 widget.title,
               ),
               if (widget.locked) copy.additionalConversationLockedSemantic,
+              if (widget.hasUnreadReply) copy.unreadReplyLabel,
             ].join(', '),
             child: SizedBox(
               width: double.infinity,
@@ -202,6 +205,35 @@ class _RecentConversationCardState extends State<RecentConversationCard> {
               ),
             ),
           ),
+          if (widget.hasUnreadReply)
+            Positioned(
+              top: 4,
+              right: 4,
+              child: IgnorePointer(
+                child: ExcludeSemantics(
+                  child: Container(
+                    key: const ValueKey('unread-reply-badge'),
+                    constraints: const BoxConstraints(
+                      minWidth: 24,
+                      minHeight: 24,
+                    ),
+                    alignment: Alignment.center,
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    decoration: const BoxDecoration(
+                      color: AppPalette.semanticError,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Text(
+                      '1',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
           if (widget.locked)
             Positioned.fill(
               child: IgnorePointer(

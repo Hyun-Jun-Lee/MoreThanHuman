@@ -1,3 +1,4 @@
+import 'package:curitalk/core/notifications/badge_sync_controller.dart';
 import 'package:curitalk/app/theme/tokens/tokens.dart';
 import 'package:curitalk/core/copy/copy.dart';
 import 'package:curitalk/core/widgets/widgets.dart';
@@ -162,6 +163,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
       await showConversationAccessDialog(
         context,
         guestLimit: access?.limitAction == 'login',
+        purpose: access?.limitAction ?? 'buy_slots',
       );
       return;
     }
@@ -182,9 +184,12 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
       if (repository is! ConversationDeletionRepository) {
         throw StateError('Conversation deletion is unavailable.');
       }
-      await (repository as ConversationDeletionRepository).deleteConversation(
-        item.id,
-      );
+      await ref
+          .read(badgeSyncControllerProvider)
+          .mutation(
+            () => (repository as ConversationDeletionRepository)
+                .deleteConversation(item.id),
+          );
       if (!mounted) return;
       ref.invalidate(conversationHistoryControllerProvider);
       ref.invalidate(recentConversationsControllerProvider);

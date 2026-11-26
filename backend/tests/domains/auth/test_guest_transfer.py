@@ -82,8 +82,9 @@ def test_claim_moves_guest_canonical_data_without_overwriting_member_profile():
     assert member.target_language == "ko"
     conversation = db.get(ConversationModel, conversation_id)
     assert conversation.user_id == member_id
-    assert conversation.slot_active is True
-    assert member.slot_limit_snapshot == 1
+    from domains.conversation.repository import ConversationRepository
+    assert ConversationRepository(db).turn_access(conversation.id, member_id, enabled=True)['can_send']
+    assert ConversationRepository(db).access_summary(member_id, enabled=True)['remaining_turns'] == 10
     assert db.query(UserConsentModel).filter_by(user_id=member_id).count() == 1
     assert db.query(GuestTurnUsageModel).filter_by(user_id=member_id).count() == 1
     assert db.get(ProfileModel, guest_id).is_active is False

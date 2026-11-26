@@ -1,41 +1,34 @@
-# Conversation Access v2.3 — REVIEW
+# Conversation Access v3 — REVIEW
 
-구독과 대화 권한의 서버 계약이에요. `CONVERSATION_ACCESS_ENABLED=false`가 기본값이며, 결제 검증·구매 복원·모바일 잠금 UI·기존 대화 이행을 확인한 뒤 운영에서 켜요. 이 플래그는 회원 구독 정책의 rollout만 제어하며 게스트의 1개·누적 5회 제한은 값과 무관하게 항상 적용해요.
+> 문서 갱신: 2026-11-25 · 대화창 슬롯·대화권 상품명과 사용 단위 통일
 
-## 상품과 권한
 
-- Apple 자동 갱신 월간 구독 제품 ID는 `Advance`, `Plus`예요. 같은 구독 그룹(`22439301`, 참조명 `ttm_scbscribe`)에 속해요. 가격은 App Store Connect에서 정하고 앱은 스토어 가격을 표시해요.
-- 관리자가 부여한 유효한 Advance·Plus와 Apple 구독 중 높은 플랜을 적용해요. 관리자는 구독과 무관하게 슬롯·발화 한도가 없으며 기존 잠긴 대화도 이용할 수 있어요. 상세 계약은 [관리자 권한](ADMIN_ENTITLEMENTS.md)에 있어요.
-- 무료: 동시 활성 대화 1개, 활성 대화당 사용자 발화 15회. Advance: 동시 활성 대화 5개, 발화 무제한. Plus: 동시 활성 대화 10개, 발화 무제한. `ACTIVE`·`COMPLETED` 대화 모두 활성 슬롯을 사용해요.
-- 게스트: 동시 활성 대화 1개, 계정 전체 누적 사용자 발화 5회예요. 발화 수는 대화 메시지 수가 아니라 요청 키가 고유한 사용 원장으로 계산하며 대화를 삭제해도 committed 사용량은 복구되지 않아요. 텍스트와 음성의 canonical 사용자 메시지가 AI 처리에 수락될 때 한 번 예약하고 usable 응답이 완성되면 commit해요. 중복 요청, 시스템 첫 질문, 저장 전 실패와 usable 응답 전 서버 실패는 차감하지 않아요.
-- 저장된 대화의 총수는 제한하지 않아요. 비활성 대화는 앱에서 열 수 없고 삭제할 수 있어요. 서버의 메시지 조회 API는 기존 읽기 권한을 유지하며, 비활성 대화의 발화는 거절해요. 비활성 대화는 생성 슬롯을 차지하지 않아요. 사용자는 대화의 활성 슬롯을 직접 변경할 수 없어요.
-- 기존 다중 대화 무료 계정은 최근 실제 사용 대화 1개만 활성화하고 나머지는 잠가요. 무료 대화의 누적 사용자 발화 수는 초기화하지 않아요. 활성 대화를 삭제해 빈 슬롯이 생겨도 잠긴 대화는 그대로예요. 플랜의 슬롯 한도가 늘어나면 잠긴 대화를 최근 실제 사용 순서대로 남은 슬롯 수만큼 활성화해요.
-- 구독 해지는 확인된 만료 시각까지 혜택을 유지해요. Apple이 확인한 billing grace 상태는 유효 기간까지 유지하고, 만료·환불·철회 시 유효 플랜의 슬롯 수만 활성 상태로 남겨요. Plus에서 Advance로 변경되면 5개 한도를 적용해요.
-- 추가 슬롯 소모성 상품과 Plus 전용 후속 혜택은 이 계약의 범위 밖이에요. 기존 `legacy_conversation_slots`와 `conversation_slot_grants`는 데이터로 보존하되 새 권한 계산에서 제외해요.
+회원은 기본 대화창 슬롯 1개와 계정당 한 번 발급되는 체험 대화권 10회를 받아요. 게스트의 활성 대화 1개·누적 5회는 별도 원장이며 회원 전환 시 사용량을 합산하지 않아요. 관리자는 무제한이에요. 회원 제한 rollout은 `CONVERSATION_ACCESS_ENABLED=false`가 기본이며 게스트 제한은 항상 적용해요.
 
-## 구매 신뢰 경계
+슬롯은 보관 대화와 진행 중 역할극 시작 예약을 합쳐 새 생성에만 검사해요. 기존 회원 대화는 잠그지 않아요. 회원 제한 활성화 시 환불로 슬롯 한도를 초과하면 새 생성만 차단하고 기존 기록은 계속 열람할 수 있어요. 기존 대화의 새 발화에는 남은 대화권이 필요해요. 삭제는 대화창 슬롯만 비우며 사용한 대화권을 반환하지 않아요. 진행 중 스트림 삭제는 409 `TURN_IN_PROGRESS`예요.
 
-- Flutter의 구매 성공 이벤트만으로 혜택을 부여하지 않아요. 인증된 검증 API가 Apple 서명 거래와 현재 구독 상태를 확인해요.
-- 원거래 ID는 한 tomatalk 계정에만 연결해요. 구매 시 tomatalk 사용자 UUID를 Apple `appAccountToken`으로 전달해요. 다른 계정의 복원은 기존 소유자 권한을 유지하고 두 번째 계정에는 혜택을 주지 않아요.
-- Apple Server Notifications V2는 서명된 payload를 검증해요. 중복·역순 이벤트는 현재 Apple 상태 재조회로 조정하고, 알림 누락에 대비해 재조회 작업을 운영해요.
-- Apple 로그인은 구매의 필수 조건이 아니에요. iOS에서 로그인한 Google/Apple tomatalk 계정 모두 구매할 수 있어요. Android 구매 UI는 숨기지만 같은 tomatalk 계정의 서버 권한은 적용해요.
-- 추가 대화 잠금 안내 팝업은 주간 주제 시작 확인 팝업과 같은 높이로 표시해요. 슬롯 해제 위치는 현재 화면 제목인 `Conversations`(대화 목록)로 안내하고, iOS에서는 `SUBSCRIPT` 버튼으로 구독 화면으로 이동할 수 있어요.
-- iOS 구독 화면에서 구매 복원을 누르면 확인 중 안내를 모달 팝업으로 표시해요. 서버 검증 결과가 오면 같은 팝업을 성공·실패 안내로 갱신하고, 확인 중 팝업을 닫은 뒤 도착한 결과는 다시 팝업으로 안내해요. 복원 상태 문구는 구독 버튼 위에 표시하지 않아요.
-- 내 정보 화면은 구독 권한 조회가 완료되기 전이나 실패했을 때 Free 플랜으로 단정하지 않아요. 조회 중에는 구독 배지에 제공된 토마토 GIF 로딩과 확인 중 문구를 표시하고, 실패 시 조회 실패를 표시해요. Free는 서버가 반환한 플랜이 Free일 때만 표시해요.
-- 홈과 대화 목록의 잠긴 항목은 대화 화면으로 이동하지 않아요. 화면 주소로 직접 진입할 때도 대화별 최신 권한을 확인한 뒤 잠겨 있으면 메시지 화면을 만들지 않고 잠금 안내를 표시해요. 권한 조회 실패 시에도 메시지를 표시하지 않아요.
-- 게스트 한도 오류는 `GUEST_TURNS_FULL`과 `limit_action=login`을 반환해요. 다섯 번째 응답 이후 기록과 오디오 재생은 유지하고 작성기·새 대화 시작만 잠가요. 회원 전환 뒤에는 게스트 사용 원장이 Free 15회 계산에 합산되지 않고 해당 회원 플랜 규칙을 적용해요.
-- 기존 회원 계정으로 게스트 데이터를 이전하면 이전 트랜잭션 안에서 회원 플랜의 슬롯을 즉시 재계산해요. 이전된 대화와 기존 회원 대화를 합쳐 최근 실제 사용 순서대로 활성 슬롯을 선택하므로, 빈 슬롯이 있는 게스트 대화가 목록에 잠긴 상태로 노출되지 않아요.
-- 홈은 인증된 세션에서 최초 대화 목록 조회와 당겨서 새로고침 전에 대화 접근 권한을 먼저 조회해요. 이 조회가 서버의 슬롯 상태를 현재 회원 플랜에 맞게 재계산하므로, 이전 버전에서 `slot_limit_snapshot`이 비어 남은 계정도 앱 재실행이나 홈 새로고침으로 복구돼요. 권한 조회가 실패해도 홈 진입 자체를 막지 않고 저장된 목록은 계속 표시해요.
+대화권 1회는 사용자 메시지 1개와 저장된 AI 텍스트 답변 1개예요. API의 `remaining_turns`·`trial_turns`·`paid_turns`는 이 단위로 나타낸 대화권 잔액이에요. 체험 lot을 먼저, 이후 구매·수동 lot을 생성 순서대로 사용해요. profile 잠금 안에서 예약하고 AI 텍스트와 같은 트랜잭션에서 확정해요. 실패·5분 만료는 반환하고, 텍스트 저장 뒤 TTS 실패는 차감을 유지해요. 환불된 lot은 새 예약을 막으며 기존 예약은 성공하면 확정, 실패하면 무효화해요. 고정 역할극 인사·저장된 추천 첫 질문·다시 듣기는 차감하지 않아요. 음성은 STT 전 사전 검사와 저장 전 최종 검사를 거쳐요.
 
-## API
+| Product ID | 유형 | 지급 |
+|---|---|---|
+| `com.morethanhuman.curitalk.slots.plus.1` | CONSUMABLE | 대화창 슬롯 +1개 |
+| `com.morethanhuman.curitalk.slots.plus.3` | CONSUMABLE | 대화창 슬롯 +3개 |
+| `com.morethanhuman.curitalk.turns.5` | CONSUMABLE | 대화권 5회 충전 |
+| `com.morethanhuman.curitalk.turns.10` | CONSUMABLE | 대화권 10회 충전 |
+| `com.morethanhuman.curitalk.turns.20` | CONSUMABLE | 대화권 20회 충전 |
 
-- `GET /api/billing/entitlement/`: 현재 `plan`, `status`, 만료 시각, 슬롯·발화 한도를 반환해요.
-- `POST /api/billing/apple/verify/`: 구매·복원 거래를 같은 멱등 경로로 검증해요.
-- `POST /api/billing/apple/notifications/`: Apple 서명 notification을 수신해요.
-- `GET /api/conversations/access/`: `used_slots`는 활성 대화와 진행 중인 역할극 시작 예약의 합계, `locked_count`는 비활성 대화 수예요. `slot_limit`은 현재 플랜 한도예요. 활성 대화 ID 목록은 반환하지 않아요.
-- `GET /api/conversations/{id}/access/`와 목록 항목: 잠금 상태와 `can_send`, 무료 발화 수·한도를 표시해요.
-- 대화 활성화·해제 API는 제공하지 않아요. 잠긴 대화에 대한 전송은 HTTP 409 `CONVERSATION_LOCKED`, 슬롯 초과는 `CONVERSATION_SLOTS_FULL`, 무료 15회 초과는 `CONVERSATION_TURNS_FULL`이에요.
+- `GET /api/billing/entitlement/`: `plan=member|guest|admin`, `status`, `slot_limit`, `additional_slots`, `remaining_turns`, `trial_turns`, `paid_turns`, `unlimited`, `is_admin`, `source`, `turn_scope=account`, `limit_action`를 반환해요. 회원의 기존 호환 필드 `turn_limit`, `expires_at`은 null이에요. 게스트는 `turn_limit=5`예요.
+- `GET /api/conversations/access/`: `enabled, can_create, used_slots, slot_limit, remaining_slots, locked_count, plan, turn_scope, remaining_turns, trial_turns, paid_turns, limit_action`을 반환해요. 회원의 `locked_count`는 0이에요.
+- `GET /api/conversations/{id}/access/`: `enabled, user_turns, turn_limit, can_send, locked, turn_scope, remaining_turns, limit_action`을 반환해요. 회원의 `locked`는 false이며 `user_turns`는 해당 대화 메시지 수로 잔액이 아니에요.
+- 부족 오류는 HTTP 409 `CONVERSATION_SLOTS_FULL`+`limit_action=buy_slots` 또는 `CONVERSATION_TURNS_FULL`+`buy_turns`예요. 게스트는 `GUEST_TURNS_FULL`+`login`이에요.
+- `POST /api/billing/apple/verify/`: 회원 Bearer와 `{signed_transaction: JWS}`. 앱·환경·상품·소비성 유형·수량·계정 토큰을 검증하고 거래 ID별 한 번만 지급해요. 응답은 권한과 `delivery_status`, `terminal=true`예요. 삭제·환불 tombstone은 잔액 없는 terminal 응답을 반환할 수 있어요.
+- `POST /api/billing/apple/terminalize/`: Bearer 없이 JWS를 제출해요. 삭제된 account token과 일치할 때만 `{delivery_status: deleted, terminal: true}`를 반환해요. 활성 계정에는 지급·종료하지 않아요.
+- 다른 계정은 409 `PURCHASE_ACCOUNT_CONFLICT`, 잘못된 거래는 400 `INVALID_APPLE_PURCHASE`예요. 앱은 재시도 가능한 오류에서는 StoreKit 거래를 완료하지 않아요. 서버의 terminal 결과를 보존한 뒤에만 완료해요.
+- `POST /api/billing/apple/notifications/`: `{signedPayload}`의 서명과 UUID를 검증해요. REFUND는 해당 거래의 슬롯 또는 lot 미사용분만 회수해요. 먼저 도착한 환불은 `refund-before-delivery`로 보존해요. CONSUMPTION_REQUEST는 감사 기록만 저장하며 소비 정보는 전송하지 않아요.
 
-## 활성화
+소비성 구매 복원 API·UI는 제공하지 않아요. 같은 tomatalk 계정의 재설치·기기 변경은 서버 잔액을 조회해요. 계정 삭제·재가입·다른 계정에는 과거 구매를 복원하거나 이전하지 않아요. 삭제 후 원문 구매·계정 ID 대신 버전형 HMAC tombstone을 보존해 재지급을 차단해요.
 
-새 migration과 앱 버전을 배포하고 기존 대화 선택을 이행해요. Sandbox 구매·복원·만료·환불과 PostgreSQL 동시 요청을 검증하기 전에는 운영의 `CONVERSATION_ACCESS_ENABLED`를 켜지 않아요. 플래그가 꺼져 있어도 게스트 제한은 유지해요. 구버전 클라이언트의 접근이 남아 있으면 서버가 모든 생성·전송 경로를 계속 집행해요.
+자체 지원 환불 검토는 대화권 lot의 확정 사용이 0회이거나 대화창 슬롯 거래의 `first_used_at`이 없을 때만 가능해요. 첫 정상 사용자 답변 저장 시 그 전에 지급된 모든 미사용 슬롯 거래에 사용 시각을 기록하며 삭제로 되돌리지 않아요. Apple의 환불 심사는 별개이며 확정 환불은 사용 여부와 무관하게 반영해요.
+
+
+운영 활성화 전 수동 검증은 [운영 가이드](../../docs/OPERATIONS.md#대화-이용-권한-활성화)를 따라요.

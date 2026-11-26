@@ -50,7 +50,10 @@ class AuthRepository:
         is_guest: bool = False,
         app_locale: str | None = None,
     ) -> ProfileModel:
-        if self.db.query(AccountDeletionModel.user_id).filter_by(user_id=profile_id).first():
+        from shared.billing_tombstones import find_tombstone
+        from shared.credit_ledger import CreditLedger
+        if (self.db.query(AccountDeletionModel.user_id).filter_by(user_id=profile_id).first()
+                or find_tombstone(self.db, 'user', profile_id)):
             raise AuthenticationException("Account deletion is in progress or completed")
         profile = self.db.query(ProfileModel).filter(ProfileModel.id == profile_id).first()
         if profile is None:
@@ -81,6 +84,9 @@ class AuthRepository:
                 if language_changed or locale_changed:
                     self.db.commit()
             self.db.refresh(profile)
+            CreditLedger(self.db).lock(profile.id)
+            CreditLedger(self.db).ensure_trial(profile)
+            self.db.commit()
             return profile
 
         changed = self._apply_language(profile, language)
@@ -91,6 +97,9 @@ class AuthRepository:
             profile.oauth_provider = oauth_provider
             profile.avatar_url = avatar_url
             profile.is_guest = False
+            self.db.flush()
+            CreditLedger(self.db).lock(profile.id)
+            CreditLedger(self.db).ensure_trial(profile)
             profile.updated_at = datetime.utcnow()
             changed = True
         elif profile.is_guest and is_guest:

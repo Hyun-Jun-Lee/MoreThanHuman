@@ -15,10 +15,10 @@ from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from config import get_settings
-from database import Base, engine
+from database import Base, engine, SessionLocal
 from domains.auth.models import ProfileModel  # noqa: F401 - 테이블 생성용 import
 from domains.auth.supabase import SupabaseAuthVerifier
-from shared.subscription import AppleSubscriptionModel, AppleNotificationModel, ManualEntitlementGrantModel  # noqa: F401 - 테이블 생성용 import
+from shared import billing_models  # noqa: F401 - 테이블 생성용 import
 from domains.admin.router import router as admin_router
 from domains.admin.router import access_router as admin_access_router
 from domains.admin.web import router as admin_web_router
@@ -46,6 +46,8 @@ configure_logging()
 async def lifespan(_app: FastAPI):
     """애플리케이션 생명주기 관리"""
     # Startup
+    from shared.billing_tombstones import keyring, validate_key_versions
+    keyring()
     if settings.audio_cache_dir:
         cache_dir = Path(settings.audio_cache_dir)
         if not cache_dir.is_absolute() or not cache_dir.is_dir() or not os.access(cache_dir, os.W_OK):
@@ -57,6 +59,8 @@ async def lifespan(_app: FastAPI):
         log_event("app.database.metadata_created")
     else:
         log_event("app.database.migrations_managed")
+    with SessionLocal() as db:
+        validate_key_versions(db)
     log_event("app.started")
 
     async with http_clients(settings) as clients:

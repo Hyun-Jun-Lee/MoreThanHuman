@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 Future<void> showConversationAccessDialog(
   BuildContext context, {
   bool guestLimit = false,
+  String purpose = 'buy_slots',
 }) {
   final copy = AppCopy.of(context);
   return showDialog<void>(
@@ -15,11 +16,15 @@ Future<void> showConversationAccessDialog(
       title: Text(
         guestLimit
             ? copy.signInToContinueLabel
+            : purpose == 'buy_turns'
+            ? (copy.isKorean ? '대화권 충전' : 'Conversation credits')
             : copy.additionalConversationLabel,
       ),
       content: Text(
         guestLimit
             ? copy.guestTurnLimitReached
+            : purpose == 'buy_turns'
+            ? copy.conversationTurnLimitReached
             : copy.additionalConversationLocked,
       ),
       actions: [
@@ -36,7 +41,7 @@ Future<void> showConversationAccessDialog(
           FilledButton(
             onPressed: () {
               Navigator.of(dialogContext).pop();
-              context.push(AppRoute.paywall);
+              context.push('${AppRoute.paywall}?purpose=$purpose');
             },
             child: Text(copy.subscriptionDialogActionLabel),
           ),

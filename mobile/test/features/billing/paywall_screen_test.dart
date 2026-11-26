@@ -1,10 +1,10 @@
-import 'dart:async';
-
 import 'package:curitalk/app/theme/app_theme.dart';
 import 'package:curitalk/app/theme/tokens/tokens.dart';
 import 'package:curitalk/features/billing/billing_controller.dart';
 import 'package:curitalk/features/billing/billing_repository.dart';
 import 'package:curitalk/features/billing/paywall_screen.dart';
+import 'package:curitalk/features/conversation/data/conversation_access_repository.dart';
+import 'package:curitalk/features/conversation/domain/conversation_access.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -13,571 +13,223 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 
 void main() {
-  test('decodes the source and unlimited access flags', () {
-    final entitlement = BillingEntitlement.fromJson({
-      'plan': 'plus',
-      'status': 'admin',
-      'source': 'admin',
-      'is_admin': true,
-      'unlimited': true,
+  test('decodes account balances', () {
+    final value = BillingEntitlement.fromJson({
+      'plan': 'member',
+      'status': 'active',
+      'slot_limit': 4,
+      'remaining_turns': 17,
+      'trial_turns': 7,
+      'paid_turns': 10,
     });
-    expect(entitlement.isAdmin, isTrue);
-    expect(entitlement.isUnlimited, isTrue);
-    expect(entitlement.source, 'admin');
+    expect(value.slotLimit, 4);
+    expect(value.remainingTurns, 17);
+    expect(value.trialTurns, 7);
+    expect(value.paidTurns, 10);
   });
 
-  testWidgets('shows admin access without offering another purchase', (
+  Future<void> showStore(
     WidgetTester tester,
-  ) async {
+    _TestBillingController controller, {
+    String? purpose,
+    bool admin = false,
+  }) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
     addTearDown(() => debugDefaultTargetPlatformOverride = null);
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          billingControllerProvider.overrideWith(_TestBillingController.new),
+          billingControllerProvider.overrideWith(() => controller),
           billingEntitlementProvider.overrideWith(
-            (Ref ref) async => const BillingEntitlement(
-              plan: 'plus',
-              status: 'admin',
-              source: 'admin',
-              isAdmin: true,
-              isUnlimited: true,
+            (ref) async => BillingEntitlement(
+              plan: admin ? 'admin' : 'member',
+              status: 'active',
+              slotLimit: 4,
+              remainingTurns: 17,
+              trialTurns: 7,
+              paidTurns: 10,
+              isAdmin: admin,
+              isUnlimited: admin,
+            ),
+          ),
+          conversationAccessProvider.overrideWith(
+            (ref) async => const ConversationAccess(
+              enabled: true,
+              canCreate: true,
+              usedSlots: 2,
+              slotLimit: 4,
             ),
           ),
         ],
         child: MaterialApp(
           theme: AppTheme.light,
           locale: const Locale('ko'),
-          supportedLocales: const <Locale>[Locale('ko'), Locale('en')],
-          localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
+          supportedLocales: const [Locale('ko'), Locale('en')],
+          localizationsDelegates: const [
             GlobalMaterialLocalizations.delegate,
-            GlobalCupertinoLocalizations.delegate,
             GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
           ],
-          home: const PaywallScreen(),
+          home: PaywallScreen(purpose: purpose),
         ),
       ),
     );
-    await tester.pump();
-    expect(find.text('관리자 무제한 이용'), findsOneWidget);
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey<String>('paywall-subscribe')),
-      300,
-    );
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets(
+    'shows balances and separate repeat-purchase products without restore',
+    (tester) async {
+      final controller = _TestBillingController();
+      await showStore(tester, controller);
+      expect(find.text('17회'), findsOneWidget);
+      expect(find.text('4개'), findsOneWidget);
+      final slots = tester.getRect(
+        find.byKey(const ValueKey('store-slot-balance')),
+      );
+      final turns = tester.getRect(
+        find.byKey(const ValueKey('store-turn-balance')),
+      );
+      expect(slots.top, turns.top);
+      expect(slots.right, lessThan(turns.left));
+      expect(find.byIcon(Icons.circle_outlined), findsNothing);
+      expect(find.text('구매 복원'), findsNothing);
+      expect(
+        tester.getTopLeft(find.text('대화창 슬롯 +3개')).dy,
+        greaterThan(tester.getTopLeft(find.text('대화창 슬롯 +1개')).dy),
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(
+            const ValueKey(
+              'store-product-com.morethanhuman.curitalk.slots.plus.1',
+            ),
+          ),
+          matching: find.byKey(const ValueKey('store-selected-tomato')),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const ValueKey('store-purchase')))
+            .onPressed,
+        isNotNull,
+      );
+      await tester.scrollUntilVisible(find.text('대화창 슬롯 +1개'), 250);
+      await tester.tap(find.text('대화창 슬롯 +1개'));
+      await tester.pump();
+      expect(controller.purchases, isEmpty);
+      expect(
+        find.byKey(const ValueKey('store-selected-tomato')),
+        findsOneWidget,
+      );
+      expect(find.byIcon(Icons.check_circle), findsNothing);
+      expect(
+        tester
+            .widget<Card>(
+              find.byKey(
+                const ValueKey(
+                  'store-product-com.morethanhuman.curitalk.slots.plus.1',
+                ),
+              ),
+            )
+            .color,
+        AppPalette.subscriptionSelected,
+      );
+      await tester.tap(find.byKey(const ValueKey('store-purchase')));
+      await tester.pump();
+      expect(
+        controller.purchases.single,
+        'com.morethanhuman.curitalk.slots.plus.1',
+      );
+      await tester.tap(find.byKey(const ValueKey('store-purchase')));
+      expect(controller.purchases.length, 2);
+      await tester.scrollUntilVisible(find.text('대화권 20회 충전'), 250);
+      expect(find.text('대화권 5회 충전'), findsOneWidget);
+      expect(find.text('대화권 10회 충전'), findsOneWidget);
+      await tester.tap(find.text('대화권 20회 충전'));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('store-purchase')));
+      expect(controller.purchases.last, 'com.morethanhuman.curitalk.turns.20');
+      expect(find.text('내 대화창 슬롯과 대화권'), findsNothing);
+      final buyRect = tester.getRect(
+        find.byKey(const ValueKey('store-purchase')),
+      );
+      expect(buyRect.top, greaterThan(400));
+      expect(
+        tester.getRect(find.text('이용약관')).top,
+        greaterThan(buyRect.bottom),
+      );
+      debugDefaultTargetPlatformOverride = null;
+    },
+  );
+
+  testWidgets(
+    'small screen keeps purchase and policy links visible while products scroll',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 568);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final controller = _TestBillingController();
+      await showStore(tester, controller);
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const ValueKey('store-purchase')))
+            .onPressed,
+        isNotNull,
+      );
+      await tester.scrollUntilVisible(find.text('대화권 20회 충전'), 200);
+      await tester.tap(find.text('대화권 20회 충전'));
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('store-purchase')).hitTestable(),
+        findsOneWidget,
+      );
+      expect(find.text('개인정보처리방침').hitTestable(), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      debugDefaultTargetPlatformOverride = null;
+    },
+  );
+
+  testWidgets('turn shortage focuses reply section', (tester) async {
+    await showStore(tester, _TestBillingController(), purpose: 'buy_turns');
+    expect(find.text('대화권 충전').hitTestable(), findsOneWidget);
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('admins cannot purchase', (tester) async {
+    await showStore(tester, _TestBillingController(), admin: true);
+    await tester.scrollUntilVisible(find.text('대화창 슬롯 +1개'), 250);
     expect(
       tester
-          .widget<FilledButton>(
-            find.byKey(const ValueKey<String>('paywall-subscribe')),
-          )
+          .widget<FilledButton>(find.byKey(const ValueKey('store-purchase')))
           .onPressed,
       isNull,
-    );
-    debugDefaultTargetPlatformOverride = null;
-  });
-
-  testWidgets('selects one paid plan and purchases it from one bottom CTA', (
-    WidgetTester tester,
-  ) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-    addTearDown(() => debugDefaultTargetPlatformOverride = null);
-
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          billingControllerProvider.overrideWith(_TestBillingController.new),
-          billingEntitlementProvider.overrideWith(
-            (Ref ref) async =>
-                const BillingEntitlement(plan: 'free', status: 'free'),
-          ),
-        ],
-        child: MaterialApp(
-          theme: AppTheme.light,
-          locale: const Locale('ko'),
-          supportedLocales: const <Locale>[Locale('ko'), Locale('en')],
-          localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
-            GlobalMaterialLocalizations.delegate,
-            GlobalCupertinoLocalizations.delegate,
-            GlobalWidgetsLocalizations.delegate,
-          ],
-          home: const PaywallScreen(),
-        ),
-      ),
-    );
-    await tester.pump();
-    await tester.pump();
-
-    expect(find.text('원하는 만큼 대화를 이어가세요'), findsNothing);
-    expect(find.textContaining('현재 플랜:'), findsNothing);
-    expect(find.textContaining('동시 대화 5개'), findsOneWidget);
-    expect(find.textContaining('동시 대화 10개'), findsOneWidget);
-    expect(find.textContaining('발화 무제한'), findsNWidgets(2));
-    expect(find.text('Advance 구독하기'), findsNothing);
-    expect(find.text('Plus 구독하기'), findsNothing);
-    final Finder currentPlanIndicator = find.byKey(
-      const ValueKey<String>('paywall-current-plan-indicator'),
-    );
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey<String>('paywall-plan-Free')),
-        matching: currentPlanIndicator,
-      ),
-      findsOneWidget,
-    );
-    final FadeTransition indicator = tester.widget<FadeTransition>(
-      find.ancestor(
-        of: currentPlanIndicator,
-        matching: find.byType(FadeTransition),
-      ),
-    );
-    final double initialOpacity = indicator.opacity.value;
-    await tester.pump(const Duration(milliseconds: 350));
-    expect(indicator.opacity.value, isNot(initialOpacity));
-
-    expect(
-      tester
-          .widget<Card>(find.byKey(const ValueKey<String>('paywall-plan-Free')))
-          .color,
-      AppPalette.subscriptionSelected,
-    );
-    expect(
-      tester
-          .widget<Card>(
-            find.byKey(const ValueKey<String>('paywall-plan-Advance')),
-          )
-          .color,
-      Theme.of(
-        tester.element(
-          find.byKey(const ValueKey<String>('paywall-plan-Advance')),
-        ),
-      ).colorScheme.surfaceContainerLow,
-    );
-    expect(
-      tester
-          .widget<Card>(find.byKey(const ValueKey<String>('paywall-plan-Plus')))
-          .color,
-      Theme.of(
-        tester.element(find.byKey(const ValueKey<String>('paywall-plan-Plus'))),
-      ).colorScheme.surfaceContainerLow,
-    );
-
-    final Text price = tester.widget<Text>(find.text(r'$4.99'));
-    final Text period = tester.widget<Text>(find.text('/월').first);
-    expect(price.style?.fontSize, greaterThan(period.style?.fontSize ?? 0));
-
-    await tester.tap(find.byKey(const ValueKey<String>('paywall-plan-Plus')));
-    await tester.pump();
-    expect(
-      tester
-          .widget<Card>(
-            find.byKey(const ValueKey<String>('paywall-plan-Advance')),
-          )
-          .color,
-      Theme.of(
-        tester.element(
-          find.byKey(const ValueKey<String>('paywall-plan-Advance')),
-        ),
-      ).colorScheme.surfaceContainerLow,
-    );
-    expect(
-      tester
-          .widget<Card>(find.byKey(const ValueKey<String>('paywall-plan-Plus')))
-          .color,
-      AppPalette.subscriptionSelected,
-    );
-
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey<String>('paywall-subscribe')),
-      300,
-    );
-    expect(find.text('이전에 구매했었나요?'), findsOneWidget);
-    expect(find.text('구매 복원'), findsOneWidget);
-    expect(find.widgetWithText(FilledButton, '구독하기'), findsOneWidget);
-    final ProviderContainer container = ProviderScope.containerOf(
-      tester.element(find.byType(PaywallScreen)),
-    );
-    final _TestBillingController controller =
-        container.read(billingControllerProvider.notifier)
-            as _TestBillingController;
-    await tester.tap(find.widgetWithText(FilledButton, '구독하기'));
-    await tester.pump();
-    expect(controller.purchasedProductId, 'Plus');
-    expect(
-      find.byKey(const ValueKey<String>('paywall-purchase-loading')),
-      findsOneWidget,
-    );
-    expect(find.text('구독 정보를 업데이트하는 중이에요.'), findsOneWidget);
-    expect(
-      tester
-          .widget<FilledButton>(find.widgetWithText(FilledButton, '구독하기'))
-          .onPressed,
-      isNull,
-    );
-
-    controller.completePurchase();
-    await tester.pump();
-    expect(
-      find.byKey(const ValueKey<String>('paywall-purchase-loading')),
-      findsNothing,
-    );
-    debugDefaultTargetPlatformOverride = null;
-  });
-
-  testWidgets('keeps loading visible until the refreshed plan arrives', (
-    WidgetTester tester,
-  ) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-    addTearDown(() => debugDefaultTargetPlatformOverride = null);
-    final Completer<BillingEntitlement> entitlement =
-        Completer<BillingEntitlement>();
-
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          billingControllerProvider.overrideWith(
-            _VerifiedBillingController.new,
-          ),
-          billingEntitlementProvider.overrideWith(
-            (Ref ref) => entitlement.future,
-          ),
-        ],
-        child: MaterialApp(
-          theme: AppTheme.light,
-          locale: const Locale('ko'),
-          supportedLocales: const <Locale>[Locale('ko'), Locale('en')],
-          localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
-            GlobalMaterialLocalizations.delegate,
-            GlobalCupertinoLocalizations.delegate,
-            GlobalWidgetsLocalizations.delegate,
-          ],
-          home: const PaywallScreen(),
-        ),
-      ),
-    );
-    await tester.pump();
-
-    expect(
-      find.byKey(const ValueKey<String>('paywall-purchase-loading')),
-      findsOneWidget,
-    );
-
-    entitlement.complete(
-      const BillingEntitlement(plan: 'plus', status: 'active'),
-    );
-    await tester.pump();
-    await tester.pump();
-    expect(
-      find.byKey(const ValueKey<String>('paywall-purchase-loading')),
-      findsNothing,
-    );
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey<String>('paywall-plan-Plus')),
-        matching: find.byKey(
-          const ValueKey<String>('paywall-current-plan-indicator'),
-        ),
-      ),
-      findsOneWidget,
-    );
-    expect(
-      tester
-          .widget<Card>(find.byKey(const ValueKey<String>('paywall-plan-Plus')))
-          .color,
-      AppPalette.subscriptionSelected,
-    );
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey<String>('paywall-subscribe')),
-      300,
-    );
-    expect(
-      tester
-          .widget<FilledButton>(
-            find.byKey(const ValueKey<String>('paywall-subscribe')),
-          )
-          .onPressed,
-      isNull,
-    );
-    debugDefaultTargetPlatformOverride = null;
-  });
-
-  testWidgets('keeps a paid plan tapped before entitlement loading completes', (
-    WidgetTester tester,
-  ) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-    addTearDown(() => debugDefaultTargetPlatformOverride = null);
-    final Completer<BillingEntitlement> entitlement =
-        Completer<BillingEntitlement>();
-
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          billingControllerProvider.overrideWith(_TestBillingController.new),
-          billingEntitlementProvider.overrideWith(
-            (Ref ref) => entitlement.future,
-          ),
-        ],
-        child: MaterialApp(
-          theme: AppTheme.light,
-          locale: const Locale('ko'),
-          supportedLocales: const <Locale>[Locale('ko'), Locale('en')],
-          localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
-            GlobalMaterialLocalizations.delegate,
-            GlobalCupertinoLocalizations.delegate,
-            GlobalWidgetsLocalizations.delegate,
-          ],
-          home: const PaywallScreen(),
-        ),
-      ),
-    );
-    await tester.pump();
-
-    final Finder plusPlan = find.byKey(
-      const ValueKey<String>('paywall-plan-Plus'),
-    );
-    await tester.tap(plusPlan);
-    await tester.pump();
-
-    entitlement.complete(
-      const BillingEntitlement(plan: 'free', status: 'free'),
-    );
-    await tester.pump();
-    await tester.pump();
-
-    expect(
-      tester.widget<Card>(plusPlan).color,
-      AppPalette.subscriptionSelected,
-    );
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey<String>('paywall-subscribe')),
-      300,
-    );
-    expect(
-      tester
-          .widget<FilledButton>(
-            find.byKey(const ValueKey<String>('paywall-subscribe')),
-          )
-          .onPressed,
-      isNotNull,
-    );
-    debugDefaultTargetPlatformOverride = null;
-  });
-
-  testWidgets('selects the current Advance plan and disables its CTA', (
-    WidgetTester tester,
-  ) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-    addTearDown(() => debugDefaultTargetPlatformOverride = null);
-
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          billingControllerProvider.overrideWith(_TestBillingController.new),
-          billingEntitlementProvider.overrideWith(
-            (Ref ref) async =>
-                const BillingEntitlement(plan: 'advance', status: 'active'),
-          ),
-        ],
-        child: MaterialApp(
-          theme: AppTheme.light,
-          locale: const Locale('ko'),
-          supportedLocales: const <Locale>[Locale('ko'), Locale('en')],
-          localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
-            GlobalMaterialLocalizations.delegate,
-            GlobalCupertinoLocalizations.delegate,
-            GlobalWidgetsLocalizations.delegate,
-          ],
-          home: const PaywallScreen(),
-        ),
-      ),
-    );
-    await tester.pump();
-    await tester.pump();
-
-    final Finder advancePlan = find.byKey(
-      const ValueKey<String>('paywall-plan-Advance'),
-    );
-    expect(
-      find.descendant(
-        of: advancePlan,
-        matching: find.byKey(
-          const ValueKey<String>('paywall-current-plan-indicator'),
-        ),
-      ),
-      findsOneWidget,
-    );
-    expect(
-      tester.widget<Card>(advancePlan).color,
-      AppPalette.subscriptionSelected,
-    );
-
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey<String>('paywall-subscribe')),
-      300,
-    );
-    expect(
-      tester
-          .widget<FilledButton>(
-            find.byKey(const ValueKey<String>('paywall-subscribe')),
-          )
-          .onPressed,
-      isNull,
-    );
-    debugDefaultTargetPlatformOverride = null;
-  });
-
-  testWidgets('shows restore progress and delayed result in a dialog', (
-    WidgetTester tester,
-  ) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-    addTearDown(() => debugDefaultTargetPlatformOverride = null);
-
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          billingControllerProvider.overrideWith(_RestoreBillingController.new),
-          billingEntitlementProvider.overrideWith(
-            (Ref ref) async =>
-                const BillingEntitlement(plan: 'free', status: 'free'),
-          ),
-        ],
-        child: MaterialApp(
-          theme: AppTheme.light,
-          locale: const Locale('ko'),
-          supportedLocales: const <Locale>[Locale('ko'), Locale('en')],
-          localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
-            GlobalMaterialLocalizations.delegate,
-            GlobalCupertinoLocalizations.delegate,
-            GlobalWidgetsLocalizations.delegate,
-          ],
-          home: const PaywallScreen(),
-        ),
-      ),
-    );
-    await tester.pump();
-    final controller =
-        ProviderScope.containerOf(
-              tester.element(find.byType(PaywallScreen)),
-            ).read(billingControllerProvider.notifier)
-            as _RestoreBillingController;
-
-    await tester.scrollUntilVisible(find.text('구매 복원'), 300);
-    await tester.tap(find.text('구매 복원'));
-    await tester.pump();
-    final dialog = find.byKey(const ValueKey<String>('paywall-restore-dialog'));
-    expect(dialog, findsOneWidget);
-    expect(
-      find.descendant(of: dialog, matching: find.text('복원한 구매를 확인하고 있어요.')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey<String>('paywall-purchase-loading')),
-      findsNothing,
-    );
-
-    await tester.tap(find.descendant(of: dialog, matching: find.text('확인')));
-    await tester.pump();
-    expect(dialog, findsNothing);
-    controller.completeRestoreRequest();
-    await tester.pump();
-    expect(dialog, findsNothing);
-
-    controller.markVerified();
-    await tester.pump();
-    expect(dialog, findsOneWidget);
-    expect(
-      find.descendant(of: dialog, matching: find.text('구독이 확인되었어요.')),
-      findsOneWidget,
-    );
-    await tester.tap(find.descendant(of: dialog, matching: find.text('확인')));
-    await tester.pump();
-    expect(dialog, findsNothing);
-    expect(find.text('구독이 확인되었어요.'), findsNothing);
-
-    await tester.tap(find.text('구매 복원'));
-    await tester.pump();
-    controller.markFailed();
-    await tester.pump();
-    expect(dialog, findsOneWidget);
-    expect(
-      find.descendant(
-        of: dialog,
-        matching: find.text('결제를 확인하지 못했어요. 다시 시도하거나 구매를 복원해 주세요.'),
-      ),
-      findsOneWidget,
     );
     debugDefaultTargetPlatformOverride = null;
   });
 }
 
 class _TestBillingController extends BillingController {
-  String? purchasedProductId;
-  final Completer<void> _purchaseCompleter = Completer<void>();
-
+  final purchases = <String>[];
   @override
-  BillingUiState build() => BillingUiState(products: _products);
-
+  BillingUiState build() => BillingUiState(
+    products: [
+      for (final id in BillingController.productIds)
+        ProductDetails(
+          id: id,
+          title: id,
+          description: '',
+          price: '₩1,000',
+          rawPrice: 1000,
+          currencyCode: 'KRW',
+        ),
+    ],
+  );
   @override
   Future<void> loadProducts() async {}
-
   @override
   Future<void> purchase(ProductDetails product) async {
-    purchasedProductId = product.id;
-    state = state.copyWith(isProcessing: true);
-    await _purchaseCompleter.future;
-    state = state.copyWith(isProcessing: false);
+    purchases.add(product.id);
   }
-
-  void completePurchase() => _purchaseCompleter.complete();
 }
-
-class _VerifiedBillingController extends BillingController {
-  @override
-  BillingUiState build() =>
-      BillingUiState(products: _products, message: 'verified');
-
-  @override
-  Future<void> loadProducts() async {}
-}
-
-class _RestoreBillingController extends BillingController {
-  final Completer<void> _restoreCompleter = Completer<void>();
-
-  @override
-  BillingUiState build() => BillingUiState(products: _products);
-
-  @override
-  Future<void> loadProducts() async {}
-
-  @override
-  Future<void> restore() async {
-    state = state.copyWith(isProcessing: true);
-    await _restoreCompleter.future;
-    state = state.copyWith(isProcessing: false, message: 'restore_requested');
-  }
-
-  void completeRestoreRequest() => _restoreCompleter.complete();
-
-  void markVerified() =>
-      state = state.copyWith(isProcessing: false, message: 'verified');
-
-  void markFailed() =>
-      state = state.copyWith(isProcessing: false, message: 'restore_failed');
-}
-
-final List<ProductDetails> _products = <ProductDetails>[
-  ProductDetails(
-    id: 'Advance',
-    title: 'Advance',
-    description: '',
-    price: r'$4.99',
-    rawPrice: 4.99,
-    currencyCode: 'USD',
-  ),
-  ProductDetails(
-    id: 'Plus',
-    title: 'Plus',
-    description: '',
-    price: r'$6.99',
-    rawPrice: 6.99,
-    currencyCode: 'USD',
-  ),
-];

@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:collection';
+import 'package:curitalk/core/notifications/badge_sync_controller.dart';
+import 'package:curitalk/features/billing/billing_repository.dart';
 
 import 'package:curitalk/core/diagnostics/latency_trace.dart';
 import 'package:curitalk/features/conversation/application/conversation_audio_services.dart';
@@ -25,7 +27,8 @@ enum AssistantAudioStatus { unavailable }
 
 bool _isTurnLimitError(Object error) =>
     error is ApiException &&
-    (error.code == 'CONVERSATION_TURNS_FULL' ||
+    (error.code == 'CREDITS_EXHAUSTED' ||
+        error.code == 'CONVERSATION_TURNS_FULL' ||
         error.code == 'GUEST_TURNS_FULL');
 
 class ConversationState {
@@ -189,6 +192,43 @@ class ConversationController extends AsyncNotifier<ConversationState> {
   String? _completedAssistantId;
   Completer<void>? _assistantFrameWaiter;
   int _assistantFrameThreshold = 0;
+  String? _unconfirmedRequest;
+  bool _recovering = false;
+
+  Iterable<String> get publishedReplyIds =>
+      (state.value?.messages ?? <ConversationMessage>[])
+          .where(
+            (message) =>
+                message.role == ConversationMessageRole.assistant &&
+                !message.isLocalPending &&
+                (message.id != _completedAssistantId ||
+                    message.content.length == _completedAssistantText?.length),
+          )
+          .map((message) => message.id);
+
+  void rememberUncertainRequest(String requestId) {
+    _unconfirmedRequest = requestId;
+    final current = state.value;
+    if (current != null) {
+      state = AsyncData(
+        current.copyWith(isSending: false, pendingRequestId: requestId),
+      );
+    }
+  }
+
+  Future<void> recoverUncertainTurn() async {
+    if (_recovering || _activeStreamToken != null) return;
+    final current = state.value;
+    if (current?.pendingTurnId == null && current?.pendingRequestId == null) {
+      return;
+    }
+    _recovering = true;
+    try {
+      await refreshTurnStatus();
+    } finally {
+      _recovering = false;
+    }
+  }
 
   void onAssistantTextFrameReady(String assistantMessageId, int visibleChars) {
     if (_activeStreamAssistantId != assistantMessageId) {
@@ -223,6 +263,14 @@ class ConversationController extends AsyncNotifier<ConversationState> {
   }
 
   Future<void> cancelActiveStream() async {
+    if (_unconfirmedRequest != null && ref.mounted && state.value != null) {
+      state = AsyncData(
+        state.requireValue.copyWith(
+          isSending: false,
+          pendingRequestId: _unconfirmedRequest,
+        ),
+      );
+    }
     final completedText = _completedAssistantText;
     if (completedText != null &&
         _releasedAssistantChars < completedText.length) {
@@ -301,6 +349,7 @@ class ConversationController extends AsyncNotifier<ConversationState> {
           : <String>{initialAutoPlayMessageId},
       failedTurnId: _firstTurn(recovery, 'failed')?.turnId,
       pendingTurnId: _firstTurn(recovery, 'pending')?.turnId,
+      pendingRequestId: _unconfirmedRequest,
       audioRetryMessageId: recovery
           .where(
             (turn) =>
@@ -565,12 +614,16 @@ class ConversationController extends AsyncNotifier<ConversationState> {
         ),
       );
       ref.invalidate(conversationTurnAccessProvider(conversationId));
+      ref.invalidate(conversationAccessProvider);
+      ref.invalidate(billingEntitlementProvider);
     } on Object catch (error) {
       final bool limitReached = _isTurnLimitError(error);
       final bool locked =
           error is ApiException && error.code == 'CONVERSATION_LOCKED';
       if (limitReached || locked) {
         ref.invalidate(conversationTurnAccessProvider(conversationId));
+        ref.invalidate(conversationAccessProvider);
+        ref.invalidate(billingEntitlementProvider);
       }
       state = AsyncData<ConversationState>(
         previous.copyWith(
@@ -663,12 +716,16 @@ class ConversationController extends AsyncNotifier<ConversationState> {
         ),
       );
       ref.invalidate(conversationTurnAccessProvider(conversationId));
+      ref.invalidate(conversationAccessProvider);
+      ref.invalidate(billingEntitlementProvider);
     } on Object catch (error) {
       final bool limitReached = _isTurnLimitError(error);
       final bool locked =
           error is ApiException && error.code == 'CONVERSATION_LOCKED';
       if (limitReached || locked) {
         ref.invalidate(conversationTurnAccessProvider(conversationId));
+        ref.invalidate(conversationAccessProvider);
+        ref.invalidate(billingEntitlementProvider);
       }
       state = AsyncData<ConversationState>(
         previous.copyWith(
@@ -698,6 +755,7 @@ class ConversationController extends AsyncNotifier<ConversationState> {
     final requestId = newConversationRequestId();
     final token = CancelToken();
     _activeStreamToken = token;
+    _unconfirmedRequest = requestId;
     final localUserId = 'local-user-$requestId';
     final localAssistantId = 'local-assistant-$requestId';
     final requestTrace = (audioFile?.latencyTrace ?? LatencyTrace())
@@ -871,6 +929,8 @@ class ConversationController extends AsyncNotifier<ConversationState> {
             _failStreamAudio();
             break;
           case 'turn_completed':
+            _unconfirmedRequest = null;
+            ref.read(badgeSyncControllerProvider).refresh();
             final assistantId = event['assistant_message_id'];
             final completedText = event['text'];
             if (assistantId is! String || completedText is! String) {
@@ -932,8 +992,11 @@ class ConversationController extends AsyncNotifier<ConversationState> {
               _finishAssistantReveal();
             }
             ref.invalidate(conversationTurnAccessProvider(conversationId));
+            ref.invalidate(conversationAccessProvider);
+            ref.invalidate(billingEntitlementProvider);
             break;
           case 'turn_error':
+            _unconfirmedRequest = null;
             terminal = true;
             _audioGeneration++;
             _audioQueue.clear();
@@ -963,6 +1026,7 @@ class ConversationController extends AsyncNotifier<ConversationState> {
     } on Object catch (sendError) {
       if (!ref.mounted || token.isCancelled) return;
       if (_isTurnLimitError(sendError)) {
+        _unconfirmedRequest = null;
         final current = state.requireValue;
         state = AsyncData(
           current.copyWith(
@@ -981,6 +1045,8 @@ class ConversationController extends AsyncNotifier<ConversationState> {
           ),
         );
         ref.invalidate(conversationTurnAccessProvider(conversationId));
+        ref.invalidate(conversationAccessProvider);
+        ref.invalidate(billingEntitlementProvider);
         return;
       }
       if (sendError is ApiException &&
@@ -1067,12 +1133,35 @@ class ConversationController extends AsyncNotifier<ConversationState> {
     ApiConversationRepository repository,
     StreamTurnStatus status,
   ) async {
+    final before = state.value;
+    if (status.status == 'pending') {
+      if (before != null) {
+        state = AsyncData(
+          before.copyWith(isSending: false, pendingTurnId: status.turnId),
+        );
+      }
+      return;
+    }
     final page = await _loadLatestPage(repository);
-    if (!ref.mounted) return;
+    if (!ref.mounted ||
+        _activeStreamToken != null && before?.isSending != true) {
+      return;
+    }
+    _unconfirmedRequest = null;
+    final merged = <String, ConversationMessage>{
+      for (final message in before?.messages ?? <ConversationMessage>[])
+        if (!message.isLocalPending) message.id: message,
+      for (final message in page.results) message.id: message,
+    }.values.toList()..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    ref.read(badgeSyncControllerProvider).refresh();
     state = AsyncData(
       ConversationState(
-        messages: page.results,
-        oldestOffset: page.pagination.offset,
+        messages: merged,
+        oldestOffset: before == null
+            ? page.pagination.offset
+            : (before.oldestOffset < page.pagination.offset
+                  ? before.oldestOffset
+                  : page.pagination.offset),
         failedTurnId: status.status == 'failed' ? status.turnId : null,
         pendingTurnId: status.status == 'pending' ? status.turnId : null,
         audioRetryMessageId:
@@ -1392,6 +1481,7 @@ class ConversationController extends AsyncNotifier<ConversationState> {
       await _recoverFromStatus(repository, status);
     } on Object catch (error) {
       if (error is ApiException && error.statusCode == 404 && ref.mounted) {
+        _unconfirmedRequest = null;
         final current = state.requireValue;
         state = AsyncData(
           current.copyWith(

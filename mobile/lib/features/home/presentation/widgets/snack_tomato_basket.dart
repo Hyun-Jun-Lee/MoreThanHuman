@@ -404,6 +404,9 @@ class _SnackDialog extends StatelessWidget {
     backgroundColor: switch (snack.contentType) {
       'usage_contrast' => AppPalette.blockBlue,
       'homonym' => AppPalette.blockLimeSoft,
+      'register_contrast' => AppPalette.blockBlue,
+      'collocation' => AppPalette.blockLimeSoft,
+      'idiomatic_expression' => AppPalette.blockLilac,
       _ => AppPalette.blockLilac,
     },
     insetPadding: const EdgeInsets.all(AppSpacing.md),

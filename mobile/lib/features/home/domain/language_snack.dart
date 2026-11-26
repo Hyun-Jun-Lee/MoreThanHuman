@@ -24,14 +24,63 @@ class SnackExpression {
   };
 }
 
+sealed class SnackPayload {
+  const SnackPayload();
+  List<SnackExpression> get expressions;
+  Map<String, dynamic> toJson();
+}
+
+class ComparisonPayload extends SnackPayload {
+  const ComparisonPayload(this.expressions);
+  @override
+  final List<SnackExpression> expressions;
+  @override
+  Map<String, dynamic> toJson() => {
+    'items': expressions.map((item) => item.toJson()).toList(),
+  };
+}
+
+final class RegionalPayload extends ComparisonPayload {
+  const RegionalPayload(super.expressions, this.meaning);
+  final String meaning;
+  @override
+  Map<String, dynamic> toJson() => {...super.toJson(), 'meaning': meaning};
+}
+
+final class RegisterPayload extends ComparisonPayload {
+  const RegisterPayload(super.expressions, this.situation);
+  final String situation;
+  @override
+  Map<String, dynamic> toJson() => {...super.toJson(), 'situation': situation};
+}
+
+final class CollocationPayload extends ComparisonPayload {
+  const CollocationPayload(super.expressions, this.headword);
+  final String headword;
+  @override
+  Map<String, dynamic> toJson() => {...super.toJson(), 'headword': headword};
+}
+
+final class IdiomaticPayload extends SnackPayload {
+  const IdiomaticPayload(this.item, this.literalMeaning);
+  final SnackExpression item;
+  final String literalMeaning;
+  @override
+  List<SnackExpression> get expressions => [item];
+  @override
+  Map<String, dynamic> toJson() => {
+    ...item.toJson(),
+    'literal_meaning': literalMeaning,
+  };
+}
+
 class LanguageSnack {
   const LanguageSnack({
     required this.id,
     required this.contentType,
     required this.contentLanguage,
     required this.explanationLanguage,
-    required this.items,
-    this.meaning,
+    required this.payload,
     required this.publishedAt,
     required this.createdAt,
     required this.updatedAt,
@@ -41,6 +90,9 @@ class LanguageSnack {
     'regional_variant',
     'usage_contrast',
     'homonym',
+    'register_contrast',
+    'collocation',
+    'idiomatic_expression',
   };
 
   static bool isSupported(Object? json) {
@@ -59,33 +111,66 @@ class LanguageSnack {
     }
     final data = json as Map<String, dynamic>;
     final type = _text(data, 'content_type', 32);
-    final payload = data['payload'];
-    if (payload is! Map<String, dynamic> || payload['items'] is! List) {
+    final raw = data['payload'];
+    if (raw is! Map<String, dynamic>) {
       throw const FormatException('Invalid snack payload.');
     }
-    final rawItems = payload['items'] as List;
-    if (rawItems.length != 2) {
-      throw const FormatException('A snack needs two items.');
-    }
-    final items = rawItems
-        .map((raw) {
-          if (raw is! Map<String, dynamic>) {
+    SnackExpression parseItem(Map<String, dynamic> item) => SnackExpression(
+      expression: _text(item, 'expression', 80),
+      label: {'regional_variant', 'register_contrast'}.contains(type)
+          ? _text(item, 'label', 48)
+          : null,
+      meaning: {'homonym', 'collocation', 'idiomatic_expression'}.contains(type)
+          ? _text(item, 'meaning', 160)
+          : null,
+      usage:
+          {
+            'usage_contrast',
+            'register_contrast',
+            'idiomatic_expression',
+          }.contains(type)
+          ? _text(item, 'usage', 160)
+          : null,
+      example: type != 'regional_variant' ? _text(item, 'example', 240) : null,
+      exampleTranslation: item['example_translation'] == null
+          ? null
+          : _text(item, 'example_translation', 240),
+    );
+    final SnackPayload payload;
+    if (type == 'idiomatic_expression') {
+      if (raw.containsKey('items')) {
+        throw const FormatException('An idiom has one expression, not items.');
+      }
+      payload = IdiomaticPayload(
+        parseItem(raw),
+        _text(raw, 'literal_meaning', 160),
+      );
+    } else {
+      final rawItems = raw['items'];
+      if (rawItems is! List || rawItems.length != 2) {
+        throw const FormatException('A comparison needs two items.');
+      }
+      final items = List<SnackExpression>.unmodifiable(
+        rawItems.map((item) {
+          if (item is! Map<String, dynamic>) {
             throw const FormatException('Invalid snack item.');
           }
-          return SnackExpression(
-            expression: _text(raw, 'expression', 80),
-            label: type == 'regional_variant' ? _text(raw, 'label', 48) : null,
-            meaning: type == 'homonym' ? _text(raw, 'meaning', 160) : null,
-            usage: type == 'usage_contrast' ? _text(raw, 'usage', 160) : null,
-            example: type != 'regional_variant'
-                ? _text(raw, 'example', 240)
-                : null,
-            exampleTranslation: raw['example_translation'] == null
-                ? null
-                : _text(raw, 'example_translation', 240),
-          );
-        })
-        .toList(growable: false);
+          return parseItem(item);
+        }),
+      );
+      payload = switch (type) {
+        'regional_variant' => RegionalPayload(
+          items,
+          _text(raw, 'meaning', 160),
+        ),
+        'register_contrast' => RegisterPayload(
+          items,
+          _text(raw, 'situation', 160),
+        ),
+        'collocation' => CollocationPayload(items, _text(raw, 'headword', 80)),
+        _ => ComparisonPayload(items),
+      };
+    }
     final language = _text(data, 'content_language', 8);
     final explanation = _text(data, 'explanation_language', 8);
     if (!{'en', 'ko'}.contains(language) ||
@@ -97,10 +182,7 @@ class LanguageSnack {
       contentType: type,
       contentLanguage: language,
       explanationLanguage: explanation,
-      items: List.unmodifiable(items),
-      meaning: type == 'regional_variant'
-          ? _text(payload, 'meaning', 160)
-          : null,
+      payload: payload,
       publishedAt: _date(data, 'published_at'),
       createdAt: _date(data, 'created_at'),
       updatedAt: _date(data, 'updated_at'),
@@ -111,20 +193,35 @@ class LanguageSnack {
   final String contentType;
   final String contentLanguage;
   final String explanationLanguage;
-  final List<SnackExpression> items;
-  final String? meaning;
+  final SnackPayload payload;
   final DateTime publishedAt;
   final DateTime createdAt;
   final DateTime updatedAt;
 
+  List<SnackExpression> get items => payload.expressions;
+  String? get meaning => switch (payload) {
+    RegionalPayload(:final meaning) => meaning,
+    _ => null,
+  };
+
   String get semanticLabel => contentType == 'regional_variant'
       ? '${items[0].label} ${items[0].expression}. ${items[1].label} ${items[1].expression}. $meaning'
-      : items
-            .map(
-              (item) =>
-                  '${item.expression}. ${item.usage ?? item.meaning}. ${item.example}${item.exampleTranslation == null ? '' : '. ${item.exampleTranslation}'}',
-            )
-            .join(' ');
+      : [
+          if (payload case RegisterPayload(:final situation)) situation,
+          if (payload case CollocationPayload(:final headword)) headword,
+          if (payload case IdiomaticPayload(:final literalMeaning))
+            '${explanationLanguage == 'ko' ? '직역' : 'Literal meaning'}: $literalMeaning',
+          for (final item in items)
+            [
+              item.label,
+              item.expression,
+              item.meaning,
+              item.usage,
+              item.example,
+              item.exampleTranslation,
+            ].whereType<String>().join('. '),
+          ?meaning,
+        ].join('. ');
 
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -132,10 +229,7 @@ class LanguageSnack {
     'schema_version': 1,
     'content_language': contentLanguage,
     'explanation_language': explanationLanguage,
-    'payload': {
-      'items': items.map((item) => item.toJson()).toList(),
-      if (meaning != null) 'meaning': meaning,
-    },
+    'payload': payload.toJson(),
     'published_at': publishedAt.toUtc().toIso8601String(),
     'created_at': createdAt.toUtc().toIso8601String(),
     'updated_at': updatedAt.toUtc().toIso8601String(),

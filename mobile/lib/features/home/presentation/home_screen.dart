@@ -1,3 +1,4 @@
+import 'package:curitalk/core/notifications/badge_sync_controller.dart';
 import 'package:curitalk/app/theme/tokens/tokens.dart';
 import 'package:curitalk/core/copy/copy.dart';
 import 'package:curitalk/core/widgets/widgets.dart';
@@ -157,12 +158,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     setState(() => _checkingAccess = true);
     bool isLocked;
     bool guestLimit = false;
+    String purpose = 'buy_slots';
     try {
       if (!await ensureAIConsent(context, ref)) return false;
       final access = await ref.refresh(conversationAccessProvider.future);
       if (!mounted) return false;
       isLocked = access.isLocked;
       guestLimit = access.limitAction == 'login';
+      purpose = access.limitAction;
     } on Object {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -176,7 +179,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       if (mounted) setState(() => _checkingAccess = false);
     }
     if (isLocked) {
-      await showConversationAccessDialog(context, guestLimit: guestLimit);
+      await showConversationAccessDialog(
+        context,
+        guestLimit: guestLimit,
+        purpose: purpose,
+      );
       return false;
     }
     return true;
@@ -228,11 +235,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       return;
     }
     final failure = ref.read(startConversationControllerProvider).failureReason;
-    if (failure == StartConversationFailureReason.slotsFull) {
+    if (failure == StartConversationFailureReason.slotsFull ||
+        failure == StartConversationFailureReason.creditsFull) {
       final access = ref.read(conversationAccessProvider).value;
       await showConversationAccessDialog(
         context,
         guestLimit: access?.limitAction == 'login',
+        purpose: failure == StartConversationFailureReason.creditsFull
+            ? 'buy_turns'
+            : 'buy_slots',
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -263,8 +274,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       await ref
           .read(recentConversationsControllerProvider.notifier)
           .refreshAfterMutation(
-            () => (repository as ConversationDeletionRepository)
-                .deleteConversation(conversation.id),
+            () => ref
+                .read(badgeSyncControllerProvider)
+                .mutation(
+                  () => (repository as ConversationDeletionRepository)
+                      .deleteConversation(conversation.id),
+                ),
           );
       ref.invalidate(conversationHistoryControllerProvider);
     } on Object {
@@ -394,6 +409,7 @@ class _RecentConversationsState extends State<_RecentConversations> {
             ),
             title: visibleConversations[index].title,
             locked: visibleConversations[index].locked,
+            hasUnreadReply: visibleConversations[index].hasUnreadReply,
             color: _RecentConversations
                 ._colors[index % _RecentConversations._colors.length],
             onTap:

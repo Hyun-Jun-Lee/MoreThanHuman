@@ -18,6 +18,75 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  for (final failInitialization in [false, true]) {
+    testWidgets(
+      'onboarding retries ${failInitialization ? 'guest initialization' : 'consent storage'} before completing',
+      (tester) async {
+        final storage = _MemoryOnboardingStorage(false);
+        final repository = _FakeAuthRepository()
+          ..failConsentSave = !failInitialization;
+        final auth = _FakeSupabaseAuthService()
+          ..failAnonymousSignIn = failInitialization;
+        await tester.pumpWidget(
+          _appScope(
+            tokenStorage: _MemoryTokenStorage(),
+            onboardingStorage: storage,
+            authRepository: repository,
+            supabaseAuth: auth,
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('SKIP'));
+        await tester.pumpAndSettle();
+        expect(find.text('Privacy policy'), findsOneWidget);
+        expect(auth.anonymousSignInCount, 0);
+        await tester.tap(find.text('Agree and continue'));
+        await tester.pumpAndSettle();
+        expect(storage.completed, isFalse);
+        expect(repository.consentChoices, isEmpty);
+        expect(find.text('Start a conversation'), findsNothing);
+        expect(find.text('Retry'), findsOneWidget);
+        auth.failAnonymousSignIn = false;
+        repository.failConsentSave = false;
+        await tester.tap(find.text('Retry'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Decide later'));
+        await tester.pumpAndSettle();
+        expect(storage.completed, isTrue);
+        expect(repository.consentChoices, [false]);
+        expect(find.text('Start a conversation'), findsOneWidget);
+        expect(find.byType(AlertDialog), findsNothing);
+      },
+    );
+  }
+
+  testWidgets(
+    'existing account sees missing AI consent at Home and can defer',
+    (tester) async {
+      final repository = _FakeAuthRepository()..consentAccepted = false;
+      await tester.pumpWidget(
+        _appScope(
+          tokenStorage: _MemoryTokenStorage(),
+          onboardingStorage: _MemoryOnboardingStorage(true),
+          authRepository: repository,
+          supabaseAuth: _FakeSupabaseAuthService(hasSession: true),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Consent for AI conversations'), findsOneWidget);
+      await tester.tap(find.text('Decide later'));
+      await tester.pumpAndSettle();
+      expect(repository.consentChoices, [false]);
+      expect(find.text('Start a conversation'), findsOneWidget);
+      await tester.tap(find.text('Profile'));
+      await tester.pumpAndSettle();
+      expect(find.text('Privacy policy'), findsOneWidget);
+      await tester.tap(find.text('Home'));
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+    },
+  );
+
   testWidgets('new account must save a nickname after session restore', (
     WidgetTester tester,
   ) async {
@@ -95,6 +164,33 @@ void main() {
     await tester.pumpAndSettle();
     expect(repository.user.nickname, 'Fresh Name');
     expect(find.text('Fresh Name'), findsOneWidget);
+  });
+
+  testWidgets('notice load failure does not bypass required nickname setup', (
+    tester,
+  ) async {
+    final repository = _FakeAuthRepository()
+      ..failConsentLoad = true
+      ..user = UserProfile(
+        id: 'new-user',
+        email: 'new@example.com',
+        name: 'New user',
+        appLocale: 'en',
+        isActive: true,
+        createdAt: DateTime.utc(2026),
+        updatedAt: DateTime.utc(2026),
+      );
+    await tester.pumpWidget(
+      _appScope(
+        tokenStorage: _MemoryTokenStorage(),
+        onboardingStorage: _MemoryOnboardingStorage(true),
+        authRepository: repository,
+        supabaseAuth: _FakeSupabaseAuthService(hasSession: true),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Choose a nickname'), findsOneWidget);
+    expect(repository.consentChoices, isEmpty);
   });
 
   testWidgets('Korean system locale suggests an English nickname', (
@@ -246,6 +342,11 @@ void main() {
 
     await tester.tap(find.text('GET STARTED'));
     await tester.pumpAndSettle();
+    expect(find.text('Privacy policy'), findsOneWidget);
+    expect(supabaseAuth.anonymousSignInCount, 0);
+    await tester.tap(find.text('Agree and continue'));
+    await tester.pumpAndSettle();
+    expect(authRepository.consentChoices, [true]);
 
     expect(find.text('Start a conversation'), findsOneWidget);
     expect(supabaseAuth.anonymousSignInCount, 1);
@@ -321,6 +422,9 @@ void main() {
     expect(find.text('재미있게 대화하고 자연스레 학습해요.'), findsOneWidget);
 
     await tester.tap(find.text('건너뛰기'));
+    await tester.pumpAndSettle();
+    expect(find.text('개인정보 처리방침'), findsOneWidget);
+    await tester.tap(find.text('나중에 선택'));
     await tester.pumpAndSettle();
 
     expect(find.text('대화를 시작하세요'), findsOneWidget);
@@ -671,9 +775,46 @@ class _FakeGoogleIdentityService implements GoogleIdentityService {
   Future<void> signOut() async {}
 }
 
-class _FakeAuthRepository implements AuthRepository, NicknameRepository {
+class _FakeAuthRepository
+    implements AuthRepository, NicknameRepository, AIConsentRepository {
   UserProfile user = _user;
   bool failNicknameUpdate = false;
+  bool consentAccepted = true;
+  bool failConsentSave = false;
+  bool failConsentLoad = false;
+  final List<bool> consentChoices = [];
+
+  AIConsentStatus _consentStatus(bool accepted) => AIConsentStatus(
+    accepted: accepted,
+    noticeAcknowledged: accepted,
+    requiredVersions: const {
+      'privacy_policy': 'privacy-v1',
+      'ai_data_processing': 'ai-v1',
+    },
+    acceptedVersions: const {},
+    missing: accepted ? const [] : const ['ai_data_processing'],
+    privacyPolicyUrl: 'https://example.com/privacy',
+    privacyPolicyUrlEn: 'https://example.com/en/privacy',
+  );
+  @override
+  Future<AIConsentStatus> getAINotice() async => _consentStatus(false);
+  @override
+  Future<AIConsentStatus> getAIConsentStatus() async {
+    if (failConsentLoad) throw StateError('offline');
+    return _consentStatus(consentAccepted);
+  }
+
+  @override
+  Future<AIConsentStatus> recordAIConsentChoice(
+    AIConsentStatus notice, {
+    required bool acceptAI,
+  }) async {
+    if (failConsentSave) throw StateError('offline');
+    consentChoices.add(acceptAI);
+    consentAccepted = acceptAI;
+    return _consentStatus(consentAccepted);
+  }
+
   String? lastBootstrapAppLocale;
   final List<String?> bootstrapAppLocales = <String?>[];
   @override
@@ -719,6 +860,7 @@ class _FakeSupabaseAuthService
   String? lastAppleIdToken;
   String? lastRawNonce;
   int anonymousSignInCount = 0;
+  bool failAnonymousSignIn = false;
   void Function()? onAnonymousSignIn;
   void Function()? onMemberSignIn;
 
@@ -735,6 +877,7 @@ class _FakeSupabaseAuthService
   @override
   Future<void> signInAnonymously() async {
     anonymousSignInCount += 1;
+    if (failAnonymousSignIn) throw StateError("offline");
     hasSession = true;
     onAnonymousSignIn?.call();
   }

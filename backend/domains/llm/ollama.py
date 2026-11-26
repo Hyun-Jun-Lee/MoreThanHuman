@@ -58,14 +58,17 @@ class OllamaProvider(LLMProvider):
             data = response.json()
 
             return LLMResponse(
-                content=data["choices"][0]["message"]["content"],
+                content=data["choices"][0]["message"].get("content") or "",
+                finish_reason=data["choices"][0].get("finish_reason"),
+                refused=bool(data["choices"][0]["message"].get("refusal")),
                 model=data.get("model"),
                 usage=data.get("usage"),
             )
         except httpx.HTTPStatusError as e:
             response_body = e.response.text[:500] if e.response is not None else ""
             raise ExternalAPIException(
-                f"Ollama API call failed: status={e.response.status_code}, body={response_body}"
+                f"Ollama API call failed: status={e.response.status_code}, body={response_body}",
+                details={"status_code": e.response.status_code}
             )
         except httpx.HTTPError as e:
             raise ExternalAPIException(f"Ollama API call failed: {str(e)}")

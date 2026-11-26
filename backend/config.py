@@ -74,8 +74,8 @@ class Settings(BaseSettings):
     swagger_token_issuer_secret: str | None = None
     auto_create_tables: bool = False
 
-    # Versioned privacy / AI processing notice
-    privacy_policy_version: str = "2026-11-23"
+    # 처리방침 버전은 안내 재확인에, AI 처리 버전은 AI 접근 동의에 사용해요.
+    privacy_policy_version: str = "2026-11-25"
     ai_data_processing_version: str = "2026-11-23"
     privacy_policy_url: str = "https://www.curitalk.app/privacy"
     privacy_policy_url_en: str = "https://www.curitalk.app/en/privacy"
@@ -115,9 +115,7 @@ class Settings(BaseSettings):
     language_snacks_lock_database_url: str | None = None
     language_snacks_per_type: int = Field(3, ge=1, le=6)
     language_snacks_max_calls: int = Field(100, ge=1)
-    language_snacks_max_tokens: int = Field(250000, ge=1)
     language_snacks_history_bytes: int = Field(40000, ge=1)
-    language_snacks_run_seconds: int = Field(600, ge=1)
 
     # Google OAuth2
     google_client_id: str | None = None
@@ -146,9 +144,12 @@ class Settings(BaseSettings):
     apple_iap_environment: Literal["sandbox", "production"] | None = None
     apple_iap_bundle_id: str | None = None
     apple_iap_app_id: int | None = None
-    apple_iap_issuer_id: str | None = None
-    apple_iap_key_id: str | None = None
-    apple_iap_private_key: str | None = None
+    # Accepted during deployment transition; consumable verification does not use these.
+    apple_iap_issuer_id: str | None = Field(default=None, repr=False)
+    apple_iap_key_id: str | None = Field(default=None, repr=False)
+    apple_iap_private_key: str | None = Field(default=None, repr=False)
+    billing_hmac_keys: dict[str, str] = Field(default_factory=dict, repr=False)
+    billing_hmac_current_key: str | None = None
 
     # Voice Settings
     stt_provider: str = "openrouter"

@@ -111,7 +111,7 @@ void main() {
   });
 
   testWidgets(
-    'debug reset refills locally and closes a partially eaten tomato',
+    'debug reset redraws content and closes a partially eaten tomato',
     (tester) async {
       final storage = MemorySnackStorage();
       final resets = MemoryBasketResetRepository();
@@ -143,7 +143,7 @@ void main() {
       expect(stored.resetId, 'already-applied');
       expect(
         stored.snacks.map((s) => s.id),
-        List.generate(12, testSnack).map((s) => s.id),
+        unorderedEquals(List.generate(12, testSnack).map((s) => s.id)),
       );
       final touch = find.byKey(const ValueKey('snack-tomato-touch'));
       await tester.tap(touch);

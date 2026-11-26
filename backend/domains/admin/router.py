@@ -29,20 +29,9 @@ class AdminCodeRequest(BaseModel):
 class ManualEntitlementRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    plan: Literal["advance", "plus"]
-    revoke_at: datetime | None = None
-
-    @field_validator("revoke_at")
-    @classmethod
-    def future_utc(cls, value: datetime | None) -> datetime | None:
-        if value is None:
-            return None
-        if value.tzinfo is None or value.utcoffset() is None:
-            raise ValueError("revoke_at must include a timezone")
-        normalized = value.astimezone(timezone.utc).replace(tzinfo=None)
-        if normalized <= datetime.utcnow():
-            raise ValueError("revoke_at must be in the future")
-        return normalized
+    request_id: UUID
+    resource_kind: Literal['slots', 'turns']
+    quantity: int = Field(gt=0)
 
 
 def get_access_session(request: Request, db: Session = Depends(get_db)) -> AdminAccessSessionModel:
@@ -137,14 +126,12 @@ def list_users(
     _admin: Annotated[AdminAccessSessionModel, Depends(require_admin)],
     service: Annotated[AdminEntitlementService, Depends(get_admin_service)],
     q: str | None = Query(default=None, max_length=255),
-    plan: Literal["free", "advance", "plus"] | None = Query(default=None),
-    source: Literal["free", "apple", "manual", "admin"] | None = Query(default=None),
     is_admin: bool | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
 ):
     return SuccessResponse(data=service.list_users(
-        q=q, plan=plan, source=source, is_admin=is_admin, limit=limit, offset=offset,
+        q=q, is_admin=is_admin, limit=limit, offset=offset,
     ))
 
 
@@ -185,19 +172,23 @@ def put_manual(
     _admin: Annotated[AdminAccessSessionModel, Depends(require_admin_write)],
     service: Annotated[AdminEntitlementService, Depends(get_admin_service)],
 ):
-    result = service.put_manual(str(user_id), None, request.plan, request.revoke_at)
+    try:
+        result = service.put_manual(str(user_id), str(request.request_id), request.resource_kind, request.quantity)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     if result is None:
         raise HTTPException(status_code=404, detail="User not found")
     return SuccessResponse(data=result)
 
 
-@router.delete("/{user_id}/manual-entitlement/")
+@router.delete("/{user_id}/manual-entitlement/{grant_id}/")
 def delete_manual(
     user_id: UUID,
+    grant_id: UUID,
     _admin: Annotated[AdminAccessSessionModel, Depends(require_admin_write)],
     service: Annotated[AdminEntitlementService, Depends(get_admin_service)],
 ):
-    result = service.delete_manual(str(user_id), None)
+    result = service.delete_manual(str(user_id), str(grant_id))
     if result is None:
         raise HTTPException(status_code=404, detail="User not found")
     return SuccessResponse(data=result)

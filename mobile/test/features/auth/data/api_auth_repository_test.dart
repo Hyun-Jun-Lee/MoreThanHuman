@@ -9,6 +9,38 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test(
+    'notice is public and choice sends displayed versions and explicit AI decision',
+    () async {
+      final client = ApiClient.create(
+        tokenProvider: const _StaticSessionProvider('token'),
+        sessionRefreshProvider: const _StaticSessionProvider('token'),
+        baseUrl: 'https://example.com/api/',
+      );
+      final adapter = _AuthHttpClientAdapter();
+      client.dio.httpClientAdapter = adapter;
+      addTearDown(client.close);
+      final repository = ApiAuthRepository(client);
+      final notice = await repository.getAINotice();
+      expect(adapter.requests.single.headers['Authorization'], isNull);
+      expect(adapter.requests.single.uri.path, '/api/auth/ai-notice');
+      final result = await repository.recordAIConsentChoice(
+        notice,
+        acceptAI: false,
+      );
+      final request = adapter.requests.last;
+      expect(request.headers['Authorization'], 'Bearer token');
+      expect(request.uri.path, '/api/auth/me/ai-consent');
+      expect(request.data, {
+        'privacy_policy_version': 'privacy-v1',
+        'ai_data_processing_version': 'ai-v1',
+        'accept_ai': false,
+      });
+      expect(result.accepted, isFalse);
+      expect(result.noticeAcknowledged, isTrue);
+    },
+  );
+
+  test(
     'bootstrap sends pending app and learning language and returns the profile',
     () async {
       final client = ApiClient.create(
@@ -102,17 +134,32 @@ class _AuthHttpClientAdapter implements HttpClientAdapter {
     return ResponseBody.fromString(
       jsonEncode(<String, dynamic>{
         'success': true,
-        'data': <String, dynamic>{
-          'id': 'user-id',
-          'email': 'learner@example.com',
-          'name': 'Learner',
-          'nickname': options.method == 'PUT' ? 'Tomato' : null,
-          'is_active': true,
-          'is_admin': true,
-          'oauth_provider': 'google',
-          'created_at': '2026-06-23T00:00:00Z',
-          'updated_at': '2026-06-23T00:00:00Z',
-        },
+        'data':
+            options.path.contains('ai-notice') ||
+                options.path.contains('ai-consent')
+            ? {
+                'accepted': false,
+                'notice_acknowledged': options.method == 'POST',
+                'required_versions': {
+                  'privacy_policy': 'privacy-v1',
+                  'ai_data_processing': 'ai-v1',
+                },
+                'accepted_versions': {},
+                'missing': ['ai_data_processing'],
+                'privacy_policy_url': 'https://example.com/privacy',
+                'privacy_policy_url_en': 'https://example.com/en/privacy',
+              }
+            : <String, dynamic>{
+                'id': 'user-id',
+                'email': 'learner@example.com',
+                'name': 'Learner',
+                'nickname': options.method == 'PUT' ? 'Tomato' : null,
+                'is_active': true,
+                'is_admin': true,
+                'oauth_provider': 'google',
+                'created_at': '2026-06-23T00:00:00Z',
+                'updated_at': '2026-06-23T00:00:00Z',
+              },
       }),
       200,
       headers: <String, List<String>>{
