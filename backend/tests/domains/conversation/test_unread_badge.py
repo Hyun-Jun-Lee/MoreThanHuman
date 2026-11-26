@@ -108,3 +108,21 @@ def test_api_requires_auth_validates_ids_and_preserves_ownership(records):
             assert client.post(path, json={'message_ids': [foreign.id]}).json()['data']['has_unread']
             assert not client.post(path, json={'message_ids': [reply.id]}).json()['data']['has_unread']
     engine.dispose()
+
+
+def test_conversation_list_marks_only_owned_unread_replies(records):
+    from domains.conversation.service import ConversationService
+
+    repo, owner, conversation, (reply, _, foreign) = records
+    service = ConversationService(repo)
+    result = service.get_conversations(owner.id)
+    assert len(result.results) == 1
+    assert result.results[0].has_unread_reply is True
+    repo.mark_replies_read(conversation.id, owner.id, [reply.id])
+    assert service.get_conversations(owner.id).results[0].has_unread_reply is False
+    repo.save_message(MessageModel(id=str(uuid4()), conversation_id=conversation.id,
+                                  role=MessageRole.ASSISTANT, content='next'))
+    owner.is_guest = True
+    repo.db.commit()
+    assert service.get_conversations(owner.id).results[0].has_unread_reply is False
+    assert foreign.read_at is None

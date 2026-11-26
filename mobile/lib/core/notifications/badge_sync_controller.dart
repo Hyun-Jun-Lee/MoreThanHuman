@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:curitalk/features/home/application/recent_conversations_controller.dart';
 
 import 'package:curitalk/core/notifications/ios_badge_bridge.dart';
 import 'package:curitalk/core/storage/storage_providers.dart';
@@ -10,7 +11,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// 읽음·조회·native 쓰기를 대화 진행과 독립적으로 조정해요.
 class BadgeSyncController {
-  BadgeSyncController(this.bridge, this.storage, this.repository);
+  BadgeSyncController(
+    this.bridge,
+    this.storage,
+    this.repository, {
+    this.onRepliesChanged,
+  });
+  final void Function()? onRepliesChanged;
   final IOSBadgeBridge bridge;
   final SecureStorageBackend storage;
   final ConversationRepository Function() repository;
@@ -90,6 +97,7 @@ class BadgeSyncController {
 
   void refresh() {
     if (_disposed) return;
+    onRepliesChanged?.call();
     _generation++;
     if (_mutations != 0) _needsFinalQuery = true;
     _dirty = true;
@@ -163,7 +171,10 @@ class BadgeSyncController {
     try {
       final unread = await (repo as UnreadConversationRepository)
           .markRepliesRead(conversation, batch);
-      if (account == _account) done.addAll(batch);
+      if (account == _account) {
+        done.addAll(batch);
+        onRepliesChanged?.call();
+      }
       if (_valid(account, generation) && _mutations == 1 && !_needsFinalQuery) {
         _dirty = _member && (!_enabled || !_allowed);
         if (_member && _enabled && _allowed) {
@@ -200,6 +211,9 @@ final badgeSyncControllerProvider = Provider<BadgeSyncController>((ref) {
     ref.watch(iosBadgeBridgeProvider),
     ref.watch(secureStorageBackendProvider),
     () => ref.read(conversationRepositoryProvider),
+    onRepliesChanged: () => scheduleMicrotask(() {
+      if (ref.mounted) ref.invalidate(recentConversationsControllerProvider);
+    }),
   );
   ref.listen(authControllerProvider, (_, next) {
     if (next.isLoading || next.hasError) return;

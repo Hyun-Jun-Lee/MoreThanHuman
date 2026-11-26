@@ -574,8 +574,10 @@ class ConversationService:
         conversations = self.repository.find_all(user_id, limit, offset)
         total_count = self.repository.count_conversations(user_id)
         access_enabled = self._access_enabled(user_id)
+        unread_ids = self.repository.unread_conversation_ids(user_id, [c.id for c in conversations])
         results = [Conversation.model_validate(c).model_copy(
-            update={"locked": access_enabled and self.repository.db.get(ProfileModel, user_id).is_guest and not c.slot_active}
+            update={"locked": access_enabled and self.repository.db.get(ProfileModel, user_id).is_guest and not c.slot_active,
+                    "has_unread_reply": c.id in unread_ids}
         ) for c in conversations]
         pagination = self._build_pagination(
             limit=limit,

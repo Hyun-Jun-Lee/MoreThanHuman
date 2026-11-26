@@ -7,7 +7,14 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 Language = Literal["en", "ko"]
-ContentType = Literal["regional_variant", "usage_contrast", "homonym"]
+ContentType = Literal[
+    "regional_variant",
+    "usage_contrast",
+    "homonym",
+    "register_contrast",
+    "collocation",
+    "idiomatic_expression",
+]
 Text80 = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)
 ]
@@ -57,10 +64,33 @@ class HomonymPayload(StrictModel):
     items: list[HomonymItem] = Field(min_length=2, max_length=2)
 
 
+class RegisterItem(UsageItem):
+    label: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=48)
+    ]
+
+
+class RegisterPayload(StrictModel):
+    situation: Text160
+    items: list[RegisterItem] = Field(min_length=2, max_length=2)
+
+
+class CollocationPayload(HomonymPayload):
+    headword: Text80
+
+
+class IdiomaticPayload(HomonymItem):
+    literal_meaning: Text160
+    usage: Text160
+
+
 PAYLOAD_MODELS = {
     "regional_variant": RegionalPayload,
     "usage_contrast": UsagePayload,
     "homonym": HomonymPayload,
+    "register_contrast": RegisterPayload,
+    "collocation": CollocationPayload,
+    "idiomatic_expression": IdiomaticPayload,
 }
 
 
@@ -69,14 +99,24 @@ class IdentityEntry(StrictModel):
     expression: Text80
     sense: Text160
     variety: Text80 | None = None
+    register: Text80 | None = None
 
 
 class KnowledgeIdentity(StrictModel):
-    relation: Literal["regional_equivalent", "usage_difference", "same_sound"]
-    entries: list[IdentityEntry] = Field(min_length=2, max_length=2)
+    relation: Literal[
+        "regional_equivalent",
+        "usage_difference",
+        "same_sound",
+        "register_difference",
+        "collocation_set",
+        "idiomatic_meaning",
+    ]
+    entries: list[IdentityEntry] = Field(min_length=1, max_length=2)
     contrast: Text160 | None = None
     pronunciation: Text80 | None = None
     pronunciation_standard: Text80 | None = None
+    context: Text160 | None = None
+    headword: Text80 | None = None
 
 
 class Candidate(StrictModel):
@@ -91,9 +131,43 @@ class Candidate(StrictModel):
             "regional_variant": "regional_equivalent",
             "usage_contrast": "usage_difference",
             "homonym": "same_sound",
+            "register_contrast": "register_difference",
+            "collocation": "collocation_set",
+            "idiomatic_expression": "idiomatic_meaning",
         }
         if self.identity.relation != relation[self.content_type]:
             raise ValueError("Identity relation does not match content type.")
+        expected_count = 1 if self.content_type == "idiomatic_expression" else 2
+        if len(self.identity.entries) != expected_count:
+            raise ValueError("Identity entry count does not match content type.")
+        new_types = {"register_contrast", "collocation", "idiomatic_expression"}
+        if self.content_type in new_types:
+            allowed = {"relation", "entries"}
+            if self.content_type == "register_contrast":
+                allowed.add("context")
+                if not self.identity.context or any(
+                    not e.register for e in self.identity.entries
+                ):
+                    raise ValueError(
+                        "Register identity requires context and registers."
+                    )
+            if self.content_type == "collocation":
+                allowed.add("headword")
+                if not self.identity.headword:
+                    raise ValueError("Collocations require a headword.")
+            if set(self.identity.model_dump(exclude_none=True)) - allowed:
+                raise ValueError("Unrelated identity fields.")
+            if any(
+                e.variety or (e.register and self.content_type != "register_contrast")
+                for e in self.identity.entries
+            ):
+                raise ValueError("Unrelated entry fields.")
+        elif (
+            self.identity.context
+            or self.identity.headword
+            or any(e.register for e in self.identity.entries)
+        ):
+            raise ValueError("New identity fields are not valid for legacy types.")
         if any(
             entry.language != self.content_language for entry in self.identity.entries
         ):
@@ -124,10 +198,19 @@ class LanguageSnackCreate(Candidate):
         if self.explanation_language != expected:
             raise ValueError("Explanations must use the other supported language.")
         parsed = PAYLOAD_MODELS[self.content_type].model_validate(self.payload)
-        if sorted(normalized_text(item.expression) for item in parsed.items) != sorted(
+        expressions = (
+            [parsed.expression]
+            if isinstance(parsed, IdiomaticPayload)
+            else [item.expression for item in parsed.items]
+        )
+        if sorted(normalized_text(expression) for expression in expressions) != sorted(
             normalized_text(item.expression) for item in self.identity.entries
         ):
             raise ValueError("Payload expressions do not match the reserved identity.")
+        if isinstance(parsed, CollocationPayload) and normalized_text(
+            parsed.headword
+        ) != normalized_text(self.identity.headword):
+            raise ValueError("Payload headword does not match identity.")
         self.payload = parsed.model_dump(exclude_none=True)
         return self
 

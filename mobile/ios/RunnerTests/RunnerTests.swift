@@ -96,4 +96,43 @@ class RunnerTests: XCTestCase {
     XCTAssertEqual(snapshot.pairedPages.first?.secondaryBody, "듣는 사람에 초점을 둬요.")
   }
 
+  func testNewTypesDecodeAndRoundTripWithoutLosingPayload() throws {
+    let payloads: [(String, [String: Any])] = [
+      ("register_contrast", ["situation": "도움을 요청할 때", "items": [
+        ["expression": "Help me", "label": "친구", "usage": "편하게", "example": "Help me."],
+        ["expression": "Could you help?", "label": "정중하게", "usage": "공손하게", "example": "Could you help?"]]]),
+      ("collocation", ["headword": "decision", "items": [
+        ["expression": "make a decision", "meaning": "결정하다", "example": "Make a decision."],
+        ["expression": "reach a decision", "meaning": "결정에 이르다", "example": "We reached a decision."]]]),
+      ("idiomatic_expression", ["expression": "break the ice", "literal_meaning": "얼음을 깨다",
+        "meaning": "어색함을 풀다", "usage": "첫 만남", "example": "A game broke the ice."])
+    ]
+    for (kind, payload) in payloads {
+      let raw: [String: Any] = ["id": kind, "content_type": kind, "schema_version": 1,
+        "content_language": "en", "explanation_language": "ko", "payload": payload,
+        "published_at": "2026-11-26T00:00:00Z", "created_at": "2026-11-26T00:00:00Z", "updated_at": "2026-11-26T00:00:00Z"]
+      let decoder = JSONDecoder()
+      decoder.keyDecodingStrategy = .convertFromSnakeCase
+      let snack = try decoder.decode(SnackWidgetContent.self, from: JSONSerialization.data(withJSONObject: raw))
+      XCTAssertTrue(snack.isValid)
+      let snapshot = SnackWidgetSnapshot(userId: "user", language: "en",
+        basket: SnackWidgetBasket(day: "2026-11-26", consumed: 5, resetId: "reset", snacks: Array(repeating: snack, count: 12)), page: 0)
+      XCTAssertTrue(snapshot.isValid)
+      XCTAssertFalse(snapshot.pairedPages.isEmpty)
+      let encoder = JSONEncoder()
+      encoder.keyEncodingStrategy = .convertToSnakeCase
+      let encoded = try encoder.encode(snack)
+      let saved = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+      XCTAssertEqual(saved["payload"] as? NSDictionary, payload as NSDictionary)
+      if kind == "idiomatic_expression" {
+        XCTAssertEqual(snack.payload.displayItems.count, 1)
+        XCTAssertEqual(snapshot.pairedPages.first?.title, "직역")
+        XCTAssertTrue(snapshot.pairedPages.contains { $0.title == "실제 의미" && $0.body == "어색함을 풀다" })
+        var broken = snack
+        broken.payload.meaning = nil
+        XCTAssertFalse(broken.isValid)
+      }
+    }
+  }
+
 }

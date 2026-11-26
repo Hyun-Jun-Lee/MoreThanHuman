@@ -1,6 +1,6 @@
 # tomatalk Backend DSL
 
-> 최종 갱신: 2026-11-25 · 범위: FastAPI 백엔드 API + Flutter 모바일 연동
+> 최종 갱신: 2026-11-26 · 범위: FastAPI 백엔드 API + Flutter 모바일 연동
 
 사용자 클라이언트는 `mobile/`의 Flutter 기반 모바일 앱으로 개발해요. 이 문서는 모바일 앱이 연동할 백엔드 도메인, 데이터 모델, API 계약을 정의해요.
 
@@ -105,7 +105,7 @@ database Schema {
 
   table language_snacks {
     id: UUID PRIMARY KEY
-    content_type: regional_variant | usage_contrast | homonym
+    content_type: regional_variant | usage_contrast | homonym | register_contrast | collocation | idiomatic_expression
     schema_version: INTEGER
     content_language: en | ko
     explanation_language: en | ko
@@ -130,6 +130,7 @@ database Schema {
     content_language: en | ko
     status: running | succeeded | partial | failed
     target_per_type: INTEGER
+    content_types: JSONB NOT NULL // 실행 시작 시 대상 유형 목록
     metrics: JSONB NOT NULL
     started_at: DATETIME
     finished_at: DATETIME?
@@ -242,7 +243,7 @@ module Auth {
 
 ## 5. Language Snack 모듈
 
-> v2.3 · 2026-11-13: 학습 언어별 무작위 feed, 사용자별 운영 바구니 리셋과 무제한 반복 권한을 제공해요.
+> v2.4 · 2026-11-26: 여섯 유형의 학습 언어별 feed와 단일 관용 표현 본문, 실행별 생성 대상 목록을 제공해요.
 
 ```dsl
 module LanguageSnack {
@@ -257,26 +258,29 @@ module LanguageSnack {
   POST  /api/language-snacks/ -> 410 [legacy]
 
   type LanguageSnackCreate {
-    content_type: "regional_variant" | "usage_contrast" | "homonym"
+    content_type: "regional_variant" | "usage_contrast" | "homonym" | "register_contrast" | "collocation" | "idiomatic_expression"
     schema_version: 1 = 1
     content_language: "en" | "ko"
     explanation_language: "en" | "ko"
     identity: KnowledgeIdentity
     knowledge_summary: String(1..240)
-    payload: RegionalPayload | UsagePayload | HomonymPayload
+    payload: RegionalPayload | UsagePayload | HomonymPayload | RegisterPayload | CollocationPayload | IdiomaticPayload
   }
 
   type KnowledgeIdentity {
-    relation: "regional_equivalent" | "usage_difference" | "same_sound"
-    entries: exactly 2 * {
+    relation: "regional_equivalent" | "usage_difference" | "same_sound" | "register_difference" | "collocation_set" | "idiomatic_meaning"
+    entries: 1..2 * { // idiomatic_meaning은 1개, 나머지는 정확히 2개
       language: "en" | "ko"
       expression: String(1..80)
       sense: String(1..160)
       variety?: String(1..80)
+      register?: String(1..80)
     }
     contrast?: String(1..160)
     pronunciation?: String(1..80)
     pronunciation_standard?: String(1..80)
+    context?: String(1..160)
+    headword?: String(1..80)
   }
 
   type RegionalPayload {
@@ -296,13 +300,33 @@ module LanguageSnack {
     }
   }
 
+  type RegisterPayload {
+    situation: String(1..160)
+    items: exactly 2 * {
+      label: String(1..48), expression: String(1..80), usage: String(1..160)
+      example: String(1..240), example_translation?: String(1..240)
+    }
+  }
+  type CollocationPayload {
+    headword: String(1..80)
+    items: exactly 2 * {
+      expression: String(1..80), meaning: String(1..160)
+      example: String(1..240), example_translation?: String(1..240)
+    }
+  }
+  type IdiomaticPayload {
+    expression: String(1..80), literal_meaning: String(1..160)
+    meaning: String(1..160), usage: String(1..160)
+    example: String(1..240), example_translation?: String(1..240)
+  }
+
   type LanguageSnack {
     id: UUID
-    content_type: "regional_variant" | "usage_contrast" | "homonym"
+    content_type: "regional_variant" | "usage_contrast" | "homonym" | "register_contrast" | "collocation" | "idiomatic_expression"
     schema_version: 1
     content_language: "en" | "ko"
     explanation_language: "en" | "ko"
-    payload: RegionalPayload | UsagePayload | HomonymPayload
+    payload: RegionalPayload | UsagePayload | HomonymPayload | RegisterPayload | CollocationPayload | IdiomaticPayload
     published_at: DateTime
     created_at: DateTime
     updated_at: DateTime
@@ -314,15 +338,23 @@ GET은 Supabase Bearer 인증 후 profile.target_language와 content_language가
 
 Home 토마토 UI v2(2026-09-18)는 `order=random&limit=12`로 하루 묶음을 구성해요. 토마토 3개에 각각 4개 콘텐츠를 연결하고, 전체 열람 후에는 기기 현지 자정까지 소진 상태를 유지해요. API 자체는 날짜별 결과를 고정하지 않으며 앱이 사용자·언어·기기 로컬 날짜별 스냅샷을 저장해요. API 단일 응답의 서로 다른 ID 추출에는 seed가 필요하지 않아요. 12개 미만일 때의 반복·캐시·진행 복원 정책은 [클라이언트 계약](../.agent/_contracts/LANGUAGE_SNACKS.md#토마토-상호작용-v1-2026-09-18-구현-결정)을 따라요.
 
-POST/PATCH는 서버 `LANGUAGE_SNACKS_OPERATIONS_KEY`와 일치하는 `X-Operations-Key`가 필요해요. 일반 Bearer는 운영 권한을 대신하지 않아요. 키 미설정·불일치 403, 중복 지식 409, 입력/품질 오류와 불확실 판정 422, LLM 장애·잠금 충돌·예산 초과 503, 없는 항목 보관 404예요.
+POST/PATCH는 서버 `LANGUAGE_SNACKS_OPERATIONS_KEY`와 일치하는 `X-Operations-Key`가 필요해요. 일반 Bearer는 운영 권한을 대신하지 않아요. 키 미설정·불일치 403, 중복 지식 409, 입력/품질 오류와 불확실 판정 422, LLM 장애·잠금 충돌·호출/이력 한도 초과 503, 없는 항목 보관 404예요. 스낵 생성은 모든 단계에서 strict JSON Schema를 요청하고 서버 도메인 검증을 병행해요. 카테고리 작업은 최대 6개 병렬 실행하며 후보는 유형별로 최대 3개씩 독립 요청해요. 중복 검사·예약은 직렬화하고 본문·품질 검사는 병렬로 진행해요. 해당 유형·언어·관계·필드만 스키마에 포함해요. 후보 입력은 같은 언어의 모든 유형·상태 identity를 포함하고 최종 중복 검사는 ID·identity·요약 전체 이력을 유지해요. 운영 CLI의 `metrics.failures`에 원문을 제외한 검증 오류·출력 잘림·거절·HTTP 실패 진단을 남겨요. `generation_budget_exceeded`는 누적 호출 횟수 초과를 뜻하며 추정 토큰이나 전체 실행 시간으로 생성을 제한하지 않아요.
 
-content_type과 relation은 위 나열 순서대로 대응해요. 모든 entry.language는 content_language와 같아야 하며 regional은 각 variety, usage는 contrast, homonym은 pronunciation과 pronunciation_standard가 필수예요. 영어 동음은 미국 영어, 한국어는 현대 표준어 기준으로 생성·검증하고 발음이 다른 동형이의어는 제외해요. payload의 두 expression은 identity의 expression과 순서 무관하게 같아야 해요. 필수 문자열은 양끝 공백을 제거하며 공백만 있는 값·미지정 필드·미지원 버전은 거부해요.
+content_type과 relation은 위 나열 순서대로 대응해요. 모든 entry.language는 content_language와 같아야 하며 regional은 각 variety, usage는 contrast, homonym은 pronunciation과 pronunciation_standard가 필수예요. 영어 동음은 미국 영어, 한국어는 현대 표준어 기준으로 생성·검증하고 발음이 다른 동형이의어는 제외해요. 비교형 payload의 두 expression은 identity의 expression과 순서 무관하게 같아야 해요. idiomatic_expression은 단일 expression과 identity entry 하나가 같아야 해요. 필수 문자열은 양끝 공백을 제거하며 공백만 있는 값·미지정 필드·미지원 버전은 거부해요.
 
-현재 explanation_language는 content_language의 반대 지원 언어로 고정돼요(`en -> ko`, `ko -> en`). expression·example은 학습 언어, label·meaning·usage·example_translation은 설명 언어예요. 이는 앱 표시 언어나 언어쌍 ID가 아닌 콘텐츠 메타데이터예요.
+현재 explanation_language는 content_language의 반대 지원 언어로 고정돼요(`en -> ko`, `ko -> en`). expression·headword·example은 학습 언어, label·situation·literal_meaning·meaning·usage·example_translation은 설명 언어예요. 이는 앱 표시 언어나 언어쌍 ID가 아닌 콘텐츠 메타데이터예요.
 
 운영 POST와 주간 생성은 같은 중복 검사와 PostgreSQL 전용 세션 잠금을 사용해요. 전체 payload가 아닌 정규화 identity를 SHA-256으로 해시하고 UNIQUE로 보호해요. 의미 중복 검사는 같은 언어의 모든 유형·상태 이력을 LLM에 전달해 new만 허용해요. 생성 후보를 reserved로 먼저 저장하고 본문·품질 검증 후 published로 전환해요. draft는 후속 편집용으로 예약된 상태이며 현재 자동 발행 경로에서 별도로 저장하지 않아요. archived도 중복 이력에 남고 즉시 오프라인 캐시 회수는 하지 않아요. LLM의 의미·품질 판단은 오류가 남을 수 있어요.
 
 구버전 GET은 인증된 빈 목록, 구버전 POST는 운영 키 확인 후 410을 반환해요. 새 앱은 미지원 type/schema_version을 건너뛰고 알려진 유형의 손상된 응답에는 마지막 성공 캐시를 사용해요.
+
+### 추가 유형과 생성 실행
+
+`register_contrast`는 같은 의도의 두 표현을 관계·공손함·격식에 따라 비교해요. identity에는 각 entry의 register와 공통 context가 필수예요. `collocation`은 중심 단어의 자연스러운 조합 두 개를 보여주며 identity와 payload의 headword가 일치해야 해요. `idiomatic_expression`은 표현 하나의 직역·실제 의미·사용 상황·예문을 보여줘요. 새 relation은 관련 없는 identity 필드를 허용하지 않으며 기존 identity 직렬화·해시와 identity_version=1은 유지해요. 설명·예문만 바꾼 재발행은 전체 이력 기반 중복 검사 대상이에요.
+
+비교형 두 유형은 세로 배치, 관용 표현은 단일 표현 아래 직역·실제 의미를 구분해요. 선택적 번역은 누락·null을 허용하고 저장 시 null을 생략해요. 새 유형도 schema_version=1이며 구버전 v2 앱은 모르는 유형을 건너뛰므로 표시 가능한 카드 수가 줄어들 수 있어요. 당일 스냅샷·진행은 그대로 유지해요.
+
+`20261126_0003`은 기존 스낵 데이터를 보존하며 유형 CHECK와 생성 run의 content_types를 추가해요. 기존 run은 기존 세 유형으로 백필하고 새 run은 여섯 유형을 저장해요. 재개 시 저장된 대상 목록으로 후보 필터·부족 수량·완료를 판단하고 목록 밖 후보는 예약하지 않아요. 목록이 없거나 잘못됐으면 `invalid_run_content_types`로 종료해요. 기존 성공 키를 재실행해도 새 유형을 만들지 않아요. 발행 수량·배포·복구는 [운영 가이드](OPERATIONS.md#언어-스낵-운영)를 따라요.
 
 ### 바구니 리셋
 
@@ -608,7 +640,7 @@ AudioContinue  = POST /api/conversations/{id}/turn/        multipart { audio_fil
 
 모바일 v1은 문법 피드백 수신에 SSE보다 polling을 우선해요. 앱은 `ConversationResponse.message_id` 또는 `MessageResponse.message_id`를 받은 뒤 `GET /api/grammar/message/{message_id}/`를 반복 호출하고, `404`를 pending 또는 접근 불가 상태로 처리해요. SSE 스트림은 실시간성이 더 중요해질 때 선택적으로 사용해요.
 
-`GET /api/conversations/`는 `updated_at desc`로 정렬된 `PaginatedConversations`를 반환해요.
+`GET /api/conversations/`는 `updated_at desc`로 정렬된 `PaginatedConversations`를 반환해요. 2026-11-27 목록 계약 v1.1부터 각 항목에 `has_unread_reply: boolean`을 포함해요. 회원 소유 대화에 읽지 않은 assistant 메시지가 있으면 true, 게스트는 false이며 슬롯·대화권 잔액과 무관해요. 페이지의 대화 ID를 한 번의 집계 조회로 확인해요. 구버전 서버 응답에서 필드가 없으면 새 모바일은 false로 처리해요.
 
 `GET /api/conversations/{id}/messages/`는 `created_at asc`로 정렬된 `PaginatedMessages`를 반환해요.
 
@@ -877,6 +909,8 @@ module LLM {
 ```
 
 ## 문서 변경 기록
+
+- 2026-11-26: 스낵 여섯 유형·본문/identity·실행 대상 스냅샷·앱/위젯 호환 계약을 추가했어요.
 
 - 2026-11-25: 일회성 상품·관리자 지급 명칭을 대화창 슬롯·대화권으로 통일하고 잔액 필드와 이용 제한의 의미를 명시했어요.
 

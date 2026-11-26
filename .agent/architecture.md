@@ -1,6 +1,6 @@
 # 시스템 아키텍처
 
-> 프로젝트: MoreThanHuman (서비스명: tomatalk) · 최종 갱신: 2026-11-25 · 일회성 상품명·이용 제한 정리
+> 프로젝트: MoreThanHuman (서비스명: tomatalk) · 최종 갱신: 2026-11-26 · 일회성 상품명·이용 제한 정리
 
 ---
 
@@ -95,9 +95,13 @@ Home의 `language_snacks`는 최근 대화와 독립된 학습 콘텐츠 흐름�
 
 iOS 홈 화면 스낵 위젯 v1(2026-10-27, 2026-11-15 모션 갱신)은 iOS 17 이상 `systemMedium`·`systemLarge` WidgetKit extension이에요. 두 크기는 같은 App Group 스냅샷을 공유하며 크기별 SwiftUI 레이아웃을 사용해요. Flutter의 일일 스냅샷은 MethodChannel을 거쳐 App Group UserDefaults에도 저장하고, 위젯 `AppIntent`가 바구니에서 토마토 꺼내기·한입 소비·본문 페이지 이동을 그 저장소에서 처리해요. 두 크기는 같은 SwiftUI 이미지 레이어를 사용해요. 바구니 터치는 한 번의 상태 갱신으로 토마토를 교차 표시하고, 토마토 터치는 소비 횟수를 저장한 뒤 단일 타임라인 항목으로 스낵 카드를 바로 표시해요. 이동·확대 모션은 사용하지 않아요. 위젯 전용 이미지는 최대 512px로 저장해요. 꺼낼 때는 바구니가 사라지며 토마토 한 개가 나타나고, 토마토 터치에는 흔들림·한입 이미지 미리보기·카드 지연을 사용하지 않아요. 카드 교체에는 페이드·비활성 버튼 흐림을 사용하지 않아요. 스낵 카드가 나타나면 유형별 불투명 배경이 시작 화면의 토마토와 제목을 가려요. 앱 Home 진입·복귀는 위젯 진행을 보안 저장소에 반영하고, 로그아웃은 위젯 스냅샷을 지워요. 앱을 열지 않은 채 날짜가 바뀌면 위젯은 마지막 12개를 새 날짜에 재사용해요. 상세 동작과 검증 범위는 [iOS 스낵 위젯 계약](_contracts/IOS_SNACK_WIDGET.md)에 있어요.
 
-스낵 v2(2026-09-12)는 세 유형의 `payload`와 지식 `identity`를 JSONB로 저장해요. identity는 NFC·공백 정규화, 객체 키·entry 순서 정렬 후 SHA-256을 계산해 UNIQUE로 보호하며 대소문자·sense는 보존해요. LLM은 같은 content_language의 모든 상태·유형 요약 이력을 보고 별도로 의미 중복을 판정해요. reserved를 먼저 저장하고 본문 구조·품질 검증 후 published로 전환하며 재시도 소진이나 운영 취소는 archived로 남겨 재생성하지 않아요. draft는 향후 편집용 상태로 현재 경로에서는 따로 저장하지 않아요.
+스낵 v2(2026-11-26 여섯 유형 확장)는 여섯 유형의 `payload`와 지식 `identity`를 JSONB로 저장해요. identity는 NFC·공백 정규화, 객체 키·entry 순서 정렬 후 SHA-256을 계산해 UNIQUE로 보호하며 대소문자·sense는 보존해요. LLM은 같은 content_language의 모든 상태·유형 요약 이력을 보고 별도로 의미 중복을 판정해요. reserved를 먼저 저장하고 본문 구조·품질 검증 후 published로 전환하며 재시도 소진이나 운영 취소는 archived로 남겨 재생성하지 않아요. draft는 향후 편집용 상태로 현재 경로에서는 따로 저장하지 않아요.
 
-주간 CLI는 API 이미지의 별도 작업 컨테이너에서 en/ko run을 순서대로 실행해요. 영속 `run_key`는 주간 슬롯+언어의 재실행을 멱등하게 만들고 예약을 우선 재개해요. scheduled_for 별도 컬럼 대신 run_key의 주간 날짜를 사용해요. metrics에는 후보 rounds, calls, charged_tokens, reported_tokens, published_by_type와 발생한 중복·불확실 수/오류 코드가 저장돼요. 후보 라운드·호출·토큰 상한은 run에 누적되며 본문 시도 횟수는 예약 metadata에 저장돼요. 실행 시간 상한은 언어별 시도에 적용해요. reserved/published/archived 개수로 예약·발행·실패를 추가 집계할 수 있어요.
+스낵 유형 확장(2026-11-26): register_contrast·collocation은 비교형 payload, idiomatic_expression은 단일 표현 payload예요. Flutter는 본문 타입별로 저장·렌더링하고 iOS 위젯은 optional items와 유형별 검증·페이지를 사용해요. 기존 identity 해시·카드 ID·캐시 키는 유지해요. generation run의 content_types는 기존 세 유형으로 백필하고 새 run에는 여섯 유형을 저장해 재개 목표가 바뀌지 않게 해요. API schema_version은 1이에요.
+
+주간 CLI는 API 이미지의 별도 작업 컨테이너에서 en/ko run을 순서대로 실행해요. 영속 `run_key`는 주간 슬롯+언어의 재실행을 멱등하게 만들고 예약을 우선 재개해요. scheduled_for 별도 컬럼 대신 run_key의 주간 날짜를 사용해요. metrics에는 후보 rounds, calls, reported_tokens, published_by_type와 발생한 중복·불확실 수/오류 코드가 저장돼요. 후보 라운드·호출 상한은 run에 누적되며 본문 시도 횟수는 예약 metadata에 저장돼요. 추정 토큰과 전체 실행 시간으로 중단하지 않으며 요청별 65초 타임아웃은 유지해요. 기존 metrics의 charged_tokens는 과거 기록으로만 남고 더 이상 증가하거나 제한에 사용되지 않아요. reserved/published/archived 개수로 예약·발행·실패를 추가 집계할 수 있어요.
+
+스낵 LLM 요청은 모든 단계에 strict JSON Schema를 사용해요. 후보는 카테고리별 독립 요청(최대 3개)으로 분리하고 해당 유형의 relation·identity 필드와 언어만 wire schema에 남겨요. 후보에는 모든 유형·상태의 identity만 전달하고 ID·요약은 빼며 최종 중복 검사에는 전체 이력을 유지해요. 프롬프트에서 스키마의 중복 사본은 제거해요. 라운드는 미완료 유형 작업을 최대 6개 병렬 실행하는 단위이며 기존 rounds·calls를 보존해요. 유형별 후보 오류는 해당 작업만 중단하며 다른 유형은 계속해요. 새 후보의 중복 검사·예약은 asyncio 잠금 아래 직렬화하고, 본문·품질 검사는 병렬 실행해요. 동기 DB 세션·metrics 작업은 단일 이벤트 루프에서 await 없이 완료해야 해요. 자원 한도·잠금 실패나 취소는 모든 작업을 취소·회수한 뒤 외부 쓰기 잠금을 해제해요. 요청 시작 전에 calls를 예약하고 진단 호출 번호를 고정해요. 취소된 본문 시도는 예약의 attempts를 되돌려 재개 기회를 보존해요. nullable 필드도 required에 포함하고 default는 제거하며 모든 객체의 추가 필드를 금지해요. OpenRouter는 지원 endpoint를 요구하고 일반 텍스트로 폴백하지 않아요. Pydantic 도메인 검증을 유지하고 응답 finish_reason·거절 여부를 별도로 전달해 실패를 구분해요. run metrics.failures는 원문 없는 최근 20건의 진단만 저장해요.
 
 운영 POST·PATCH와 CLI 쓰기는 같은 PostgreSQL session advisory lock을 획득해 직렬화해요. 전용 direct/session 연결에 잠금을 유지하고 LLM 대기 중 ORM 트랜잭션은 열어두지 않아요. 잠금 연결을 잃으면 추가 저장을 중지해요. SQLite 잠금은 단일 프로세스 개발용이에요. 전체 이력 크기를 넘으면 과거 항목을 생략하지 않고 중단하며 LLM 의미·품질 판정에는 오차가 남아요. API는 구버전 GET에 빈 목록, 구버전 POST에 410을 제공해요. 상세 외부 계약은 [DSL](../docs/DSL.md), 파괴적 migration·cron 설치·롤백은 [운영 가이드](../docs/OPERATIONS.md), 환경변수는 [환경 설정](../docs/ENVIRONMENT.md)이 기준이에요. [README](../README.md)는 실행·CLI 진입점으로 유지해요.
 

@@ -28,7 +28,24 @@ class LanguageSnackContent extends StatelessWidget {
                 style: AppTypography.caption,
               ),
               const SizedBox(height: AppSpacing.md),
-              if (stacked)
+              if (snack.payload case RegisterPayload(:final situation)) ...[
+                Text(situation, style: AppTypography.bodySm),
+                const SizedBox(height: AppSpacing.md),
+              ],
+              if (snack.payload case CollocationPayload(:final headword)) ...[
+                Text(headword, style: AppTypography.headlineMd),
+                const SizedBox(height: AppSpacing.md),
+              ],
+              if (snack.payload case IdiomaticPayload(
+                :final item,
+                :final literalMeaning,
+              ))
+                _Idiom(
+                  item: item,
+                  literalMeaning: literalMeaning,
+                  isKorean: snack.explanationLanguage == 'ko',
+                )
+              else if (stacked)
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -58,6 +75,40 @@ class LanguageSnackContent extends StatelessWidget {
       },
     );
   }
+}
+
+class _Idiom extends StatelessWidget {
+  const _Idiom({
+    required this.item,
+    required this.literalMeaning,
+    required this.isKorean,
+  });
+  final SnackExpression item;
+  final String literalMeaning;
+  final bool isKorean;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(item.expression, style: AppTypography.headlineMd),
+      const SizedBox(height: AppSpacing.md),
+      Text(isKorean ? '직역' : 'Literal meaning', style: AppTypography.caption),
+      Text(literalMeaning, style: AppTypography.bodySm),
+      const SizedBox(height: AppSpacing.sm),
+      Text(isKorean ? '실제 의미' : 'Actual meaning', style: AppTypography.caption),
+      Text(item.meaning!, style: AppTypography.bodySm),
+      const SizedBox(height: AppSpacing.sm),
+      Text(item.usage!, style: AppTypography.bodySm),
+      const SizedBox(height: AppSpacing.sm),
+      Text(
+        item.example!,
+        style: AppTypography.bodySm.copyWith(fontStyle: FontStyle.italic),
+      ),
+      if (item.exampleTranslation != null)
+        Text(item.exampleTranslation!, style: AppTypography.bodySm),
+    ],
+  );
 }
 
 class _Expression extends StatelessWidget {

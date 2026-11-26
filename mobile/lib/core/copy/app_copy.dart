@@ -50,10 +50,10 @@ class AppCopy {
     return '${languageName(nativeCode)} -> ${languageName(targetCode)}';
   }
 
-  String get badgeTitle => isKorean ? '미확인 답변 배지' : 'Unread reply badge';
+  String get badgeTitle => isKorean ? '미확인 알림' : 'Unread notifications';
   String get badgeExplanation => isKorean
-      ? '확인하지 않은 AI 답변이 있으면 앱 아이콘에 1을 표시해요. 배너나 소리는 보내지 않아요. 앱 실행·복귀 시 갱신하며, 나중에 내 정보에서 변경할 수 있어요.'
-      : 'Show 1 on the app icon when an AI reply is unread. No banners or sounds. Updates while using or reopening the app. You can change this in your profile.';
+      ? '확인하지 않은 답변이 있으면 앱 아이콘에 알림을 표시해요'
+      : 'Show a notification on the app icon when you have unread replies.';
   String get badgeEnable => isKorean ? '배지 사용' : 'Use badge';
   String get badgeSkip => isKorean ? '사용하지 않기' : 'Not now / turn off';
   String get badgeSettings => isKorean ? '설정 열기' : 'Open settings';
@@ -345,6 +345,10 @@ class AppCopy {
     'regional_variant' => isKorean ? '지역마다 다른 표현' : 'Regional expressions',
     'usage_contrast' => isKorean ? '비슷하지만 다른 쓰임' : 'Usage differences',
     'homonym' => isKorean ? '같은 소리, 다른 뜻' : 'Same sound, different meanings',
+    'register_contrast' => isKorean ? '상황에 맞는 말투' : 'The right tone',
+    'collocation' => isKorean ? '함께 쓰면 자연스러운 말' : 'Words that go together',
+    'idiomatic_expression' =>
+      isKorean ? '직역하면 놓치는 뜻' : 'Beyond literal meaning',
     _ => languageSnackLabel,
   };
   String get previousLanguageSnackTooltip =>
@@ -431,9 +435,15 @@ class AppCopy {
   String get cancelLabel => isKorean ? '취소' : 'CANCEL';
   String get aiConsentTitle =>
       isKorean ? 'AI 대화를 위한 동의' : 'Consent for AI conversations';
+  String get unreadReplyLabel => isKorean ? '미확인 AI 답변 있음' : 'Unread AI reply';
+  String get aiConsentRequiredLabel =>
+      isKorean ? '[필수] AI 데이터 처리 동의' : '[Required] AI data processing';
+  String get aiConsentRequiredWarning => isKorean
+      ? '동의하지 않으면 AI 대화, 음성 처리 및 학습 피드백 서비스를 이용할 수 없어요.'
+      : 'Without consent, AI conversations, speech processing and learning feedback are unavailable.';
   String get aiConsentDescription => isKorean
-      ? '대화 내용과 음성 입력은 AI 답변, 음성 변환과 학습 피드백을 위해 외부 AI 서비스에 전달돼요. 자세한 처리 내용은 개인정보 처리방침에서 확인할 수 있어요. AI 데이터 처리에 동의할지 선택해 주세요. 나중에 선택해도 홈을 이용할 수 있어요.'
-      : 'Conversation content and voice input are sent to external AI services for replies, speech processing and learning feedback. See the privacy policy for details. Choose whether to accept AI data processing. You can decide later and still use Home.';
+      ? '대화 내용과 음성 입력은 AI 답변, 음성 변환과 학습 피드백을 위해 외부 AI 서비스에 전달돼요. 자세한 처리 내용은 개인정보 처리방침에서 확인할 수 있어요. AI 대화 서비스를 이용하려면 데이터 처리 동의가 필요해요. 동의 전에도 홈과 기존 대화 내역은 확인할 수 있어요.'
+      : 'Conversation content and voice input are sent to external AI services for replies, speech processing and learning feedback. See the privacy policy for details. AI data processing consent is required to use AI conversations. You can still view Home and existing conversations before consenting.';
   String get privacyNoticeDescription => isKorean
       ? '업데이트된 개인정보 처리방침을 확인할 수 있어요. 기존 AI 데이터 처리 동의는 유지돼요.'
       : 'You can review the updated privacy policy. Your existing AI data processing consent remains valid.';

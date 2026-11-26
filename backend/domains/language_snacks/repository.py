@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from domains.language_snacks.identity import canonical_identity, knowledge_key
 from domains.language_snacks.lock import SnackError, mutation_lock
 from domains.language_snacks.models import LanguageSnackModel, LanguageSnackRunModel
+from domains.language_snacks.schemas import PAYLOAD_MODELS
 
 
 class LanguageSnackRepository:
@@ -103,6 +104,17 @@ class LanguageSnackRepository:
         if row:
             if row.content_language != language or row.target_per_type != target:
                 raise SnackError("run_configuration_changed", 409)
+            kinds = row.content_types
+            if (
+                not isinstance(kinds, list)
+                or not kinds
+                or any(
+                    not isinstance(kind, str) or kind not in PAYLOAD_MODELS
+                    for kind in kinds
+                )
+                or len(set(kinds)) != len(kinds)
+            ):
+                raise SnackError("invalid_run_content_types", 409)
             return row
         return self.save(
             LanguageSnackRunModel(
@@ -110,6 +122,7 @@ class LanguageSnackRepository:
                 run_key=key,
                 content_language=language,
                 target_per_type=target,
+                content_types=list(PAYLOAD_MODELS),
                 status="running",
                 metrics={},
             )

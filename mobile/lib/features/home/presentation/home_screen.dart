@@ -409,6 +409,7 @@ class _RecentConversationsState extends State<_RecentConversations> {
             ),
             title: visibleConversations[index].title,
             locked: visibleConversations[index].locked,
+            hasUnreadReply: visibleConversations[index].hasUnreadReply,
             color: _RecentConversations
                 ._colors[index % _RecentConversations._colors.length],
             onTap:

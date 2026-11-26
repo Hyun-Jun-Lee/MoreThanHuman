@@ -304,6 +304,8 @@ flowchart TB
 
 ### U7. Android snack widget
 
+2026-11-26 연동 기준: [스낵 계약](../../.agent/_contracts/LANGUAGE_SNACKS.md)의 여섯 유형과 단일 관용 표현 payload를 지원해야 해요. 모든 카드가 items 두 개라는 가정을 두지 않아요.
+
 **목표·요구사항:** 앱과 같은 하루 진행을 사용하는 Android 홈 화면 위젯을 제공해요. R11–R12, KTD8–KTD9를 구현해요. **의존성:** U1·U2. 결제 구현과 독립적이에요.
 
 **대상 파일:** `mobile/lib/core/storage/snack_widget_bridge.dart`, `mobile/lib/features/home/application/daily_snack_basket_controller.dart`, `mobile/lib/features/auth/data/account_local_data.dart`, `mobile/android/app/src/main/kotlin/com/morethanhuman/curitalk/MainActivity.kt`, 새 `.../snackwidget/`의 Glance 위젯·receiver·store, Android manifest·위젯 리소스·Gradle 설정, 새 `.agent/_contracts/ANDROID_SNACK_WIDGET.md`예요. 테스트는 기존 `mobile/test/features/home/application/daily_snack_basket_controller_test.dart`, 새 `mobile/test/core/storage/snack_widget_bridge_test.dart`, `mobile/android/app/src/test/kotlin/com/morethanhuman/curitalk/snackwidget/SnackWidgetStoreTest.kt`, `mobile/android/app/src/androidTest/kotlin/com/morethanhuman/curitalk/snackwidget/SnackWidgetIntegrationTest.kt`를 사용해요.

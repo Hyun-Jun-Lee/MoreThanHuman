@@ -48,6 +48,7 @@ class LanguageSnackRunModel(Base):
     content_language = Column(String(8), nullable=False)
     status = Column(String(20), nullable=False, default="running")
     target_per_type = Column(Integer, nullable=False)
+    content_types = Column(json_type(), nullable=False)
     metrics = Column(json_type(), nullable=False, default=dict)
     started_at = Column(DateTime(timezone=True), nullable=False, default=utcnow)
     finished_at = Column(DateTime(timezone=True))
@@ -64,7 +65,8 @@ class LanguageSnackModel(Base):
             "id",
         ),
         CheckConstraint(
-            "content_type IN ('regional_variant','usage_contrast','homonym')",
+            "content_type IN ('regional_variant','usage_contrast','homonym',"
+            "'register_contrast','collocation','idiomatic_expression')",
             name="ck_snack_type",
         ),
         CheckConstraint(

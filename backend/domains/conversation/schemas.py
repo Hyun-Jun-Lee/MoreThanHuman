@@ -121,6 +121,7 @@ class Conversation(BaseModel):
     message_count: int
     status: ConversationStatus
     locked: bool = False
+    has_unread_reply: bool = False
     created_at: datetime
     updated_at: datetime
 

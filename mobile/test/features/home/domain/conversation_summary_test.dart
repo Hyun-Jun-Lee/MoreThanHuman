@@ -7,6 +7,7 @@ void main() {
         ConversationSummary.fromJson(<String, dynamic>{
           'id': 'conversation-id',
           'title': 'Osaka food trip',
+          'has_unread_reply': true,
           'conversation_type': 'FREE_CHAT',
           'role_character': null,
           'message_count': 8,
@@ -16,6 +17,7 @@ void main() {
         });
 
     expect(conversation.title, 'Osaka food trip');
+    expect(conversation.hasUnreadReply, isTrue);
     expect(conversation.category, 'FreeChat');
     expect(conversation.preview, '8 messages · Continue speaking');
   });
@@ -33,6 +35,7 @@ void main() {
         });
 
     expect(conversation.title, 'Cafe barista');
+    expect(conversation.hasUnreadReply, isFalse);
     expect(conversation.category, 'Role Playing');
     expect(conversation.preview, '1 message · Completed');
   });

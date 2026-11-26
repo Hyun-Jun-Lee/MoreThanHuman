@@ -1,22 +1,25 @@
 # Language Snacks API Contract
 
-> Status: REVIEW · Version: 2.13 · Updated: 2026-11-23
+> Status: REVIEW · Version: 2.17 · Updated: 2026-11-26
 
 외부 계약의 단일 기준은 [DSL Language Snack 모듈](../../docs/DSL.md#5-language-snack-모듈)이에요. CLI는 [README](../../README.md#스낵-콘텐츠-생성), 배포는 [운영 가이드](../../docs/OPERATIONS.md#언어-스낵-운영), 설정은 [환경변수](../../docs/ENVIRONMENT.md), 내부 상태·중복 검사는 [아키텍처](../architecture.md)를 참고해요.
 
 ## Scope
 
 - content_language는 학습 대상 언어, explanation_language는 설명 언어예요. 현재 영어 학습은 한국어 설명, 한국어 학습은 영어 설명을 제공해요.
-- JSONB payload는 regional_variant, usage_contrast, homonym이며 schema_version은 1이에요. identity와 knowledge_key는 표시 데이터와 분리하며 학습자 API에 노출하지 않아요.
+- JSONB payload는 regional_variant, usage_contrast, homonym, register_contrast, collocation, idiomatic_expression이며 schema_version은 1이에요. identity와 knowledge_key는 표시 데이터와 분리하며 학습자 API에 노출하지 않아요.
 - GET v2는 Bearer profile.target_language 기준 published 12개(최대 30개)를 반환해요. `order=latest`가 기본이고 `order=random`은 전체 발행 목록에서 중복 없이 무작위 추출해요.
 - Supabase 익명 게스트도 자신의 Bearer profile로 인앱 feed를 조회하고 회원과 같은 로컬 일일 스냅샷을 사용해요. 회원 전환이 같은 사용자 ID를 유지하면 캐시를 보존하고, 기존 계정으로 이전하면 회원 캐시를 우선해 게스트 캐시를 지워요.
 - POST/PATCH v2는 서버 운영 키로 보호하며 일반 학습자 앱에는 생성 기능·키를 넣지 않아요.
 - GET `/api/v2/language-snacks/basket-reset/`은 Bearer 사용자의 현재 학습 언어별 최신 `reset_id`를 반환해요. 기록이 없으면 null이에요. 같은 경로 POST는 운영 키로 보호하며 `{user_id, content_language}` 대상의 새 리셋 ID를 저장해요. 사용자·언어별 마지막 기록만 유지하며 일반 앱에는 운영 키를 넣지 않아요.
 - 백엔드 `profiles.snack_unlimited_replay_enabled`는 기본 false인 계정별 권한이에요. 관리자는 이 값과 관계없이 무제한 반복해요. 바구니 리셋 GET·POST 응답의 `unlimited_replay_enabled`에 대상 계정의 적용 권한을 담고, 일반 사용자가 이를 수정하는 API는 제공하지 않아요. 이전 서버의 응답에 필드가 없으면 앱은 false로 처리해요.
 - 정규화 identity UNIQUE와 전체 이력 기반 LLM 중복 검사, 자동 품질 검증을 통과해야 발행해요. 의미 중복 방지에 통계적 오차가 남아요.
-- 구 API는 GET 빈 목록 / POST 410을 반환해요. 마이그레이션 시 기존 스낵 데이터는 모두 삭제해요.
+- 구 API는 GET 빈 목록 / POST 410을 반환해요. 과거 v1→v2 최초 전환은 기존 데이터를 삭제했지만, 이번 여섯 유형 확장 마이그레이션은 기존 카드·identity·knowledge_key·생성 실행을 보존해요. 기존 실행의 대상은 세 유형으로 고정하고 새 실행만 여섯 유형으로 생성해요.
 
 ## Client
+
+- 상황에 맞는 말투는 situation과 label이 붙은 두 표현, 자연스러운 조합은 headword와 두 조합, 관용 표현은 items 없이 expression·literal_meaning·meaning·usage·example을 표시해요. 예문 번역은 선택이며 빈 공간을 남기지 않아요.
+- 앱은 유형별 payload를 저장·복원하고 관용 표현도 접근성 설명에 포함해요. 기존 캐시 키·schema_version·하루 12개 소비 규칙은 유지해요. 작은 화면·큰 글자에서는 스크롤로 본문과 닫기에 접근할 수 있어요.
 
 - 학습 언어 변경 시 즉시 재조회하고 언어별 캐시 키를 분리해요. 실패 시 해당 언어의 마지막 성공 목록만 사용해요.
 - Home 재진입·앱 복귀 후 5분 이상 경과했다면 목록을 재조회하되 이미 정한 당일 묶음은 유지해요. 당일 콘텐츠 열람은 네트워크를 호출하지 않아요.
@@ -41,6 +44,14 @@
 - 검증: 랜덤 조회의 언어·발행 필터, 중복 없는 추출, 12회 소진·재시작·자정 리필, 중복 터치 차단, 날짜·사용자·언어 분리, 캐시·저장 실패, 작은 화면·큰 글자·접근성을 포함해요. 로컬 진행 저장은 기기 시계 변경·재설치에 대한 서버 이용 제한을 보장하지 않아요.
 
 ## Change Log
+
+- 2026-11-26 v2.17: 카테고리 작업 최대 6개 병렬 처리, 중복 검사·예약 직렬화, 호출 한도와 취소 시 작업 회수를 적용해요. dry-run도 후보를 병렬 요청하며 언어별 run은 순차예요.
+
+- 2026-11-26 v2.16: 후보 요청을 카테고리별 최대 3개로 분리하고 관련 필드만 strict 스키마에 전달해요. 후보 이력은 전체 identity로 압축하고 최종 중복 이력은 유지해요. dry-run은 언어별 6회 요청해요.
+
+- 2026-11-26 v2.15: 모든 생성 단계 strict 출력과 원문 없는 실패 진단을 추가해요. 제공자 미지원 시 텍스트 폴백 없이 실패하며 도메인 검증을 유지해요.
+
+- 2026-11-26 v2.14: 새 카테고리 세 개와 단일 표현 본문, 기존 캐시·진행 호환을 추가해요.
 
 - 2026-11-23 v2.13: 익명 게스트의 인앱 스낵 조회와 회원 전환 시 캐시 소유권 규칙을 추가해요. iOS 위젯은 게스트 범위에서 제외해요.
 - 2026-11-18 v2.12: Home의 일일 열람 수와 현재 토마토 번호를 모든 빌드 모드에서 숨겨요. 디버그 전용 리셋 버튼은 유지해요.

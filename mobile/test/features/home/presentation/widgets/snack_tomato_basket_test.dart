@@ -303,7 +303,14 @@ void main() {
   );
 
   for (final width in [320.0, 390.0, 768.0]) {
-    for (final type in ['regional_variant', 'usage_contrast', 'homonym']) {
+    for (final type in [
+      'regional_variant',
+      'usage_contrast',
+      'homonym',
+      'register_contrast',
+      'collocation',
+      'idiomatic_expression',
+    ]) {
       testWidgets(
         '$type popup fits $width with large text and reduced motion',
         (tester) async {
@@ -334,7 +341,12 @@ void main() {
           }
           await tester.tap(_touch);
           await tester.pumpAndSettle();
-          expect(find.text('word-0-0'), findsOneWidget);
+          expect(
+            find.text(
+              type == 'idiomatic_expression' ? 'break the ice' : 'word-0-0',
+            ),
+            findsOneWidget,
+          );
           expect(tester.takeException(), isNull);
           await _capture(tester, 'popup-$type-${width.toInt()}');
           await tester.tap(_close);

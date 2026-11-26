@@ -1,3 +1,5 @@
+import 'package:curitalk/core/notifications/ios_badge_bridge.dart';
+import 'package:curitalk/core/notifications/badge_sync_controller.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:curitalk/features/profile/presentation/profile_screen.dart';
@@ -25,6 +27,94 @@ import '../snack_test_fixtures.dart';
 import 'package:curitalk/features/home/data/snack_basket_reset_repository.dart';
 
 void main() {
+  testWidgets(
+    'profile badge settings use the language card layout and disable persists',
+    (tester) async {
+      final storage = MemorySnackStorage();
+      await storage.write('badge.choice.user-id', 'enabled');
+      await tester.pumpWidget(
+        _homeApp(
+          profile: true,
+          billingPlan: 'member',
+          snackStorage: storage,
+          badgeBridge: _AllowedBadgeBridge(),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('profile-badge-settings-card')),
+        250,
+      );
+      final languageCard = find.byKey(
+        const ValueKey('profile-language-settings-card'),
+      );
+      final badgeCard = find.byKey(
+        const ValueKey('profile-badge-settings-card'),
+      );
+      expect(
+        tester.getSize(badgeCard).width,
+        tester.getSize(languageCard).width,
+      );
+      expect(find.text('On'), findsOneWidget);
+      expect(find.text('Off'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('profile-badge-false')));
+      await tester.pumpAndSettle();
+      expect(await storage.read('badge.choice.user-id'), 'disabled');
+      await tester.tap(find.byKey(const ValueKey('profile-badge-true')));
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(await storage.read('badge.choice.user-id'), 'enabled');
+      await tester.scrollUntilVisible(find.text('Privacy policy'), 250);
+      expect(
+        tester.getTopLeft(find.text('Privacy policy')).dy,
+        greaterThan(
+          tester
+              .getBottomLeft(find.byKey(const ValueKey('profile-account-card')))
+              .dy,
+        ),
+      );
+    },
+  );
+
+  testWidgets('home refreshes unread marker after a reply change', (
+    tester,
+  ) async {
+    final repository = _FakeHomeRepository(
+      conversations: [
+        ConversationSummary(
+          id: 'unread',
+          title: 'Unread conversation',
+          kind: ConversationKind.freeChat,
+          messageCount: 2,
+          isActive: true,
+          hasUnreadReply: true,
+          updatedAt: DateTime(2026),
+        ),
+      ],
+    );
+    await tester.pumpWidget(_homeApp(homeRepository: repository));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('unread-reply-badge')), findsOneWidget);
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(HomeScreen)),
+    );
+    repository.conversations
+      ..clear()
+      ..add(
+        ConversationSummary(
+          id: 'unread',
+          title: 'Unread conversation',
+          kind: ConversationKind.freeChat,
+          messageCount: 2,
+          isActive: true,
+          updatedAt: DateTime(2026),
+        ),
+      );
+    container.read(badgeSyncControllerProvider).refresh();
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('unread-reply-badge')), findsNothing);
+  });
+
   for (final plan in <String>['free', 'advance', 'plus']) {
     testWidgets('iOS profile shows $plan beside subscription details', (
       WidgetTester tester,
@@ -68,7 +158,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('10'), findsOneWidget);
-    expect(find.text('10 conversation credits · 1 conversation slot'), findsOneWidget);
+    expect(
+      find.text('10 conversation credits · 1 conversation slot'),
+      findsOneWidget,
+    );
     expect(find.text('Account balance'), findsOneWidget);
     expect(find.text('Balance and products'), findsOneWidget);
     expect(find.text('Learn English in Korean'), findsOneWidget);
@@ -100,7 +193,10 @@ void main() {
     );
     expect(find.text('Please wait a moment.'), findsOneWidget);
     expect(find.text('10'), findsNothing);
-    expect(find.text('10 conversation credits · 1 conversation slot'), findsNothing);
+    expect(
+      find.text('10 conversation credits · 1 conversation slot'),
+      findsNothing,
+    );
 
     entitlement.complete(
       const BillingEntitlement(
@@ -111,7 +207,10 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('15 conversation credits · 2 conversation slots'), findsOneWidget);
+    expect(
+      find.text('15 conversation credits · 2 conversation slots'),
+      findsOneWidget,
+    );
     expect(find.text('Checking your balance.'), findsNothing);
     expect(
       find.byKey(const ValueKey('profile-subscription-loading')),
@@ -147,7 +246,10 @@ void main() {
       findsNothing,
     );
     expect(find.text('10'), findsNothing);
-    expect(find.text('10 conversation credits · 1 conversation slot'), findsNothing);
+    expect(
+      find.text('10 conversation credits · 1 conversation slot'),
+      findsNothing,
+    );
 
     final container = ProviderScope.containerOf(
       tester.element(find.byType(ProfileScreen)),
@@ -171,7 +273,10 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('10 conversation credits · 1 conversation slot'), findsOneWidget);
+    expect(
+      find.text('10 conversation credits · 1 conversation slot'),
+      findsOneWidget,
+    );
     expect(
       find.byKey(const ValueKey('profile-subscription-loading')),
       findsNothing,
@@ -201,7 +306,10 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('10 conversation credits · 1 conversation slot'), findsOneWidget);
+      expect(
+        find.text('10 conversation credits · 1 conversation slot'),
+        findsOneWidget,
+      );
 
       final container = ProviderScope.containerOf(
         tester.element(find.byType(ProfileScreen)),
@@ -217,12 +325,18 @@ void main() {
         find.byKey(const ValueKey('profile-subscription-loading')),
         findsOneWidget,
       );
-      expect(find.text('10 conversation credits · 1 conversation slot'), findsNothing);
+      expect(
+        find.text('10 conversation credits · 1 conversation slot'),
+        findsNothing,
+      );
 
       nextEntitlement.completeError(StateError('Subscription unavailable'));
       await tester.pumpAndSettle();
       expect(find.text('Could not check your balance.'), findsOneWidget);
-      expect(find.text('10 conversation credits · 1 conversation slot'), findsNothing);
+      expect(
+        find.text('10 conversation credits · 1 conversation slot'),
+        findsNothing,
+      );
       expect(
         find.byKey(const ValueKey('profile-subscription-loading')),
         findsNothing,
@@ -257,7 +371,10 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Learner Kim'), findsOneWidget);
-    expect(find.text('10 conversation credits · 1 conversation slot'), findsOneWidget);
+    expect(
+      find.text('10 conversation credits · 1 conversation slot'),
+      findsOneWidget,
+    );
 
     authRepository.nickname = 'Updated Learner';
     plan = 'advance';
@@ -268,7 +385,10 @@ void main() {
     expect(authRepository.bootstrapReads, 1);
     expect(entitlementReads, 2);
     expect(find.text('Updated Learner'), findsOneWidget);
-    expect(find.text('15 conversation credits · 2 conversation slots'), findsOneWidget);
+    expect(
+      find.text('15 conversation credits · 2 conversation slots'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('home delegates navigation to the shared shell', (tester) async {
@@ -1302,6 +1422,7 @@ const WeeklyTopics _publishedTopics = WeeklyTopics(
 );
 Widget _homeApp({
   bool profile = false,
+  IOSBadgeBridge? badgeBridge,
   Locale locale = const Locale('en'),
   TargetPlatform? platform,
   String? billingPlan,
@@ -1329,6 +1450,8 @@ Widget _homeApp({
       tokenStorage ?? _MemoryTokenStorage(tokens: _tokens, deviceId: _deviceId);
   return ProviderScope(
     overrides: [
+      if (badgeBridge != null)
+        iosBadgeBridgeProvider.overrideWithValue(badgeBridge),
       if (snackClock != null) snackClockProvider.overrideWithValue(snackClock),
       snackBasketResetRepositoryProvider.overrideWithValue(
         basketResetRepository ?? MemoryBasketResetRepository(),
@@ -1891,4 +2014,12 @@ class _MemoryTokenStorage implements TokenStorage {
   Future<void> writeTokens(AuthTokens tokens) async {
     this.tokens = tokens;
   }
+}
+
+class _AllowedBadgeBridge extends IOSBadgeBridge {
+  @override
+  Future<BadgePermission> permission({bool request = false}) async =>
+      BadgePermission.allowed;
+  @override
+  Future<void> setCount(int count) async {}
 }

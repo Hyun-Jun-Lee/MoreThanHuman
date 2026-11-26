@@ -286,37 +286,41 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         ),
                       ),
                       const SizedBox(height: AppSpacing.lg),
-                      const BadgeSettingsButton(),
-                      TextButton(
-                        onPressed: () async {
-                          try {
-                            final repository =
-                                ref.read(authRepositoryProvider)
-                                    as AIConsentRepository;
-                            final notice = await repository.getAINotice();
-                            if (!context.mounted) return;
-                            final opened = await launchUrl(
-                              Uri.parse(
-                                notice.privacyPolicyUrlFor(
-                                  isKorean: copy.isKorean,
+                      BadgeSettingsButton(
+                        builder: (context, enabled, onChanged) =>
+                            _ProfileSurface(
+                              key: const ValueKey(
+                                'profile-badge-settings-card',
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(AppSpacing.md),
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    _ProfileSettingCopy(
+                                      title: copy.badgeTitle,
+                                      description: copy.badgeExplanation,
+                                    ),
+                                    const SizedBox(height: AppSpacing.sm),
+                                    _ProfileSegmentedControl<bool>(
+                                      values: const [false, true],
+                                      selectedValue: enabled,
+                                      labelBuilder: (value) => TextSpan(
+                                        text: value
+                                            ? (copy.isKorean ? '사용' : 'On')
+                                            : (copy.isKorean
+                                                  ? '사용 안 함'
+                                                  : 'Off'),
+                                      ),
+                                      keyBuilder: (value) =>
+                                          ValueKey('profile-badge-$value'),
+                                      onSelected: onChanged,
+                                    ),
+                                  ],
                                 ),
                               ),
-                              mode: LaunchMode.externalApplication,
-                            );
-                            if (!opened) {
-                              throw StateError('Cannot open privacy policy.');
-                            }
-                          } catch (_) {
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(copy.aiConsentSaveFailed),
-                                ),
-                              );
-                            }
-                          }
-                        },
-                        child: Text(copy.privacyPolicyLabel),
+                            ),
                       ),
                       _ProfileSectionLabel(copy.accountLabel),
                       const SizedBox(height: AppSpacing.xs),
@@ -361,6 +365,38 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                             ),
                           ],
                         ),
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      TextButton(
+                        onPressed: () async {
+                          try {
+                            final repository =
+                                ref.read(authRepositoryProvider)
+                                    as AIConsentRepository;
+                            final notice = await repository.getAINotice();
+                            if (!context.mounted) return;
+                            final opened = await launchUrl(
+                              Uri.parse(
+                                notice.privacyPolicyUrlFor(
+                                  isKorean: copy.isKorean,
+                                ),
+                              ),
+                              mode: LaunchMode.externalApplication,
+                            );
+                            if (!opened) {
+                              throw StateError('Cannot open privacy policy.');
+                            }
+                          } catch (_) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(copy.aiConsentSaveFailed),
+                                ),
+                              );
+                            }
+                          }
+                        },
+                        child: Text(copy.privacyPolicyLabel),
                       ),
                     ],
                   ),

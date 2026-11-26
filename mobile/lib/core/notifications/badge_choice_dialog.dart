@@ -1,3 +1,4 @@
+import 'package:curitalk/core/storage/storage_providers.dart';
 import 'package:curitalk/core/copy/copy.dart';
 import 'package:curitalk/core/notifications/badge_sync_controller.dart';
 import 'package:curitalk/core/notifications/ios_badge_bridge.dart';
@@ -66,22 +67,132 @@ Future<void> showBadgeChoice(BuildContext context, WidgetRef ref) async {
   }
 }
 
-class BadgeSettingsButton extends ConsumerWidget {
-  const BadgeSettingsButton({super.key});
+typedef BadgeSettingsBuilder =
+    Widget Function(
+      BuildContext context,
+      bool enabled,
+      ValueChanged<bool>? onChanged,
+    );
+
+class BadgeSettingsButton extends ConsumerStatefulWidget {
+  const BadgeSettingsButton({this.builder, super.key});
+  final BadgeSettingsBuilder? builder;
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    if (ref.watch(authControllerProvider).value?.isMember != true) {
+  ConsumerState<BadgeSettingsButton> createState() =>
+      _BadgeSettingsButtonState();
+}
+
+class _BadgeSettingsButtonState extends ConsumerState<BadgeSettingsButton>
+    with WidgetsBindingObserver {
+  String? _account;
+  Future<(BadgePermission, bool)>? _settings;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  Future<(BadgePermission, bool)> _load(String account) async {
+    final bridge = ref.read(iosBadgeBridgeProvider);
+    final storage = ref.read(secureStorageBackendProvider);
+    final permission = await bridge.permission();
+    if (permission == BadgePermission.unsupported) return (permission, false);
+    final choice = await storage.read('badge.choice.$account');
+    return (
+      permission,
+      choice == 'enabled' && permission == BadgePermission.allowed,
+    );
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _account != null) {
+      setState(() => _settings = _load(_account!));
+    }
+  }
+
+  Future<void> _choose(bool enabled) async {
+    if (_saving) return;
+    setState(() => _saving = true);
+    try {
+      final account = _account;
+      final result = await ref
+          .read(badgeSyncControllerProvider)
+          .choose(enabled);
+      if (mounted &&
+          enabled &&
+          result == BadgePermission.denied &&
+          ref.read(authControllerProvider).value?.user?.id == account) {
+        final copy = AppCopy.of(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(copy.badgeSettingsMessage),
+            action: SnackBarAction(
+              label: copy.badgeSettings,
+              onPressed: () async {
+                try {
+                  await ref.read(iosBadgeBridgeProvider).openSettings();
+                } catch (_) {}
+              },
+            ),
+          ),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppCopy.of(context).badgeSaveFailed)),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+          if (_account != null) _settings = _load(_account!);
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final session = ref.watch(authControllerProvider).value;
+    if (session?.isMember != true) {
+      _account = null;
+      _settings = null;
       return const SizedBox.shrink();
     }
-    return FutureBuilder<BadgePermission>(
-      future: ref.watch(iosBadgeBridgeProvider).permission(),
-      builder: (context, snapshot) =>
-          snapshot.hasData && snapshot.data != BadgePermission.unsupported
-          ? TextButton(
-              onPressed: () => showBadgeChoice(context, ref),
-              child: Text(AppCopy.of(context).badgeTitle),
-            )
-          : const SizedBox.shrink(),
+    if (_account != session!.user!.id) {
+      _account = session.user!.id;
+      _settings = _load(_account!);
+    }
+    return FutureBuilder<(BadgePermission, bool)>(
+      future: _settings,
+      builder: (context, snapshot) {
+        if (!snapshot.hasData ||
+            snapshot.data!.$1 == BadgePermission.unsupported) {
+          return const SizedBox.shrink();
+        }
+        if (widget.builder != null) {
+          return widget.builder!(
+            context,
+            snapshot.data!.$2,
+            _saving ? null : _choose,
+          );
+        }
+        return TextButton(
+          onPressed: _saving ? null : () => _choose(true),
+          child: Text(AppCopy.of(context).badgeTitle),
+        );
+      },
     );
   }
 }

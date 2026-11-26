@@ -1,9 +1,9 @@
+import 'package:curitalk/app/theme/tokens/tokens.dart';
 import 'package:curitalk/core/copy/copy.dart';
 import 'package:curitalk/core/config/app_config.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:curitalk/features/billing/billing_controller.dart';
 import 'package:curitalk/features/billing/billing_repository.dart';
-import 'package:curitalk/features/conversation/data/conversation_access_repository.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -19,9 +19,8 @@ class PaywallScreen extends ConsumerStatefulWidget {
 class _PaywallScreenState extends ConsumerState<PaywallScreen> {
   final _slotsKey = GlobalKey();
   final _turnsKey = GlobalKey();
-  final _slotsFocus = FocusNode();
-  final _turnsFocus = FocusNode();
   bool _focused = false;
+  String _selectedProductId = 'com.morethanhuman.curitalk.slots.plus.1';
 
   bool get _supportsPurchases =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
@@ -37,37 +36,93 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
   }
 
   @override
-  void dispose() {
-    _slotsFocus.dispose();
-    _turnsFocus.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     final ko = AppCopy.of(context).isKorean;
     final state = ref.watch(billingControllerProvider);
     final balance = ref.watch(billingEntitlementProvider);
-    final access = ref.watch(conversationAccessProvider);
+    final products = [...state.products]
+      ..sort(
+        (a, b) => int.parse(
+          a.id.split('.').last,
+        ).compareTo(int.parse(b.id.split('.').last)),
+      );
     final busy =
         state.isProcessing ||
         (state.message == 'verified' && balance.isLoading);
+    final selected = state.products
+        .where((p) => p.id == _selectedProductId)
+        .firstOrNull;
+    final canPurchase =
+        _supportsPurchases &&
+        !busy &&
+        !balance.isLoading &&
+        !balance.hasError &&
+        balance.asData?.value != null &&
+        balance.asData?.value.isUnlimited != true;
     if (!_focused && state.products.isNotEmpty && widget.purpose != null) {
       _focused = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        final slots = widget.purpose == 'buy_slots';
-        final target = (slots ? _slotsKey : _turnsKey).currentContext;
-        if (target != null) {
-          Scrollable.ensureVisible(target);
-          (slots ? _slotsFocus : _turnsFocus).requestFocus();
-        }
+        final target = (widget.purpose == 'buy_slots' ? _slotsKey : _turnsKey)
+            .currentContext;
+        if (target != null) Scrollable.ensureVisible(target);
       });
     }
     return PopScope(
       canPop: !busy,
       child: Scaffold(
         appBar: AppBar(title: Text(ko ? '대화 상점' : 'Conversation store')),
+        bottomNavigationBar: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 12, 24, 8),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_supportsPurchases)
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      key: const ValueKey('store-purchase'),
+                      onPressed: canPurchase && selected != null
+                          ? () => ref
+                                .read(billingControllerProvider.notifier)
+                                .purchase(selected)
+                          : null,
+                      child: Text(
+                        selected == null
+                            ? (ko ? '상품을 선택해 주세요' : 'Select a product')
+                            : (ko
+                                  ? '${selected.price} 구매'
+                                  : 'Buy · ${selected.price}'),
+                      ),
+                    ),
+                  ),
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  children: [
+                    TextButton(
+                      onPressed: busy
+                          ? null
+                          : () => launchUrl(Uri.parse(AppConfig.termsOfUseUrl)),
+                      child: Text(ko ? '이용약관' : 'Terms of Use'),
+                    ),
+                    TextButton(
+                      onPressed: busy
+                          ? null
+                          : () => launchUrl(
+                              Uri.parse(
+                                AppConfig.privacyPolicyUrlFor(isKorean: ko),
+                              ),
+                            ),
+                      child: Text(ko ? '개인정보처리방침' : 'Privacy Policy'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
         body: Stack(
           children: [
             ListView(
@@ -77,30 +132,53 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                   data: (value) => Card(
                     child: Padding(
                       padding: const EdgeInsets.all(20),
-                      child: Column(
+                      child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            ko ? '내 대화창 슬롯과 대화권' : 'Your conversation slots and credits',
-                            style: Theme.of(context).textTheme.titleLarge,
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  ko ? '대화창 슬롯' : 'Conversation slots',
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.titleMedium,
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  '${value.isUnlimited ? '∞' : (value.slotLimit ?? '—')}${ko ? '개' : ''}',
+                                  key: const ValueKey('store-slot-balance'),
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .headlineMedium
+                                      ?.copyWith(fontWeight: FontWeight.w700),
+                                ),
+                              ],
+                            ),
                           ),
-                          const SizedBox(height: 12),
-                          Text(
-                            value.isUnlimited
-                                ? (ko ? '관리자 · 무제한' : 'Admin · Unlimited')
-                                : (ko
-                                      ? '대화창 슬롯 ${access.asData?.value.usedSlots ?? '—'} / ${value.slotLimit ?? '—'}개 사용 중'
-                                      : 'Conversation slots ${access.asData?.value.usedSlots ?? '—'} / ${value.slotLimit ?? '—'} in use'),
-                          ),
-                          Text(
-                            ko
-                                ? '남은 대화권 ${value.isUnlimited ? '∞' : (value.remainingTurns ?? '—')}회'
-                                : '${value.isUnlimited ? '∞' : (value.remainingTurns ?? '—')} conversation credits remaining',
-                          ),
-                          Text(
-                            ko
-                                ? '체험 대화권 ${value.trialTurns}회 · 추가 대화권 ${value.paidTurns}회'
-                                : 'Trial credits ${value.trialTurns} · Added credits ${value.paidTurns}',
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  ko ? '남은 대화권' : 'Credits remaining',
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.titleMedium,
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  '${value.isUnlimited ? '∞' : (value.remainingTurns ?? '—')}${ko ? '회' : ''}',
+                                  key: const ValueKey('store-turn-balance'),
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .headlineMedium
+                                      ?.copyWith(fontWeight: FontWeight.w700),
+                                ),
+                              ],
+                            ),
                           ),
                         ],
                       ),
@@ -112,39 +190,6 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                     onPressed: () => ref.invalidate(billingEntitlementProvider),
                     child: Text(ko ? '잔액 다시 확인' : 'Retry balance'),
                   ),
-                ),
-                Wrap(
-                  children: [
-                    TextButton(
-                      onPressed: () =>
-                          launchUrl(Uri.parse(AppConfig.termsOfUseUrl)),
-                      child: Text(ko ? '이용약관' : 'Terms of Use'),
-                    ),
-                    TextButton(
-                      onPressed: () => launchUrl(
-                        Uri.parse(AppConfig.privacyPolicyUrlFor(isKorean: ko)),
-                      ),
-                      child: Text(ko ? '개인정보처리방침' : 'Privacy Policy'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 24),
-                Text(
-                  ko
-                      ? '대화권 1회는 사용자 메시지 1개와 AI 텍스트 답변 1개예요. 답변 저장 전에 실패하면 반환하고, 텍스트가 저장된 뒤 음성만 실패하면 사용한 것으로 처리해요.'
-                      : 'One conversation credit covers one user message and one AI text reply. Failure before saving the reply returns the credit; an audio-only failure after saving text still uses it.',
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  ko
-                      ? '같은 tomatalk 계정으로 로그인하면 잔액을 다시 확인할 수 있어요. 계정 삭제 시 추가 대화창 슬롯과 남은 대화권이 영구 소멸하며, 재가입·다른 계정에는 복원하거나 이전할 수 없어요.'
-                      : 'Sign in to the same tomatalk account to access your balance. Deleting the account permanently removes extra conversation slots and remaining conversation credits. They cannot be restored after re-registration or transferred to another account.',
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  ko
-                      ? '자체 지원 환불은 대화권 상품의 첫 사용 전, 대화창 슬롯 상품의 구매 후 첫 AI 텍스트 답변 저장 전까지만 검토해요. Apple 환불 요청은 Apple이 별도로 심사해요.'
-                      : 'Support refund review is available before the first use of a conversation credit pack, or before the first AI text reply saved after a conversation slot purchase. Apple reviews its refund requests separately.',
                 ),
                 if (!_supportsPurchases)
                   Padding(
@@ -162,25 +207,35 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                       child: Center(child: CircularProgressIndicator()),
                     ),
                   for (final kind in ['slots', 'turns'])
-                    Focus(
+                    Column(
                       key: kind == 'slots' ? _slotsKey : _turnsKey,
-                      focusNode: kind == 'slots' ? _slotsFocus : _turnsFocus,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const SizedBox(height: 32),
-                          Text(
-                            kind == 'slots'
-                                ? (ko ? '대화창 슬롯 추가' : 'Add conversation slots')
-                                : (ko ? '대화권 충전' : 'Conversation credits'),
-                            style: Theme.of(context).textTheme.headlineSmall,
-                          ),
-                          const SizedBox(height: 12),
-                          for (final product in state.products.where(
-                            (p) => p.id.contains('.$kind.'),
-                          ))
-                            Card(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 32),
+                        Text(
+                          kind == 'slots'
+                              ? (ko ? '대화창 슬롯 추가' : 'Add conversation slots')
+                              : (ko ? '대화권 충전' : 'Conversation credits'),
+                          style: Theme.of(context).textTheme.headlineSmall,
+                        ),
+                        const SizedBox(height: 12),
+                        for (final product in products.where(
+                          (p) => p.id.contains('.$kind.'),
+                        ))
+                          Semantics(
+                            selected: product.id == _selectedProductId,
+                            child: Card(
+                              key: ValueKey('store-product-${product.id}'),
+                              color: product.id == _selectedProductId
+                                  ? AppPalette.subscriptionSelected
+                                  : null,
                               child: ListTile(
+                                enabled: canPurchase,
+                                onTap: canPurchase
+                                    ? () => setState(
+                                        () => _selectedProductId = product.id,
+                                      )
+                                    : null,
                                 title: Text(
                                   kind == 'slots'
                                       ? (ko
@@ -191,25 +246,21 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                                             : '${product.id.split('.').last} conversation credits'),
                                 ),
                                 subtitle: Text(product.price),
-                                trailing: FilledButton(
-                                  onPressed:
-                                      busy ||
-                                          balance.asData?.value == null ||
-                                          balance.asData?.value.isUnlimited ==
-                                              true
-                                      ? null
-                                      : () => ref
-                                            .read(
-                                              billingControllerProvider
-                                                  .notifier,
-                                            )
-                                            .purchase(product),
-                                  child: Text(ko ? '구매' : 'Buy'),
-                                ),
+                                trailing: product.id == _selectedProductId
+                                    ? Image.asset(
+                                        'assets/images/snack_tomato/origin_tomato.png',
+                                        key: const ValueKey(
+                                          'store-selected-tomato',
+                                        ),
+                                        width: 36,
+                                        height: 36,
+                                        excludeFromSemantics: true,
+                                      )
+                                    : null,
                               ),
                             ),
-                        ],
-                      ),
+                          ),
+                      ],
                     ),
                   if (state.message != null && state.message != 'verified')
                     Padding(

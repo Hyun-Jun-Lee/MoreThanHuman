@@ -106,3 +106,36 @@ def test_random_order_is_validated_and_forwarded(client, repository, monkeypatch
     assert http.get("/api/v2/language-snacks/?order=random&limit=12").status_code == 200
     assert calls == [("en", 12, {"order": "random"})]
     assert http.get("/api/v2/language-snacks/?order=invalid").status_code == 422
+
+
+@pytest.mark.parametrize(
+    "kind", ["register_contrast", "collocation", "idiomatic_expression"]
+)
+@pytest.mark.parametrize("language", ["en", "ko"])
+def test_new_type_api_round_trip(client, kind, language):
+    from tests.domains.language_snacks.test_language_snack_schemas import new_snack
+
+    http, user = client
+    sample = new_snack(kind, language)
+    response = http.post(
+        "/api/v2/language-snacks/",
+        json=sample,
+        headers={"X-Operations-Key": "operations-key"},
+    )
+    assert response.status_code == 201, response.text
+    body = response.json()["data"]
+    assert body["payload"] == sample["payload"]
+    assert "identity" not in body and "generation_metadata" not in body
+    user.target_language = language
+    feed = http.get("/api/v2/language-snacks/?order=random").json()["data"]
+    assert len(feed) == 1
+    # SQLite 재조회는 timezone을 제거하므로 본문과 날짜의 순간을 따로 비교해요.
+    from datetime import UTC, datetime
+
+    for key, value in body.items():
+        if key.endswith("_at"):
+            assert datetime.fromisoformat(feed[0][key]).replace(
+                tzinfo=UTC
+            ) == datetime.fromisoformat(value).replace(tzinfo=UTC)
+        else:
+            assert feed[0][key] == value

@@ -49,9 +49,7 @@
 | `LANGUAGE_SNACKS_LOCK_DATABASE_URL` | transaction pooling 사용 시 | DATABASE_URL | 같은 DB의 direct/session 연결. API와 job에서 동일하게 사용 |
 | `LANGUAGE_SNACKS_PER_TYPE` | 아니오 | 3 | 언어별 유형별 목표 수량, 1..6 |
 | `LANGUAGE_SNACKS_MAX_CALLS` | 아니오 | 100 | 언어별 run의 누적 LLM 호출 상한 |
-| `LANGUAGE_SNACKS_MAX_TOKENS` | 아니오 | 250000 | 입력 UTF-8 바이트+출력 최대 토큰을 누적한 보수적 예산, 금액 상한이 아님 |
 | `LANGUAGE_SNACKS_HISTORY_BYTES` | 아니오 | 40000 | 전체 지식 이력 UTF-8 바이트 상한 |
-| `LANGUAGE_SNACKS_RUN_SECONDS` | 아니오 | 600 | 언어별 실행 시도 시간 상한(초), 각 LLM 요청은 최대 65초 |
 | `AUTO_CREATE_TABLES` | 아니오 | `false` | Alembic 대신 SQLAlchemy `create_all`을 실행할지 여부. 로컬 임시 실행 외에는 `false` 권장 |
 | `JWT_SECRET_KEY` | 설정 로드 시 필수 | 없음 | 레거시 JWT용 secret. Supabase 로그인에는 쓰지 않지만 현재 Settings에는 값이 필요해요 |
 | `ENV` | 아니오 | `prod` | 실행 환경. `dev`/`development`/`local`이면 개발 전용 API 활성화 |
@@ -129,9 +127,11 @@ Compose의 `environment`는 API와 생성 컨테이너에서 ENV=prod, DEBUG=fal
 - model: LANGUAGE_SNACKS_MODEL이 있으면 사용하고, 없으면 선택한 provider의 OPENROUTER_MODEL 또는 OLLAMA_MODEL을 사용해요. 후보·중복·본문·품질 검사는 모두 이 설정을 사용해요.
 - LANGUAGE_SNACKS_LOCK_DATABASE_URL은 DATABASE_URL과 **같은 DB의 direct 또는 session pooling 연결**이어야 해요. transaction pooling 연결로 session advisory lock을 사용하면 안 돼요.
 - PER_TYPE은 1..6, 나머지 스낵 숫자 상한은 양수예요. CLI의 --per-type은 환경변수보다 우선해요.
-- 호출·토큰 상한은 언어별 run에 누적되고 시간 제한은 실행 시도별로 적용돼요. 모델의 실제 금액 한도는 provider에서도 별도로 관리해요.
+- 호출 횟수 상한만 언어별 run에 누적돼요. 토큰 추정·누적 토큰 한도·전체 실행 시간 제한은 없고, 각 LLM 요청에는 65초 타임아웃을 적용해요. 실제 보고 토큰은 관측용으로만 기록해요. 모델의 실제 금액 한도는 provider에서도 별도로 관리해요.
 
 ## 변경 기록
+
+- 2026-11-26: 스낵의 추정 토큰·전체 시간 제한 설정을 제거하고 호출 횟수 제한만 유지해요.
 
 - 2026-11-25: 회원 제한 설정의 자원 명칭을 대화창 슬롯·체험 대화권으로 통일했어요.
 

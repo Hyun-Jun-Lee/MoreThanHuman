@@ -1,4 +1,5 @@
 import 'package:curitalk/app/theme/app_theme.dart';
+import 'package:curitalk/app/theme/tokens/tokens.dart';
 import 'package:curitalk/features/billing/billing_controller.dart';
 import 'package:curitalk/features/billing/billing_repository.dart';
 import 'package:curitalk/features/billing/paywall_screen.dart';
@@ -74,7 +75,6 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    debugDefaultTargetPlatformOverride = null;
   }
 
   testWidgets(
@@ -82,27 +82,119 @@ void main() {
     (tester) async {
       final controller = _TestBillingController();
       await showStore(tester, controller);
-      expect(find.text('남은 대화권 17회'), findsOneWidget);
-      expect(find.text('대화창 슬롯 2 / 4개 사용 중'), findsOneWidget);
+      expect(find.text('17회'), findsOneWidget);
+      expect(find.text('4개'), findsOneWidget);
+      final slots = tester.getRect(
+        find.byKey(const ValueKey('store-slot-balance')),
+      );
+      final turns = tester.getRect(
+        find.byKey(const ValueKey('store-turn-balance')),
+      );
+      expect(slots.top, turns.top);
+      expect(slots.right, lessThan(turns.left));
+      expect(find.byIcon(Icons.circle_outlined), findsNothing);
       expect(find.text('구매 복원'), findsNothing);
+      expect(
+        tester.getTopLeft(find.text('대화창 슬롯 +3개')).dy,
+        greaterThan(tester.getTopLeft(find.text('대화창 슬롯 +1개')).dy),
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(
+            const ValueKey(
+              'store-product-com.morethanhuman.curitalk.slots.plus.1',
+            ),
+          ),
+          matching: find.byKey(const ValueKey('store-selected-tomato')),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const ValueKey('store-purchase')))
+            .onPressed,
+        isNotNull,
+      );
       await tester.scrollUntilVisible(find.text('대화창 슬롯 +1개'), 250);
-      await tester.tap(find.widgetWithText(FilledButton, '구매').first);
+      await tester.tap(find.text('대화창 슬롯 +1개'));
+      await tester.pump();
+      expect(controller.purchases, isEmpty);
+      expect(
+        find.byKey(const ValueKey('store-selected-tomato')),
+        findsOneWidget,
+      );
+      expect(find.byIcon(Icons.check_circle), findsNothing);
+      expect(
+        tester
+            .widget<Card>(
+              find.byKey(
+                const ValueKey(
+                  'store-product-com.morethanhuman.curitalk.slots.plus.1',
+                ),
+              ),
+            )
+            .color,
+        AppPalette.subscriptionSelected,
+      );
+      await tester.tap(find.byKey(const ValueKey('store-purchase')));
       await tester.pump();
       expect(
         controller.purchases.single,
         'com.morethanhuman.curitalk.slots.plus.1',
       );
-      await tester.tap(find.widgetWithText(FilledButton, '구매').first);
+      await tester.tap(find.byKey(const ValueKey('store-purchase')));
       expect(controller.purchases.length, 2);
       await tester.scrollUntilVisible(find.text('대화권 20회 충전'), 250);
       expect(find.text('대화권 5회 충전'), findsOneWidget);
       expect(find.text('대화권 10회 충전'), findsOneWidget);
+      await tester.tap(find.text('대화권 20회 충전'));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('store-purchase')));
+      expect(controller.purchases.last, 'com.morethanhuman.curitalk.turns.20');
+      expect(find.text('내 대화창 슬롯과 대화권'), findsNothing);
+      final buyRect = tester.getRect(
+        find.byKey(const ValueKey('store-purchase')),
+      );
+      expect(buyRect.top, greaterThan(400));
+      expect(
+        tester.getRect(find.text('이용약관')).top,
+        greaterThan(buyRect.bottom),
+      );
+      debugDefaultTargetPlatformOverride = null;
+    },
+  );
+
+  testWidgets(
+    'small screen keeps purchase and policy links visible while products scroll',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 568);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final controller = _TestBillingController();
+      await showStore(tester, controller);
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const ValueKey('store-purchase')))
+            .onPressed,
+        isNotNull,
+      );
+      await tester.scrollUntilVisible(find.text('대화권 20회 충전'), 200);
+      await tester.tap(find.text('대화권 20회 충전'));
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('store-purchase')).hitTestable(),
+        findsOneWidget,
+      );
+      expect(find.text('개인정보처리방침').hitTestable(), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      debugDefaultTargetPlatformOverride = null;
     },
   );
 
   testWidgets('turn shortage focuses reply section', (tester) async {
     await showStore(tester, _TestBillingController(), purpose: 'buy_turns');
     expect(find.text('대화권 충전').hitTestable(), findsOneWidget);
+    debugDefaultTargetPlatformOverride = null;
   });
 
   testWidgets('admins cannot purchase', (tester) async {
@@ -110,10 +202,11 @@ void main() {
     await tester.scrollUntilVisible(find.text('대화창 슬롯 +1개'), 250);
     expect(
       tester
-          .widget<FilledButton>(find.widgetWithText(FilledButton, '구매').first)
+          .widget<FilledButton>(find.byKey(const ValueKey('store-purchase')))
           .onPressed,
       isNull,
     );
+    debugDefaultTargetPlatformOverride = null;
   });
 }
 

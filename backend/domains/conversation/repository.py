@@ -76,6 +76,19 @@ class ConversationRepository:
         )
         return self.db.query(query.exists()).scalar()
 
+    def unread_conversation_ids(self, user_id: str, conversation_ids: list[str]) -> set[str]:
+        """목록 페이지의 회원 소유 대화만 한 번에 집계해요."""
+        if not conversation_ids:
+            return set()
+        rows = self.db.query(MessageModel.conversation_id).join(
+            ConversationModel, MessageModel.conversation_id == ConversationModel.id,
+        ).join(ProfileModel, ConversationModel.user_id == ProfileModel.id).filter(
+            ProfileModel.id == user_id, ProfileModel.is_guest.is_(False),
+            ConversationModel.id.in_(conversation_ids),
+            MessageModel.role == MessageRole.ASSISTANT, MessageModel.read_at.is_(None),
+        ).distinct().all()
+        return {row[0] for row in rows}
+
     def mark_replies_read(self, conversation_id: str, user_id: str, message_ids: list[str]) -> None:
         conversation = self.find_by_id(conversation_id, user_id)
         profile = self.db.get(ProfileModel, user_id)

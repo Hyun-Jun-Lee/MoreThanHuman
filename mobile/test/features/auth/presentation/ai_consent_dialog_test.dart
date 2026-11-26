@@ -37,6 +37,13 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Consent for AI conversations'), findsOneWidget);
+    expect(find.text('[Required] AI data processing'), findsOneWidget);
+    expect(
+      find.text(
+        'Without consent, AI conversations, speech processing and learning feedback are unavailable.',
+      ),
+      findsOneWidget,
+    );
     expect(find.text('Privacy policy'), findsOneWidget);
     await tester.tap(find.text('Decide later'));
     await tester.pumpAndSettle();

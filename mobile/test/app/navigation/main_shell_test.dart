@@ -48,10 +48,9 @@ void main() {
       expect(fixture.storage.values['badge.choice.member'], 'disabled');
       await tester.tap(find.text('Profile'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Unread reply badge'));
+      await tester.tap(find.text('Unread notifications'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Use badge'));
-      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
       expect(fixture.bridge.requests, 1);
       expect(fixture.storage.values['badge.choice.member'], 'enabled');
       await tester.tap(find.text('Home'));
@@ -68,7 +67,7 @@ void main() {
     expect(find.text('Use badge'), findsNothing);
     fixture.router.go(AppRoute.profile);
     await tester.pumpAndSettle();
-    expect(find.text('Unread reply badge'), findsNothing);
+    expect(find.text('Unread notifications'), findsNothing);
     expect(fixture.bridge.requests, 0);
   });
 

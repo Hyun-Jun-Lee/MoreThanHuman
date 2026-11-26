@@ -1,7 +1,23 @@
 import 'package:curitalk/features/home/domain/language_snack.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../snack_test_fixtures.dart';
+
 void main() {
+  for (final kind in [
+    'register_contrast',
+    'collocation',
+    'idiomatic_expression',
+  ]) {
+    for (final language in ['en', 'ko']) {
+      test('$kind $language survives cache round trip', () {
+        final snack = testSnack(1, type: kind, language: language);
+        expect(LanguageSnack.fromJson(snack.toJson()).toJson(), snack.toJson());
+        expect(snack.semanticLabel, isNot(contains('null')));
+      });
+    }
+  }
+
   for (final type in ['usage_contrast', 'homonym']) {
     test('$type preserves expression-level explanations and examples', () {
       final json = _snackJson()
