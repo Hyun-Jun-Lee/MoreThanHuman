@@ -2,13 +2,14 @@
 
 import json
 import logging
-import os
 import sys
 from contextvars import ContextVar
 from datetime import datetime, timezone
 from pathlib import Path
 from traceback import extract_tb
 from typing import Any
+
+from config import get_settings
 
 
 request_context: ContextVar[dict[str, str] | None] = ContextVar("request_log_context", default=None)
@@ -66,8 +67,21 @@ def _safe_fields(fields: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+def _redact_configured_secrets(text: str) -> str:
+    """개발 로그에서도 설정된 인증 키·비밀번호·연결 문자열은 가려요."""
+    secrets = []
+    for name, value in get_settings().model_dump().items():
+        if not any(part in name for part in ("secret", "password", "token", "key", "database_url")):
+            continue
+        values = value.values() if isinstance(value, dict) else [value]
+        secrets.extend(item for item in values if isinstance(item, str) and len(item) >= 8)
+    for secret in sorted(set(secrets), key=len, reverse=True):
+        text = text.replace(secret, "[REDACTED]")
+    return text
+
+
 class JsonLogHandler(logging.Handler):
-    """자유 형식 메시지와 exc_info는 출력하지 않아요."""
+    """개발 환경은 메시지·traceback, 운영은 허용된 구조화 필드를 출력해요."""
 
     def emit(self, record: logging.LogRecord) -> None:
         try:
@@ -85,11 +99,17 @@ class JsonLogHandler(logging.Handler):
                 "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                 "level": record.levelname,
                 "service": "api",
-                "environment": os.getenv("ENV", "dev"),
+                "environment": get_settings().env,
                 "trace_id": context.get("trace_id"),
                 "request_id": context.get("request_id"),
                 **fields,
             }
+            if get_settings().is_dev:
+                payload["message"] = _redact_configured_secrets(record.getMessage())
+                if record.exc_info:
+                    payload["traceback"] = _redact_configured_secrets(
+                        logging.Formatter().formatException(record.exc_info)
+                    )
             if context.get("proxy_request_id"):
                 payload["proxy_request_id"] = context["proxy_request_id"]
             sys.stdout.write(json.dumps(payload, ensure_ascii=True, separators=(",", ":")) + "\n")
