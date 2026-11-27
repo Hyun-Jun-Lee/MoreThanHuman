@@ -345,7 +345,11 @@ void main() {
             find.text(
               type == 'idiomatic_expression' ? 'break the ice' : 'word-0-0',
             ),
-            findsOneWidget,
+            findsNWidgets(
+              type == 'idiomatic_expression' || type == 'regional_variant'
+                  ? 1
+                  : 2,
+            ),
           );
           expect(tester.takeException(), isNull);
           await _capture(tester, 'popup-$type-${width.toInt()}');

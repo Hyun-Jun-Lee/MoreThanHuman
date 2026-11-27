@@ -78,8 +78,8 @@ class RunnerTests: XCTestCase {
     XCTAssertTrue(snapshot.isValid)
     XCTAssertNil(snapshot.showingContent)
     XCTAssertNil(snapshot.showingTomato)
-    XCTAssertEqual(snapshot.pages.first?.title, "공통 의미")
-    XCTAssertEqual(snapshot.pages.first?.body, "같은 뜻이에요.")
+    XCTAssertEqual(snapshot.pages.first?.title, "표현 비교")
+    XCTAssertTrue(snapshot.pages.map(\.body).joined().contains("같은 뜻이에요."))
     XCTAssertTrue(snapshot.isTomatoOut)
     snapshot.basket.consumed = 0
     XCTAssertFalse(snapshot.isTomatoOut)
@@ -135,15 +135,14 @@ class RunnerTests: XCTestCase {
       page: 0,
       showingContent: true
     )
-    XCTAssertEqual(snapshot.pages.first?.title, "say · 사용 예시")
-    XCTAssertEqual(snapshot.pages.first?.body, "말하는 내용에 초점을 둬요.")
-    XCTAssertFalse(snapshot.pages.contains { $0.body == "표현을 비교해 보세요" })
-    XCTAssertEqual(snapshot.pages.count, 6)
-    XCTAssertEqual(snapshot.pairedPages.count, 3)
-    XCTAssertEqual(snapshot.pairedPages.first?.title, "say · 사용 예시")
-    XCTAssertEqual(snapshot.pairedPages.first?.body, "말하는 내용에 초점을 둬요.")
-    XCTAssertEqual(snapshot.pairedPages.first?.secondaryTitle, "tell · 사용 예시")
-    XCTAssertEqual(snapshot.pairedPages.first?.secondaryBody, "듣는 사람에 초점을 둬요.")
+    let pages = snapshot.readingPages(width: 300, height: 240, fontSize: 16)
+    XCTAssertEqual(pages.first?.title, "표현 비교")
+    XCTAssertTrue(pages.first!.body.contains("say"))
+    XCTAssertTrue(pages.first!.body.contains("tell"))
+    XCTAssertTrue(pages.contains { $0.body.contains("Say hello.") && $0.body.contains("안녕하세요라고 말해요.") })
+    let allText = pages.map(\.body).joined()
+    XCTAssertTrue(allText.contains("듣는 사람에 초점을 둬요."))
+
   }
 
   func testNewTypesDecodeAndRoundTripWithoutLosingPayload() throws {
@@ -176,13 +175,34 @@ class RunnerTests: XCTestCase {
       XCTAssertEqual(saved["payload"] as? NSDictionary, payload as NSDictionary)
       if kind == "idiomatic_expression" {
         XCTAssertEqual(snack.payload.displayItems.count, 1)
-        XCTAssertEqual(snapshot.pairedPages.first?.title, "직역")
-        XCTAssertTrue(snapshot.pairedPages.contains { $0.title == "실제 의미" && $0.body == "어색함을 풀다" })
+        XCTAssertEqual(snapshot.pairedPages.first?.title, "실제 의미")
+        XCTAssertTrue(snapshot.pairedPages.contains { $0.title == "실제 의미" && $0.body.contains("어색함을 풀다") })
         var broken = snack
         broken.payload.meaning = nil
         XCTAssertFalse(broken.isValid)
       }
     }
+  }
+
+  func testPaginationPreservesAllTextAtBothWidgetSizes() {
+    for text in [String(repeating: "긴 설명과 예문을 빠짐없이 읽어요. ", count: 30),
+                 String(repeating: "Long examples and their translations. ", count: 30),
+                 String(repeating: "👨‍👩‍👧‍👦", count: 80), "first\n\nsecond\ntranslation"] {
+      for height: CGFloat in [30, 220] {
+        let chunks = snackTextChunks(text, width: 260, height: height, fontSize: 16)
+        XCTAssertEqual(chunks.joined(), text)
+        XCTAssertTrue(chunks.allSatisfy { !$0.isEmpty })
+        for chunk in chunks {
+          let displayed = chunk.trimmingCharacters(in: .whitespacesAndNewlines)
+          let rect = (displayed as NSString).boundingRect(with: CGSize(width: 260, height: CGFloat.greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            attributes: [.font: UIFont.systemFont(ofSize: 16)], context: nil)
+          XCTAssertLessThanOrEqual(ceil(rect.height), height)
+        }
+      }
+    }
+    XCTAssertEqual(snackDisplayLabel("Formal", korean: true), "격식 있는 표현")
+    XCTAssertEqual(snackDisplayLabel("친구", korean: true), "친구")
   }
 
 }

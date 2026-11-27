@@ -56,10 +56,12 @@ struct ShowSnackPageIntent: AppIntent {
   static var openAppWhenRun = false
 
   @Parameter(title: "방향") var direction: Int
+  @Parameter(title: "페이지 수", default: 1) var pageCount: Int
 
   init() {}
 
-  init(direction: Int) {
+  init(direction: Int, pageCount: Int) {
+    self.pageCount = pageCount
     self.direction = direction
   }
 
@@ -67,7 +69,7 @@ struct ShowSnackPageIntent: AppIntent {
     guard var snapshot = SnackWidgetStore.current(), snapshot.showingContent == true else {
       return .result()
     }
-    let last = max(snapshot.pairedPages.count - 1, 0)
+    let last = max(pageCount - 1, 0)
     let current = min(max(snapshot.page, 0), last)
     snapshot.page = min(max(current + direction, 0), last)
     SnackWidgetStore.save(snapshot, reload: false)
@@ -183,116 +185,55 @@ struct SnackWidgetView: View {
   }
 
   private func contentCard(snapshot: SnackWidgetSnapshot, snack: SnackWidgetContent) -> some View {
-    let pages = snapshot.pairedPages
-    let page = min(max(snapshot.page, 0), pages.count - 1)
-    return VStack(alignment: .leading, spacing: isLarge ? 8 : 2) {
-      HStack {
-        Text(typeLabel(snack.contentType, language: snack.explanationLanguage))
-          .font(.system(size: isLarge ? 15 : 12, weight: .semibold))
-        Spacer()
-        Text("\(snapshot.basket.consumed) / 12")
-          .font(.system(size: isLarge ? 12 : 10, weight: .medium))
-          .foregroundStyle(.secondary)
-        Button(intent: CloseSnackContentIntent()) {
-          Image(systemName: "xmark")
-            .font(.system(size: isLarge ? 13 : 11, weight: .semibold))
-            .frame(width: isLarge ? 34 : 24, height: isLarge ? 34 : 24)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("스낵 닫기")
-      }
-
-      HStack(alignment: .top, spacing: isLarge ? 8 : 6) {
-        ForEach(snack.payload.displayItems.indices, id: \.self) { index in
-          expressionCard(snack.payload.displayItems[index])
-        }
-      }
-
-      if isLarge {
-        Rectangle().fill(Color.black.opacity(0.12)).frame(height: 1)
-      }
-
-      if let secondaryTitle = pages[page].secondaryTitle,
-         let secondaryBody = pages[page].secondaryBody {
-        HStack(alignment: .top, spacing: isLarge ? 8 : 6) {
-          pairedExplanation(title: pages[page].title, body: pages[page].body)
-          pairedExplanation(title: secondaryTitle, body: secondaryBody)
-        }
-      } else {
-        Text(pages[page].title)
-          .font(.system(size: isLarge ? 14 : 11, weight: .semibold))
-          .lineLimit(isLarge ? 2 : 1)
-        Text(pages[page].body)
-          .font(.system(size: isLarge ? 14 : 12))
-          .lineLimit(isLarge ? 7 : 3)
-          .minimumScaleFactor(0.85)
-      }
-      Spacer(minLength: 0)
-
-      if pages.count > 1 {
+    GeometryReader { geometry in
+      let padding: CGFloat = isLarge ? 16 : 8
+      let fontSize: CGFloat = isLarge ? 18 : 16
+      let bodyHeight = max(20, geometry.size.height - padding * 2 - 92)
+      let pages = snapshot.readingPages(width: geometry.size.width - padding * 2,
+                                       height: bodyHeight, fontSize: fontSize)
+      let page = min(max(snapshot.page, 0), max(0, pages.count - 1))
+      VStack(alignment: .leading, spacing: 4) {
         HStack {
-          Button(intent: ShowSnackPageIntent(direction: -1)) {
-            Image(systemName: "chevron.left")
-              .frame(width: isLarge ? 40 : 30, height: isLarge ? 32 : 22)
-          }
-          .disabled(page == 0)
+          Text(typeLabel(snack.contentType, language: snack.explanationLanguage))
+            .font(.system(size: isLarge ? 15 : 12, weight: .semibold))
+            .lineLimit(1)
+            .minimumScaleFactor(0.85)
           Spacer()
-          Text("\(page + 1) / \(pages.count)")
-            .font(.system(size: isLarge ? 12 : 10))
+          Button(intent: CloseSnackContentIntent()) {
+            Image(systemName: "xmark").frame(width: 28, height: 28)
+          }
+          .buttonStyle(.plain)
+          .accessibilityLabel(snack.explanationLanguage == "ko" ? "스낵 닫기" : "Close snack")
+        }.frame(height: 28)
+        if !pages.isEmpty {
+          Text(pages[page].title)
+            .font(.system(size: 12, weight: .semibold))
             .foregroundStyle(.secondary)
-          Spacer()
-          Button(intent: ShowSnackPageIntent(direction: 1)) {
-            Image(systemName: "chevron.right")
-              .frame(width: isLarge ? 40 : 30, height: isLarge ? 32 : 22)
-          }
-          .disabled(page == pages.count - 1)
+            .frame(height: 16, alignment: .leading)
+          Text(pages[page].body.trimmingCharacters(in: .whitespacesAndNewlines))
+            .font(.system(size: fontSize))
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, minHeight: bodyHeight, maxHeight: bodyHeight, alignment: .topLeading)
+          Spacer(minLength: 0)
+          HStack {
+            Button(intent: ShowSnackPageIntent(direction: -1, pageCount: pages.count)) {
+              Image(systemName: "chevron.left").frame(width: 40, height: 28)
+            }.disabled(page == 0)
+              .accessibilityLabel(snack.explanationLanguage == "ko" ? "이전 내용" : "Previous page")
+            Spacer()
+            Text("\(page + 1) / \(pages.count)").font(.system(size: 12))
+            Spacer()
+            Button(intent: ShowSnackPageIntent(direction: 1, pageCount: pages.count)) {
+              Image(systemName: "chevron.right").frame(width: 40, height: 28)
+            }.disabled(page == pages.count - 1)
+              .accessibilityLabel(snack.explanationLanguage == "ko" ? "다음 내용" : "Next page")
+          }.buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
       }
+      .padding(padding)
+      .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
-    .padding(isLarge ? 16 : 9)
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
     .background(backgroundColor(snack.contentType))
-  }
-
-  private func pairedExplanation(title: String, body: String) -> some View {
-    VStack(alignment: .leading, spacing: isLarge ? 4 : 2) {
-      Text(title)
-        .font(.system(size: isLarge ? 13 : 10, weight: .semibold))
-        .lineLimit(1)
-        .truncationMode(.tail)
-      Text(body)
-        .font(.system(size: isLarge ? 12 : 10))
-        .lineLimit(isLarge ? 5 : 2)
-        .truncationMode(.tail)
-    }
-    .frame(maxWidth: .infinity, alignment: .topLeading)
-  }
-
-  private func expressionCard(_ item: SnackWidgetExpression) -> some View {
-    VStack(alignment: .center, spacing: isLarge ? 3 : 1) {
-      if let label = item.label {
-        Text(label)
-          .font(.system(size: isLarge ? 11 : 9, weight: .medium))
-          .multilineTextAlignment(.center)
-          .foregroundStyle(.secondary)
-      }
-      Text(item.expression)
-        .font(.system(size: isLarge ? 16 : 14, weight: .bold))
-        .lineLimit(isLarge ? 2 : 1)
-        .minimumScaleFactor(0.7)
-        .multilineTextAlignment(.center)
-      if isLarge, let detail = item.usage ?? item.meaning {
-        Text(detail)
-          .font(.system(size: 11))
-          .lineLimit(2)
-          .multilineTextAlignment(.center)
-          .foregroundStyle(.secondary)
-      }
-    }
-    .frame(maxWidth: .infinity, minHeight: isLarge ? 48 : 28, alignment: .top)
-    .padding(isLarge ? 9 : 5)
-    .background(Color.white.opacity(0.65), in: RoundedRectangle(cornerRadius: isLarge ? 12 : 8))
   }
 
   private func tomatoImage(stage: Int, size: CGFloat) -> some View {
@@ -327,10 +268,10 @@ struct SnackWidgetView: View {
     switch type {
     case "register_contrast": return language == "ko" ? "상황에 맞는 말투" : "The right tone"
     case "collocation": return language == "ko" ? "함께 쓰면 자연스러운 말" : "Words that go together"
-    case "idiomatic_expression": return language == "ko" ? "직역하면 놓치는 뜻" : "Beyond literal meaning"
-    case "regional_variant": return "지역별 표현"
-    case "usage_contrast": return "표현의 차이"
-    default: return "동음이의어"
+    case "idiomatic_expression": return language == "ko" ? "표현 속 숨은 뜻" : "Beyond literal meaning"
+    case "regional_variant": return language == "ko" ? "지역마다 다른 표현" : "Regional expressions"
+    case "usage_contrast": return language == "ko" ? "비슷하지만 다른 쓰임" : "Usage differences"
+    default: return language == "ko" ? "같은 소리, 다른 뜻" : "Same sound, different meanings"
     }
   }
 }

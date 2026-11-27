@@ -395,9 +395,23 @@ class _TomatoPickup extends StatelessWidget {
   }
 }
 
-class _SnackDialog extends StatelessWidget {
+class _SnackDialog extends StatefulWidget {
   const _SnackDialog({required this.snack});
   final LanguageSnack snack;
+
+  @override
+  State<_SnackDialog> createState() => _SnackDialogState();
+}
+
+class _SnackDialogState extends State<_SnackDialog> {
+  final _scrollController = ScrollController();
+  LanguageSnack get snack => widget.snack;
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) => Dialog(
@@ -429,6 +443,14 @@ class _SnackDialog extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
+                Expanded(
+                  child: Text(
+                    AppCopy.forLocale(
+                      Locale(snack.explanationLanguage),
+                    ).languageSnackTypeLabel(snack.contentType),
+                    style: AppTypography.label,
+                  ),
+                ),
                 IconButton(
                   key: const ValueKey('close-snack'),
                   tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
@@ -439,14 +461,19 @@ class _SnackDialog extends StatelessWidget {
             ),
           ),
           Flexible(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.lg,
-                0,
-                AppSpacing.lg,
-                AppSpacing.lg,
+            child: Scrollbar(
+              controller: _scrollController,
+              thumbVisibility: true,
+              child: SingleChildScrollView(
+                controller: _scrollController,
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.lg,
+                  0,
+                  AppSpacing.lg,
+                  AppSpacing.lg,
+                ),
+                child: LanguageSnackContent(snack: snack),
               ),
-              child: LanguageSnackContent(snack: snack),
             ),
           ),
         ],

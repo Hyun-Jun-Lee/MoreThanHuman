@@ -1,5 +1,6 @@
 import Foundation
 import WidgetKit
+import UIKit
 
 struct SnackWidgetSnapshot: Codable {
   var userId: String
@@ -55,101 +56,42 @@ struct SnackWidgetSnapshot: Codable {
     return basket.consumed % 4
   }
 
-  var pages: [SnackWidgetPage] {
+  var pages: [SnackWidgetPage] { readingPages(width: 260, height: 90, fontSize: 16) }
+  var pairedPages: [SnackWidgetPage] { pages }
+
+  func readingPages(width: CGFloat, height: CGFloat, fontSize: CGFloat) -> [SnackWidgetPage] {
     guard let snack = currentSnack else { return [] }
-    var result: [SnackWidgetPage] = []
-    if snack.contentType == "idiomatic_expression" {
-      let ko = snack.explanationLanguage == "ko"
-      for (title, body) in [(ko ? "직역" : "Literal meaning", snack.payload.literalMeaning),
-                            (ko ? "실제 의미" : "Actual meaning", snack.payload.meaning),
-                            (ko ? "쓰임" : "Usage", snack.payload.usage),
-                            (ko ? "예문" : "Example", snack.payload.example),
-                            (ko ? "번역" : "Translation", snack.payload.exampleTranslation)] {
-        if let body { appendPages(title: title, body: body, to: &result) }
-      }
-      return result
-    }
-    appendContext(snack, to: &result)
-    if let meaning = snack.payload.meaning {
-      appendPages(title: "공통 의미", body: meaning, to: &result)
-    }
-    for item in snack.payload.displayItems {
-      if let usage = item.usage {
-        appendPages(title: "\(item.expression) · 사용 예시", body: usage, to: &result)
-      }
-      if let meaning = item.meaning {
-        appendPages(title: "\(item.expression) · 뜻", body: meaning, to: &result)
-      }
-      if let example = item.example {
-        appendPages(title: "\(item.expression) · 예문", body: example, to: &result)
-      }
-      if let translation = item.exampleTranslation {
-        appendPages(title: "\(item.expression) · 번역", body: translation, to: &result)
-      }
-    }
-    return result
-  }
-
-  var pairedPages: [SnackWidgetPage] {
-    guard let snack = currentSnack else { return [] }
-    guard snack.payload.displayItems.count == 2 else { return pages }
-    var result: [SnackWidgetPage] = []
-    appendContext(snack, to: &result)
-    if let meaning = snack.payload.meaning {
-      appendPages(title: "공통 의미", body: meaning, to: &result)
-    }
-
-    let first = snack.payload.displayItems[0]
-    let second = snack.payload.displayItems[1]
-    let fields: [(String, KeyPath<SnackWidgetExpression, String?>)] = [
-      (snack.explanationLanguage == "ko" ? "사용 예시" : "Usage", \.usage),
-      (snack.explanationLanguage == "ko" ? "뜻" : "Meaning", \.meaning),
-      (snack.explanationLanguage == "ko" ? "예문" : "Example", \.example),
-      (snack.explanationLanguage == "ko" ? "번역" : "Translation", \.exampleTranslation),
-    ]
-    for (label, field) in fields {
-      let firstBody = first[keyPath: field]
-      let secondBody = second[keyPath: field]
-      if let firstBody, let secondBody {
-        result.append(SnackWidgetPage(
-          title: "\(first.expression) · \(label)", body: firstBody,
-          secondaryTitle: "\(second.expression) · \(label)", secondaryBody: secondBody
-        ))
-      } else {
-        if let firstBody {
-          appendPages(title: "\(first.expression) · \(label)", body: firstBody, to: &result)
-        }
-        if let secondBody {
-          appendPages(title: "\(second.expression) · \(label)", body: secondBody, to: &result)
-        }
-      }
-    }
-    return result
-  }
-
-  private func appendContext(_ snack: SnackWidgetContent, to pages: inout [SnackWidgetPage]) {
     let ko = snack.explanationLanguage == "ko"
-    if let situation = snack.payload.situation {
-      appendPages(title: ko ? "상황" : "Situation", body: situation, to: &pages)
+    let payload = snack.payload
+    var sections: [(String, String)] = []
+    if snack.contentType == "idiomatic_expression" {
+      sections.append((ko ? "실제 의미" : "Meaning", [payload.expression, payload.meaning].compactMap { $0 }.joined(separator: "\n")))
+      sections.append((ko ? "이렇게 써요" : "In conversation", [payload.example, payload.exampleTranslation].compactMap { $0 }.joined(separator: "\n\n")))
+      sections.append((ko ? "언제 쓰나요?" : "When to use it", payload.usage ?? ""))
+      sections.append((ko ? "말 그대로 풀면" : "Literally", payload.literalMeaning ?? ""))
+    } else {
+      let cores = payload.displayItems.map { item in
+        [item.label.map { snackDisplayLabel($0, korean: ko) }, Optional(item.expression), item.meaning ?? item.usage]
+          .compactMap { $0 }.joined(separator: "\n")
+      }
+      let context = [payload.meaning, payload.headword].compactMap { $0 }.joined(separator: "\n")
+      sections.append((ko ? "표현 비교" : "Compare", ([context] + cores).filter { !$0.isEmpty }.joined(separator: "\n\n")))
+      if let situation = payload.situation {
+        sections.append((ko ? "이런 상황에서" : "Situation", situation))
+      }
+      for item in payload.displayItems {
+        if let example = item.example {
+          sections.append((ko ? "이렇게 써요" : "In conversation", [Optional(item.expression), Optional(example), item.exampleTranslation].compactMap { $0 }.joined(separator: "\n\n")))
+        }
+      }
     }
-    if let headword = snack.payload.headword {
-      appendPages(title: ko ? "중심 단어" : "Headword", body: headword, to: &pages)
+    return sections.flatMap { title, body in
+      snackTextChunks(body, width: width, height: height, fontSize: fontSize).enumerated().map { index, chunk in
+        SnackWidgetPage(title: index == 0 ? title : "\(title) · \(ko ? "계속" : "continued")", body: chunk)
+      }
     }
   }
 
-  private func appendPages(title: String, body: String, to pages: inout [SnackWidgetPage]) {
-    var remaining = body[...]
-    while !remaining.isEmpty {
-      if remaining.count <= 70 {
-        pages.append(SnackWidgetPage(title: title, body: String(remaining)))
-        break
-      }
-      let limit = remaining.index(remaining.startIndex, offsetBy: 70)
-      let breakPoint = remaining[..<limit].lastIndex(of: " ") ?? limit
-      pages.append(SnackWidgetPage(title: title, body: String(remaining[..<breakPoint])))
-      remaining = remaining[breakPoint...].drop(while: { $0 == " " })
-    }
-  }
 }
 
 struct SnackWidgetBasket: Codable {
@@ -328,5 +270,65 @@ enum SnackWidgetStore {
   private static func dayString(_ date: Date) -> String {
     let parts = Calendar(identifier: .gregorian).dateComponents([.year, .month, .day], from: date)
     return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
+  }
+}
+
+// 실제 글꼴과 가용 영역으로 분할하며 공백·줄바꿈도 버리지 않아요.
+func snackTextChunks(_ text: String, width: CGFloat, height: CGFloat, fontSize: CGFloat) -> [String] {
+  guard !text.isEmpty else { return [] }
+  let font = UIFont.systemFont(ofSize: fontSize)
+  let characters = Array(text)
+  var offset = 0
+  var chunks: [String] = []
+  while offset < characters.count {
+    var low = 1
+    var high = characters.count - offset
+    var fit = 1
+    while low <= high {
+      let length = (low + high) / 2
+      let candidate = String(characters[offset..<(offset + length)]).trimmingCharacters(in: .whitespacesAndNewlines)
+      let rect = (candidate as NSString).boundingRect(
+        with: CGSize(width: max(1, width - 4), height: CGFloat.greatestFiniteMagnitude),
+        options: [.usesLineFragmentOrigin, .usesFontLeading],
+        attributes: [.font: font], context: nil)
+      if ceil(rect.height) <= max(font.lineHeight, height - 4) {
+        fit = length
+        low = length + 1
+      } else { high = length - 1 }
+    }
+    if offset + fit < characters.count, fit > 1,
+       let boundary = characters[offset..<(offset + fit)].lastIndex(where: { $0.isWhitespace }),
+       boundary > offset {
+      fit = boundary - offset + 1
+    }
+    // 공백 경계로 되돌리면 마지막 줄바꿈이 빈 줄을 만들 수 있어 다시 측정해요.
+    while fit > 1 {
+      let finalText = String(characters[offset..<(offset + fit)]).trimmingCharacters(in: .whitespacesAndNewlines)
+      let bounds = (finalText as NSString).boundingRect(
+        with: CGSize(width: max(1, width - 4), height: CGFloat.greatestFiniteMagnitude),
+        options: [.usesLineFragmentOrigin, .usesFontLeading],
+        attributes: [.font: font], context: nil)
+      if ceil(bounds.height) <= max(font.lineHeight, height - 4) { break }
+      fit -= 1
+    }
+    let chunk = String(characters[offset..<(offset + fit)])
+    if chunk.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, !chunks.isEmpty {
+      chunks[chunks.count - 1] += chunk
+    } else {
+      chunks.append(chunk)
+    }
+    offset += fit
+  }
+  return chunks
+}
+
+func snackDisplayLabel(_ label: String, korean: Bool) -> String {
+  guard korean else { return label }
+  switch label.lowercased() {
+  case "formal": return "격식 있는 표현"
+  case "informal": return "일상적인 표현"
+  case "polite": return "정중한 표현"
+  case "casual": return "편한 표현"
+  default: return label
   }
 }

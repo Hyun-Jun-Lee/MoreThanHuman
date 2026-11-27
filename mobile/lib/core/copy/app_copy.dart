@@ -348,7 +348,7 @@ class AppCopy {
     'register_contrast' => isKorean ? '상황에 맞는 말투' : 'The right tone',
     'collocation' => isKorean ? '함께 쓰면 자연스러운 말' : 'Words that go together',
     'idiomatic_expression' =>
-      isKorean ? '직역하면 놓치는 뜻' : 'Beyond literal meaning',
+      isKorean ? '표현 속 숨은 뜻' : 'Beyond literal meaning',
     _ => languageSnackLabel,
   };
   String get previousLanguageSnackTooltip =>
