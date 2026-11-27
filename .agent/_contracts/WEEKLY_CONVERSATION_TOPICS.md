@@ -1,5 +1,7 @@
 # Weekly Conversation Topics — ACTIVE
 
+> 2026-11-27 v2: 홈은 전체 발행 주차에서 최대 8개를 매번 무작위 조회해요.
+
 주간 추천은 정식 회원과 Supabase 익명 게스트의 학습 언어쌍에 공통으로 발행돼요. 운영자가 서버 CLI를 직접 실행해 생성하며 예약 worker는 이 계약의 범위 밖이에요.
 
 ## Publication
@@ -14,7 +16,7 @@
 
 ## API
 
-- `GET /api/conversation-topics/weekly/`는 인증된 profile의 언어쌍에서 최신 발행 묶음을 반환해요. 성공 `data`는 `{week_start, topics: [{id, text}]}`예요. 목록이 없으면 `week_start: null`, `topics: []`예요.
+- `GET /api/conversation-topics/weekly/`는 인증된 profile의 언어쌍에서 전체 발행 주차의 시작 가능한 주제를 고정 seed 없이 중복 ID 없이 최대 8개 무작위 반환해요. 보관되었거나 첫 질문이 null·공백인 항목은 제외해요. 성공 `data`는 `{week_start: null, topics: [{id, text}]}`예요. 기존 경로와 nullable 필드는 호환성을 위해 유지하고 주차는 발행 관리에만 사용해요. 목록이 없으면 `week_start: null`, `topics: []`예요.
 - `POST /api/conversations/start/free-chat/suggested/`는 `{topic_id, start_request_id, include_audio_response}`를 받아요. 성공 `data`는 `{conversation_id, assistant_message_id, conversation_type, language, response, audio?, audio_error?}`예요.
 - 시작 시 profile 언어쌍, 발행 및 보관 상태, 첫 질문 존재 여부, 대화 슬롯을 검사해요. 생성된 대화는 `FREE_CHAT`이고 첫 메시지는 발행 시 저장된 AI 질문 하나예요. 사용자 발화 수는 0이에요.
 - 게스트가 주제를 확인하면 로그인 화면이 아니라 같은 추천 시작 API로 대화를 시작해요. 현재 AI 처리 동의와 게스트 1개 슬롯·계정 누적 5회 권한을 서버에서 확인하며 저장된 첫 AI 질문은 사용량에 포함하지 않아요.
@@ -28,3 +30,5 @@
 - 주제는 제목·공통 배경 박스 없이 밝은 회색 카드와 검정 글자로 표시하고, 각 카드 상단 테두리 중앙에 초록 토마토 꼭지 이미지를 걸쳐요. 탭한 주제의 모든 반복 카드는 즉시 빨간색으로 바뀌고, 확인 팝업이 열린 동안 이동을 멈춰요. 취소하거나 시작에 실패하면 회색으로 돌아가요. 손가락으로 좌우로 밀면 그 거리만큼 이동하고 손을 떼면 현재 위치에서 자동 흐름을 이어가요. 터치 중 이동을 멈추고 동작 줄이기 및 접근성 탐색에서는 정적 선택 목록을 보여줘요.
 - 카드를 탭하면 선택한 주제를 포함한 시작 확인 팝업을 화면 중심보다 위에 보여줘요. 선택된 카드의 색 변화가 팝업 아래에서도 보이도록 배치해요. 취소 시 API를 호출하지 않고, 시작 확인 후 ‘대화 시작을 준비하고 있어요’ 로딩 상태를 카드 자리에서 보여주며 중복 시작을 막아요.
 - 추천 조회가 실패하면 같은 계정·언어쌍의 마지막 성공 목록을 사용해요. 캐시도 없으면 추천 영역을 숨겨요.
+
+- 홈 진입·탭 복귀·앱 복귀·당겨서 새로고침 시 다시 조회해요. 진행 중 조회는 중복 갱신하지 않아요. 직전 목록과 겹치는 항목은 허용해요.

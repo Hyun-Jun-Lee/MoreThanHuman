@@ -52,6 +52,32 @@ def test_latest_published_batch_and_archive(db):
     assert topics.latest("ko", "en")[0].isoformat() == "2026-09-28"
 
 
+def test_random_topics_include_all_weeks_and_only_startable_language_pair(db):
+    repository = WeeklyTopicRepository(db)
+    older = repository.publish("ko", "en", "2026-09-28", _items("이전", 3))
+    newer = repository.publish("ko", "en", "2026-10-05", _items("최신", 4))
+    repository.publish("en", "ko", "2026-10-05", _items("Other", 3))
+    repository.archive(newer[0].id)
+    newer[1].first_question = None
+    newer[2].first_question = "   "
+    db.commit()
+
+    result = repository.random_topics("ko", "en")
+    assert {topic.id for topic in result} == {topic.id for topic in older + [newer[3]]}
+    assert repository.random_topics("ja", "en") == []
+
+
+def test_random_topics_limit_to_eight_distinct_topics(db):
+    repository = WeeklyTopicRepository(db)
+    older = repository.publish("ko", "en", "2026-09-28", _items("이전", 8))
+    newer = repository.publish("ko", "en", "2026-10-05", _items("최신", 8))
+    eligible = {topic.id for topic in older + newer}
+    result = repository.random_topics("ko", "en")
+    assert len(result) == 8
+    assert len({topic.id for topic in result}) == 8
+    assert {topic.id for topic in result} <= eligible
+
+
 def test_republish_keeps_active_ids_and_existing_start_references(db):
     user_id = str(uuid4())
     db.add(ProfileModel(id=user_id, email=f"{user_id}@example.com", name="Learner"))
@@ -199,7 +225,8 @@ def test_api_lists_pair_topics_and_starts_ai_first(db, monkeypatch):
 
     listing = client.get("/api/conversation-topics/weekly/")
     assert listing.status_code == 200
-    assert [item["id"] for item in listing.json()["data"]["topics"]] == [item.id for item in own]
+    assert {item["id"] for item in listing.json()["data"]["topics"]} == {item.id for item in own}
+    assert listing.json()["data"]["week_start"] is None
     assert set(listing.json()["data"]["topics"][0]) == {"id", "text"}
     request_id = str(uuid4())
     started = client.post(

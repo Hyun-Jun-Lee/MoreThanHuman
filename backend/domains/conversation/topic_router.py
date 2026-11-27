@@ -19,10 +19,10 @@ def weekly_topics(
     db: Session = Depends(get_db),
 ):
     language = current_user.language
-    week, topics = WeeklyTopicRepository(db).latest(
+    topics = WeeklyTopicRepository(db).random_topics(
         language.native_language.value, language.target_language.value
     )
     return SuccessResponse(data=WeeklyTopicsResponse(
-        week_start=week.isoformat() if week else None,
+        week_start=None,
         topics=[WeeklyTopicItem(id=topic.id, text=topic.text) for topic in topics],
     ))

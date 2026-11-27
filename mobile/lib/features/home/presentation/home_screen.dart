@@ -478,7 +478,7 @@ class _WeeklyTopicSectionState extends ConsumerState<_WeeklyTopicSection>
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        ref.read(weeklyTopicsControllerProvider.notifier).refreshIfNewWeek();
+        ref.read(weeklyTopicsControllerProvider.notifier).refresh();
       }
     });
   }
@@ -486,7 +486,7 @@ class _WeeklyTopicSectionState extends ConsumerState<_WeeklyTopicSection>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      ref.read(weeklyTopicsControllerProvider.notifier).refreshIfNewWeek();
+      ref.read(weeklyTopicsControllerProvider.notifier).refresh();
     }
   }
 
@@ -497,7 +497,7 @@ class _WeeklyTopicSectionState extends ConsumerState<_WeeklyTopicSection>
     if (active && !_homeActive) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
-          ref.read(weeklyTopicsControllerProvider.notifier).refreshIfNewWeek();
+          ref.read(weeklyTopicsControllerProvider.notifier).refresh();
         }
       });
     }

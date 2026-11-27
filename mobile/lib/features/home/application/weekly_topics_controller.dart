@@ -5,35 +5,20 @@ import 'package:curitalk/features/home/domain/weekly_topic.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class WeeklyTopicsController extends AsyncNotifier<WeeklyTopics> {
-  String? _fetchedSlot;
-  DateTime? _lastFetch;
-  String? _scope;
-
   @override
   Future<WeeklyTopics> build() async {
     final user = ref.watch(authControllerProvider).value?.user;
     if (user == null) {
-      _scope = null;
-      _fetchedSlot = null;
-      _lastFetch = null;
       return const WeeklyTopics(weekStart: null, topics: []);
     }
     final pair =
         '${user.language.nativeLanguage.code}-${user.language.targetLanguage.code}';
-    final scope = '${user.id}.$pair';
-    if (_scope != scope) {
-      _scope = scope;
-      _fetchedSlot = null;
-      _lastFetch = null;
-    }
     final cache = ref.watch(weeklyTopicCacheProvider);
     try {
       final topics = await ref.watch(weeklyTopicRepositoryProvider).list();
       if (!_scopeMatches(user.id, pair)) {
         return const WeeklyTopics(weekStart: null, topics: []);
       }
-      _fetchedSlot = _currentSlot();
-      _lastFetch = DateTime.now();
       if (topics.topics.isNotEmpty) {
         try {
           await cache.write(user.id, pair, topics);
@@ -65,27 +50,10 @@ class WeeklyTopicsController extends AsyncNotifier<WeeklyTopics> {
             pair;
   }
 
-  void refreshIfNewWeek() {
-    if (!state.isLoading &&
-        (_fetchedSlot != _currentSlot() ||
-            _lastFetch == null ||
-            DateTime.now().difference(_lastFetch!) >=
-                const Duration(minutes: 5))) {
+  void refresh() {
+    if (!state.isLoading) {
       ref.invalidateSelf();
     }
-  }
-
-  String _currentSlot() {
-    final now = DateTime.now().toUtc().add(const Duration(hours: 9));
-    var monday = DateTime.utc(
-      now.year,
-      now.month,
-      now.day,
-    ).subtract(Duration(days: now.weekday - DateTime.monday));
-    if (now.hour < 5 && now.weekday == DateTime.monday) {
-      monday = monday.subtract(const Duration(days: 7));
-    }
-    return '${monday.year}-${monday.month.toString().padLeft(2, '0')}-${monday.day.toString().padLeft(2, '0')}';
   }
 }
 

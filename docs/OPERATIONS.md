@@ -286,7 +286,7 @@ Docker Compose로 배포한 서버에서는 저장소 루트에서 `docker compo
 
 기존 주차를 새 주제·첫 질문으로 교체하려면 migration과 새 API 배포 후 `uv run python -m scripts.generate_weekly_topics --pair all --republish`를 실행해요. Docker에서는 `docker compose exec api python -m scripts.generate_weekly_topics --pair all --republish`를 사용해요. 모든 후보를 검증한 다음 활성 주제의 ID를 유지하며 문구와 질문을 한 트랜잭션에서 교체해요. 기존 활성 주제 수보다 검증된 후보가 적으면 기존 발행을 유지하고 실패로 종료해요. 보관된 주제와 완료된 대화·시작 예약은 보존해요. `--pair all`은 언어쌍별로 순서대로 실행되므로 한쪽만 성공할 수 있어요. migration 후 재발행 전의 구형 주제는 첫 질문이 없어 새 대화를 시작할 수 없으므로, 배포 작업 중 재발행을 완료하고 목록·시작 동작을 확인해요.
 
-생성 실패나 미실행 시 목록 API는 마지막 발행 묶음을 계속 반환해요. 처음부터 발행 기록이 없으면 홈의 추천 영역이 숨겨져요. 문제 주제를 발견하면 아래 명령으로 보관해요. 보관 후 새 목록에서 빠지고 기존 앱 캐시의 해당 ID도 대화 시작 시 서버가 거절해요.
+목록 API는 주차와 관계없이 전체 발행 주제 중 시작 가능한 항목을 최대 8개 무작위 반환해요. 생성 실패나 미실행 시에도 기존 발행 주제 전체가 추출 대상이에요. 처음부터 발행 기록이 없으면 홈의 추천 영역이 숨겨져요. 문제 주제를 발견하면 아래 명령으로 보관해요. 보관 후 새 목록에서 빠지고 기존 앱 캐시의 해당 ID도 대화 시작 시 서버가 거절해요.
 
 ```bash
 uv run python -m scripts.archive_weekly_topic TOPIC_UUID
@@ -295,6 +295,8 @@ uv run python -m scripts.archive_weekly_topic TOPIC_UUID
 백업·복구에서는 API와 생성 CLI를 중지하고 `weekly_topic_batches`, `weekly_topics`, `suggested_starts`를 함께 다뤄요. `alembic downgrade 20261001_0001`은 이 세 테이블과 발행·멱등성 이력을 삭제하므로 운영 데이터 롤백에는 사전 DB 백업을 사용해요. 실제 LLM 출력은 자동 검사 후에도 의미·어조 오류가 남을 수 있으므로 첫 발행 표본을 확인해요.
 
 ## 변경 기록
+
+- 2026-11-27: 추천 목록 v2를 전체 발행 주제의 최대 8개 무작위 추출로 변경했어요. 주차는 발행 관리에만 사용해요.
 
 - 2026-11-25: 상품명을 대화창 슬롯·대화권으로 통일하고 삭제 기록·구독 테이블 이관·잔액별 이용 제한 설명을 현행 정책에 맞췄어요.
 

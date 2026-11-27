@@ -1544,7 +1544,7 @@ class _FixedWeeklyTopicsController extends WeeklyTopicsController {
   Future<WeeklyTopics> build() async => topics;
 
   @override
-  void refreshIfNewWeek() {}
+  void refresh() {}
 }
 
 class _FakeConversationAccessRepository

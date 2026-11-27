@@ -3,6 +3,7 @@
 from datetime import date, datetime
 from uuid import uuid4
 
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -34,6 +35,23 @@ class WeeklyTopicRepository:
             .all()
         )
         return batch.week_start, topics
+
+    def random_topics(self, native: str, target: str) -> list[WeeklyTopicModel]:
+        """전체 발행 주차에서 시작 가능한 주제를 중복 없이 무작위 조회해요."""
+        return (
+            self.db.query(WeeklyTopicModel)
+            .join(WeeklyTopicBatchModel)
+            .filter(
+                WeeklyTopicBatchModel.native_language == native,
+                WeeklyTopicBatchModel.target_language == target,
+                WeeklyTopicModel.archived_at.is_(None),
+                WeeklyTopicModel.first_question.isnot(None),
+                func.trim(WeeklyTopicModel.first_question) != "",
+            )
+            .order_by(func.random())
+            .limit(8)
+            .all()
+        )
 
     def available(self, topic_id: str, native: str, target: str) -> WeeklyTopicModel | None:
         return (
