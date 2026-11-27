@@ -428,6 +428,8 @@ module Conversation {
 
   자유 대화 시작 시 주제 준비 문맥을 `conversations.topic`, `topic_summary`, `conversation_direction`, `custom_focus`에 보존해요. `topic_summary`에는 시작 요청의 `search_context`(주제 준비 카드의 summary)를 저장해요. 네 필드는 모두 NULL을 허용하므로 DB 마이그레이션 후 주제 준비 없이 시작한 대화와 기존 대화는 값이 없어도 유효해요. 선택한 첫 질문은 이 네 필드에 포함하지 않아요. 모델 변경에 맞는 DB 마이그레이션은 별도로 적용해야 해요.
 
+  FreeChat 후속 턴은 저장된 `topic_summary`가 있으면 매번 시스템 프롬프트의 초기 배경 정보로 전달해요. 현재 사용자 발화와 최근 대화를 우선하고 자연스러운 주제 전환을 따르며, 시점에 민감한 내용은 오래됐을 수 있는 정보로 취급해요. 요약이 없는 대화는 이 배경 정보를 생략해요. Role Playing은 저장된 `role_character`를 후속 턴마다 계속 전달해요.
+
   type StartRoleplayRequest {
     role_character: String
     search_context?: String

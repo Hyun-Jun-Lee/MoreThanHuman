@@ -139,7 +139,7 @@ class Settings(BaseSettings):
     search_min_relevant_results: int = 2
 
     # Conversation Settings
-    max_history_turns: int = 10
+    max_history_turns: int = 3
     conversation_access_enabled: bool = False
     apple_iap_environment: Literal["sandbox", "production"] | None = None
     apple_iap_bundle_id: str | None = None

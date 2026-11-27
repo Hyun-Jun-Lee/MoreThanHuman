@@ -913,7 +913,7 @@ class ConversationRepository:
             raise NotFoundException(f"Conversation {conversation_id} not found")
         return count
 
-    def get_recent_messages(self, conversation_id: str, turn_count: int = 10) -> list[MessageModel]:
+    def get_recent_messages(self, conversation_id: str, turn_count: int = 3) -> list[MessageModel]:
         """
         최근 N턴의 메시지 조회
 

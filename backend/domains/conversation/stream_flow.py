@@ -75,7 +75,8 @@ def _prepare_existing_turn(
                                     if item.role == MessageRole.ASSISTANT), None)
         with latency_span("stream_context.prompt", operation=kind):
             system_prompt = service.build_system_prompt(
-                None, conversation.conversation_type, conversation.role_character,
+                conversation.topic_summary if conversation.conversation_type == ConversationType.FREE_CHAT else None,
+                conversation.conversation_type, conversation.role_character,
                 language_context=language, nickname=nickname,
             )
             history = service.prepare_message_history(previous)
@@ -249,7 +250,8 @@ def prepare_generation(
                     ) if item.id != user_message.id]
                 with latency_span("stream_context.prompt", operation=operation):
                     system_prompt = service.build_system_prompt(
-                        None, conversation.conversation_type, conversation.role_character,
+                        conversation.topic_summary if conversation.conversation_type == ConversationType.FREE_CHAT else None,
+                        conversation.conversation_type, conversation.role_character,
                         language_context=language, nickname=nickname,
                     )
                     history = service.prepare_message_history(previous)

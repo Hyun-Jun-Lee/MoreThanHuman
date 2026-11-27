@@ -84,7 +84,7 @@
 | `SEARCH_BACKEND` | 아니오 | `auto` | ddgs 검색 backend |
 | `SEARCH_MAX_RESULTS` | 아니오 | `6` | 필터링 전 수집할 검색 결과 수. 최소 관련 출처 2개를 확보하지 못할 수 있어 품질 지표를 함께 확인해요. |
 | `SEARCH_MIN_RELEVANT_RESULTS` | 아니오 | `2` | LLM judge가 accept해야 하는 최소 출처 수 |
-| `MAX_HISTORY_TURNS` | 아니오 | `10` | 대화 기록 최대 턴 |
+| `MAX_HISTORY_TURNS` | 아니오 | `3` | AI 프롬프트에 포함할 최근 대화 턴 수 (최대 6개 이전 메시지) |
 | `CONVERSATION_ACCESS_ENABLED` | 아니오 | `false` | 회원의 기본 대화창 슬롯 1개·계정 최초 체험 대화권 10회와 일회성 추가 구매 잔액의 제한 적용 여부. 게스트의 활성 슬롯 1개·누적 체험 5회는 항상 집행해요. Sandbox와 PostgreSQL 검증 후 활성화해요 |
 | `APPLE_IAP_ISSUER_ID`, `APPLE_IAP_KEY_ID`, `APPLE_IAP_PRIVATE_KEY` | 아니오 | 없음 | 이전 배포 환경과의 호환을 위해 읽기만 허용해요. 새 검증 경로에서는 사용하지 않아요 |
 | `BILLING_HMAC_KEYS` | 필수 | 없음 | 버전 → 독립 비밀 키 JSON. 각 키 최소 32바이트. 서버 전용 비밀 저장소·백업에 보관하고 기존 tombstone의 버전 키를 유지해요 |

@@ -1,4 +1,5 @@
 from uuid import uuid4
+from datetime import datetime, timedelta
 
 import pytest
 from sqlalchemy import create_engine, event
@@ -18,6 +19,37 @@ def _repository():
     Base.metadata.create_all(bind=engine)
     session = sessionmaker(bind=engine)()
     return ConversationRepository(session)
+
+
+def test_prompt_history_keeps_only_six_previous_messages():
+    repository = _repository()
+    user_id = str(uuid4())
+    conversation_id = str(uuid4())
+    repository.db.add(ProfileModel(id=user_id, email="history@example.com", name="History"))
+    repository.db.add(ConversationModel(
+        id=conversation_id, user_id=user_id, conversation_type=ConversationType.FREE_CHAT,
+    ))
+    start = datetime(2026, 1, 1)
+    repository.db.add_all([
+        MessageModel(
+            id=str(uuid4()), conversation_id=conversation_id,
+            role=MessageRole.USER if index % 2 == 0 else MessageRole.ASSISTANT,
+            content=str(index), created_at=start + timedelta(seconds=index),
+        )
+        for index in range(9)
+    ])
+    repository.db.commit()
+
+    # JSON 경로는 마지막 사용자 입력을 제외하고, 스트림 경로는 이전 메시지만 조회해요.
+    json_history = repository.get_recent_messages(conversation_id, 4)[:-1]
+    stream_history = repository.get_recent_messages(conversation_id, 3)
+    service = ConversationService(repository)
+    assert [item["content"] for item in service.prepare_message_history(json_history)] == [
+        "2", "3", "4", "5", "6", "7",
+    ]
+    assert [item["content"] for item in service.prepare_message_history(stream_history)] == [
+        "3", "4", "5", "6", "7", "8",
+    ]
 
 
 def test_find_all_filters_conversations_by_profile_id():

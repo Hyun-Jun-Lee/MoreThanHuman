@@ -45,6 +45,18 @@ def test_free_chat_prompt_includes_topic_prep_handoff_context():
     assert "counterarguments" in prompt
 
 
+def test_saved_topic_summary_is_background_and_absent_when_missing():
+    service = ConversationService(repository=None)
+    prompt = service.build_system_prompt("A cafe opened last week.", ConversationType.FREE_CHAT)
+
+    assert "A cafe opened last week." in prompt
+    assert "Prioritize the user's current message and recent conversation" in prompt
+    assert "Treat time-sensitive facts as potentially outdated" in prompt
+    assert "Initial Topic Background" not in service.build_system_prompt(
+        None, ConversationType.FREE_CHAT,
+    )
+
+
 @pytest.mark.parametrize(
     ("topic", "expected"),
     [

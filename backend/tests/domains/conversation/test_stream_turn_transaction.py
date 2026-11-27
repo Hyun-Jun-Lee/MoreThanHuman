@@ -99,6 +99,10 @@ def test_guest_cannot_start_stream_roleplay_after_five_account_turns(stream_db):
 @pytest.mark.parametrize("kind", ["turn", "message"])
 def test_new_turn_reads_history_once_and_commits_all_rows_together(stream_db, kind):
     engine, sessions, user_id, conversation_id = stream_db
+    with sessions() as db:
+        db.get(ConversationModel, conversation_id).topic_summary = "Initial cafe background"
+        db.commit()
+    _CountingSession.commits = 0
     statements = []
 
     def capture(_connection, _cursor, statement, _parameters, _context, _many):
@@ -119,6 +123,8 @@ def test_new_turn_reads_history_once_and_commits_all_rows_together(stream_db, ki
         {"role": "user", "content": "Hello"},
         {"role": "assistant", "content": "How are you?"},
     ]
+    assert "Initial cafe background" in prepared.system_prompt
+    assert "Prioritize the user's current message and recent conversation" in prepared.system_prompt
     with sessions() as db:
         turn = db.get(StreamTurnModel, prepared.turn_id)
         assert turn.user_message_id == prepared.user_message_id
