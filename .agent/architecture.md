@@ -306,3 +306,7 @@ FastAPI lifespan에서 워커의 이벤트 루프별 AI용·Supabase 인증용 `
 ### iOS 미확인 답변 배지 v1 (2026-11-26)
 
 서버는 메시지별 `read_at`과 소유자 조건의 존재 조회를 제공해요. Flutter의 `BadgeSyncController`는 읽음 API·존재값 조회·native 쓰기를 단일 경로로 조정하며 계정 유형·동기화 세대로 지연 응답을 버려요. 읽음과 배지 요청은 대화 응답 표시·재생·전송을 기다리게 하지 않아요. 회원별 기기 선택과 iOS 16 이상 배지 권한이 모두 있어야 1을 설정해요. 전경 UI의 전체 답변 공개, 중단된 요청만 복구, 회원 전용 권한과 검증 상태는 [배지 계약](_contracts/IOS_UNREAD_BADGE.md)을 참조해요.
+
+### 대화 억양 v1 (2026-11-28)
+
+`conversations.tts_accent`는 미국 기본값을 갖는 대화 설정이에요. 스트림 시작 입력에도 보존해 대화 생성 전 Roleplay 실패를 재시도할 수 있어요. TTS는 명시적 요청 쿼리 또는 대화에 저장된 억양으로 음성을 선택해요. Flutter는 영어 학습의 Topic Prep·Roleplay Setup·추천 확인창에서 공통 `AccentSelector`와 번들 국기 이미지를 사용해요.

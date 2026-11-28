@@ -597,7 +597,9 @@ module Conversation {
 | `POST /api/conversations/turns/{turn_id}/retry/stream/` | 실패한 AI 생성을 저장된 입력으로 다시 시도해요. 새 사용자 발화와 STT는 만들지 않아요. |
 | `POST /api/conversations/messages/{assistant_message_id}/audio/stream/` | 저장된 MP3가 모두 정상이면 재생하고, 파일이 없거나 손상됐으면 저장된 답변에서 TTS를 한 번 다시 생성해요. 소유자 인증을 확인하고 중복 생성은 409예요. |
 
-음성 생성 경로는 선택 쿼리 파라미터 `tts_accent=us|au|gb`와 `tts_speed=0.5..2.0`을 받아요. 생략하면 MAI-Voice-2.1-Flash의 미국 Harper 음성과 0.8배 속도를 사용해요. 악센트별 음성은 미국 Harper, 호주 Isla, 영국 Emily예요. 이 모델의 OpenRouter 합성 요청에는 모두 Azure `style=neutral`을 전달해요. 이 설정은 기존 JSON·multipart 요청과 스트림 시작·이어가기·재시도·다시 듣기에 동일하게 적용돼요. 다시 듣기는 모델·음성·속도·스타일이 일치하는 MP3만 캐시에서 읽고, 다르면 선택한 설정으로 재합성해요. `tts_accent`는 MAI-Voice-2.1-Flash에서만 사용할 수 있어요.
+대화 억양 v1(2026-11-28): Free Chat·Roleplay·추천 시작의 JSON 또는 multipart 본문에 선택형 `tts_accent=us|gb|au`를 받아 대화에 저장해요. 생략하면 미국(`us`)이며 기존 대화도 미국으로 이관해요. 생성 응답과 대화 목록·상세 응답에 `tts_accent`를 반환해요. 생성 본문과 쿼리가 모두 있고 서로 다르면 422예요. 본문 없이 쿼리만 보내면 그 선택을 저장해요. 이후 이어 말하기·실패 turn 재시도·다시 듣기는 저장된 억양을 사용하고 명시적 쿼리는 해당 요청만 덮어써요. 추천 시작의 같은 요청 키는 최초 대화 설정을 유지해요. 앱은 영어 학습 대화에만 국기와 영문 국가명 선택을 보여주며 한국어 학습에서는 미국 기본값으로 시작해요.
+
+음성 생성 경로는 선택 쿼리 파라미터 `tts_accent=us|au|gb`와 `tts_speed=0.5..2.0`을 받아요. 억양을 생략하면 대화에 저장된 음성을, 속도를 생략하면 0.8배 속도를 사용해요. 새 대화의 기본 음성은 미국 Harper예요. 악센트별 음성은 미국 Harper, 호주 Isla, 영국 Emily예요. 이 모델의 OpenRouter 합성 요청에는 모두 Azure `style=neutral`을 전달해요. 이 설정은 기존 JSON·multipart 요청과 스트림 시작·이어가기·재시도·다시 듣기에 동일하게 적용돼요. 다시 듣기는 모델·음성·속도·스타일이 일치하는 MP3만 캐시에서 읽고, 다르면 선택한 설정으로 재합성해요. `tts_accent`는 MAI-Voice-2.1-Flash에서만 사용할 수 있어요.
 
 NDJSON 각 줄에는 `event`, 0부터 증가하는 `seq`, `turn_id`, `attempt_id`가 있어요. `turn_started` 뒤 확정 사용자 발화가 있으면 `user_message_committed`를 보내고, 생성 중 `text_delta`와 문장별 `audio_segment`(`segment_index`, `text`, `content_type`, `format`, `base64`)를 보내요. 끝에는 `turn_completed`(`conversation_id`, `assistant_message_id`, `text`, `audio_status`) 또는 `turn_error` 하나를 보내요. TTS 실패 때는 `audio_error` 뒤 `audio_status: failed`인 `turn_completed`를 보내고 AI 메시지는 보존해요. 연결 단절 때는 마지막 이벤트를 받았다고 추정하지 않고 상태 조회로 확인해요. 같은 키의 중복 요청은 현재 상태에 따라 HTTP 409 `TURN_IN_PROGRESS`, `TURN_ALREADY_COMPLETED`, `TURN_FAILED_RETRY_REQUIRED`예요. 앱은 증분 UTF-8로 읽고, 세그먼트를 순서대로 재생해요.
 
@@ -720,6 +722,7 @@ module Search {
     POST /api/search/topic-prep/stream/            -> prepareTopicStream
     POST /api/search/topic-prep/custom-questions/  -> prepareCustomFocusQuestions
     POST /api/search/topic-prep/directions/        -> regenerateTopicPrepDirections
+    POST /api/search/topic-prep/questions/         -> regenerateTopicPrepQuestions
   }
 
   service SearchService {
@@ -800,6 +803,18 @@ module Search {
     previous_directions: List<String>
   }
 
+  type TopicPrepQuestionsRequest {
+    topic: String                // 2~200자
+    focus: String                // 2~2000자, 선택 방향의 enum·제목·설명 또는 직접 입력 방향
+    summary: String              // 최대 10000자, 기본값 빈 문자열
+    previous_questions: List<String> // 직전 질문 정확히 3개
+  }
+
+  type TopicPrepQuestionsResult {
+    first_questions: List<String> // 학습 언어 질문 정확히 3개
+    first_question_translations: List<String> // 반대 언어 번역 정확히 3개, 같은 순서
+  }
+
   type TopicPrepDirectionsResult {
     directions: List<TopicPrepDirection>
   }
@@ -862,6 +877,10 @@ module Search {
 
 ready Topic Prep card는 정확히 세 recommendation을 제공해요. `custom_focus`는 고정 direction enum에 추가하지 않고 free-chat handoff에 별도로 전달해요. directions 재생성은 현재 화면의 summary/source를 유지한 채 새로운 recommendation 세 개와 target-language first question만 반환해요.
 
+질문 재생성 v1(2026-11-28): `POST /api/search/topic-prep/questions/`는 Bearer 인증과 현재 AI 동의를 확인하고 성공 envelope에 `TopicPrepQuestionsResult`만 반환해요. 기존 요약·선택 방향을 참고해 검색 없이 질문과 번역을 생성해요. 질문끼리 또는 직전 질문과 공백 제거·대소문자 무시 기준으로 같은 문장이면 502예요. 질문·번역 누락과 공백도 502이며 의미상 유사성까지 보장하지는 않아요. 앱은 성공 시 해당 방향의 질문·번역만 교체하고 첫 항목을 선택해요. 요약·출처·방향·작성한 답변을 유지하며 실패 시 기존 질문과 선택을 보존해요.
+
+질문 재생성 지침 v1.1(2026-11-28): 첫 질문 새로고침은 최초 카드 생성과 동일한 `format_topic_prep_priorities`의 학습 언어별 회화 연습 지침을 포함해요. 일반적인 질문 대신 선택한 주제에 구체적인 질문을 만들도록 명시해요.
+
 ## 9. LLM 모듈
 
 ```dsl
@@ -918,6 +937,10 @@ module LLM {
 ```
 
 ## 문서 변경 기록
+
+- 2026-11-28: 질문 재생성 v1.1에 최초 생성과 같은 언어별 회화 연습 지침과 주제 구체성 지시를 적용했어요.
+
+- 2026-11-28: Topic Prep 질문 재생성 v1을 추가했어요. 선택 방향·요약을 유지하며 질문 3개와 번역만 교체해요.
 
 - 2026-11-28: Role Playing 첫 인사를 역할에 맞게 생성하고 장면 진행·마무리·교정 요청·사용자 입력 처리 지침을 정리했어요.
 

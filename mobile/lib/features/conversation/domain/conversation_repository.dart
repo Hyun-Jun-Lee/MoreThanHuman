@@ -17,6 +17,7 @@ class ConversationAudioFile {
 
 abstract interface class ConversationRepository {
   Future<MultimodalConversationResponse> startFreeChat({
+    String ttsAccent = 'us',
     required String firstMessage,
     String? searchContext,
     String? topic,
@@ -26,6 +27,7 @@ abstract interface class ConversationRepository {
   });
 
   Future<MultimodalConversationResponse> startFreeChatWithAudio({
+    String ttsAccent = 'us',
     required ConversationAudioFile audioFile,
     String? searchContext,
     String? topic,
@@ -35,6 +37,7 @@ abstract interface class ConversationRepository {
   });
 
   Future<MultimodalConversationResponse> startRoleplay({
+    String ttsAccent = 'us',
     required String roleCharacter,
     String? searchContext,
     bool includeAudioResponse = true,
@@ -66,6 +69,7 @@ abstract interface class ConversationRepository {
 
 abstract interface class CustomFocusConversationRepository {
   Future<MultimodalConversationResponse> startFreeChatWithCustomFocus({
+    String ttsAccent = 'us',
     required String firstMessage,
     String? searchContext,
     String? topic,
@@ -75,6 +79,7 @@ abstract interface class CustomFocusConversationRepository {
   });
 
   Future<MultimodalConversationResponse> startFreeChatWithAudioAndCustomFocus({
+    String ttsAccent = 'us',
     required ConversationAudioFile audioFile,
     String? searchContext,
     String? topic,
@@ -95,6 +100,7 @@ abstract interface class UnreadConversationRepository {
 
 abstract interface class SuggestedConversationRepository {
   Future<SuggestedConversationResponse> startSuggestedFreeChat({
+    String ttsAccent = 'us',
     required String topicId,
     required String startRequestId,
     bool includeAudioResponse = true,

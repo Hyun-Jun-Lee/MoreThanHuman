@@ -9,11 +9,205 @@ import 'package:curitalk/features/language/language.dart';
 import 'package:curitalk/features/topic_prep/topic_prep.dart';
 import 'package:curitalk/features/topic_prep/presentation/widgets/tomato_bite_loader.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
 void main() {
+  for (final custom in [false, true]) {
+    testWidgets(
+      'refresh only replaces questions and hands them off (custom=$custom)',
+      (tester) async {
+        tester.view.physicalSize = const Size(800, 1600);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final repository = _FakeTopicPrepRepository();
+        final conversations = _FakeConversationRepository();
+        await tester.pumpWidget(
+          _app(repository: repository, conversationRepository: conversations),
+        );
+        await tester.pumpAndSettle();
+        if (custom) {
+          await tester.tap(find.byKey(const ValueKey('custom-focus-open')));
+          await tester.pumpAndSettle();
+          await tester.enterText(
+            find.descendant(
+              of: find.byType(AlertDialog),
+              matching: find.byType(TextField),
+            ),
+            'pitching choices',
+          );
+          await tester.tap(find.text('Create questions'));
+          await tester.pumpAndSettle();
+        } else {
+          await tester.tap(find.text('DEBATE'));
+          await tester.pumpAndSettle();
+        }
+        final refresh = find.byKey(const ValueKey('regenerate-questions'));
+        await tester.ensureVisible(refresh);
+        final icon = tester.widget<Image>(
+          find.descendant(of: refresh, matching: find.byType(Image)),
+        );
+        expect(
+          (icon.image as AssetImage).assetName,
+          'assets/images/topic_prep/refresh_directions.png',
+        );
+        expect(icon.width, 14);
+        await tester.tap(refresh);
+        await tester.pumpAndSettle();
+        expect(
+          repository.lastQuestionFocus,
+          custom ? 'pitching choices' : contains('DEBATE'),
+        );
+        expect(repository.lastQuestionSummary, 'Lotte won 8-3.');
+        expect(repository.lastPreviousQuestions, hasLength(3));
+        expect(repository.topics, ['recent lotte']);
+        expect(repository.regenerateCallCount, 0);
+        expect(find.text('New question one?'), findsOneWidget);
+        expect(find.text('새 질문 하나?'), findsOneWidget);
+        await tester.ensureVisible(find.text('DEBATE'));
+        if (custom) {
+          expect(
+            tester
+                .widget<AppSelectionChip>(
+                  find.byKey(const ValueKey('custom-focus-direction')),
+                )
+                .selected,
+            isTrue,
+          );
+        } else {
+          expect(
+            tester
+                .widget<AppSelectionChip>(
+                  find.ancestor(
+                    of: find.text('DEBATE'),
+                    matching: find.byType(AppSelectionChip),
+                  ),
+                )
+                .selected,
+            isTrue,
+          );
+        }
+        await tester.tap(find.text('CASUAL CHAT'));
+        await tester.pumpAndSettle();
+        expect(find.text('What stood out in the game?'), findsOneWidget);
+        await tester.tap(
+          custom
+              ? find.byKey(const ValueKey('custom-focus-direction'))
+              : find.text('DEBATE'),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('New question one?'), findsOneWidget);
+        await tester.scrollUntilVisible(
+          find.bySemanticsLabel('First answer in Korean'),
+          300,
+          scrollable: find.byType(Scrollable).first,
+        );
+        await tester.enterText(find.byType(TextField).last, '새 질문에 답해요.');
+        await tester.pump();
+        await tester.tap(find.byTooltip('Send message'));
+        await tester.pumpAndSettle();
+        expect(conversations.lastSelectedQuestion, 'New question one?');
+        expect(
+          conversations.lastCustomFocus,
+          custom ? 'pitching choices' : null,
+        );
+      },
+    );
+  }
+
+  testWidgets(
+    'question refresh blocks duplicate actions and keeps old questions on failure',
+    (tester) async {
+      tester.view.physicalSize = const Size(800, 1600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final repository = _FakeTopicPrepRepository();
+      repository.pendingQuestions = Completer<TopicPrepQuestions>();
+      await tester.pumpWidget(_app(repository: repository));
+      await tester.pumpAndSettle();
+      final refresh = find.byKey(const ValueKey('regenerate-questions'));
+      await tester.ensureVisible(refresh);
+      final cards = find.byKey(const ValueKey('first-question-cards'));
+      final cardSize = tester.getSize(cards);
+      await tester.tap(refresh);
+      await tester.pump();
+      expect(tester.widget<IconButton>(refresh).onPressed, isNull);
+      expect(
+        find.descendant(
+          of: refresh,
+          matching: find.byType(AppLoadingIndicator),
+        ),
+        findsNothing,
+      );
+      expect(
+        find.descendant(of: refresh, matching: find.byType(Image)),
+        findsOneWidget,
+      );
+      final loader = find.descendant(
+        of: cards,
+        matching: find.byType(TomatoBiteLoader),
+      );
+      expect(loader, findsOneWidget);
+      expect(tester.getSize(cards), cardSize);
+      expect(tester.getCenter(loader), tester.getCenter(cards));
+      expect(
+        tester
+            .widget<Visibility>(
+              find
+                  .descendant(of: cards, matching: find.byType(Visibility))
+                  .first,
+            )
+            .visible,
+        isFalse,
+      );
+      expect(
+        tester
+            .widget<IconButton>(
+              find.byKey(const ValueKey('regenerate-directions')),
+            )
+            .onPressed,
+        isNull,
+      );
+      expect(
+        tester.widget<ChatComposer>(find.byType(ChatComposer)).enabled,
+        isFalse,
+      );
+      repository.pendingQuestions!.completeError(StateError('offline'));
+      await tester.pumpAndSettle();
+      expect(find.byType(TomatoBiteLoader), findsNothing);
+      expect(
+        tester
+            .widget<Visibility>(
+              find
+                  .descendant(of: cards, matching: find.byType(Visibility))
+                  .first,
+            )
+            .visible,
+        isTrue,
+      );
+      expect(find.text('What stood out in the game?'), findsOneWidget);
+      expect(find.text('경기에서 어떤 점이 눈에 띄었나요?'), findsOneWidget);
+      expect(
+        find.text('We could not prepare new questions. Please try again.'),
+        findsOneWidget,
+      );
+      expect(tester.widget<IconButton>(refresh).onPressed, isNotNull);
+      repository.pendingQuestions = null;
+      await tester.ensureVisible(refresh);
+      await tester.tap(refresh);
+      await tester.pumpAndSettle();
+      expect(find.text('New question one?'), findsOneWidget);
+      expect(
+        find.text('We could not prepare new questions. Please try again.'),
+        findsNothing,
+      );
+    },
+  );
+
   testWidgets('tomato loader stays still when animations are disabled', (
     WidgetTester tester,
   ) async {
@@ -115,6 +309,111 @@ void main() {
     expect(find.text('CASUAL CHAT'), findsOneWidget);
     expect(find.byType(TomatoBiteLoader), findsNothing);
   });
+
+  testWidgets(
+    'recommendations hide summary during loading and after preparation',
+    (tester) async {
+      final repository = _StreamingTopicPrepRepository();
+      await tester.pumpWidget(
+        _app(
+          repository: repository,
+          initialLocation:
+              '${AppRoute.topicPrep}?topic=recent%20lotte&recommended=true',
+        ),
+      );
+      await tester.pump();
+      expect(find.text('SUMMARY'), findsNothing);
+      expect(find.byType(TomatoBiteLoader), findsNWidgets(2));
+      repository.events.add(
+        const TopicPrepStreamEvent.summary('Early summary'),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('Early summary'), findsNothing);
+      repository.events.add(
+        TopicPrepStreamEvent.card(
+          await repository.prepareTopic('recent lotte'),
+        ),
+      );
+      await repository.events.close();
+      await tester.pumpAndSettle();
+      expect(find.text('SUMMARY'), findsNothing);
+      expect(find.text('Lotte won 8-3.'), findsNothing);
+      expect(find.text('CASUAL CHAT'), findsOneWidget);
+    },
+  );
+
+  for (final locale in ['en', 'ko']) {
+    testWidgets(
+      'Accent matches direction heading style and spacing in $locale',
+      (tester) async {
+        await tester.pumpWidget(
+          _app(
+            repository: _FakeTopicPrepRepository(
+              language: LearningLanguageContext.defaultContext,
+            ),
+            locale: Locale(locale),
+            initialLocation:
+                '${AppRoute.topicPrep}?topic=recent%20lotte&recommended=true',
+          ),
+        );
+        await tester.pumpAndSettle();
+        final accent = find.text('Accent');
+        final direction = find.text(
+          locale == 'ko'
+              ? '어떤 주제가 좋으세요?'
+              : 'WHAT WOULD YOU LIKE TO TALK ABOUT?',
+        );
+        expect(accent, findsOneWidget);
+        expect(
+          tester.widget<Text>(accent).style,
+          tester.widget<Text>(direction).style,
+        );
+        final accentHeader = find.byKey(const ValueKey('accent-heading'));
+        final directionHeader = find.byKey(
+          const ValueKey('topic-directions-heading'),
+        );
+        expect(
+          tester.getSize(accentHeader).height,
+          tester.getSize(directionHeader).height,
+        );
+        expect(
+          tester.getTopLeft(accent).dy - tester.getTopLeft(accentHeader).dy,
+          closeTo(
+            tester.getTopLeft(direction).dy -
+                tester.getTopLeft(directionHeader).dy,
+            0.1,
+          ),
+        );
+        expect(
+          tester.getTopLeft(accentHeader).dy -
+              tester.getBottomLeft(find.text('recent lotte')).dy,
+          AppSpacing.xl,
+        );
+        expect(
+          tester.getTopLeft(directionHeader).dy -
+              tester
+                  .getBottomLeft(find.byKey(const ValueKey('accent-options')))
+                  .dy,
+          AppSpacing.xl,
+        );
+        expect(
+          tester.getTopLeft(find.byKey(const ValueKey('accent-options'))).dy -
+              tester.getBottomLeft(accentHeader).dy,
+          AppSpacing.xs,
+        );
+        expect(
+          tester
+                  .getTopLeft(
+                    find.byKey(const ValueKey('topic-directions-options')),
+                  )
+                  .dy -
+              tester.getBottomLeft(directionHeader).dy,
+          AppSpacing.xs,
+        );
+      },
+    );
+  }
 
   testWidgets(
     'ready state shows summary and default question without sources',
@@ -518,6 +817,7 @@ Widget _app({
   required TopicPrepRepository repository,
   ConversationRepository? conversationRepository,
   ConversationAudioRecorder? recorder,
+  Locale? locale,
   String initialLocation = '${AppRoute.topicPrep}?topic=recent%20lotte',
 }) {
   final GoRouter router = GoRouter(
@@ -537,6 +837,8 @@ Widget _app({
         builder: (_, GoRouterState state) {
           return TopicPrepScreen(
             initialTopic: state.uri.queryParameters['topic']!,
+            isRecommendedTopic:
+                state.uri.queryParameters['recommended'] == 'true',
           );
         },
       ),
@@ -558,18 +860,57 @@ Widget _app({
       if (recorder != null)
         conversationAudioRecorderProvider.overrideWithValue(recorder),
     ],
-    child: MaterialApp.router(theme: AppTheme.light, routerConfig: router),
+    child: MaterialApp.router(
+      theme: AppTheme.light,
+      routerConfig: router,
+      locale: locale,
+      supportedLocales: const [Locale('en'), Locale('ko')],
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
+    ),
   );
 }
 
 class _FakeTopicPrepRepository
-    implements TopicPrepRepository, TopicPrepCustomFocusRepository {
-  _FakeTopicPrepRepository({this.failFirstTopic});
+    implements
+        TopicPrepRepository,
+        TopicPrepCustomFocusRepository,
+        TopicPrepQuestionsRepository {
+  _FakeTopicPrepRepository({
+    this.failFirstTopic,
+    this.language = _koreanPracticeLanguage,
+  });
+
+  final LearningLanguageContext language;
 
   final String? failFirstTopic;
   final List<String> topics = <String>[];
   String? lastCustomFocus;
   int regenerateCallCount = 0;
+  String? lastQuestionFocus;
+  String? lastQuestionSummary;
+  List<String>? lastPreviousQuestions;
+  Completer<TopicPrepQuestions>? pendingQuestions;
+
+  @override
+  Future<TopicPrepQuestions> regenerateQuestions({
+    required String topic,
+    required String focus,
+    required String summary,
+    required List<String> previousQuestions,
+  }) async {
+    lastQuestionFocus = focus;
+    lastQuestionSummary = summary;
+    lastPreviousQuestions = previousQuestions;
+    if (pendingQuestions != null) return pendingQuestions!.future;
+    return const TopicPrepQuestions(
+      firstQuestions: [
+        'New question one?',
+        'New question two?',
+        'New question three?',
+      ],
+      firstQuestionTranslations: ['새 질문 하나?', '새 질문 둘?', '새 질문 셋?'],
+    );
+  }
 
   @override
   Future<TopicPrepResult> prepareTopic(String topic) async {
@@ -583,7 +924,7 @@ class _FakeTopicPrepRepository
         ready: false,
         card: null,
         quality: _quality(isSufficient: false),
-        language: _koreanPracticeLanguage,
+        language: language,
         retryGuidance: 'Try a more specific topic.',
         exampleTopics: const <String>['최근 롯데 자이언츠 경기'],
       );
@@ -643,7 +984,7 @@ class _FakeTopicPrepRepository
         timestamp: DateTime.utc(2026, 7, 2),
       ),
       quality: _quality(),
-      language: _koreanPracticeLanguage,
+      language: language,
       exampleTopics: const <String>[],
     );
   }
@@ -750,6 +1091,7 @@ class _FakeConversationRepository
 
   @override
   Future<MultimodalConversationResponse> startFreeChat({
+    String ttsAccent = 'us',
     required String firstMessage,
     String? searchContext,
     String? topic,
@@ -771,6 +1113,7 @@ class _FakeConversationRepository
 
   @override
   Future<MultimodalConversationResponse> startFreeChatWithAudio({
+    String ttsAccent = 'us',
     required ConversationAudioFile audioFile,
     String? searchContext,
     String? topic,
@@ -793,6 +1136,7 @@ class _FakeConversationRepository
 
   @override
   Future<MultimodalConversationResponse> startFreeChatWithCustomFocus({
+    String ttsAccent = 'us',
     required String firstMessage,
     String? searchContext,
     String? topic,
@@ -814,6 +1158,7 @@ class _FakeConversationRepository
 
   @override
   Future<MultimodalConversationResponse> startFreeChatWithAudioAndCustomFocus({
+    String ttsAccent = 'us',
     required ConversationAudioFile audioFile,
     String? searchContext,
     String? topic,
@@ -835,6 +1180,7 @@ class _FakeConversationRepository
 
   @override
   Future<MultimodalConversationResponse> startRoleplay({
+    String ttsAccent = 'us',
     required String roleCharacter,
     String? searchContext,
     bool includeAudioResponse = true,

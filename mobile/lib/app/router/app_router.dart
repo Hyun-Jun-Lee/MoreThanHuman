@@ -161,7 +161,11 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
           if (topic == null || topic.trim().isEmpty) {
             return const TopicInputScreen();
           }
-          return TopicPrepScreen(initialTopic: topic);
+          return TopicPrepScreen(
+            initialTopic: topic,
+            isRecommendedTopic:
+                state.uri.queryParameters['recommended'] == 'true',
+          );
         },
       ),
       GoRoute(

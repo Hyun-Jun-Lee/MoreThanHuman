@@ -900,6 +900,7 @@ class _FakeConversationRepository implements ConversationRepository {
 
   @override
   Future<MultimodalConversationResponse> startFreeChat({
+    String ttsAccent = 'us',
     required String firstMessage,
     String? searchContext,
     String? topic,
@@ -912,6 +913,7 @@ class _FakeConversationRepository implements ConversationRepository {
 
   @override
   Future<MultimodalConversationResponse> startFreeChatWithAudio({
+    String ttsAccent = 'us',
     required ConversationAudioFile audioFile,
     String? searchContext,
     String? topic,
@@ -924,6 +926,7 @@ class _FakeConversationRepository implements ConversationRepository {
 
   @override
   Future<MultimodalConversationResponse> startRoleplay({
+    String ttsAccent = 'us',
     required String roleCharacter,
     String? searchContext,
     bool includeAudioResponse = true,

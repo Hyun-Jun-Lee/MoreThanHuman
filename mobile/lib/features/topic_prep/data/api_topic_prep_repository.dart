@@ -11,6 +11,7 @@ class ApiTopicPrepRepository
     implements
         TopicPrepRepository,
         TopicPrepStreamRepository,
+        TopicPrepQuestionsRepository,
         TopicPrepCustomFocusRepository {
   const ApiTopicPrepRepository(this.apiClient);
 
@@ -113,6 +114,26 @@ class ApiTopicPrepRepository
           data: <String, String>{'topic': topic, 'custom_focus': customFocus},
           decodeData: CustomFocusQuestions.fromJson,
         );
+    return response.data;
+  }
+
+  @override
+  Future<TopicPrepQuestions> regenerateQuestions({
+    required String topic,
+    required String focus,
+    required String summary,
+    required List<String> previousQuestions,
+  }) async {
+    final response = await apiClient.post<TopicPrepQuestions>(
+      'search/topic-prep/questions/',
+      data: <String, Object>{
+        'topic': topic,
+        'focus': focus,
+        'summary': summary,
+        'previous_questions': previousQuestions,
+      },
+      decodeData: TopicPrepQuestions.fromJson,
+    );
     return response.data;
   }
 

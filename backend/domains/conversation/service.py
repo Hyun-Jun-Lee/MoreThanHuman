@@ -83,6 +83,7 @@ class ConversationService:
         request_id: str,
         user_id: str,
         language_context: LearningLanguageContext,
+        tts_accent: str = "us",
     ) -> SuggestedFreeChatResponse:
         """추천 주제로 AI가 첫 질문을 하는 자유 대화를 시작해요."""
         reservation = self.repository.completed_suggested_start(user_id, request_id, topic_id)
@@ -102,11 +103,13 @@ class ConversationService:
             return SuggestedFreeChatResponse(
                 conversation_id=conversation.id, assistant_message_id=message.id,
                 conversation_type=ConversationType.FREE_CHAT, language=conversation.language,
+                tts_accent=conversation.tts_accent,
                 response=message.content,
             )
         try:
             first_question = topic.first_question
             conversation = ConversationModel(
+                tts_accent=tts_accent,
                 id=str(uuid4()), user_id=user_id, title=topic.text[:200],
                 conversation_type=ConversationType.FREE_CHAT, role_character=None,
                 native_language=language_context.native_language.value,
@@ -124,7 +127,7 @@ class ConversationService:
             return SuggestedFreeChatResponse(
                 conversation_id=conversation.id, assistant_message_id=message.id,
                 conversation_type=ConversationType.FREE_CHAT,
-                language=language_context, response=message.content,
+                language=language_context, response=message.content, tts_accent=tts_accent,
             )
         except Exception:
             self.repository.release_suggested_start(reservation.id)
@@ -176,6 +179,7 @@ class ConversationService:
         custom_focus: str | None = None,
         language_context: LearningLanguageContext | None = None,
         nickname: str | None = None,
+        tts_accent: str = "us",
     ) -> ConversationResponse:
         """
         자유 대화 시작
@@ -203,6 +207,7 @@ class ConversationService:
             title = free_chat_title(topic, first_message)
 
             conversation = ConversationModel(
+                tts_accent=tts_accent,
                 id=str(uuid4()),
                 user_id=user_id,
                 title=title,
@@ -285,6 +290,7 @@ class ConversationService:
 
             # 8. AI 응답 즉시 반환 (grammar_feedback=None)
             return ConversationResponse(
+                tts_accent=tts_accent,
                 conversation_id=conversation.id,
                 message_id=user_message.id,
                 conversation_type=ConversationType.FREE_CHAT,
@@ -313,6 +319,7 @@ class ConversationService:
         user_id: str = "",
         language_context: LearningLanguageContext | None = None,
         nickname: str | None = None,
+        tts_accent: str = "us",
     ) -> ConversationResponse:
         """
         롤플레이 대화 시작 (AI가 먼저 인사)
@@ -333,6 +340,7 @@ class ConversationService:
             title = self._roleplay_title(role_character)
 
             conversation = ConversationModel(
+                tts_accent=tts_accent,
                 id=str(uuid4()),
                 user_id=user_id,
                 title=title,
@@ -371,6 +379,7 @@ class ConversationService:
 
             # 6. 롤플레이 시작이므로 grammar_feedback 없음
             return ConversationResponse(
+                tts_accent=tts_accent,
                 conversation_id=conversation.id,
                 message_id=assistant_message.id,
                 conversation_type=ConversationType.ROLE_PLAYING,

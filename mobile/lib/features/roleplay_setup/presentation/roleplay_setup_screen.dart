@@ -1,3 +1,4 @@
+import 'package:curitalk/features/conversation/presentation/widgets/accent_selector.dart';
 import 'package:curitalk/app/router/app_router.dart';
 import 'package:curitalk/app/theme/tokens/tokens.dart';
 import 'package:curitalk/core/copy/copy.dart';
@@ -42,6 +43,7 @@ class RoleplaySetupScreen extends ConsumerStatefulWidget {
 }
 
 class _RoleplaySetupScreenState extends ConsumerState<RoleplaySetupScreen> {
+  String _ttsAccent = 'us';
   late final TextEditingController _customController;
 
   @override
@@ -94,6 +96,9 @@ class _RoleplaySetupScreenState extends ConsumerState<RoleplaySetupScreen> {
                       .read(startConversationControllerProvider.notifier)
                       .startRoleplay(
                         roleCharacter: payload.roleCharacter,
+                        ttsAccent: targetLanguage == LearningLanguageCode.en
+                            ? _ttsAccent
+                            : 'us',
                         onStreamStarted: (requestId) {
                           if (!context.mounted) return;
                           pendingOpened = true;
@@ -110,6 +115,13 @@ class _RoleplaySetupScreenState extends ConsumerState<RoleplaySetupScreen> {
       ),
       body: ListView(
         children: <Widget>[
+          if (targetLanguage == LearningLanguageCode.en)
+            AccentSelector(
+              value: _ttsAccent,
+              onChanged: startState.isStarting
+                  ? null
+                  : (value) => setState(() => _ttsAccent = value),
+            ),
           const SizedBox(height: AppSpacing.lg),
           Text(
             copy.chooseSituationTitle,

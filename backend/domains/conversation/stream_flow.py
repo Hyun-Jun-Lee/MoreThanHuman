@@ -35,6 +35,7 @@ class PreparedGeneration:
     history: list[dict]
     prompt: str
     fixed_answer: str | None = None
+    tts_accent: str = "us"
 
 
 def _language(data: dict) -> LearningLanguageContext:
@@ -110,6 +111,7 @@ def _prepare_existing_turn(
                 conversation_id=conversation_id, user_message_id=user_message.id,
                 user_text=user_text, input_mode=input_data.get("input_mode"),
                 system_prompt=system_prompt, history=history, prompt=user_text,
+                tts_accent=conversation.tts_accent,
             )
             db.commit()
             committed = True
@@ -267,6 +269,7 @@ def prepare_generation(
                     else:
                         title = free_chat_title(input_data.get("topic"), user_text)
                         conversation = ConversationModel(
+                            tts_accent=input_data.get("tts_accent", "us"),
                             id=str(uuid4()), user_id=user_id, title=title,
                             conversation_type=ConversationType.FREE_CHAT,
                             role_character=None,
@@ -318,6 +321,7 @@ def prepare_generation(
                 conversation_id=conversation_id, user_message_id=user_message_id,
                 user_text=user_text, input_mode=input_mode, system_prompt=system_prompt,
                 history=history, prompt=prompt,
+                tts_accent=(input_data.get("tts_accent", "us") if kind == "roleplay_start" else conversation.tts_accent),
             )
         except Exception:
             store.fail(turn.id, "PREPARATION_FAILED")
@@ -358,6 +362,7 @@ def complete_generated_text(user_id: str, prepared: PreparedGeneration, answer: 
                         + repository.count_pending_roleplay_starts(user_id) > entitlement["slot_limit"]):
                     raise ConversationSlotsFull("대화창 슬롯이 부족해요")
             conversation = ConversationModel(
+                tts_accent=data.get("tts_accent", "us"),
                 id=str(uuid4()), user_id=user_id, title=role[:200],
                 conversation_type=ConversationType.ROLE_PLAYING, role_character=role,
                 message_count=1, status=ConversationStatus.ACTIVE,

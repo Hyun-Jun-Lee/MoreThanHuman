@@ -1,5 +1,7 @@
 from uuid import uuid4
 
+import pytest
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -14,7 +16,8 @@ class _BackgroundTasks:
         coroutine.close()
 
 
-def test_stream_free_chat_stores_topic_as_title(monkeypatch):
+@pytest.mark.parametrize("accent", ["us", "gb", "au"])
+def test_stream_free_chat_stores_topic_as_title(monkeypatch, accent):
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(bind=engine)
     sessions = sessionmaker(bind=engine)
@@ -30,6 +33,7 @@ def test_stream_free_chat_stores_topic_as_title(monkeypatch):
         kind="free_chat_start",
         input_data={
             "text": "I want to discuss my trip.",
+            "tts_accent": accent,
             "input_mode": "text",
             "topic": "  오사카 여행  ",
             "search_context": "오사카 여행 준비 요약",
@@ -47,9 +51,20 @@ def test_stream_free_chat_stores_topic_as_title(monkeypatch):
 
     with sessions() as db:
         conversation = db.get(ConversationModel, prepared.conversation_id)
+        assert prepared.tts_accent == accent
+        assert conversation.tts_accent == accent
         assert conversation.title == "오사카 여행"
         assert conversation.topic == "  오사카 여행  "
         assert conversation.topic_summary == "오사카 여행 준비 요약"
         assert conversation.conversation_direction == "CASUAL_CHAT"
         assert conversation.custom_focus == "음식 이야기"
+    from domains.conversation.stream_turns import StreamTurnStore
+    with sessions() as db:
+        StreamTurnStore(db).fail(prepared.turn_id, "TEST_FAILURE")
+    retried = prepare_generation(
+        user_id=user_id, request_id=str(uuid4()), kind=None, input_data=None,
+        retry_turn_id=prepared.turn_id, http_client=None, background_tasks=_BackgroundTasks(),
+    )
+    assert retried.conversation_id == prepared.conversation_id
+    assert retried.tts_accent == accent
     engine.dispose()

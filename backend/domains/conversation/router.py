@@ -109,6 +109,7 @@ FREE_CHAT_REQUEST_BODY_OPENAPI = {
                 "required": ["first_message"],
                 "properties": {
                     "first_message": {"type": "string"},
+                    "tts_accent": {"type": "string", "enum": ["us", "gb", "au"]},
                     "search_context": {"type": "string", "nullable": True},
                     "topic": {"type": "string", "nullable": True},
                     "conversation_direction": {"type": "string", "nullable": True},
@@ -122,6 +123,7 @@ FREE_CHAT_REQUEST_BODY_OPENAPI = {
                 "type": "object",
                 "properties": {
                     "first_message": {"type": "string"},
+                    "tts_accent": {"type": "string", "enum": ["us", "gb", "au"]},
                     "text": {"type": "string"},
                     "audio_file": {"type": "string", "format": "binary"},
                     "search_context": {"type": "string"},
@@ -137,6 +139,7 @@ FREE_CHAT_REQUEST_BODY_OPENAPI = {
                 "type": "object",
                 "properties": {
                     "first_message": {"type": "string"},
+                    "tts_accent": {"type": "string", "enum": ["us", "gb", "au"]},
                     "text": {"type": "string"},
                     "search_context": {"type": "string"},
                     "topic": {"type": "string"},
@@ -212,17 +215,39 @@ def get_voice_service(
     """Voice Service 의존성"""
     if tts_accent and settings.tts_model != "microsoft/mai-voice-2.1-flash":
         raise HTTPException(status_code=422, detail="tts_accent requires MAI-Voice-2.1-Flash")
-    return VoiceService(
+    service = VoiceService(
         http_client=http_client,
         voice=ACCENT_VOICES[tts_accent] if tts_accent else None,
         speed=tts_speed,
     )
+    service.request_accent = tts_accent
+    return service
+
+
+def _use_accent(voice_service: VoiceService, accent: str) -> None:
+    """저장 설정은 쿼리를 생략한 요청에 적용해요."""
+    if isinstance(voice_service, VoiceService) and not getattr(voice_service, "request_accent", None):
+        if settings.tts_model == "microsoft/mai-voice-2.1-flash":
+            voice_service.select_voice(ACCENT_VOICES[accent])
+
+
+def _start_accent(body, voice_service: VoiceService) -> str:
+    requested = getattr(voice_service, "request_accent", None)
+    selected = body.tts_accent
+    if requested and selected and requested != selected:
+        raise HTTPException(status_code=422, detail="Conflicting tts_accent values")
+    accent = selected or requested or "us"
+    if selected and settings.tts_model != "microsoft/mai-voice-2.1-flash":
+        raise HTTPException(status_code=422, detail="tts_accent requires MAI-Voice-2.1-Flash")
+    _use_accent(voice_service, accent)
+    return accent
 
 
 def _prepared_stream_response(
     prepared: PreparedGeneration, *, user_id: str, service: ConversationService,
     voice_service: VoiceService,
 ) -> StreamingResponse:
+    _use_accent(voice_service, prepared.tts_accent)
     trace_id = current_trace_id()
     deltas = service.stream_response(prepared.system_prompt, prepared.history, prepared.prompt)
     if prepared.fixed_answer is not None:
@@ -424,6 +449,7 @@ async def _parse_free_chat_input(http_request: Request) -> tuple[StartFreeChatRe
             "conversation_direction": form.get("conversation_direction"),
             "selected_question": form.get("selected_question"),
             "custom_focus": form.get("custom_focus"),
+            "tts_accent": form.get("tts_accent"),
         }
         return StartFreeChatRequest.model_validate(payload), include_audio_response, audio_file
 
@@ -499,6 +525,7 @@ async def start_free_chat_conversation(
         if settings.conversation_access_enabled or getattr(current_user, "is_guest", False):
             service.assert_can_create(current_user.id)
         request, include_audio_response, audio_file = await _parse_free_chat_input(http_request)
+        accent = _start_accent(request, voice_service)
         input_mode, first_message = await voice_service.resolve_input_text(
             text=request.first_message,
             audio_file=audio_file,
@@ -514,6 +541,7 @@ async def start_free_chat_conversation(
                 if request.conversation_direction
                 else None
             ),
+            **({"tts_accent": accent} if accent != "us" else {}),
             selected_question=request.selected_question,
             custom_focus=request.custom_focus,
             language_context=ensure_language_context(getattr(current_user, "language", None)),
@@ -570,7 +598,9 @@ async def start_suggested_free_chat(
         response = await service.start_suggested_free_chat(
             str(request.topic_id), str(request.start_request_id), current_user.id,
             ensure_language_context(current_user.language),
+            **({"tts_accent": _start_accent(request, voice_service)} if request.tts_accent or getattr(voice_service, "request_accent", None) else {}),
         )
+        _use_accent(voice_service, getattr(response, "tts_accent", "us"))
         audio, audio_error = await _synthesize_optional_audio(
             include_audio_response=request.include_audio_response,
             response_text=response.response,
@@ -619,7 +649,8 @@ async def start_suggested_free_chat_stream(
         try:
             turn = store.reserve(
                 user_id=user_id, request_id=str(idempotency_key), kind="suggested_start",
-                input_data={"topic_id": str(body.topic_id), "start_request_id": str(body.start_request_id)},
+                input_data={"topic_id": str(body.topic_id), "start_request_id": str(body.start_request_id),
+                            "tts_accent": _start_accent(body, voice_service)},
             )
         except StreamTurnConflict as error:
             raise _access_conflict(error.code, "요청 상태를 조회한 뒤 다시 시도해 주세요")
@@ -628,6 +659,7 @@ async def start_suggested_free_chat_stream(
         response = await service.start_suggested_free_chat(
             str(body.topic_id), str(body.start_request_id), user_id,
             ensure_language_context(current_user.language),
+            **({"tts_accent": _start_accent(body, voice_service)} if body.tts_accent or getattr(voice_service, "request_accent", None) else {}),
         )
         with SessionLocal() as db:
             StreamTurnStore(db).complete_text(
@@ -652,6 +684,7 @@ async def start_suggested_free_chat_stream(
             raise HTTPException(status_code=400, detail=error.message)
         raise
 
+    _use_accent(voice_service, getattr(response, "tts_accent", "us"))
     service.repository.db.close()
     return _saved_question_audio_response(
         turn_id=turn_id, attempt_id=attempt_id, trace_id=trace_id,
@@ -723,6 +756,7 @@ async def start_free_chat_stream(
     try:
         with latency_span("stream_input", operation="free_chat_start"):
             body, _, audio_file = await _parse_free_chat_input(http_request)
+            accent = _start_accent(body, voice_service)
             input_mode, first_message = await voice_service.resolve_input_text(
                 text=body.first_message, audio_file=audio_file,
                 language=ensure_language_context(current_user.language).target_language.value,
@@ -736,7 +770,7 @@ async def start_free_chat_stream(
     prepared = _prepare_stream_or_http_error(
         user_id=current_user.id, request_id=str(idempotency_key), kind="free_chat_start",
         input_data={
-            "text": first_message, "input_mode": input_mode.value,
+            "text": first_message, "input_mode": input_mode.value, "tts_accent": accent,
             "search_context": body.search_context, "topic": body.topic,
             "conversation_direction": body.conversation_direction.value if body.conversation_direction else None,
             "selected_question": body.selected_question, "custom_focus": body.custom_focus,
@@ -761,6 +795,7 @@ async def start_roleplay_stream(
         user_id=current_user.id, request_id=str(idempotency_key), kind="roleplay_start",
         input_data={
             "role_character": body.role_character, "search_context": body.search_context,
+            "tts_accent": _start_accent(body, voice_service),
             "language": language_context_to_dict(ensure_language_context(current_user.language)),
         },
         http_client=service.http_client, background_tasks=service.background_tasks,
@@ -868,6 +903,7 @@ async def retry_stream_turn(
             response = await service.start_suggested_free_chat(
                 saved_input["topic_id"], saved_input["start_request_id"],
                 current_user.id, ensure_language_context(current_user.language),
+                **({"tts_accent": saved_input["tts_accent"]} if saved_input.get("tts_accent", "us") != "us" else {}),
             )
             with SessionLocal() as db:
                 StreamTurnStore(db).complete_text(
@@ -889,6 +925,7 @@ async def retry_stream_turn(
             if isinstance(error, AppException):
                 raise HTTPException(status_code=400, detail=error.message) from error
             raise
+        _use_accent(voice_service, getattr(response, "tts_accent", "us"))
         service.repository.db.close()
         return _saved_question_audio_response(
             turn_id=str(turn_id), attempt_id=attempt_id,
@@ -920,7 +957,8 @@ async def retry_stream_audio(
         ).one_or_none()
         if turn is None:
             raise HTTPException(status_code=404, detail="음성 turn을 찾을 수 없어요")
-        ConversationRepository(db).find_by_id(turn.conversation_id, current_user.id)
+        conversation = ConversationRepository(db).find_by_id(turn.conversation_id, current_user.id)
+        _use_accent(voice_service, conversation.tts_accent)
         message = db.query(MessageModel).filter_by(
             id=message_id, conversation_id=turn.conversation_id,
         ).one()
@@ -1061,13 +1099,16 @@ async def start_roleplay_conversation(
     try:
         if settings.conversation_access_enabled or getattr(current_user, "is_guest", False):
             service.assert_can_create(current_user.id)
+        accent = _start_accent(request, voice_service)
         response = await service.start_roleplay_conversation(
             request.role_character,
             request.search_context,
+            **({"tts_accent": accent} if accent != "us" else {}),
             user_id=current_user.id,
             language_context=ensure_language_context(getattr(current_user, "language", None)),
             nickname=getattr(current_user, "nickname", None),
         )
+        _use_accent(voice_service, getattr(response, "tts_accent", "us"))
         audio, audio_error = await _synthesize_optional_audio(
             include_audio_response=request.include_audio_response,
             response_text=response.response,
@@ -1096,6 +1137,8 @@ async def start_roleplay_conversation(
     except AppException as e:
         log_exception(e, status_code=400, error_code=type(e).__name__)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
+    except HTTPException:
+        raise
     except Exception as e:
         log_exception(e, status_code=500, error_code="UNHANDLED_EXCEPTION")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
@@ -1163,6 +1206,8 @@ async def send_multimodal_turn(
             audio_file=audio_file,
             language=language,
         )
+        if isinstance(voice_service, VoiceService):
+            _use_accent(voice_service, service.get_conversation(str(conversation_id), current_user.id).tts_accent)
         response = await service.continue_conversation(
             str(conversation_id),
             user_text,

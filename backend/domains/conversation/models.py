@@ -17,10 +17,12 @@ class ConversationModel(Base):
     """대화 테이블"""
 
     __tablename__ = "conversations"
-    __table_args__ = (Index("ix_conversations_user_slot_active", "user_id", "slot_active"),)
+    __table_args__ = (Index("ix_conversations_user_slot_active", "user_id", "slot_active"),
+                      CheckConstraint("tts_accent IN ('us', 'gb', 'au')", name="ck_conversation_tts_accent"))
 
     id = Column(String(36), primary_key=True)  # UUID를 문자열로 저장
     user_id = Column(String(36), ForeignKey("profiles.id"), nullable=False, index=True)
+    tts_accent = Column(String(2), nullable=False, default="us", server_default="us")
     title = Column(String(200), nullable=True)  # 대화 제목
     conversation_type = Column(SQLEnum(ConversationType), default=ConversationType.FREE_CHAT, nullable=False)  # 대화 타입
     role_character = Column(String(500), nullable=True)  # 롤플레이 캐릭터/상황 설명

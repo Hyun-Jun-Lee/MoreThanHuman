@@ -7,6 +7,7 @@ class ConversationSummary {
     required this.kind,
     required this.messageCount,
     required this.isActive,
+    this.ttsAccent = 'us',
     this.locked = false,
     this.hasUnreadReply = false,
     required this.updatedAt,
@@ -50,6 +51,7 @@ class ConversationSummary {
         ? roleCharacter.trim()
         : null;
     return ConversationSummary(
+      ttsAccent: json['tts_accent'] as String? ?? 'us',
       id: id,
       title:
           title ??
@@ -65,6 +67,7 @@ class ConversationSummary {
     );
   }
 
+  final String ttsAccent;
   final String id;
   final String title;
   final ConversationKind kind;

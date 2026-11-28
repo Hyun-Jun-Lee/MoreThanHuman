@@ -2,23 +2,17 @@ import 'package:curitalk/app/router/app_router.dart';
 import 'package:curitalk/app/theme/tokens/tokens.dart';
 import 'package:curitalk/core/copy/copy.dart';
 import 'package:curitalk/core/widgets/widgets.dart';
-import 'package:curitalk/features/auth/auth.dart';
-import 'package:curitalk/features/language/language.dart';
-import 'package:curitalk/features/topic_prep/domain/topic_starter_examples.dart';
+import 'package:curitalk/features/home/application/weekly_topics_controller.dart';
+import 'package:curitalk/features/home/domain/weekly_topic.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-final Provider<LearningLanguageCode> topicStarterNativeLanguageProvider =
-    Provider<LearningLanguageCode>((Ref ref) {
-      return ref.watch(
-        authControllerProvider.select(
-          (AsyncValue<AuthSession> auth) =>
-              auth.value?.user?.language.nativeLanguage ??
-              LearningLanguageContext.defaultContext.nativeLanguage,
-        ),
-      );
-    });
+// 홈과 같은 조회·캐시를 사용하되 화면 진입마다 새 무작위 목록을 받아요.
+final topicInputTopicsProvider =
+    AsyncNotifierProvider.autoDispose<WeeklyTopicsController, WeeklyTopics>(
+      WeeklyTopicsController.new,
+    );
 
 class TopicInputScreen extends ConsumerStatefulWidget {
   const TopicInputScreen({this.initialTopic, super.key});
@@ -34,6 +28,7 @@ class _TopicInputScreenState extends ConsumerState<TopicInputScreen> {
   late final FocusNode _focusNode;
   String? _errorText;
   String? _selectedExample;
+  String? _recommendedTopic;
 
   @override
   void initState() {
@@ -47,11 +42,17 @@ class _TopicInputScreenState extends ConsumerState<TopicInputScreen> {
   void _handleTextChanged() {
     setState(() {
       _selectedExample = null;
+      if (_controller.text.trim() != _recommendedTopic) {
+        _recommendedTopic = null;
+      }
       _errorText = null;
     });
   }
 
   void _handleFocusChanged() {
+    if (_focusNode.hasFocus && _recommendedTopic != null) {
+      _controller.clear();
+    }
     setState(() {
       if (_focusNode.hasFocus) _selectedExample = null;
     });
@@ -67,12 +68,9 @@ class _TopicInputScreenState extends ConsumerState<TopicInputScreen> {
   @override
   Widget build(BuildContext context) {
     final AppCopy copy = AppCopy.of(context);
-    final LearningLanguageCode nativeLanguage = ref.watch(
-      topicStarterNativeLanguageProvider,
-    );
-    final List<String> examples = TopicStarterExamples.forNativeLanguage(
-      nativeLanguage,
-    );
+    final List<WeeklyTopic> examples =
+        ref.watch(topicInputTopicsProvider).value?.topics.take(6).toList() ??
+        const <WeeklyTopic>[];
     return AppScaffold(
       appBar: AppBar(title: Text(copy.freeChatTitle)),
       bottomNavigationBar: SafeArea(
@@ -148,69 +146,71 @@ class _TopicInputScreenState extends ConsumerState<TopicInputScreen> {
               style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),
           ],
-          const SizedBox(height: AppSpacing.lg + AppSpacing.xl),
-          AppSectionLabel(copy.examplesLabel, textAlign: TextAlign.center),
-          const SizedBox(height: AppSpacing.md),
-          GridView.count(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisCount: 2,
-            crossAxisSpacing: AppSpacing.xs,
-            mainAxisSpacing: AppSpacing.xs,
-            mainAxisExtent: 76,
-            children: <Widget>[
-              for (final String example in examples)
-                Builder(
-                  builder: (BuildContext context) {
-                    final bool selected = _selectedExample == example;
-                    return Semantics(
-                      button: true,
-                      selected: selected,
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(24),
-                        onTap: () {
-                          _controller.text = example;
-                          _focusNode.unfocus();
-                          setState(() {
-                            _selectedExample = example;
-                            _errorText = null;
-                          });
-                        },
-                        child: Container(
-                          alignment: Alignment.center,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: AppSpacing.sm,
-                            vertical: AppSpacing.xs,
-                          ),
-                          decoration: BoxDecoration(
-                            color: selected
-                                ? AppPalette.blockCream
-                                : Theme.of(context).colorScheme.surface,
-                            borderRadius: BorderRadius.circular(24),
-                            border: Border.all(
+          if (examples.isNotEmpty) ...<Widget>[
+            const SizedBox(height: AppSpacing.lg + AppSpacing.xl),
+            AppSectionLabel(copy.examplesLabel, textAlign: TextAlign.center),
+            const SizedBox(height: AppSpacing.md),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                for (final WeeklyTopic topic in examples)
+                  Builder(
+                    builder: (BuildContext context) {
+                      final String example = topic.text;
+                      final bool selected = _selectedExample == example;
+                      return Semantics(
+                        key: ValueKey<String>('topic-example-${topic.id}'),
+                        button: true,
+                        selected: selected,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(24),
+                          onTap: () {
+                            _controller.text = example;
+                            _focusNode.unfocus();
+                            setState(() {
+                              _selectedExample = example;
+                              _recommendedTopic = example;
+                              _errorText = null;
+                            });
+                          },
+                          child: Container(
+                            constraints: const BoxConstraints(minHeight: 56),
+                            margin: const EdgeInsets.only(
+                              bottom: AppSpacing.xs,
+                            ),
+                            alignment: Alignment.center,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.sm,
+                              vertical: AppSpacing.xs,
+                            ),
+                            decoration: BoxDecoration(
                               color: selected
-                                  ? Theme.of(context).colorScheme.onSurface
-                                  : Theme.of(
-                                      context,
-                                    ).colorScheme.outlineVariant,
-                              width: selected ? 2 : 1,
+                                  ? AppPalette.blockCream
+                                  : Theme.of(context).colorScheme.surface,
+                              borderRadius: BorderRadius.circular(24),
+                              border: Border.all(
+                                color: selected
+                                    ? Theme.of(context).colorScheme.onSurface
+                                    : Theme.of(
+                                        context,
+                                      ).colorScheme.outlineVariant,
+                                width: selected ? 2 : 1,
+                              ),
+                            ),
+                            child: Text(
+                              example,
+                              textAlign: TextAlign.center,
+                              style: AppTypography.bodySm,
                             ),
                           ),
-                          child: Text(
-                            example,
-                            textAlign: TextAlign.center,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: AppTypography.bodySm,
-                          ),
                         ),
-                      ),
-                    );
-                  },
-                ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.lg),
+                      );
+                    },
+                  ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.lg),
+          ],
         ],
       ),
     );
@@ -225,7 +225,13 @@ class _TopicInputScreenState extends ConsumerState<TopicInputScreen> {
       return;
     }
     context.push(
-      '${AppRoute.topicPrep}?topic=${Uri.encodeQueryComponent(topic)}',
+      Uri(
+        path: AppRoute.topicPrep,
+        queryParameters: {
+          'topic': topic,
+          if (_recommendedTopic == topic) 'recommended': 'true',
+        },
+      ).toString(),
     );
   }
 }

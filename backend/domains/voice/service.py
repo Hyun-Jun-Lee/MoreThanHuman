@@ -60,9 +60,17 @@ class VoiceService:
         voice: str | None = None, speed: float | None = None,
     ):
         self._provider = provider
+        self._provider_injected = provider is not None
+        self.request_accent: str | None = None
         self.http_client = http_client
         self.tts_voice = voice or settings.tts_voice
         self.tts_speed = settings.tts_speed if speed is None else speed
+
+    def select_voice(self, voice: str) -> None:
+        """같은 요청의 STT 후에도 TTS 음성을 새 설정으로 만들어요."""
+        self.tts_voice = voice
+        if not self._provider_injected:
+            self._provider = None
 
     @property
     def audio_profile(self) -> dict[str, str | float]:

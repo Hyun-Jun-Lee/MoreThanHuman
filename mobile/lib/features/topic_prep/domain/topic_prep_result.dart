@@ -283,6 +283,36 @@ class CustomFocusQuestions {
   final String? retryGuidance;
 }
 
+class TopicPrepQuestions {
+  const TopicPrepQuestions({
+    required this.firstQuestions,
+    required this.firstQuestionTranslations,
+  });
+
+  factory TopicPrepQuestions.fromJson(Object? json) {
+    if (json is! Map<String, dynamic>) {
+      throw const FormatException('Topic prep questions must be an object.');
+    }
+    List<String> readQuestions(String key) {
+      final Object? values = json[key];
+      if (values is! List ||
+          values.length != 3 ||
+          values.any((value) => value is! String || value.trim().isEmpty)) {
+        throw const FormatException('Topic prep questions are incomplete.');
+      }
+      return values.cast<String>().map((value) => value.trim()).toList();
+    }
+
+    return TopicPrepQuestions(
+      firstQuestions: readQuestions('first_questions'),
+      firstQuestionTranslations: readQuestions('first_question_translations'),
+    );
+  }
+
+  final List<String> firstQuestions;
+  final List<String> firstQuestionTranslations;
+}
+
 class TopicPrepDirections {
   const TopicPrepDirections(this.directions);
 

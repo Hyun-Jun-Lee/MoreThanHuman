@@ -8,6 +8,47 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'question refresh sends context and parses only questions and translations',
+    () async {
+      final client = ApiClient.create(
+        tokenStorage: _MemoryTokenStorage('access-token'),
+        baseUrl: 'https://example.com/api/',
+      );
+      addTearDown(client.close);
+      final adapter = _TopicPrepHttpClientAdapter();
+      client.dio.httpClientAdapter = adapter;
+      final result = await ApiTopicPrepRepository(client).regenerateQuestions(
+        topic: 'baseball',
+        focus: 'pitching choices',
+        summary: 'A close game.',
+        previousQuestions: ['Old one?', 'Old two?', 'Old three?'],
+      );
+      expect(
+        adapter.lastRequest?.uri.path,
+        '/api/search/topic-prep/questions/',
+      );
+      expect(
+        adapter.lastRequest?.headers['Authorization'],
+        'Bearer access-token',
+      );
+      expect(adapter.lastRequest?.data, {
+        'topic': 'baseball',
+        'focus': 'pitching choices',
+        'summary': 'A close game.',
+        'previous_questions': ['Old one?', 'Old two?', 'Old three?'],
+      });
+      expect(result.firstQuestions, ['New one?', 'New two?', 'New three?']);
+      expect(result.firstQuestionTranslations, ['하나?', '둘?', '셋?']);
+      expect(
+        () => TopicPrepQuestions.fromJson({
+          'first_questions': result.firstQuestions,
+          'first_question_translations': ['하나?'],
+        }),
+        throwsFormatException,
+      );
+    },
+  );
   test('repository posts a topic and parses the response', () async {
     final ApiClient client = ApiClient.create(
       tokenStorage: _MemoryTokenStorage('access-token'),
@@ -70,6 +111,21 @@ class _TopicPrepHttpClientAdapter implements HttpClientAdapter {
     Future<void>? cancelFuture,
   ) async {
     lastRequest = options;
+    if (options.path.endsWith('topic-prep/questions/')) {
+      return ResponseBody.fromString(
+        jsonEncode({
+          'success': true,
+          'data': {
+            'first_questions': ['New one?', 'New two?', 'New three?'],
+            'first_question_translations': ['하나?', '둘?', '셋?'],
+          },
+        }),
+        200,
+        headers: {
+          Headers.contentTypeHeader: [Headers.jsonContentType],
+        },
+      );
+    }
     final String body = jsonEncode(<String, dynamic>{
       'success': true,
       'data': <String, dynamic>{

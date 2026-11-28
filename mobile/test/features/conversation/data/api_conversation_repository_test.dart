@@ -41,6 +41,7 @@ void main() {
     );
     expect(adapter.lastRequest?.data, {
       'topic_id': 'topic-id',
+      'tts_accent': 'us',
       'start_request_id': 'request-id',
       'include_audio_response': true,
     });
@@ -53,6 +54,7 @@ void main() {
 
     final ConversationResponse response = await repository.startFreeChat(
       firstMessage: 'I liked the game.',
+      ttsAccent: 'gb',
       searchContext: 'Lotte won 8-3.',
       topic: '롯데 자이언츠 최근 경기',
       conversationDirection: 'CASUAL_CHAT',
@@ -67,6 +69,7 @@ void main() {
     expect(adapter.lastRequest?.data, <String, Object?>{
       'first_message': 'I liked the game.',
       'search_context': 'Lotte won 8-3.',
+      'tts_accent': 'gb',
       'topic': '롯데 자이언츠 최근 경기',
       'conversation_direction': 'CASUAL_CHAT',
       'selected_question': 'What stood out?',
@@ -183,6 +186,7 @@ void main() {
     expect(adapter.lastRequest?.data, <String, Object?>{
       'role_character': 'a friendly cafe barista taking an order',
       'search_context': null,
+      'tts_accent': 'us',
       'include_audio_response': true,
     });
   });

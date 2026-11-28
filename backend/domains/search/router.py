@@ -20,6 +20,8 @@ from domains.search.schemas import (
     TopicPrepDirectionsRequest,
     TopicPrepDirectionsResult,
     TopicPrepRequest,
+    TopicPrepQuestionsRequest,
+    TopicPrepQuestionsResult,
     TopicPrepResult,
 )
 from domains.search.service import SearchService
@@ -123,6 +125,24 @@ async def prepare_custom_focus_questions(
         result = await service.prepare_custom_focus_questions(
             request.topic,
             request.custom_focus,
+            language_context=ensure_language_context(getattr(current_user, "language", None)),
+        )
+        return SuccessResponse(data=result)
+    except AppException as e:
+        log_exception(e, status_code=502, error_code="SEARCH_UPSTREAM_FAILED")
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=e.message)
+
+
+@router.post("/topic-prep/questions/", response_model=SuccessResponse[TopicPrepQuestionsResult])
+async def regenerate_topic_prep_questions(
+    request: TopicPrepQuestionsRequest,
+    current_user: ProfileModel = Depends(get_current_ai_profile),
+    service: SearchService = Depends(get_search_service),
+):
+    """선택한 방향의 첫 질문 세 개와 번역만 재생성해요."""
+    try:
+        result = await service.regenerate_topic_prep_questions(
+            request.topic, request.focus, request.summary, request.previous_questions,
             language_context=ensure_language_context(getattr(current_user, "language", None)),
         )
         return SuccessResponse(data=result)

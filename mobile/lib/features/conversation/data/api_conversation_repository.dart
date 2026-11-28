@@ -40,6 +40,7 @@ class ApiConversationRepository
 
   @override
   Future<SuggestedConversationResponse> startSuggestedFreeChat({
+    String ttsAccent = 'us',
     required String topicId,
     required String startRequestId,
     bool includeAudioResponse = true,
@@ -48,6 +49,7 @@ class ApiConversationRepository
       'conversations/start/free-chat/suggested/',
       data: <String, Object?>{
         'topic_id': topicId,
+        'tts_accent': ttsAccent,
         'start_request_id': startRequestId,
         'include_audio_response': includeAudioResponse,
       },
@@ -58,6 +60,7 @@ class ApiConversationRepository
 
   @override
   Future<MultimodalConversationResponse> startFreeChat({
+    String ttsAccent = 'us',
     required String firstMessage,
     String? searchContext,
     String? topic,
@@ -71,6 +74,7 @@ class ApiConversationRepository
           data: <String, Object?>{
             'first_message': firstMessage,
             'search_context': searchContext,
+            'tts_accent': ttsAccent,
             'topic': topic,
             'conversation_direction': conversationDirection,
             'selected_question': selectedQuestion,
@@ -83,6 +87,7 @@ class ApiConversationRepository
 
   @override
   Future<MultimodalConversationResponse> startFreeChatWithAudio({
+    String ttsAccent = 'us',
     required ConversationAudioFile audioFile,
     String? searchContext,
     String? topic,
@@ -97,6 +102,7 @@ class ApiConversationRepository
         contentType: DioMediaType.parse(audioFile.contentType),
       ),
       'search_context': searchContext,
+      'tts_accent': ttsAccent,
       'topic': topic,
       'conversation_direction': conversationDirection,
       'selected_question': selectedQuestion,
@@ -115,6 +121,7 @@ class ApiConversationRepository
 
   @override
   Future<MultimodalConversationResponse> startRoleplay({
+    String ttsAccent = 'us',
     required String roleCharacter,
     String? searchContext,
     bool includeAudioResponse = true,
@@ -125,6 +132,7 @@ class ApiConversationRepository
           data: <String, Object?>{
             'role_character': roleCharacter,
             'search_context': searchContext,
+            'tts_accent': ttsAccent,
             'include_audio_response': includeAudioResponse,
           },
           decodeData: MultimodalConversationResponse.fromJson,
@@ -216,6 +224,7 @@ class ApiConversationRepository
 
   @override
   Future<MultimodalConversationResponse> startFreeChatWithCustomFocus({
+    String ttsAccent = 'us',
     required String firstMessage,
     String? searchContext,
     String? topic,
@@ -229,6 +238,7 @@ class ApiConversationRepository
           data: <String, Object?>{
             'first_message': firstMessage,
             'search_context': searchContext,
+            'tts_accent': ttsAccent,
             'topic': topic,
             'selected_question': selectedQuestion,
             'custom_focus': customFocus,
@@ -241,6 +251,7 @@ class ApiConversationRepository
 
   @override
   Future<MultimodalConversationResponse> startFreeChatWithAudioAndCustomFocus({
+    String ttsAccent = 'us',
     required ConversationAudioFile audioFile,
     String? searchContext,
     String? topic,
@@ -255,6 +266,7 @@ class ApiConversationRepository
         contentType: DioMediaType.parse(audioFile.contentType),
       ),
       'search_context': searchContext,
+      'tts_accent': ttsAccent,
       'topic': topic,
       'selected_question': selectedQuestion,
       'custom_focus': customFocus,

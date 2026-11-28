@@ -82,49 +82,51 @@ void main() {
       AppPalette.topicSurface,
     );
     expect(
-      tester.widget<TextKo>(find.text('주말 산책\n이야기').first).style?.color,
+      tester.widget<TextKo>(find.text('주말 산책 이야기').first).style?.color,
       AppPalette.ink,
     );
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets(
-    'moving cards keep equal width and centered wrapped text',
-    (tester) async {
-      const short = '취미 이야기';
-      const long = '주말에 가장 기억에 남는 활동 이야기';
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(
-            body: WeeklyTopicLoop(
-              topics: [
-                WeeklyTopic(id: 'short', text: short),
-                WeeklyTopic(id: 'long', text: long),
-              ],
-              onSelected: _ignore,
-            ),
+  testWidgets('moving cards keep equal width and centered wrapped text', (
+    tester,
+  ) async {
+    const short = '취미 이야기';
+    const long = '주말에 가장 기억에 남는 활동 이야기';
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: WeeklyTopicLoop(
+            topics: [
+              WeeklyTopic(id: 'short', text: short),
+              WeeklyTopic(id: 'long', text: long),
+            ],
+            onSelected: _ignore,
           ),
         ),
+      ),
+    );
+
+    for (final id in ['short', 'long']) {
+      final card = find.byKey(ValueKey('weekly-topic-card-$id-0'));
+      final text = find.text(id == 'short' ? short : long).first;
+      expect(tester.getSize(card).width, 156);
+      expect(tester.getSize(card).height, greaterThanOrEqualTo(104));
+      expect(
+        tester.getSize(card),
+        tester.getSize(find.byKey(const ValueKey('weekly-topic-card-short-0'))),
       );
+      expect(
+        tester.getCenter(text).dx,
+        closeTo(tester.getCenter(card).dx, 0.1),
+      );
+      expect(tester.widget<TextKo>(text).maxLines, isNull);
+    }
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
 
-      for (final id in ['short', 'long']) {
-        final card = find.byKey(ValueKey('weekly-topic-card-$id-0'));
-        final text = find
-            .text(id == 'short' ? short : '주말에 가장\n기억에 남는\n활동 이야기')
-            .first;
-        expect(tester.getSize(card), const Size(156, 104));
-        expect(
-          tester.getCenter(text).dx,
-          closeTo(tester.getCenter(card).dx, 0.1),
-        );
-        expect(tester.widget<TextKo>(text).maxLines, 3);
-      }
-      expect(tester.takeException(), isNull);
-      await tester.pumpWidget(const SizedBox());
-    },
-  );
-
-  testWidgets('topic wraps every two words without changing its original', (
+  testWidgets('topic wraps naturally without changing its original', (
     tester,
   ) async {
     const topic = '내가 배우고 싶은 새로운 기술';
@@ -141,7 +143,7 @@ void main() {
     );
 
     final display = tester.widget<TextKo>(find.byType(TextKo).first);
-    expect(display.data, '내가 배우고\n싶은 새로운\n기술');
+    expect(display.data, topic);
     expect(display.semanticsLabel, topic);
     final richText = find
         .descendant(
@@ -162,11 +164,7 @@ void main() {
         .top;
 
     expect(topOf(technology), topOf(technology + 2));
-    expect(topOf(technology), greaterThan(topOf(rendered.indexOf('싶'))));
-    expect(
-      topOf(rendered.indexOf('싶')),
-      greaterThan(topOf(rendered.indexOf('내'))),
-    );
+    expect(paragraph.didExceedMaxLines, isFalse);
     await tester.tap(find.byKey(const ValueKey('weekly-topic-korean-1')));
     expect(selected?.text, topic);
     expect(tester.takeException(), isNull);
@@ -194,6 +192,108 @@ void main() {
     );
     expect(find.byKey(const ValueKey('weekly-topics-static')), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  for (final scale in [1.0, 1.3, 2.0]) {
+    testWidgets('long Korean and English topics fit at text scale $scale', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(320, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      const longTopics = [
+        WeeklyTopic(id: 'short', text: '취미 이야기'),
+        WeeklyTopic(
+          id: 'ko',
+          text: '좀비 세상에서 의외로 쓸모 있을 내 숨겨진 재능과 생존 전략에 대해 이야기해 보기',
+        ),
+        WeeklyTopic(
+          id: 'en',
+          text:
+              'What would you bring to a new world where you can only keep three things from your old life?',
+        ),
+      ];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaQuery(
+            data: MediaQueryData(textScaler: TextScaler.linear(scale)),
+            child: const Scaffold(
+              body: SingleChildScrollView(
+                child: WeeklyTopicLoop(
+                  topics: longTopics,
+                  onSelected: _ignore,
+                  selectedTopicId: 'short',
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      final suffix = scale > 1.3 ? '' : '-0';
+      final shortCard = find.byKey(ValueKey('weekly-topic-card-short$suffix'));
+      final size = tester.getSize(shortCard);
+      expect(size.height, greaterThan(104));
+      for (final topic in longTopics) {
+        final card = find.byKey(
+          ValueKey('weekly-topic-card-${topic.id}$suffix'),
+        );
+        expect(tester.getSize(card), size);
+        final text = find.descendant(of: card, matching: find.byType(TextKo));
+        expect(tester.widget<TextKo>(text).data, topic.text);
+        final rich = find.descendant(of: text, matching: find.byType(RichText));
+        final paragraph = tester.renderObject<RenderParagraph>(rich);
+        expect(paragraph.didExceedMaxLines, isFalse);
+        final rendered = paragraph.text.toPlainText();
+        // 줄 끝 공백의 selection box는 너비 밖으로 뻗을 수 있어 실제 글자를 검증해요.
+        for (var index = 0; index < rendered.length; index++) {
+          if (rendered[index].trim().isEmpty || rendered[index] == '\u2060') {
+            continue;
+          }
+          final boxes = paragraph.getBoxesForSelection(
+            TextSelection(baseOffset: index, extentOffset: index + 1),
+          );
+          expect(boxes, isNotEmpty);
+          for (final box in boxes) {
+            expect(box.bottom, lessThanOrEqualTo(paragraph.size.height + 0.1));
+            expect(
+              box.left,
+              greaterThanOrEqualTo(-0.1),
+              reason: '${topic.id}: ${rendered[index]}',
+            );
+            expect(
+              box.right,
+              lessThanOrEqualTo(paragraph.size.width + 0.1),
+              reason: '${topic.id}: ${rendered[index]}',
+            );
+          }
+        }
+        expect(
+          tester.getBottomLeft(rich).dy,
+          lessThanOrEqualTo(tester.getBottomLeft(card).dy - 12 + 0.1),
+        );
+        expect(
+          tester.getBottomLeft(card).dy,
+          lessThanOrEqualTo(
+            tester.getBottomLeft(find.byType(WeeklyTopicLoop)).dy,
+          ),
+        );
+      }
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    });
+  }
+
+  testWidgets('an empty topic list takes no space', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: WeeklyTopicLoop(topics: [], onSelected: _ignore),
+        ),
+      ),
+    );
+    expect(tester.getSize(find.byType(WeeklyTopicLoop)), Size.zero);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
   });
 
   testWidgets('topics move right and pause under touch', (tester) async {

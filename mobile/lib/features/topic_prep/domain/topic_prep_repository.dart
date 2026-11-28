@@ -4,6 +4,15 @@ abstract interface class TopicPrepRepository {
   Future<TopicPrepResult> prepareTopic(String topic);
 }
 
+abstract interface class TopicPrepQuestionsRepository {
+  Future<TopicPrepQuestions> regenerateQuestions({
+    required String topic,
+    required String focus,
+    required String summary,
+    required List<String> previousQuestions,
+  });
+}
+
 class TopicPrepStreamEvent {
   const TopicPrepStreamEvent.summary(this.summary) : result = null;
   const TopicPrepStreamEvent.card(this.result) : summary = null;

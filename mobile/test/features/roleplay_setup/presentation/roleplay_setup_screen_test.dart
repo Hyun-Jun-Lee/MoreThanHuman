@@ -17,6 +17,8 @@ void main() {
   ) async {
     await tester.pumpWidget(_app());
 
+    expect(find.text('United States'), findsOneWidget);
+    expect(find.text('United Kingdom'), findsOneWidget);
     expect(find.text('Choose a situation'), findsOneWidget);
     expect(
       find.text('Choose a situation to practice, or create your own.'),
@@ -27,13 +29,18 @@ void main() {
       TextAlign.center,
     );
     expect(find.text('Cafe order'), findsOneWidget);
-    expect(find.text('Hotel check-in'), findsOneWidget);
     expect(find.text('CUSTOM ROLEPLAY'), findsOneWidget);
     expect(
       tester.getTopLeft(find.text('CUSTOM ROLEPLAY')).dy,
       lessThan(tester.getTopLeft(find.text('Cafe order')).dy),
     );
     expect(_startButton(tester).enabled, isFalse);
+    await tester.scrollUntilVisible(
+      find.text('Hotel check-in'),
+      150,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Hotel check-in'), findsOneWidget);
   });
 
   testWidgets('centers Korean heading and instruction', (
@@ -78,6 +85,8 @@ void main() {
   ) async {
     await tester.pumpWidget(_app(targetLanguage: LearningLanguageCode.ko));
 
+    expect(find.text('United States'), findsNothing);
+    expect(find.text('United Kingdom'), findsNothing);
     expect(find.text('Polite cafe order'), findsOneWidget);
     expect(find.text('Front desk help'), findsOneWidget);
     expect(

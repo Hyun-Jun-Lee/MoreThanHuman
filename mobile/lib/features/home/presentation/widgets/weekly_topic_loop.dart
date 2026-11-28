@@ -1,9 +1,13 @@
+import 'dart:math' as math;
+
 import 'package:curitalk/app/theme/tokens/tokens.dart';
-import 'package:curitalk/core/text/word_pair_lines.dart';
 import 'package:curitalk/features/home/domain/weekly_topic.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:text_ko/text_ko.dart';
+
+const _topicCardWidth = 156.0;
+const _topicCardPadding = EdgeInsets.fromLTRB(10, 18, 10, 12);
 
 class WeeklyTopicLoop extends StatefulWidget {
   const WeeklyTopicLoop({
@@ -92,6 +96,11 @@ class _WeeklyTopicLoopState extends State<WeeklyTopicLoop>
 
   @override
   Widget build(BuildContext context) {
+    if (widget.topics.isEmpty) return const SizedBox.shrink();
+    return LayoutBuilder(builder: _buildTopics);
+  }
+
+  Widget _buildTopics(BuildContext context, BoxConstraints constraints) {
     final media = MediaQuery.of(context);
     final staticMode =
         media.disableAnimations ||
@@ -102,6 +111,15 @@ class _WeeklyTopicLoopState extends State<WeeklyTopicLoop>
             .accessibilityFeatures
             .reduceMotion ||
         media.textScaler.scale(1) > 1.3;
+    final cardWidth = math.min(
+      media.textScaler.scale(1) > 1.3 ? constraints.maxWidth : _topicCardWidth,
+      constraints.maxWidth,
+    );
+    final textStyle =
+        (Theme.of(context).textTheme.bodyMedium ??
+                DefaultTextStyle.of(context).style)
+            .copyWith(color: AppPalette.ink);
+    final cardHeight = _measureCardHeight(context, cardWidth, textStyle);
     if (staticMode) {
       return Wrap(
         key: const ValueKey('weekly-topics-static'),
@@ -114,6 +132,9 @@ class _WeeklyTopicLoopState extends State<WeeklyTopicLoop>
               topic: widget.topics[index],
               selected: widget.selectedTopicId == widget.topics[index].id,
               onTap: widget.onSelected,
+              cardWidth: cardWidth,
+              cardHeight: cardHeight,
+              textStyle: textStyle,
             ),
         ],
       );
@@ -135,7 +156,7 @@ class _WeeklyTopicLoopState extends State<WeeklyTopicLoop>
         behavior: HitTestBehavior.opaque,
         dragStartBehavior: DragStartBehavior.down,
         onHorizontalDragUpdate: (details) {
-          final total = widget.topics.length * 172.0;
+          final total = widget.topics.length * (cardWidth + 16);
           if (total == 0) return;
           setState(() {
             _dragOffset =
@@ -143,11 +164,12 @@ class _WeeklyTopicLoopState extends State<WeeklyTopicLoop>
           });
         },
         child: SizedBox(
-          height: 148,
+          // 곡선의 최대 이동 28px + 꼭지 여백 13px + 하단 여유 3px예요.
+          height: cardHeight + 44,
           child: LayoutBuilder(
             builder: (context, constraints) {
-              const step = 172.0;
-              const itemWidth = 156.0;
+              final step = cardWidth + 16;
+              final itemWidth = cardWidth;
               final total = widget.topics.length * step;
               final copies = (constraints.maxWidth / total).ceil() + 1;
               return ClipRect(
@@ -184,7 +206,8 @@ class _WeeklyTopicLoopState extends State<WeeklyTopicLoop>
                                       widget.topics[index].id,
                                   onTap: widget.onSelected,
                                   cardWidth: itemWidth,
-                                  cardHeight: 104,
+                                  cardHeight: cardHeight,
+                                  textStyle: textStyle,
                                   keySuffix: '$copy',
                                 ),
                               );
@@ -200,6 +223,42 @@ class _WeeklyTopicLoopState extends State<WeeklyTopicLoop>
       ),
     );
   }
+
+  double _measureCardHeight(
+    BuildContext context,
+    double width,
+    TextStyle style,
+  ) {
+    final media = MediaQuery.of(context);
+    final painter = TextPainter(
+      textDirection: Directionality.of(context),
+      textAlign: TextAlign.center,
+      textScaler: media.textScaler,
+      locale: Localizations.maybeLocaleOf(context),
+    );
+    var height = 104.0;
+    // 실제 표시와 같은 한국어 어절 처리·서체·접근성 배율로 측정해요.
+    for (final topic in widget.topics) {
+      painter.text = TextSpan(
+        text: applyTextKoWordBreak(
+          topic.text,
+          wordBreak: TextKoWordBreak.keepAll,
+        ),
+        style: media.boldText
+            ? style.merge(const TextStyle(fontWeight: FontWeight.bold))
+            : style,
+      );
+      painter.layout(
+        maxWidth: math.max(1, width - _topicCardPadding.horizontal),
+      );
+      height = math.max(
+        height,
+        painter.height.ceilToDouble() + _topicCardPadding.vertical,
+      );
+    }
+    painter.dispose();
+    return height;
+  }
 }
 
 class _TopicButton extends StatelessWidget {
@@ -207,27 +266,27 @@ class _TopicButton extends StatelessWidget {
     required this.topic,
     required this.selected,
     required this.onTap,
-    this.cardWidth,
-    this.cardHeight,
+    required this.cardWidth,
+    required this.cardHeight,
+    required this.textStyle,
     this.keySuffix,
   });
 
   final WeeklyTopic topic;
   final bool selected;
   final ValueChanged<WeeklyTopic>? onTap;
-  final double? cardWidth;
-  final double? cardHeight;
+  final double cardWidth;
+  final double cardHeight;
+  final TextStyle textStyle;
   final String? keySuffix;
 
   @override
   Widget build(BuildContext context) {
     final text = TextKo(
-      wrapWordsInPairs(topic.text),
+      topic.text,
       wordBreak: TextKoWordBreak.keepAll,
       semanticsLabel: topic.text,
-      style: const TextStyle(color: AppPalette.ink),
-      maxLines: 3,
-      overflow: TextOverflow.ellipsis,
+      style: textStyle,
       textAlign: TextAlign.center,
     );
     return Semantics(
@@ -261,10 +320,8 @@ class _TopicButton extends StatelessWidget {
                   highlightColor: Colors.transparent,
                   onTap: onTap == null ? null : () => onTap!(topic),
                   child: Padding(
-                    padding: cardWidth == null
-                        ? const EdgeInsets.fromLTRB(16, 18, 16, 12)
-                        : const EdgeInsets.fromLTRB(10, 18, 10, 12),
-                    child: cardWidth == null ? text : Center(child: text),
+                    padding: _topicCardPadding,
+                    child: Center(child: text),
                   ),
                 ),
               ),

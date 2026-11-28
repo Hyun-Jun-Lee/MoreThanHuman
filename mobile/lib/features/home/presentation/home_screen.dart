@@ -1,3 +1,4 @@
+import 'package:curitalk/features/conversation/presentation/widgets/accent_selector.dart';
 import 'package:curitalk/core/notifications/badge_sync_controller.dart';
 import 'package:curitalk/app/theme/tokens/tokens.dart';
 import 'package:curitalk/core/copy/copy.dart';
@@ -206,29 +207,51 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
     if (!await _canStartConversation() || !mounted) return;
     final copy = AppCopy.of(context);
+    var ttsAccent = 'us';
+    final showAccent =
+        ref
+            .read(authControllerProvider)
+            .value
+            ?.user
+            ?.language
+            .targetLanguage
+            .code ==
+        'en';
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        alignment: const Alignment(0, -0.45),
-        title: Text(copy.confirmSuggestedConversationTitle),
-        content: Text(topic.text),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: Text(copy.cancelLabel),
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          alignment: const Alignment(0, -0.45),
+          title: Text(copy.confirmSuggestedConversationTitle),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(topic.text),
+              if (showAccent)
+                AccentSelector(
+                  value: ttsAccent,
+                  onChanged: (value) => setDialogState(() => ttsAccent = value),
+                ),
+            ],
           ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: Text(copy.startConversationLabel),
-          ),
-        ],
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: Text(copy.cancelLabel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: Text(copy.startConversationLabel),
+            ),
+          ],
+        ),
       ),
     );
     if (confirmed != true || !mounted) return;
     if (ref.read(startConversationControllerProvider).isStarting) return;
     final conversationId = await ref
         .read(startConversationControllerProvider.notifier)
-        .startSuggestedFreeChat(topic.id);
+        .startSuggestedFreeChat(topic.id, ttsAccent: ttsAccent);
     if (!mounted) return;
     if (conversationId != null) {
       widget.onConversationSelected?.call(conversationId);

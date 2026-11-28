@@ -50,6 +50,8 @@ class AppCopy {
     return '${languageName(nativeCode)} -> ${languageName(targetCode)}';
   }
 
+  String get englishAccentLabel => 'Accent';
+
   String get badgeTitle => isKorean ? '미확인 알림' : 'Unread notifications';
   String get badgeExplanation => isKorean
       ? '확인하지 않은 답변이 있으면 앱 아이콘에 알림을 표시해요'
@@ -514,6 +516,11 @@ class AppCopy {
       : 'We could not prepare new directions. Please try again.';
   String get pickFirstQuestionLabel =>
       isKorean ? '첫 질문 고르기' : 'Pick a first question';
+  String get regenerateQuestionsLabel =>
+      isKorean ? '첫 질문 새로고침' : 'Refresh first questions';
+  String get regenerateQuestionsFailed => isKorean
+      ? '새로운 질문을 준비하지 못했어요. 다시 시도해 주세요.'
+      : 'We could not prepare new questions. Please try again.';
   String get answerToBeginLabel => isKorean ? '답변하고 시작하기' : 'Answer to begin';
   String get tryOneOfTheseLabel =>
       isKorean ? '이 중 하나로 시도해 보세요' : 'Try one of these';

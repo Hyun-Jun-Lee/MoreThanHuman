@@ -110,6 +110,19 @@ class TopicPrepDirectionsRequest(TopicPrepRequest):
     previous_directions: list[str] = Field(default_factory=list, max_length=3)
 
 
+class TopicPrepQuestionsRequest(TopicPrepRequest):
+    """선택한 방향을 유지하며 첫 질문만 재생성해요."""
+
+    focus: str = Field(..., min_length=2, max_length=2000)
+    summary: str = Field(default="", max_length=10000)
+    previous_questions: list[str] = Field(..., min_length=3, max_length=3)
+
+
+class TopicPrepQuestionsResult(BaseModel):
+    first_questions: list[str] = Field(..., min_length=3, max_length=3)
+    first_question_translations: list[str] = Field(..., min_length=3, max_length=3)
+
+
 class TopicPrepQuality(BaseModel):
     """검색 품질 판정"""
 

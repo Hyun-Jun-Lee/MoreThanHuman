@@ -172,10 +172,16 @@ class StartConversationController extends Notifier<StartConversationState> {
     return const StartConversationState();
   }
 
-  Future<String?> startSuggestedFreeChat(String topicId) async {
+  String _pendingSuggestedAccent = 'us';
+
+  Future<String?> startSuggestedFreeChat(
+    String topicId, {
+    String ttsAccent = 'us',
+  }) async {
     if (state.isStarting) return null;
     if (_pendingSuggestedTopic != topicId) {
       _pendingSuggestedTopic = topicId;
+      _pendingSuggestedAccent = ttsAccent;
       _pendingSuggestedRequestId = _newRequestId();
     }
     state = const StartConversationState(isStarting: true);
@@ -231,6 +237,7 @@ class StartConversationController extends Notifier<StartConversationState> {
       final response = await (repository as SuggestedConversationRepository)
           .startSuggestedFreeChat(
             topicId: topicId,
+            ttsAccent: _pendingSuggestedAccent,
             startRequestId: _pendingSuggestedRequestId!,
           );
       if (response.audio != null || response.audioError != null) {
@@ -288,6 +295,7 @@ class StartConversationController extends Notifier<StartConversationState> {
     final stream = retryTurnId == null
         ? SuggestedConversationStream(repository.apiClient).start(
             topicId: topicId,
+            ttsAccent: _pendingSuggestedAccent,
             requestId: _pendingSuggestedRequestId!,
             cancelToken: token,
             trace: trace,
@@ -655,6 +663,7 @@ class StartConversationController extends Notifier<StartConversationState> {
   }
 
   Future<ConversationResponse?> startFreeChat({
+    String ttsAccent = 'us',
     required String firstMessage,
     String? searchContext,
     String? topic,
@@ -674,19 +683,21 @@ class StartConversationController extends Notifier<StartConversationState> {
           data: <String, Object?>{
             'first_message': firstMessage,
             'search_context': searchContext,
+            'tts_accent': ttsAccent,
             'topic': topic,
             'conversation_direction': conversationDirection,
             'selected_question': selectedQuestion,
             'custom_focus': customFocus,
           },
           fingerprint:
-              'free:$firstMessage:$topic:$selectedQuestion:$customFocus',
+              'free:$ttsAccent:$firstMessage:$topic:$selectedQuestion:$customFocus',
           type: ConversationType.freeChat,
         );
       }
       final ConversationResponse response = customFocus == null
           ? await repository.startFreeChat(
               firstMessage: firstMessage,
+              ttsAccent: ttsAccent,
               searchContext: searchContext,
               topic: topic,
               conversationDirection: conversationDirection,
@@ -697,6 +708,7 @@ class StartConversationController extends Notifier<StartConversationState> {
               repository,
             ).startFreeChatWithCustomFocus(
               firstMessage: firstMessage,
+              ttsAccent: ttsAccent,
               searchContext: searchContext,
               topic: topic,
               selectedQuestion: selectedQuestion,
@@ -722,6 +734,7 @@ class StartConversationController extends Notifier<StartConversationState> {
   }
 
   Future<ConversationResponse?> startFreeChatWithAudio({
+    String ttsAccent = 'us',
     required ConversationAudioFile audioFile,
     String? searchContext,
     String? topic,
@@ -745,13 +758,14 @@ class StartConversationController extends Notifier<StartConversationState> {
               contentType: DioMediaType.parse(audioFile.contentType),
             ),
             'search_context': searchContext,
+            'tts_accent': ttsAccent,
             'topic': topic,
             'conversation_direction': conversationDirection,
             'selected_question': selectedQuestion,
             'custom_focus': customFocus,
           }),
           fingerprint:
-              'free-audio:${audioFile.filename}:$topic:$selectedQuestion:$customFocus',
+              'free-audio:$ttsAccent:${audioFile.filename}:$topic:$selectedQuestion:$customFocus',
           type: ConversationType.freeChat,
           trace: audioFile.latencyTrace,
         );
@@ -759,6 +773,7 @@ class StartConversationController extends Notifier<StartConversationState> {
       final ConversationResponse response = customFocus == null
           ? await repository.startFreeChatWithAudio(
               audioFile: audioFile,
+              ttsAccent: ttsAccent,
               searchContext: searchContext,
               topic: topic,
               conversationDirection: conversationDirection,
@@ -769,6 +784,7 @@ class StartConversationController extends Notifier<StartConversationState> {
               repository,
             ).startFreeChatWithAudioAndCustomFocus(
               audioFile: audioFile,
+              ttsAccent: ttsAccent,
               searchContext: searchContext,
               topic: topic,
               selectedQuestion: selectedQuestion,
@@ -794,6 +810,7 @@ class StartConversationController extends Notifier<StartConversationState> {
   }
 
   Future<ConversationResponse?> startRoleplay({
+    String ttsAccent = 'us',
     required String roleCharacter,
     String? searchContext,
     void Function(String requestId)? onStreamStarted,
@@ -808,8 +825,9 @@ class StartConversationController extends Notifier<StartConversationState> {
           data: <String, Object?>{
             'role_character': roleCharacter,
             'search_context': searchContext,
+            'tts_accent': ttsAccent,
           },
-          fingerprint: 'roleplay:$roleCharacter:$searchContext',
+          fingerprint: 'roleplay:$ttsAccent:$roleCharacter:$searchContext',
           type: ConversationType.rolePlaying,
           roleCharacter: roleCharacter,
           onStreamStarted: onStreamStarted,
@@ -817,6 +835,7 @@ class StartConversationController extends Notifier<StartConversationState> {
       }
       final ConversationResponse response = await repository.startRoleplay(
         roleCharacter: roleCharacter,
+        ttsAccent: ttsAccent,
         searchContext: searchContext,
         includeAudioResponse: true,
       );

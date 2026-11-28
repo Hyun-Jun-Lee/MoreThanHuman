@@ -2,7 +2,7 @@
 Conversation 도메인 Pydantic 스키마 정의
 """
 from datetime import datetime
-from typing import Generic, TypeVar
+from typing import Generic, TypeVar, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -30,6 +30,7 @@ class UnreadReplies(BaseModel):
 class StartFreeChatRequest(BaseModel):
     """자유 대화 시작 요청"""
 
+    tts_accent: Literal["us", "gb", "au"] | None = None
     first_message: str
     search_context: str | None = None
     topic: str | None = None
@@ -41,12 +42,14 @@ class StartFreeChatRequest(BaseModel):
 class StartRoleplayRequest(BaseModel):
     """롤플레이 대화 시작 요청"""
 
+    tts_accent: Literal["us", "gb", "au"] | None = None
     role_character: str
     search_context: str | None = None
     include_audio_response: bool = False
 
 
 class StartSuggestedFreeChatRequest(BaseModel):
+    tts_accent: Literal["us", "gb", "au"] | None = None
     topic_id: UUID
     start_request_id: UUID
     include_audio_response: bool = False
@@ -55,6 +58,7 @@ class StartSuggestedFreeChatRequest(BaseModel):
 class SuggestedFreeChatResponse(BaseModel):
     conversation_id: UUID
     assistant_message_id: UUID
+    tts_accent: Literal["us", "gb", "au"] = "us"
     conversation_type: ConversationType
     language: LearningLanguageContext
     response: str
@@ -115,6 +119,7 @@ class Conversation(BaseModel):
 
     id: UUID
     title: str | None = None
+    tts_accent: Literal["us", "gb", "au"] = "us"
     conversation_type: ConversationType
     role_character: str | None = None
     language: LearningLanguageContext = Field(default_factory=LearningLanguageContext)
@@ -149,6 +154,7 @@ class ConversationResponse(BaseModel):
 
     conversation_id: UUID
     message_id: UUID  # 사용자 메시지 ID (SSE 연결용)
+    tts_accent: Literal["us", "gb", "au"] = "us"
     conversation_type: ConversationType
     role_character: str | None = None
     language: LearningLanguageContext = Field(default_factory=LearningLanguageContext)

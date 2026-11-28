@@ -28,6 +28,7 @@ class SuggestedConversationStream {
 
   Stream<Map<String, dynamic>> start({
     required String topicId,
+    String ttsAccent = 'us',
     required String requestId,
     required CancelToken cancelToken,
     required LatencyTrace trace,
@@ -40,6 +41,7 @@ class SuggestedConversationStream {
             'conversations/start/free-chat/suggested/stream/',
             data: <String, String>{
               'topic_id': topicId,
+              'tts_accent': ttsAccent,
               'start_request_id': requestId,
             },
             cancelToken: cancelToken,
