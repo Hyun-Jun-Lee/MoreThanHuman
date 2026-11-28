@@ -96,6 +96,26 @@ def test_guest_cannot_start_stream_roleplay_after_five_account_turns(stream_db):
         )
 
 
+def test_stream_roleplay_start_generates_role_specific_opening(stream_db):
+    _engine, sessions, user_id, conversation_id = stream_db
+    with sessions() as db:
+        db.query(MessageModel).filter_by(conversation_id=conversation_id).delete()
+        db.delete(db.get(ConversationModel, conversation_id))
+        db.commit()
+    prepared = prepare_generation(
+        user_id=user_id, request_id=str(uuid4()), kind="roleplay_start",
+        input_data={
+            "role_character": "a cafe barista taking an order",
+            "language": {"native_language": "ko", "target_language": "en", "feedback_language": "ko"},
+        },
+        http_client=None, background_tasks=_BackgroundTasks(),
+    )
+
+    assert prepared.fixed_answer is None
+    assert "Start the scene in English as the assigned counterpart" in prepared.prompt
+    assert "cafe barista taking an order" in prepared.system_prompt
+
+
 @pytest.mark.parametrize("kind", ["turn", "message"])
 def test_new_turn_reads_history_once_and_commits_all_rows_together(stream_db, kind):
     engine, sessions, user_id, conversation_id = stream_db

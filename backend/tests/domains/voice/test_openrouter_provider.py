@@ -4,6 +4,8 @@ import httpx
 import pytest
 
 from domains.voice import openrouter_provider as openrouter_provider_module
+from domains.voice import openai_provider as openai_provider_module
+from domains.voice.openai_provider import OpenAIVoiceProvider
 from domains.voice.openrouter_provider import OpenRouterVoiceProvider
 from shared.exceptions import AppException, ExternalAPIException, RateLimitException
 
@@ -48,13 +50,28 @@ async def test_openrouter_transcribe_audio_uses_multipart_request(monkeypatch):
         filename="speech.webm",
         content_type="audio/webm",
         audio_bytes=b"audio-bytes",
+        language="en",
     )
 
     assert result.text == "Hello there."
     assert fake_client.calls[0]["url"] == "https://openrouter.ai/api/v1/audio/transcriptions"
     assert fake_client.calls[0]["headers"]["Authorization"] == "Bearer test-key"
-    assert fake_client.calls[0]["data"] == {"model": "openai/gpt-4o-mini-transcribe"}
+    assert fake_client.calls[0]["data"] == {"model": "openai/gpt-4o-mini-transcribe", "language": "en"}
     assert fake_client.calls[0]["files"]["file"] == ("speech.webm", b"audio-bytes", "audio/webm")
+
+
+@pytest.mark.asyncio
+async def test_openai_transcribe_audio_sends_language_hint(monkeypatch):
+    fake_client = FakeAsyncClient(make_response(json_data={"text": "I can speak English."}))
+    monkeypatch.setattr(openai_provider_module.settings, "openai_api_key", "test-key")
+
+    result = await OpenAIVoiceProvider(fake_client).transcribe_audio(
+        filename="speech.webm", content_type="audio/webm", audio_bytes=b"audio-bytes",
+        language="en",
+    )
+
+    assert result.text == "I can speak English."
+    assert fake_client.calls[0]["data"]["language"] == "en"
 
 
 @pytest.mark.asyncio
@@ -66,8 +83,9 @@ async def test_openrouter_synthesize_speech_uses_audio_speech_endpoint(monkeypat
         )
     )
     monkeypatch.setattr(openrouter_provider_module.settings, "openrouter_api_key", "test-key")
-    monkeypatch.setattr(openrouter_provider_module.settings, "tts_model", "microsoft/mai-voice-2-flash")
-    monkeypatch.setattr(openrouter_provider_module.settings, "tts_voice", "en-US-Harper:MAI-Voice-2-Flash")
+    monkeypatch.setattr(openrouter_provider_module.settings, "tts_model", "microsoft/mai-voice-2.1-flash")
+    monkeypatch.setattr(openrouter_provider_module.settings, "tts_voice", "en-US-Harper:MAI-Voice-2.1-Flash")
+    monkeypatch.setattr(openrouter_provider_module.settings, "tts_speed", 0.8)
     monkeypatch.setattr(openrouter_provider_module.settings, "tts_response_format", "mp3")
 
     result = await OpenRouterVoiceProvider(fake_client).synthesize_speech(text="Welcome back.")
@@ -77,11 +95,39 @@ async def test_openrouter_synthesize_speech_uses_audio_speech_endpoint(monkeypat
     assert result.format == "mp3"
     assert fake_client.calls[0]["url"] == "https://openrouter.ai/api/v1/audio/speech"
     assert fake_client.calls[0]["json"] == {
-        "model": "microsoft/mai-voice-2-flash",
-        "voice": "en-US-Harper:MAI-Voice-2-Flash",
+        "model": "microsoft/mai-voice-2.1-flash",
+        "voice": "en-US-Harper:MAI-Voice-2.1-Flash",
         "input": "Welcome back.",
         "response_format": "mp3",
+        "speed": 0.8,
+        "provider": {"options": {"azure": {"style": "neutral"}}},
     }
+
+
+@pytest.mark.asyncio
+async def test_openrouter_synthesize_speech_accepts_request_voice_and_speed(monkeypatch):
+    fake_client = FakeAsyncClient(make_response(content=b"mp3", headers={"content-type": "audio/mpeg"}))
+    monkeypatch.setattr(openrouter_provider_module.settings, "openrouter_api_key", "test-key")
+
+    provider = OpenRouterVoiceProvider(
+        fake_client, voice="en-AU-Isla:MAI-Voice-2.1-Flash", speed=1.25,
+    )
+    await provider.synthesize_speech(text="Hello")
+
+    assert fake_client.calls[0]["json"]["voice"] == "en-AU-Isla:MAI-Voice-2.1-Flash"
+    assert fake_client.calls[0]["json"]["speed"] == 1.25
+    assert fake_client.calls[0]["json"]["provider"] == {"options": {"azure": {"style": "neutral"}}}
+
+
+@pytest.mark.asyncio
+async def test_openrouter_non_mai_voice_does_not_send_azure_style(monkeypatch):
+    fake_client = FakeAsyncClient(make_response(content=b"mp3", headers={"content-type": "audio/mpeg"}))
+    monkeypatch.setattr(openrouter_provider_module.settings, "openrouter_api_key", "test-key")
+    monkeypatch.setattr(openrouter_provider_module.settings, "tts_model", "another/tts-model")
+
+    await OpenRouterVoiceProvider(fake_client).synthesize_speech(text="Hello")
+
+    assert "provider" not in fake_client.calls[0]["json"]
 
 
 @pytest.mark.asyncio

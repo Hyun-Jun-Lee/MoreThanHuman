@@ -2,7 +2,7 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 
 from domains.auth.dependencies import get_current_profile, get_current_user
@@ -17,12 +17,19 @@ from domains.conversation.schemas import ConversationResponse, MessageResponse
 from domains.voice.schemas import VoiceAudioResponse, VoiceInputMode
 from shared.language import LearningLanguageContext
 from shared.exceptions import ExternalAPIException, ValidationException
+from shared.http_clients import get_ai_http_client
 
 
 class FakeConversationService:
     def __init__(self):
         self.started = []
         self.continued = []
+        self.conversation_language = LearningLanguageContext(
+            native_language="ko", target_language="en", feedback_language="ko",
+        )
+
+    def get_conversation(self, conversation_id, user_id):
+        return SimpleNamespace(language=self.conversation_language)
 
     async def start_free_chat_conversation(
         self,
@@ -112,8 +119,8 @@ class FakeVoiceService:
         self.resolved_inputs = []
         self.synthesized = []
 
-    async def resolve_input_text(self, *, text, audio_file):
-        self.resolved_inputs.append({"text": text, "audio_file": audio_file})
+    async def resolve_input_text(self, *, text, audio_file, language=None):
+        self.resolved_inputs.append({"text": text, "audio_file": audio_file, "language": language})
         if text and audio_file is not None:
             raise AssertionError("ambiguous input should be rejected before fake service")
         if audio_file is not None:
@@ -152,6 +159,29 @@ def _conversation_app_with_overrides(conversation_service, voice_service) -> Fas
     app.dependency_overrides[get_conversation_service] = lambda: conversation_service
     app.dependency_overrides[get_voice_service] = lambda: voice_service
     return app
+
+
+def test_tts_query_options_select_accent_and_speed_and_validate_bounds():
+    app = FastAPI()
+    app.dependency_overrides[get_ai_http_client] = lambda: object()
+
+    @app.get("/voice-profile")
+    def voice_profile(voice_service=Depends(get_voice_service)):
+        return voice_service.audio_profile
+
+    client = TestClient(app)
+    default = client.get("/voice-profile")
+    assert default.status_code == 200
+    assert default.json()["voice"] == "en-US-Harper:MAI-Voice-2.1-Flash"
+    assert default.json()["speed"] == 0.8
+
+    selected = client.get("/voice-profile?tts_accent=au&tts_speed=1.25")
+    assert selected.status_code == 200
+    assert selected.json()["voice"] == "en-AU-Isla:MAI-Voice-2.1-Flash"
+    assert selected.json()["speed"] == 1.25
+    assert client.get("/voice-profile?tts_accent=gb").json()["voice"] == "en-GB-Emily:MAI-Voice-2.1-Flash"
+    assert client.get("/voice-profile?tts_accent=xx").status_code == 422
+    assert client.get("/voice-profile?tts_speed=2.1").status_code == 422
 
 
 def test_multimodal_turn_accepts_text_input_without_stt_or_tts():
@@ -193,6 +223,7 @@ def test_multimodal_turn_accepts_audio_input_and_returns_tts_audio():
     assert data["audio"]["base64"] == "YXVkaW8="
     assert data["audio_error"] is None
     assert conversation_service.continued[0]["user_message"] == "transcribed travel answer"
+    assert voice_service.resolved_inputs[0]["language"] == "en"
     assert voice_service.synthesized == ["That sounds useful. Let's practice it."]
 
 
@@ -297,6 +328,7 @@ def test_free_chat_start_accepts_audio_input_with_topic_prep_fields():
     assert conversation_service.started[0]["conversation_direction"] == "DEBATE"
     assert conversation_service.started[0]["selected_question"] == "Is slow travel better?"
     assert conversation_service.started[0]["language_context"].target_language.value == "ko"
+    assert voice_service.resolved_inputs[0]["language"] == "ko"
 
 
 def test_free_chat_start_keeps_existing_json_text_contract():

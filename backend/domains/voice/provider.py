@@ -16,6 +16,7 @@ class VoiceProvider(ABC):
         filename: str,
         content_type: str,
         audio_bytes: bytes,
+        language: str | None = None,
     ) -> VoiceTranscriptionResult:
         """음성 파일을 텍스트로 변환"""
         pass

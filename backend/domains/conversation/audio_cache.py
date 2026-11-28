@@ -30,9 +30,10 @@ def _uuid(value: str) -> str:
 
 
 class AudioCacheWriter:
-    def __init__(self, cache: "AudioCacheFiles", generation_id: str):
+    def __init__(self, cache: "AudioCacheFiles", generation_id: str, profile: dict | None = None):
         self.cache = cache
         self.generation_id = _uuid(generation_id)
+        self.profile = profile
         self.staging_dir = cache.root / ".staging" / self.generation_id
         self.segments: list[dict] = []
         self.published_dir: Path | None = None
@@ -70,7 +71,7 @@ class AudioCacheWriter:
 
         await asyncio.to_thread(move)
         self.published_dir = destination
-        return {"generation_id": self.generation_id, "format": "mp3",
+        return {"generation_id": self.generation_id, "format": "mp3", "profile": self.profile,
                 "text_sha256": hashlib.sha256(text.encode()).hexdigest(),
                 "segment_count": len(self.segments), "segments": self.segments.copy()}
 
@@ -84,15 +85,17 @@ class AudioCacheFiles:
     def __init__(self, root: str | Path):
         self.root = Path(root)
 
-    def writer(self, generation_id: str) -> AudioCacheWriter:
-        return AudioCacheWriter(self, generation_id)
+    def writer(self, generation_id: str, profile: dict | None = None) -> AudioCacheWriter:
+        return AudioCacheWriter(self, generation_id, profile)
 
-    async def load(self, message_id: str, manifest: dict, text: str) -> list[tuple[str, CachedAudio]] | None:
+    async def load(self, message_id: str, manifest: dict, text: str,
+                   profile: dict | None = None) -> list[tuple[str, CachedAudio]] | None:
         try:
             message_id = _uuid(message_id)
             generation_id = _uuid(manifest["generation_id"])
             segments = manifest["segments"]
             if (manifest["format"] != "mp3"
+                    or (profile is not None and manifest.get("profile") != profile)
                     or manifest["text_sha256"] != hashlib.sha256(text.encode()).hexdigest()
                     or manifest["segment_count"] != len(segments) or not segments):
                 return None

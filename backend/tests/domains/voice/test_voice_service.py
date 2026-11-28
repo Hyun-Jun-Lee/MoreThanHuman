@@ -43,12 +43,13 @@ class FakeVoiceProvider:
         self.transcribe_calls = []
         self.synthesis_calls = []
 
-    async def transcribe_audio(self, *, filename: str, content_type: str, audio_bytes: bytes):
+    async def transcribe_audio(self, *, filename: str, content_type: str, audio_bytes: bytes, language=None):
         self.transcribe_calls.append(
             {
                 "filename": filename,
                 "content_type": content_type,
                 "audio_bytes": audio_bytes,
+                "language": language,
             }
         )
         return VoiceTranscriptionResult(text=self.transcript)
@@ -109,15 +110,26 @@ def test_create_provider_rejects_mixed_voice_providers(monkeypatch):
         _ = VoiceService().provider
 
 
+def test_mai_voice_audio_profile_includes_neutral_style(monkeypatch):
+    monkeypatch.setattr(voice_service_module.settings, "tts_provider", "openrouter")
+    monkeypatch.setattr(voice_service_module.settings, "tts_model", "microsoft/mai-voice-2.1-flash")
+
+    assert VoiceService().audio_profile["style"] == "neutral"
+
+    monkeypatch.setattr(voice_service_module.settings, "tts_model", "another/tts-model")
+    assert "style" not in VoiceService().audio_profile
+
+
 @pytest.mark.asyncio
 async def test_transcribe_upload_returns_non_empty_transcript(capsys):
     provider = FakeVoiceProvider(transcript="  Let's talk about travel. ")
     service = VoiceService(provider=provider)
 
-    result = await service.transcribe_upload(FakeUpload(WEBM_BYTES))
+    result = await service.transcribe_upload(FakeUpload(WEBM_BYTES), language="en")
 
     assert result.text == "Let's talk about travel."
     assert provider.transcribe_calls[0]["filename"] == "speech.webm"
+    assert provider.transcribe_calls[0]["language"] == "en"
     rows = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line.startswith("{")]
     upload = next(
         row for row in rows

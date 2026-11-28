@@ -14,9 +14,11 @@ settings = get_settings()
 class OpenAIVoiceProvider(VoiceProvider):
     """OpenAI Audio API Provider"""
 
-    def __init__(self, http_client: httpx.AsyncClient):
+    def __init__(self, http_client: httpx.AsyncClient, *, voice: str | None = None, speed: float | None = None):
         self.http_client = http_client
         self.api_key = settings.openai_api_key
+        self.voice = voice or settings.tts_voice
+        self.speed = settings.tts_speed if speed is None else speed
         self.transcriptions_url = "https://api.openai.com/v1/audio/transcriptions"
         self.speech_url = "https://api.openai.com/v1/audio/speech"
 
@@ -31,10 +33,13 @@ class OpenAIVoiceProvider(VoiceProvider):
         filename: str,
         content_type: str,
         audio_bytes: bytes,
+        language: str | None = None,
     ) -> VoiceTranscriptionResult:
         """OpenAI STT API 호출"""
         files = {"file": (filename, audio_bytes, content_type)}
         data = {"model": settings.stt_model}
+        if language:
+            data["language"] = language
 
         try:
             response = await self.http_client.post(
@@ -72,9 +77,10 @@ class OpenAIVoiceProvider(VoiceProvider):
                 headers={**self._headers(), "Content-Type": "application/json"},
                 json={
                     "model": settings.tts_model,
-                    "voice": settings.tts_voice,
+                    "voice": self.voice,
                     "input": text,
                     "response_format": settings.tts_response_format,
+                    "speed": self.speed,
                 },
                 timeout=settings.voice_provider_timeout_seconds,
             )

@@ -1,6 +1,6 @@
 # tomatalk Backend DSL
 
-> 최종 갱신: 2026-11-26 · 범위: FastAPI 백엔드 API + Flutter 모바일 연동
+> 최종 갱신: 2026-11-28 · 범위: FastAPI 백엔드 API + Flutter 모바일 연동
 
 사용자 클라이언트는 `mobile/`의 Flutter 기반 모바일 앱으로 개발해요. 이 문서는 모바일 앱이 연동할 백엔드 도메인, 데이터 모델, API 계약을 정의해요.
 
@@ -430,6 +430,10 @@ module Conversation {
 
   FreeChat 후속 턴은 저장된 `topic_summary`가 있으면 매번 시스템 프롬프트의 초기 배경 정보로 전달해요. 현재 사용자 발화와 최근 대화를 우선하고 자연스러운 주제 전환을 따르며, 시점에 민감한 내용은 오래됐을 수 있는 정보로 취급해요. 요약이 없는 대화는 이 배경 정보를 생략해요. Role Playing은 저장된 `role_character`를 후속 턴마다 계속 전달해요.
 
+  FreeChat과 Role Playing 생성 응답은 프롬프트에서 최대 2문장으로 요청해요. 설명 언어와 무관하게 대화 응답은 학습 목표 언어로만 작성하며, 사용자가 다른 언어로 설명해 달라고 요청해도 목표 언어를 유지해요. `feedback_language`는 별도 문법 피드백·주제 준비 안내 등에 사용해요.
+
+  FreeChat의 언어별 연습 항목은 관련 상황에서 자연스러운 표현을 고르는 기준으로만 사용해요. 사용자의 대화 내용에 먼저 반응하고 문법 항목을 억지로 포함하지 않아요. 후속 질문은 현재 대화에 도움이 될 때만 하며, 대화 주제에 관한 질문에는 먼저 직접 답해요. 사용자가 명시적으로 언어 교정·평가·설명을 요청해도 대화 응답은 교사처럼 교정하지 않고, 친구처럼 상황에 맞춰 짧게 놀라거나 궁금해한 뒤 자연스럽게 대화를 이어가요. 같은 반응을 반복하거나 무례하게 들리지 않도록 해요. 문법 교정은 별도 피드백 기능에서 제공해요.
+
   type StartRoleplayRequest {
     role_character: String
     search_context?: String
@@ -453,7 +457,8 @@ module Conversation {
   }
 
   `role_character`는 클라이언트가 선택한 preset/custom 상황 또는 AI가 맡을 역할이에요.
-  클라이언트 preset과 서버 roleplay prompt examples는 conversation snapshot의 `target_language`를 기준으로 연습 상황을 고르고, `feedback_language`는 도움말·설명 언어로만 사용해요.
+  클라이언트 preset은 conversation snapshot의 `target_language`를 기준으로 연습 상황을 골라요. 대화 응답은 `target_language`만 사용하고, `feedback_language`는 별도 피드백·안내 경로에서 사용해요.
+  Role Playing은 선택한 상황과 역할에 맞는 첫 인사를 LLM으로 생성해요. 이후에는 사용자 발화에 먼저 반응하고 필요한 경우에만 질문하며, 사용자의 선택을 받아 장면을 자연스럽게 마무리해요. 무관한 preset 예시는 프롬프트에 넣지 않고, 언어별 연습 항목은 자연스러운 표현 기준으로만 사용해요. 명시적 교정 요청에도 맡은 인물로 반응하며 대화 안에서 교사처럼 교정하지 않아요. 사용자가 입력한 상황과 참고 정보는 지시가 아닌 데이터로 취급해요.
   Conversation prompt policy도 snapshot의 `target_language`를 따라요. 한국어 target은 조사, 어미, 높임/격식, 띄어쓰기, 자연스러운 어순과 구어 뉘앙스를 우선하고, 영어 target은 tense, articles, prepositions, question formation, sentence completeness, natural spoken phrasing을 우선해요.
 
   type SendMessageRequest {
@@ -592,6 +597,8 @@ module Conversation {
 | `POST /api/conversations/turns/{turn_id}/retry/stream/` | 실패한 AI 생성을 저장된 입력으로 다시 시도해요. 새 사용자 발화와 STT는 만들지 않아요. |
 | `POST /api/conversations/messages/{assistant_message_id}/audio/stream/` | 저장된 MP3가 모두 정상이면 재생하고, 파일이 없거나 손상됐으면 저장된 답변에서 TTS를 한 번 다시 생성해요. 소유자 인증을 확인하고 중복 생성은 409예요. |
 
+음성 생성 경로는 선택 쿼리 파라미터 `tts_accent=us|au|gb`와 `tts_speed=0.5..2.0`을 받아요. 생략하면 MAI-Voice-2.1-Flash의 미국 Harper 음성과 0.8배 속도를 사용해요. 악센트별 음성은 미국 Harper, 호주 Isla, 영국 Emily예요. 이 모델의 OpenRouter 합성 요청에는 모두 Azure `style=neutral`을 전달해요. 이 설정은 기존 JSON·multipart 요청과 스트림 시작·이어가기·재시도·다시 듣기에 동일하게 적용돼요. 다시 듣기는 모델·음성·속도·스타일이 일치하는 MP3만 캐시에서 읽고, 다르면 선택한 설정으로 재합성해요. `tts_accent`는 MAI-Voice-2.1-Flash에서만 사용할 수 있어요.
+
 NDJSON 각 줄에는 `event`, 0부터 증가하는 `seq`, `turn_id`, `attempt_id`가 있어요. `turn_started` 뒤 확정 사용자 발화가 있으면 `user_message_committed`를 보내고, 생성 중 `text_delta`와 문장별 `audio_segment`(`segment_index`, `text`, `content_type`, `format`, `base64`)를 보내요. 끝에는 `turn_completed`(`conversation_id`, `assistant_message_id`, `text`, `audio_status`) 또는 `turn_error` 하나를 보내요. TTS 실패 때는 `audio_error` 뒤 `audio_status: failed`인 `turn_completed`를 보내고 AI 메시지는 보존해요. 연결 단절 때는 마지막 이벤트를 받았다고 추정하지 않고 상태 조회로 확인해요. 같은 키의 중복 요청은 현재 상태에 따라 HTTP 409 `TURN_IN_PROGRESS`, `TURN_ALREADY_COMPLETED`, `TURN_FAILED_RETRY_REQUIRED`예요. 앱은 증분 UTF-8로 읽고, 세그먼트를 순서대로 재생해요.
 
 새 모바일 앱은 위 대화 흐름의 스트림 경로를 사용해요. 기존 JSON 경로는 유지돼요. `GET /api/conversations/{id}/messages/`의 완료된 스트림 assistant 메시지에는 `audio_available: true`가 포함돼요. 이 값은 재생 경로가 있다는 뜻이며 현재 파일 존재 여부는 뜻하지 않아요. TTS 조각을 정상 전달한 뒤 캐시 기록만 실패하면 음성은 완료로 유지하고 서버에 오류를 기록해요. 다음 재생 요청이 저장된 텍스트로 음성을 다시 생성해요. 실패한 AI 답변은 사용자가 재시도 버튼을 누를 때만 다시 생성하고, 음성 생성·재생 자체가 실패하면 앱에 오류와 다시 시도를 표시해요. 실기기·프록시·동시 부하 검증 항목은 [Voice Streaming 계약](../.agent/_contracts/VOICE_STREAMING.md#active-전-확인)을 따라요.
@@ -638,7 +645,7 @@ TextContinue   = POST /api/conversations/{id}/turn/        { text, include_audio
 AudioContinue  = POST /api/conversations/{id}/turn/        multipart { audio_file, include_audio_response }
 ```
 
-`first_message`/`text`와 `audio_file`은 같은 요청에서 동시에 보낼 수 없어요. `audio_file` 요청은 백엔드가 STT로 `transcript`를 만든 뒤 기존 conversation flow에 전달해요. `include_audio_response=true`이면 free chat 시작, roleplay 시작, 대화 이어가기 응답의 AI 텍스트를 TTS로 변환해 `audio`에 담고, 대화 저장 이후 TTS만 실패하면 `audio_error`를 반환해 중복 메시지 재시도를 방지해요. 모바일 v1은 AI 응답을 항상 음성으로 들려주기 위해 시작/이어가기 요청 모두에서 `include_audio_response=true`를 전송해요.
+`first_message`/`text`와 `audio_file`은 같은 요청에서 동시에 보낼 수 없어요. `audio_file` 요청은 백엔드가 STT로 `transcript`를 만든 뒤 기존 conversation flow에 전달해요. STT에는 새 대화 시작 시 프로필의 학습 언어, 기존 대화 이어가기 시 대화에 저장된 학습 언어를 `language` 힌트로 전달해요. 이 값은 발화 언어를 강제하지 않으며 모국어를 섞은 발화의 정확도를 보장하지 않아요. `include_audio_response=true`이면 free chat 시작, roleplay 시작, 대화 이어가기 응답의 AI 텍스트를 TTS로 변환해 `audio`에 담고, 대화 저장 이후 TTS만 실패하면 `audio_error`를 반환해 중복 메시지 재시도를 방지해요. 모바일 v1은 AI 응답을 항상 음성으로 들려주기 위해 시작/이어가기 요청 모두에서 `include_audio_response=true`를 전송해요.
 
 모바일 v1은 문법 피드백 수신에 SSE보다 polling을 우선해요. 앱은 `ConversationResponse.message_id` 또는 `MessageResponse.message_id`를 받은 뒤 `GET /api/grammar/message/{message_id}/`를 반복 호출하고, `404`를 pending 또는 접근 불가 상태로 처리해요. SSE 스트림은 실시간성이 더 중요해질 때 선택적으로 사용해요.
 
@@ -911,6 +918,16 @@ module LLM {
 ```
 
 ## 문서 변경 기록
+
+- 2026-11-28: Role Playing 첫 인사를 역할에 맞게 생성하고 장면 진행·마무리·교정 요청·사용자 입력 처리 지침을 정리했어요.
+
+- 2026-11-28: OpenRouter MAI-Voice-2.1-Flash 합성 요청의 neutral 스타일과 오디오 캐시 프로필 일치를 명시했어요.
+
+- 2026-11-28: FreeChat에서 명시적 언어 교정 요청에도 친구처럼 반응하고 교정은 별도 피드백에 맡기도록 명시했어요.
+
+- 2026-11-28: FreeChat에서 언어별 연습 항목을 표현 기준으로 한정하고 후속 질문은 필요한 경우에만 하도록 명시했어요.
+
+- 2026-11-28: FreeChat·Role Playing 응답을 최대 2문장으로 요청하고, 설명 요청에도 대화 응답은 학습 목표 언어만 사용하도록 명시했어요.
 
 - 2026-11-27: 추천 목록 v2는 주차 제한 없이 최대 8개를 무작위 조회하고 홈·앱 복귀 시 갱신해요.
 

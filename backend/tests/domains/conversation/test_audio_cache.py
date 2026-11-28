@@ -36,6 +36,22 @@ async def test_writer_publishes_ordered_segments_and_loads_after_reopen(tmp_path
 
 
 @pytest.mark.asyncio
+async def test_cached_audio_is_reused_only_for_matching_voice_and_speed(tmp_path: Path):
+    cache = AudioCacheFiles(tmp_path)
+    message_id = str(uuid4())
+    profile = {"model": "microsoft/mai-voice-2.1-flash", "voice": "en-US-Harper:MAI-Voice-2.1-Flash", "speed": 0.8, "style": "neutral"}
+    writer = cache.writer(str(uuid4()), profile)
+    await writer.add(0, "Hello.", VoiceAudioResponse(content_type="audio/mpeg", format="mp3", base64="aGVsbG8="))
+    manifest = await writer.publish(message_id, "Hello.")
+
+    assert await cache.load(message_id, manifest, "Hello.", profile=profile)
+    assert await cache.load(message_id, manifest, "Hello.", profile={**profile, "speed": 1.25}) is None
+    assert await cache.load(message_id, manifest, "Hello.", profile={**profile, "voice": "en-GB-Emily:MAI-Voice-2.1-Flash"}) is None
+    assert await cache.load(message_id, manifest, "Hello.", profile={key: value for key, value in profile.items() if key != "style"}) is None
+    assert await cache.load(message_id, {key: value for key, value in manifest.items() if key != "profile"}, "Hello.", profile=profile) is None
+
+
+@pytest.mark.asyncio
 async def test_missing_segment_is_cache_miss_and_abort_removes_staging(tmp_path: Path):
     message_id = str(uuid4())
     cache = AudioCacheFiles(tmp_path)

@@ -11,7 +11,7 @@ from fastapi import UploadFile
 
 from config import get_settings
 from domains.voice.openai_provider import OpenAIVoiceProvider
-from domains.voice.openrouter_provider import OpenRouterVoiceProvider
+from domains.voice.openrouter_provider import MAI_VOICE_MODEL, MAI_VOICE_STYLE, OpenRouterVoiceProvider
 from domains.voice.provider import VoiceProvider
 from domains.voice.schemas import (
     VoiceAudioResponse,
@@ -56,10 +56,20 @@ class VoiceService:
     octet_stream_content_type = "application/octet-stream"
 
     def __init__(
-        self, provider: VoiceProvider | None = None, *, http_client: httpx.AsyncClient | None = None
+        self, provider: VoiceProvider | None = None, *, http_client: httpx.AsyncClient | None = None,
+        voice: str | None = None, speed: float | None = None,
     ):
         self._provider = provider
         self.http_client = http_client
+        self.tts_voice = voice or settings.tts_voice
+        self.tts_speed = settings.tts_speed if speed is None else speed
+
+    @property
+    def audio_profile(self) -> dict[str, str | float]:
+        profile = {"model": settings.tts_model, "voice": self.tts_voice, "speed": self.tts_speed}
+        if settings.tts_provider == "openrouter" and settings.tts_model == MAI_VOICE_MODEL:
+            profile["style"] = MAI_VOICE_STYLE
+        return profile
 
     @property
     def provider(self) -> VoiceProvider:
@@ -74,9 +84,9 @@ class VoiceService:
         if self.http_client is None:
             raise RuntimeError("Voice providers require an app-owned HTTP client")
         if settings.stt_provider == "openai":
-            return OpenAIVoiceProvider(self.http_client)
+            return OpenAIVoiceProvider(self.http_client, voice=self.tts_voice, speed=self.tts_speed)
         if settings.stt_provider == "openrouter":
-            return OpenRouterVoiceProvider(self.http_client)
+            return OpenRouterVoiceProvider(self.http_client, voice=self.tts_voice, speed=self.tts_speed)
         if settings.tts_provider not in {"openai", "openrouter"}:
             raise AppException(
                 "Only openai and openrouter are supported for STT_PROVIDER and TTS_PROVIDER."
@@ -96,6 +106,7 @@ class VoiceService:
         *,
         text: str | None,
         audio_file: UploadedAudio | UploadFile | None,
+        language: str | None = None,
     ) -> tuple[VoiceInputMode, str]:
         """텍스트 또는 음성 파일을 canonical user text로 변환"""
         normalized_text = self.normalize_text(text)
@@ -109,10 +120,12 @@ class VoiceService:
         if normalized_text:
             return VoiceInputMode.TEXT, normalized_text
 
-        transcript = await self.transcribe_upload(audio_file)
+        transcript = await self.transcribe_upload(audio_file, language=language)
         return VoiceInputMode.AUDIO, transcript.text
 
-    async def transcribe_upload(self, audio_file: UploadedAudio | UploadFile | None) -> VoiceTranscriptionResult:
+    async def transcribe_upload(
+        self, audio_file: UploadedAudio | UploadFile | None, *, language: str | None = None,
+    ) -> VoiceTranscriptionResult:
         """업로드된 음성 파일을 텍스트로 변환"""
         if audio_file is None:
             raise ValidationException("audio_file is required.")
@@ -139,6 +152,7 @@ class VoiceService:
                 filename=filename,
                 content_type=content_type,
                 audio_bytes=audio_bytes,
+                language=language,
             )
         transcript = self.normalize_text(result.text)
         if not transcript:

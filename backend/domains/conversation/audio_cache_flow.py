@@ -16,9 +16,9 @@ def cache_files() -> AudioCacheFiles | None:
     return AudioCacheFiles(directory) if directory else None
 
 
-def new_writer() -> AudioCacheWriter | None:
+def new_writer(profile: dict | None = None) -> AudioCacheWriter | None:
     cache = cache_files()
-    return cache.writer(str(uuid4())) if cache else None
+    return cache.writer(str(uuid4()), profile) if cache else None
 
 
 async def persist_writer(writer: AudioCacheWriter, message_id: str, text: str, *, lease_id: str | None = None) -> None:

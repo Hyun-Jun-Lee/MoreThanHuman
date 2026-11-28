@@ -11,14 +11,18 @@ from shared.exceptions import AppException, ExternalAPIException, RateLimitExcep
 from shared.logging_config import log_event
 
 settings = get_settings()
+MAI_VOICE_MODEL = "microsoft/mai-voice-2.1-flash"
+MAI_VOICE_STYLE = "neutral"
 
 
 class OpenRouterVoiceProvider(VoiceProvider):
     """OpenRouter STT/TTS API Provider"""
 
-    def __init__(self, http_client: httpx.AsyncClient):
+    def __init__(self, http_client: httpx.AsyncClient, *, voice: str | None = None, speed: float | None = None):
         self.http_client = http_client
         self.api_key = settings.openrouter_api_key
+        self.voice = voice or settings.tts_voice
+        self.speed = settings.tts_speed if speed is None else speed
         self.transcriptions_url = "https://openrouter.ai/api/v1/audio/transcriptions"
         self.speech_url = "https://openrouter.ai/api/v1/audio/speech"
 
@@ -37,10 +41,13 @@ class OpenRouterVoiceProvider(VoiceProvider):
         filename: str,
         content_type: str,
         audio_bytes: bytes,
+        language: str | None = None,
     ) -> VoiceTranscriptionResult:
         """OpenRouter STT API 호출"""
         files = {"file": (filename, audio_bytes, content_type)}
         data = {"model": settings.stt_model}
+        if language:
+            data["language"] = language
 
         try:
             response = await self.http_client.post(
@@ -80,16 +87,20 @@ class OpenRouterVoiceProvider(VoiceProvider):
 
     async def synthesize_speech(self, *, text: str) -> VoiceSynthesisResult:
         """OpenRouter TTS API 호출"""
+        request_data = {
+            "model": settings.tts_model,
+            "voice": self.voice,
+            "input": text,
+            "response_format": settings.tts_response_format,
+            "speed": self.speed,
+        }
+        if settings.tts_model == MAI_VOICE_MODEL:
+            request_data["provider"] = {"options": {"azure": {"style": MAI_VOICE_STYLE}}}
         try:
             response = await self.http_client.post(
                 self.speech_url,
                 headers={**self._headers(), "Content-Type": "application/json"},
-                json={
-                    "model": settings.tts_model,
-                    "voice": settings.tts_voice,
-                    "input": text,
-                    "response_format": settings.tts_response_format,
-                },
+                json=request_data,
                 timeout=settings.voice_provider_timeout_seconds,
             )
             response.raise_for_status()

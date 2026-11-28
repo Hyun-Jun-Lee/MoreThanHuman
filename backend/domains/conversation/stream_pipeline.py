@@ -130,7 +130,7 @@ async def stream_answer(
     completed = False
     assistant_message_id: str | None = None
     final_text: str | None = None
-    cache_writer = new_writer()
+    cache_writer = new_writer(getattr(voice_service, "audio_profile", None))
     first_audio_sent = False
     try:
         yield event_line("turn_started", seq, turn_id, attempt_id,

@@ -1,6 +1,6 @@
 # 환경변수
 
-> 최종 갱신: 2026-11-25 · 환경변수 설명의 단일 기준 문서
+> 최종 갱신: 2026-11-28 · 환경변수 설명의 단일 기준 문서
 
 [빠른 시작](../README.md#실행-준비) · [운영 가이드](OPERATIONS.md)
 
@@ -64,8 +64,9 @@
 | `STT_PROVIDER` | 아니오 | `openrouter` | STT provider. `openrouter` 또는 `openai` |
 | `STT_MODEL` | 아니오 | `openai/gpt-4o-mini-transcribe` | 음성 파일을 텍스트로 변환할 STT 모델. OpenAI direct 사용 시 `gpt-4o-mini-transcribe`처럼 provider prefix 없이 설정 |
 | `TTS_PROVIDER` | 아니오 | `openrouter` | TTS provider. `openrouter` 또는 `openai` |
-| `TTS_MODEL` | 아니오 | `microsoft/mai-voice-2-flash` | AI 응답을 음성으로 변환할 TTS 모델. OpenAI direct 사용 시 `gpt-4o-mini-tts`처럼 provider prefix 없이 설정 |
-| `TTS_VOICE` | 아니오 | `en-US-Harper:MAI-Voice-2-Flash` | TTS 음성 preset. provider/model별 지원 voice가 다름 |
+| `TTS_MODEL` | 아니오 | `microsoft/mai-voice-2.1-flash` | AI 응답을 음성으로 변환할 TTS 모델. OpenAI direct 사용 시 `gpt-4o-mini-tts`처럼 provider prefix 없이 설정 |
+| `TTS_VOICE` | 아니오 | `en-US-Harper:MAI-Voice-2.1-Flash` | 기본 미국 영어 음성. provider/model별 지원 voice가 다름 |
+| `TTS_SPEED` | 아니오 | `0.8` | 기본 음성 속도. 0.5~2.0 범위이며 요청의 `tts_speed`로 덮어쓸 수 있어요 |
 | `TTS_RESPONSE_FORMAT` | 아니오 | `mp3` | TTS 응답 오디오 포맷. OpenRouter 기본 권장은 `mp3` 또는 `pcm` |
 | `TTS_MAX_INPUT_CHARS` | 아니오 | `4000` | TTS로 보낼 최대 텍스트 길이 |
 | `TTS_MAX_OUTPUT_MB` | 아니오 | `5` | base64 인코딩 전 TTS 응답 오디오 최대 크기 |

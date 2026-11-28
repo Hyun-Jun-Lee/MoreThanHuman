@@ -29,7 +29,7 @@ async def test_cached_replay_and_missing_file_regeneration(tmp_path, monkeypatch
     monkeypatch.setattr(audio_cache_flow, "SessionLocal", sessions)
     files = AudioCacheFiles(tmp_path)
     monkeypatch.setattr(router, "cache_files", lambda: files)
-    monkeypatch.setattr(router, "new_writer", lambda: files.writer(str(uuid4())))
+    monkeypatch.setattr(router, "new_writer", lambda profile=None: files.writer(str(uuid4()), profile))
 
     user_id, conversation_id, message_id = (str(uuid4()) for _ in range(3))
     with sessions() as db:

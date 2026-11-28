@@ -16,7 +16,7 @@ from domains.conversation.repository import ConversationRepository, Conversation
 from domains.conversation.service import ConversationService, free_chat_title
 from domains.conversation.stream_turns import StreamTurnConflict, StreamTurnStore
 from shared.background_tasks import BackgroundTaskRegistry
-from shared.language import LearningLanguageContext, language_context_from_values, language_context_to_dict, language_name
+from shared.language import LearningLanguageContext, language_context_from_values, language_context_to_dict
 from shared.latency import latency_span
 from shared.logging_config import log_event
 
@@ -307,11 +307,7 @@ def prepare_generation(
                         input_data.get("search_context"), ConversationType.ROLE_PLAYING,
                         role, language_context=language, nickname=nickname,
                     )
-                    prompt = (
-                        f"You are starting a role-play as '{role}'. "
-                        f"Greet the user naturally in {language_name(language.target_language)} "
-                        "and start the conversation as this character would. Keep it short (1-2 sentences)."
-                    )
+                    prompt = service.build_roleplay_opening_prompt(language)
                 history = []
                 conversation_id = None
                 user_message_id = None
@@ -322,9 +318,6 @@ def prepare_generation(
                 conversation_id=conversation_id, user_message_id=user_message_id,
                 user_text=user_text, input_mode=input_mode, system_prompt=system_prompt,
                 history=history, prompt=prompt,
-                fixed_answer=(('안녕하세요! 먼저 말을 걸어 주세요.' if language.target_language.value == 'ko'
-                               else 'Hello! Say something to begin our conversation.')
-                              if kind == 'roleplay_start' else None),
             )
         except Exception:
             store.fail(turn.id, "PREPARATION_FAILED")

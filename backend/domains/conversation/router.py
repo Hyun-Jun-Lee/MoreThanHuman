@@ -8,6 +8,7 @@ LatencyMiddleware에서 처리해요. JSON 계약은 유지하며 상세는 docs
 import asyncio
 import json
 import logging
+from typing import Literal
 from uuid import UUID, uuid4
 
 import httpx
@@ -196,9 +197,26 @@ def get_conversation_service(
     return ConversationService(repository, http_client=http_client, background_tasks=background_tasks)
 
 
-def get_voice_service(http_client: httpx.AsyncClient = Depends(get_ai_http_client)) -> VoiceService:
+ACCENT_VOICES = {
+    "us": "en-US-Harper:MAI-Voice-2.1-Flash",
+    "au": "en-AU-Isla:MAI-Voice-2.1-Flash",
+    "gb": "en-GB-Emily:MAI-Voice-2.1-Flash",
+}
+
+
+def get_voice_service(
+    http_client: httpx.AsyncClient = Depends(get_ai_http_client),
+    tts_accent: Literal["us", "au", "gb"] | None = Query(default=None),
+    tts_speed: float | None = Query(default=None, ge=0.5, le=2.0, allow_inf_nan=False),
+) -> VoiceService:
     """Voice Service 의존성"""
-    return VoiceService(http_client=http_client)
+    if tts_accent and settings.tts_model != "microsoft/mai-voice-2.1-flash":
+        raise HTTPException(status_code=422, detail="tts_accent requires MAI-Voice-2.1-Flash")
+    return VoiceService(
+        http_client=http_client,
+        voice=ACCENT_VOICES[tts_accent] if tts_accent else None,
+        speed=tts_speed,
+    )
 
 
 def _prepared_stream_response(
@@ -273,7 +291,7 @@ def _saved_question_audio_response(
         seq = 0
         audio_done = False
         audio_status = "completed"
-        cache_writer = new_writer()
+        cache_writer = new_writer(getattr(voice_service, "audio_profile", None))
         try:
             yield event_line("turn_started", seq, turn_id, attempt_id,
                              trace_id=trace_id, conversation_id=conversation_id)
@@ -484,6 +502,7 @@ async def start_free_chat_conversation(
         input_mode, first_message = await voice_service.resolve_input_text(
             text=request.first_message,
             audio_file=audio_file,
+            language=ensure_language_context(current_user.language).target_language.value,
         )
         response = await service.start_free_chat_conversation(
             first_message,
@@ -706,6 +725,7 @@ async def start_free_chat_stream(
             body, _, audio_file = await _parse_free_chat_input(http_request)
             input_mode, first_message = await voice_service.resolve_input_text(
                 text=body.first_message, audio_file=audio_file,
+                language=ensure_language_context(current_user.language).target_language.value,
             )
     except ValidationError as error:
         raise _validation_error_response(error) from error
@@ -763,9 +783,15 @@ async def send_turn_stream(
     try:
         with latency_span("stream_input", operation="turn"):
             text, _, audio_file = await _parse_turn_input(http_request)
-            input_mode, user_text = await voice_service.resolve_input_text(text=text, audio_file=audio_file)
+            language = (service.get_conversation(str(conversation_id), current_user.id)
+                        .language.target_language.value if audio_file else None)
+            input_mode, user_text = await voice_service.resolve_input_text(
+                text=text, audio_file=audio_file, language=language,
+            )
     except CreditsExhausted as error:
         raise _access_conflict("CONVERSATION_TURNS_FULL", error.message)
+    except NotFoundException as error:
+        raise HTTPException(status_code=404, detail=error.message) from error
     except AppException as error:
         raise HTTPException(status_code=400, detail=error.message) from error
     prepared = _prepare_stream_or_http_error(
@@ -908,7 +934,9 @@ async def retry_stream_audio(
         raise _access_conflict("AUDIO_RETRY_IN_PROGRESS", "음성이 생성 중이에요")
     cache = cache_files()
     try:
-        cached_audio = await cache.load(message_id, manifest, text) if cache and manifest else None
+        cached_audio = await cache.load(
+            message_id, manifest, text, profile=getattr(voice_service, "audio_profile", None)
+        ) if cache and manifest else None
     except OSError as error:
         logger.exception("Conversation audio cache read failed", extra={"message_id": message_id})
         raise HTTPException(status_code=503, detail={"code": "AUDIO_STORAGE_UNAVAILABLE",
@@ -954,7 +982,7 @@ async def retry_stream_audio(
     async def events():
         seq = 0
         finished = False
-        cache_writer = new_writer()
+        cache_writer = new_writer(getattr(voice_service, "audio_profile", None))
         active_lease_id = lease_id
         try:
             yield event_line("audio_started", seq, turn_id, attempt_id,
@@ -1128,9 +1156,12 @@ async def send_multimodal_turn(
         if settings.conversation_access_enabled or getattr(current_user, "is_guest", False):
             service.assert_can_send(str(conversation_id), current_user.id)
         text, include_audio_response, audio_file = await _parse_turn_input(http_request)
+        language = (service.get_conversation(str(conversation_id), current_user.id)
+                    .language.target_language.value if audio_file else None)
         input_mode, user_text = await voice_service.resolve_input_text(
             text=text,
             audio_file=audio_file,
+            language=language,
         )
         response = await service.continue_conversation(
             str(conversation_id),

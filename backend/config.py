@@ -155,8 +155,9 @@ class Settings(BaseSettings):
     stt_provider: str = "openrouter"
     stt_model: str = "openai/gpt-4o-mini-transcribe"
     tts_provider: str = "openrouter"
-    tts_model: str = "microsoft/mai-voice-2-flash"
-    tts_voice: str = "en-US-Harper:MAI-Voice-2-Flash"
+    tts_model: str = "microsoft/mai-voice-2.1-flash"
+    tts_voice: str = "en-US-Harper:MAI-Voice-2.1-Flash"
+    tts_speed: float = Field(0.8, ge=0.5, le=2.0, allow_inf_nan=False)
     tts_response_format: str = "mp3"
     tts_max_input_chars: int = 4000
     tts_max_output_mb: int = 5
