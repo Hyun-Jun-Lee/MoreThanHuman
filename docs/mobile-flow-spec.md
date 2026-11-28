@@ -1,7 +1,7 @@
 # 모바일 화면별 UX Flow / Wireframe
 
 > 기준일: 2026-06-11  
-> 최종 갱신: 2026-11-28 · Freechat 추천 주제 6행·추천 요약 생략·Accent 제목 반영 · 필수 동의·홈 미확인 표시·프로필 즉시 배지 설정·상점 토마토 선택 UI 반영
+> 최종 갱신: 2026-11-28 · 홈 와이어프레임·조회 설명 갱신 · Freechat 추천 주제 6행·추천 요약 생략·Accent 제목 반영 · 필수 동의·홈 미확인 표시·프로필 즉시 배지 설정·상점 토마토 선택 UI 반영
 > 대상: Flutter v1 모바일 앱  
 > 범위: 화면 구조, 사용자 흐름, API 연결 지점, low-fi wireframe
 
@@ -202,16 +202,15 @@ flowchart TD
 
 ```text
 ┌─────────────────────────┐
-│ Hi, User          ⚙     │
-│ Pick up where you left  │
-│ off, or start fresh.    │
+│ Toma Talk      ko → en │
 │                         │
-│ [ + Start Conversation ]│
+│ [언어 스낵]             │
 │                         │
-│ Recent Conversations    │
-│ - Lotte Giants game  >  │
-│ - Osaka restaurants  >  │
-│ - Coffee order       >  │
+│ 오늘의 토마토           │
+│ [추천 주제 카드 흐름]   │
+│ [최근 대화 카드]        │
+│                         │
+│ [ + 새 대화 ]           │
 └─────────────────────────┘
 ```
 
@@ -224,7 +223,7 @@ flowchart TD
 
 **동작**
 
-- 진입 시 `GET /api/conversations/?limit=5&offset=0`을 호출해요.
+- 진입 시 `/api/conversations/`의 모든 페이지와 `GET /api/conversation-topics/weekly/`를 조회해요. 대화 목록은 최신 상태를 확인한 뒤 최대 5개를 기본 표시해요.
 - `대화 시작` 선택 시 Conversation Start Sheet를 열어요.
 - 최근 대화 선택 시 Conversation으로 이동하고 메시지 목록을 불러와요.
 

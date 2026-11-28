@@ -255,7 +255,7 @@ domains/{name}/
          → SearchResult { query, enhanced_query, ready, summary?, sources, quality, timestamp }
 ```
 
-Topic Prep은 검색이 필요한 주제에서 출처 품질 판정을 통과한 결과의 제목·검색 요약을 카드 생성 LLM에 참고 데이터로 전달해요. 검색이 필요 없는 주제는 출처 없이 카드의 완성도와 적합성을 판정해요. 두 경로 모두 카드 요약을 앱에 표시하고, 대화 시작 시 그 요약을 `search_context`로 전달해요.
+Topic Prep은 검색이 필요한 주제에서 출처 품질 판정을 통과한 결과의 제목·검색 요약을 카드 생성 LLM에 참고 데이터로 전달해요. 검색이 필요 없는 주제는 출처 없이 카드의 완성도와 적합성을 판정해요. 두 경로 모두 카드 요약을 생성하고 대화 시작 시 `search_context`로 전달해요. 앱은 직접 입력하거나 수정한 주제에는 요약을 표시하고, Freechat 추천 주제를 그대로 선택한 경우에는 준비 중과 완료 후 요약 UI를 숨겨요.
 
 ### 웹 페이지
 
